@@ -311,4 +311,115 @@ class ReceiveMaterialService
     {
         return $item->part_id;
     }
+
+    /**
+     * Total stok FIFO aktif untuk sebuah part, opsional difilter per UOM.
+     * UOM dicocokkan case-insensitive; bila null, semua UOM dijumlahkan.
+     */
+    public function availableFifo(int $partId, ?string $uom = null): float
+    {
+        $q = PartStock::query()
+            ->where('part_id', $partId)
+            ->where('qty', '>', 0);
+
+        if ($uom !== null && trim((string) $uom) !== '') {
+            $q->whereRaw('LOWER(COALESCE(qty_unit, \'\')) = ?', [strtolower(trim((string) $uom))]);
+        }
+
+        return (float) $q->sum('qty');
+    }
+
+    /**
+     * Consume FIFO generic (by UOM) — tertua (received_at ASC NULLS LAST, lalu id) didahulukan.
+     * Return list alokasi: [{ part_stock_id, tag, take_qty, remaining_stock_after, uom }].
+     * Dipakai WO / Material Allocation untuk UOM apa pun (KGM/SHEET/ROLL/PCS).
+     */
+    public function consumeFifoByUom(int $partId, float $qtyNeed, ?string $uom = null): array
+    {
+        if ($qtyNeed <= 0) {
+            return [];
+        }
+
+        $result = [];
+
+        DB::transaction(function () use ($partId, $qtyNeed, $uom, &$result) {
+            $stocksQ = PartStock::query()
+                ->where('part_id', $partId)
+                ->where('qty', '>', 0)
+                ->orderByRaw('received_at ASC NULLS LAST')
+                ->orderBy('id');
+
+            if ($uom !== null && trim((string) $uom) !== '') {
+                $stocksQ->whereRaw('LOWER(COALESCE(qty_unit, \'\')) = ?', [strtolower(trim((string) $uom))]);
+            }
+
+            $stocks = $stocksQ->lockForUpdate()->get();
+
+            $remainingNeed = $qtyNeed;
+            foreach ($stocks as $stock) {
+                if ($remainingNeed <= 1e-9) {
+                    break;
+                }
+
+                $take = min((float) $stock->qty, $remainingNeed);
+                $newQty = (float) $stock->qty - $take;
+
+                if ($newQty <= 1e-9) {
+                    $stock->delete();
+                    $stockId = $stock->id;
+                    $newQty = 0;
+                } else {
+                    $stock->update(['qty' => $newQty]);
+                    $stockId = $stock->id;
+                }
+
+                $result[] = [
+                    'part_stock_id' => $stockId,
+                    'tag' => $stock->tag,
+                    'take_qty' => $take,
+                    'remaining_stock_after' => $newQty,
+                    'uom' => (string) ($stock->qty_unit ?? $uom ?? ''),
+                ];
+
+                $remainingNeed -= $take;
+            }
+        });
+
+        return $result;
+    }
+
+    /**
+     * Post stok hasil produksi (WO output WIP/FG).
+     * receive_id = null, tag produksi bebas, received_at = waktu produksi.
+     */
+    public function postProductionStock(int $partId, string $tag, float $qty, ?string $uom = 'PCS', $receivedAt = null): PartStock
+    {
+        $receivedAt = $receivedAt ?? now();
+        $uom = strtoupper(trim((string) $uom));
+
+        return DB::transaction(function () use ($partId, $tag, $qty, $uom, $receivedAt) {
+            $stock = PartStock::query()
+                ->where('part_id', $partId)
+                ->whereRaw('LOWER(COALESCE(tag, \'\')) = ?', [strtolower($tag)])
+                ->lockForUpdate()
+                ->first();
+
+            if ($stock) {
+                $stock->increment('qty', $qty);
+
+                return $stock->fresh();
+            }
+
+            return PartStock::create([
+                'part_id' => $partId,
+                'tag' => $tag,
+                'qty' => $qty,
+                'qty_unit' => $uom,
+                'received_at' => $receivedAt,
+                'receive_id' => null,
+                'price' => null,
+                'remarks' => 'WO output',
+            ]);
+        });
+    }
 }

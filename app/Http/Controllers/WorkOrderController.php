@@ -1,0 +1,163 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Part;
+use App\Models\WorkOrder;
+use App\Services\WoService;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
+use Inertia\Inertia;
+use Inertia\Response;
+
+class WorkOrderController extends Controller
+{
+    public function __construct(protected WoService $woService) {}
+
+    public function index(Request $request): Response
+    {
+        Gate::authorize('viewAny', WorkOrder::class);
+
+        $workOrders = WorkOrder::query()
+            ->with(['part:id,part_number,part_name,part_type_id', 'part.partType:id,code,name'])
+            ->withCount('items')
+            ->when($request->input('search'), function ($q, $search) {
+                $q->where('wo_no', 'ilike', "%{$search}%")
+                    ->orWhereHas('part', function ($w) use ($search) {
+                        $w->where('part_number', 'ilike', "%{$search}%")
+                            ->orWhere('part_name', 'ilike', "%{$search}%");
+                    });
+            })
+            ->when($request->input('status'), fn ($q, $status) => $q->where('status', $status))
+            ->orderByDesc('created_at')
+            ->paginate(15)
+            ->withQueryString();
+
+        return Inertia::render('Production/WorkOrder/Index', [
+            'workOrders' => $workOrders,
+            'filters' => $request->only(['search', 'status']),
+            'statuses' => WorkOrder::STATUSES,
+        ]);
+    }
+
+    public function create(): Response
+    {
+        Gate::authorize('create', WorkOrder::class);
+
+        // FG parts saja yang boleh diproduksi.
+        $fgParts = Part::query()
+            ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) = ?', ['fg']))
+            ->where('is_active', true)
+            ->orderBy('part_number')
+            ->get(['id', 'part_number', 'part_name', 'model', 'part_type_id']);
+
+        return Inertia::render('Production/WorkOrder/Create', [
+            'fgParts' => $fgParts,
+        ]);
+    }
+
+    public function store(Request $request): RedirectResponse
+    {
+        Gate::authorize('create', WorkOrder::class);
+
+        $validated = $request->validate([
+            'part_id' => ['required', 'integer', 'exists:parts,id'],
+            'qty' => ['required', 'numeric', 'min:0.0001'],
+            'planned_date' => ['nullable', 'date'],
+            'remarks' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        [$workOrderId, $warnings] = $this->woService->createWorkOrder(
+            (int) $validated['part_id'],
+            (float) $validated['qty'],
+            $validated['planned_date'] ?? null,
+            $validated['remarks'] ?? null,
+            (int) auth()->id(),
+        );
+
+        if (count($warnings) > 0) {
+            return redirect()
+                ->route('work-orders.show', $workOrderId)
+                ->with('error', 'WO dibuat, tapi ada kekurangan stok: ' . implode(' · ', array_slice($warnings, 0, 5)) . (count($warnings) > 5 ? ' …' : ''));
+        }
+
+        return redirect()
+            ->route('work-orders.show', $workOrderId)
+            ->with('success', 'Work Order dibuat.');
+    }
+
+    public function show(WorkOrder $workOrder): Response
+    {
+        Gate::authorize('view', $workOrder);
+
+        $workOrder->load([
+            'part' => fn ($q) => $q->with('partType', 'uom'),
+            'items' => fn ($q) => $q->with(['process', 'machine', 'parentPart', 'childPart']),
+            'consumptions',
+        ]);
+
+        return Inertia::render('Production/WorkOrder/Show', [
+            'workOrder' => $workOrder,
+            'can' => [
+                'release' => Gate::allows('release', $workOrder),
+                'complete' => Gate::allows('update', $workOrder),
+                'cancel' => Gate::allows('update', $workOrder),
+                'delete' => Gate::allows('delete', $workOrder),
+            ],
+        ]);
+    }
+
+    public function release(WorkOrder $workOrder): RedirectResponse
+    {
+        Gate::authorize('release', $workOrder);
+
+        [$workOrder, $shortages] = $this->woService->releaseWorkOrder($workOrder, (int) auth()->id());
+
+        if (count($shortages) > 0) {
+            $lines = array_map(
+                fn ($s) => "{$s['child_part_name']} ({$s['child_part_no']}) kurang {$s['short']} {$s['uom']}",
+                $shortages,
+            );
+
+            return redirect()
+                ->route('work-orders.show', $workOrder)
+                ->with('error', 'WO di-release, tapi ada kekurangan: ' . implode(' · ', array_slice($lines, 0, 5)) . (count($lines) > 5 ? ' …' : ''));
+        }
+
+        return redirect()
+            ->route('work-orders.show', $workOrder)
+            ->with('success', 'WO di-release, material & WIP dikonsumsi FIFO.');
+    }
+
+    public function complete(WorkOrder $workOrder): RedirectResponse
+    {
+        Gate::authorize('update', $workOrder);
+
+        $this->woService->complete($workOrder, (int) auth()->id());
+
+        return redirect()
+            ->route('work-orders.show', $workOrder)
+            ->with('success', 'WO selesai.');
+    }
+
+    public function cancel(WorkOrder $workOrder): RedirectResponse
+    {
+        Gate::authorize('update', $workOrder);
+
+        $this->woService->cancel($workOrder, (int) auth()->id());
+
+        return redirect()
+            ->route('work-orders.show', $workOrder)
+            ->with('success', 'WO dibatalkan.');
+    }
+
+    public function destroy(WorkOrder $workOrder): RedirectResponse
+    {
+        Gate::authorize('delete', $workOrder);
+
+        $workOrder->delete();
+
+        return redirect()->route('work-orders.index')->with('success', 'WO dihapus.');
+    }
+}

@@ -31,12 +31,12 @@ class RolesAndPermissionsSeeder extends Seeder
 
         // Permissions: module.action (spec 0.2)
         $permissions = [];
-        foreach (['part', 'supplier', 'trucking', 'machine', 'process', 'bom'] as $module) {
+        foreach (['part', 'supplier', 'trucking', 'machine', 'process', 'bom', 'production'] as $module) {
             foreach (['view', 'create', 'update', 'delete'] as $action) {
                 $permissions[] = "{$module}.{$action}";
             }
         }
-        foreach (['purchase_order', 'incoming', 'receive'] as $module) {
+        foreach (['purchase_order', 'incoming', 'receive', 'work_order'] as $module) {
             foreach (['view', 'create', 'update', 'delete'] as $action) {
                 $permissions[] = "{$module}.{$action}";
             }
@@ -67,6 +67,7 @@ class RolesAndPermissionsSeeder extends Seeder
         $viewOnly = [
             'part.view', 'supplier.view', 'trucking.view', 'machine.view', 'process.view',
             'part_substitute.view', 'uom.view', 'config.view', 'bom.view',
+            'work_order.view', 'production.view',
         ];
         $management = Role::find($roleIds['management']);
         $management->permissions()->sync(

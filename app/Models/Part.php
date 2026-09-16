@@ -40,4 +40,9 @@ class Part extends Model
     {
         return $this->hasMany(PartSubstitute::class, 'substitute_part_id');
     }
+
+    public function workOrders(): HasMany
+    {
+        return $this->hasMany(WorkOrder::class);
+    }
 }

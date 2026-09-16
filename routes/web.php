@@ -17,6 +17,7 @@ use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\TruckingCompanyController;
 use App\Http\Controllers\UomController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\WorkOrderController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -47,6 +48,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/master-data', fn () => Inertia::render('Master/ModuleLauncher'))->name('master-data');
     Route::get('/administration', fn () => Inertia::render('Administration/ModuleLauncher'))->name('administration');
     Route::get('/incoming-data', fn () => Inertia::render('Incoming/ModuleLauncher'))->name('incoming-data');
+    Route::get('/production-data', fn () => Inertia::render('Production/ModuleLauncher'))->name('production-data');
 
     // Master Data — CRUD
     Route::resource('parts', PartController::class)->except(['show']);
@@ -82,6 +84,16 @@ Route::middleware(['auth'])->group(function () {
 
     // Stock (simple per-part ledger)
     Route::get('stocks', [PartStockController::class, 'index'])->name('stocks.index');
+
+    // Work Order (Production)
+    Route::get('work-orders', [WorkOrderController::class, 'index'])->name('work-orders.index');
+    Route::get('work-orders/create', [WorkOrderController::class, 'create'])->name('work-orders.create');
+    Route::post('work-orders', [WorkOrderController::class, 'store'])->name('work-orders.store');
+    Route::get('work-orders/{workOrder}', [WorkOrderController::class, 'show'])->name('work-orders.show');
+    Route::post('work-orders/{workOrder}/release', [WorkOrderController::class, 'release'])->name('work-orders.release');
+    Route::post('work-orders/{workOrder}/complete', [WorkOrderController::class, 'complete'])->name('work-orders.complete');
+    Route::post('work-orders/{workOrder}/cancel', [WorkOrderController::class, 'cancel'])->name('work-orders.cancel');
+    Route::delete('work-orders/{workOrder}', [WorkOrderController::class, 'destroy'])->name('work-orders.destroy');
 
     // Administration
     Route::resource('config', ConfigMasterController::class)->except(['show', 'create', 'edit']);

@@ -307,3 +307,56 @@ export interface PartStock {
     remarks: string | null;
     part?: (Pick<Part, 'id' | 'part_number' | 'part_name'> & { part_type?: PartType | null }) | null;
 }
+
+export interface WorkOrderItem {
+    id: number;
+    work_order_id: number;
+    sequence: number | null;
+    process?: Process | null;
+    machine?: Machine | null;
+    parent_part_id: number | null;
+    parent_part_name: string | null;
+    parent_qty: number | null;
+    parent_uom: string | null;
+    child_part_id: number | null;
+    child_part_name: string | null;
+    size: string | null;
+    child_qty: number | null;
+    uom_rm: string | null;
+    special_code: string | null;
+    source: string | null;
+    qty_required: number;
+    qty_consumed: number;
+    parent_part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
+    child_part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
+}
+
+export interface WorkOrderConsumption {
+    id: number;
+    work_order_id: number;
+    work_order_item_id: number;
+    part_stock_id: number | null;
+    part_id: number | null;
+    qty: number;
+    uom: string | null;
+}
+
+export interface WorkOrder {
+    id: number;
+    wo_no: string;
+    part_id: number;
+    qty: number;
+    status: string;
+    planned_date: string | null;
+    released_at: string | null;
+    completed_at: string | null;
+    remarks: string | null;
+    created_at?: string;
+    items_count?: number;
+    part?: (Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> & {
+        part_type?: PartType | null;
+        uom?: Uom | null;
+    }) | null;
+    items?: WorkOrderItem[];
+    consumptions?: WorkOrderConsumption[];
+}

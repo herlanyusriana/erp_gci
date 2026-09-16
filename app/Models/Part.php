@@ -12,7 +12,7 @@ class Part extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        'part_number', 'part_name', 'part_type_id', 'model', 'uom_id',
+        'part_number', 'part_name', 'hs_code', 'part_type_id', 'model', 'uom_id',
         'size', 'nett_weight', 'is_active', 'remarks', 'created_by', 'updated_by',
     ];
 

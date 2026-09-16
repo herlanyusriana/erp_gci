@@ -51,6 +51,7 @@ class MasterDataSeeder extends Seeder
                     ['part_number' => $p['part_number']],
                     [
                         'part_name' => $p['part_name'],
+                        'hs_code' => $p['hs_code'] ?? null,
                         'part_type_id' => $typeIds[$p['part_type']] ?? null,
                         'model' => $p['model'],
                         'uom_id' => isset($p['uom']) ? ($uomIds[$p['uom']] ?? null) : null,

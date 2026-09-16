@@ -25,6 +25,7 @@ class PartController extends Controller
                 $q->where(fn ($w) => $w
                     ->where('part_number', 'ilike', "%{$search}%")
                     ->orWhere('part_name', 'ilike', "%{$search}%")
+                    ->orWhere('hs_code', 'ilike', "%{$search}%")
                     ->orWhere('model', 'ilike', "%{$search}%"));
             });
 

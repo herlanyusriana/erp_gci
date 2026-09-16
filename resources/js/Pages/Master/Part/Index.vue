@@ -97,6 +97,7 @@ function destroy(part: Part) {
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                         <th class="px-4 py-3">Part Number</th>
                         <th class="px-4 py-3">Name</th>
+                        <th class="px-4 py-3">HS Code</th>
                         <th class="px-4 py-3">Type</th>
                         <th class="px-4 py-3">Model</th>
                         <th class="px-4 py-3">UOM</th>
@@ -110,6 +111,7 @@ function destroy(part: Part) {
                     <tr v-for="p in parts.data" :key="p.id" class="hover:bg-primary-light/40">
                         <td class="px-4 py-3 font-medium text-ink-primary">{{ p.part_number }}</td>
                         <td class="px-4 py-3 text-ink-primary">{{ p.part_name }}</td>
+                        <td class="px-4 py-3 text-ink-secondary">{{ p.hs_code ?? '—' }}</td>
                         <td class="px-4 py-3">
                             <span class="rounded-md bg-primary-light px-2 py-0.5 text-xs font-semibold text-primary">{{ p.part_type?.code }}</span>
                         </td>
@@ -130,7 +132,7 @@ function destroy(part: Part) {
                         </td>
                     </tr>
                     <tr v-if="parts.data.length === 0">
-                        <td colspan="9" class="px-4 py-12 text-center text-sm text-ink-secondary">Tidak ada part.</td>
+                        <td colspan="10" class="px-4 py-12 text-center text-sm text-ink-secondary">Tidak ada part.</td>
                     </tr>
                 </tbody>
             </table>

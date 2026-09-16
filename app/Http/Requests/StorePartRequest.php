@@ -18,6 +18,7 @@ class StorePartRequest extends FormRequest
         return [
             'part_number' => ['required', 'string', 'max:120', 'unique:parts,part_number,' . ($partId ?? 'NULL')],
             'part_name' => ['required', 'string', 'max:255'],
+            'hs_code' => ['nullable', 'string', 'max:30'],
             'part_type_id' => ['required', 'exists:part_types,id'],
             'model' => ['nullable', 'string', 'max:255'],
             'uom_id' => ['nullable', 'exists:uoms,id'],

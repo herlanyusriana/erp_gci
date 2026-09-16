@@ -42,6 +42,7 @@ export interface Part {
     id: number;
     part_number: string;
     part_name: string;
+    hs_code?: string | null;
     part_type?: PartType | null;
     uom?: Uom | null;
     model?: string | null;

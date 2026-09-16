@@ -19,6 +19,7 @@ const isEdit = props.part !== null;
 const form = useForm({
     part_number: props.part?.part_number ?? '',
     part_name: props.part?.part_name ?? '',
+    hs_code: props.part?.hs_code ?? '',
     part_type_id: props.part?.part_type?.id ?? (props.defaultType
         ? (props.partTypes.find((t) => t.code === props.defaultType)?.id ?? ('' as number | ''))
         : ('' as number | '')),
@@ -102,6 +103,15 @@ function submit() {
                         <InputLabel for="part_name" value="Part Name" />
                         <input id="part_name" v-model="form.part_name" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.part_name" class="mt-1" />
+                    </div>
+                    <div v-if="typeCode !== 'WIP'">
+                        <InputLabel for="hs_code" value="HS Code" />
+                        <input id="hs_code" v-model="form.hs_code" type="text" placeholder="cth. 7225.30.90" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <InputError :message="form.errors.hs_code" class="mt-1" />
+                    </div>
+                    <div v-else>
+                        <InputLabel for="hs_code" value="HS Code" />
+                        <input id="hs_code" v-model="form.hs_code" type="text" disabled placeholder="— (WIP tidak pakai)" class="mt-1 w-full cursor-not-allowed rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-secondary focus:border-primary focus:ring-primary" />
                     </div>
                     <div>
                         <InputLabel for="model" value="Model" />

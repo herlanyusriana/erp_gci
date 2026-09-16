@@ -1,0 +1,90 @@
+<script setup lang="ts">
+import { ref, watch } from 'vue';
+import Dropdown from '@/Components/Dropdown.vue';
+import DropdownLink from '@/Components/DropdownLink.vue';
+import { Link, usePage } from '@inertiajs/vue3';
+
+const showingUserMenu = ref(false);
+
+const page = usePage();
+const flashVisible = ref(false);
+
+watch(
+    () => (page.props as any).flash,
+    (flash) => {
+        if (flash?.success || flash?.error) {
+            flashVisible.value = true;
+            setTimeout(() => (flashVisible.value = false), 4000);
+        }
+    },
+    { immediate: true },
+);
+</script>
+
+<template>
+    <div class="min-h-screen bg-background">
+        <!-- Topbar (spec 0.7) -->
+        <nav class="border-b border-borderline bg-surface">
+            <div class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center gap-3">
+                    <Link
+                        :href="route('launcher')"
+                        class="flex items-center gap-2 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                        <span
+                            class="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-sm font-bold text-white"
+                        >
+                            GC
+                        </span>
+                        <span class="text-lg font-semibold text-ink-primary">
+                            {{ $page.props.appSettings.applicationName ?? 'Geum Cheon ERP' }}
+                        </span>
+                    </Link>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <Link
+                        :href="route('launcher')"
+                        class="hidden rounded-md px-3 py-2 text-sm font-medium text-ink-secondary transition hover:bg-primary-light hover:text-primary sm:block"
+                    >
+                        Launcher
+                    </Link>
+
+                    <!-- User dropdown -->
+                    <Dropdown align="right" width="48">
+                        <template #trigger>
+                            <button
+                                type="button"
+                                class="inline-flex items-center rounded-md border border-transparent bg-surface px-3 py-2 text-sm font-medium leading-4 text-ink-primary transition hover:text-primary focus:outline-none"
+                            >
+                                {{ $page.props.auth.user.name }}
+                                <svg class="-me-0.5 ms-2 h-4 w-4 text-ink-secondary" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                                </svg>
+                            </button>
+                        </template>
+                        <template #content>
+                            <DropdownLink :href="route('profile.edit')">Profile</DropdownLink>
+                            <DropdownLink :href="route('logout')" method="post" as="button">Log Out</DropdownLink>
+                        </template>
+                    </Dropdown>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Flash toast -->
+        <div v-if="flashVisible && (($page.props as any).flash?.success || ($page.props as any).flash?.error)" class="fixed top-20 right-6 z-50">
+            <div
+                :class="($page.props as any).flash?.success ? 'border-success/30 bg-success/10 text-success' : 'border-danger/30 bg-danger/10 text-danger'"
+                class="rounded-lg border px-4 py-3 text-sm font-medium shadow-lg"
+            >
+                {{ ($page.props as any).flash?.success ?? ($page.props as any).flash?.error }}
+            </div>
+        </div>
+
+        <!-- Page content -->
+        <main class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+            <slot />
+        </main>
+    </div>
+</template>

@@ -1,0 +1,161 @@
+<script setup lang="ts">
+import { ref } from 'vue';
+import { useForm } from '@inertiajs/vue3';
+import AppLayout from '@/Layouts/AppLayout.vue';
+import BackButton from '@/Components/BackButton.vue';
+import InputError from '@/Components/InputError.vue';
+import type { PurchaseOrder, Supplier, Part } from '@/types';
+
+interface ItemRow {
+    part_id: number | '';
+    qty: number | '';
+    unit: string;
+    price: number | '';
+    notes: string;
+}
+
+const props = defineProps<{
+    purchaseOrder: PurchaseOrder | null;
+    suppliers: Array<Pick<Supplier, 'id' | 'supplier_code' | 'supplier_name'>>;
+    parts: Array<Pick<Part, 'id' | 'part_number' | 'part_name'>>;
+}>();
+
+const blankItem = (): ItemRow => ({ part_id: '', qty: '', unit: '', price: '', notes: '' });
+
+const rows = ref<ItemRow[]>(
+    props.purchaseOrder?.items?.map((i) => ({
+        part_id: i.part_id ?? '',
+        qty: i.qty,
+        unit: i.unit ?? '',
+        price: i.price ?? '',
+        notes: i.notes ?? '',
+    })) ?? [blankItem()],
+);
+
+const form = useForm({
+    po_no: props.purchaseOrder?.po_no ?? '',
+    supplier_id: props.purchaseOrder?.supplier_id ?? ('' as number | ''),
+    po_date: props.purchaseOrder?.po_date ?? '',
+    expected_date: props.purchaseOrder?.expected_date ?? '',
+    notes: props.purchaseOrder?.notes ?? '',
+    status: props.purchaseOrder?.status ?? 'draft',
+    items: [] as any[],
+});
+
+function addRow() {
+    rows.value.push(blankItem());
+}
+function removeRow(i: number) {
+    if (rows.value.length > 1) rows.value.splice(i, 1);
+}
+function submit() {
+    form.items = rows.value
+        .filter((r) => r.part_id !== '')
+        .map((r) => ({
+            part_id: Number(r.part_id),
+            qty: r.qty === '' ? 0 : Number(r.qty),
+            unit: r.unit,
+            price: r.price === '' ? null : Number(r.price),
+            notes: r.notes,
+        })) as any;
+
+    if (props.purchaseOrder) {
+        form.put(route('purchase-orders.update', props.purchaseOrder.id));
+    } else {
+        form.post(route('purchase-orders.store'));
+    }
+}
+</script>
+
+<template>
+    <AppLayout>
+        <BackButton :href="route('purchase-orders.index')" class="mb-4" />
+
+        <h1 class="mb-6 text-2xl font-bold tracking-tight text-ink-primary">
+            {{ purchaseOrder ? `Edit PO ${purchaseOrder.po_no}` : 'Tambah Purchase Order' }}
+        </h1>
+
+        <form @submit.prevent="submit" class="space-y-6">
+            <div class="rounded-xl border border-borderline bg-surface p-5">
+                <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">PO No</label>
+                        <input v-model="form.po_no" type="text" placeholder="PO-2026-001" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <InputError :message="form.errors.po_no" class="mt-1" />
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">Supplier</label>
+                        <select v-model="form.supplier_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                            <option value="">— Pilih Supplier —</option>
+                            <option v-for="s in suppliers" :key="s.id" :value="s.id">{{ s.supplier_code }} · {{ s.supplier_name }}</option>
+                        </select>
+                        <InputError :message="form.errors.supplier_id" class="mt-1" />
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">Status</label>
+                        <select v-model="form.status" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                            <option value="draft">Draft</option>
+                            <option value="confirmed">Confirmed</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">PO Date</label>
+                        <input v-model="form.po_date" type="date" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">Expected Date</label>
+                        <input v-model="form.expected_date" type="date" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                    </div>
+                    <div class="sm:col-span-2 lg:col-span-1">
+                        <label class="text-xs font-semibold text-ink-secondary">Notes</label>
+                        <input v-model="form.notes" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="rounded-xl border border-borderline bg-surface p-5">
+                <div class="mb-4 flex items-center justify-between">
+                    <h2 class="text-base font-semibold text-ink-primary">Items</h2>
+                    <button type="button" @click="addRow" class="inline-flex items-center gap-1.5 rounded-md border border-primary px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-primary-light">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                        Tambah Baris
+                    </button>
+                </div>
+                <InputError :message="form.errors.items" class="mb-3" />
+
+                <div v-for="(r, i) in rows" :key="i" class="grid gap-3 border-t border-borderline py-3 sm:grid-cols-12">
+                    <div class="sm:col-span-4">
+                        <label class="text-xs font-semibold text-ink-secondary">Part</label>
+                        <select v-model="r.part_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                            <option value="">— Pilih Part —</option>
+                            <option v-for="p in parts" :key="p.id" :value="p.id">{{ p.part_number }} · {{ p.part_name }}</option>
+                        </select>
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="text-xs font-semibold text-ink-secondary">Qty</label>
+                        <input v-model="r.qty" type="number" step="0.0001" min="0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="text-xs font-semibold text-ink-secondary">Unit</label>
+                        <input v-model="r.unit" type="text" placeholder="PCS" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="text-xs font-semibold text-ink-secondary">Harga</label>
+                        <input v-model="r.price" type="number" step="0.0001" min="0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                    </div>
+                    <div class="flex items-end sm:col-span-2">
+                        <button type="button" @click="removeRow(i)" :disabled="rows.length <= 1" class="rounded-lg border border-borderline px-3 py-2 text-sm text-danger transition hover:bg-danger/10 disabled:opacity-40">Hapus</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-3">
+                <BackButton :href="route('purchase-orders.index')">Batal</BackButton>
+                <button type="submit" :disabled="form.processing" class="rounded-md bg-primary px-5 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60">
+                    {{ form.processing ? 'Menyimpan…' : 'Simpan' }}
+                </button>
+            </div>
+        </form>
+    </AppLayout>
+</template>

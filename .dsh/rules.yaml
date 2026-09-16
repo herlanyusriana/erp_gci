@@ -1,0 +1,15 @@
+# Permission-rules — project waiver untuk build offline-dari-registry.
+# Membolehkan koneksi shell (composer/npm) ke registry paket resmi saja.
+# Dibuat atas permintaan pengguna: "Buka akses network lalu Vue3+Inertia+TS".
+rules:
+  - match:
+      tools: [bash, pwsh]
+      network:
+        domains:
+          - npmjs.org
+          - packagist.org
+          - github.com
+          - githubusercontent.com
+        schemes: [https]
+    action: allow
+    reason: "allow package registries (npm/packagist/github) for composer & npm install"

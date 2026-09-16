@@ -1,0 +1,116 @@
+<script setup lang="ts">
+import { ref } from 'vue';
+import { Link, router } from '@inertiajs/vue3';
+import AppLayout from '@/Layouts/AppLayout.vue';
+import BackButton from '@/Components/BackButton.vue';
+import ActionButton from '@/Components/ActionButton.vue';
+import Pagination from '@/Components/Pagination.vue';
+import type { IncomingArrival, Paginated } from '@/types';
+
+interface SupplierOpt { id: number; supplier_code: string | null; supplier_name: string; }
+
+const props = defineProps<{
+    localPos: Paginated<IncomingArrival>;
+    suppliers: SupplierOpt[];
+    filters: { search?: string; supplier_id?: string };
+}>();
+
+const search = ref(props.filters.search ?? '');
+const supplierId = ref(props.filters.supplier_id ?? '');
+let timer: ReturnType<typeof setTimeout> | undefined;
+
+function doSearch() {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+        router.get(route('local-pos.index'), {
+            search: search.value || undefined,
+            supplier_id: supplierId.value || undefined,
+        }, { preserveState: true, replace: true });
+    }, 300);
+}
+
+const statusTone = (s: string) => {
+    switch (s) {
+        case 'completed': return 'bg-success/10 text-success';
+        case 'cancelled': return 'bg-danger/10 text-danger';
+        default: return 'bg-warning/10 text-warning';
+    }
+};
+
+function remove(id: number, no: string | null) {
+    if (confirm(`Hapus Local PO ${no ?? ''}?`)) {
+        router.delete(route('local-pos.destroy', id));
+    }
+}
+</script>
+
+<template>
+    <AppLayout>
+        <BackButton :href="route('incoming-data')" class="mb-4" />
+
+        <div class="mb-6 flex items-end justify-between gap-4">
+            <div>
+                <h1 class="text-2xl font-bold tracking-tight text-ink-primary">Local PO</h1>
+                <p class="mt-1 text-sm text-ink-secondary">PO lokal — tanpa vessel/container, receive langsung per item.</p>
+            </div>
+            <div class="flex gap-2">
+                <a :href="route('local-pos.export')" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-primary transition hover:bg-background">Export Excel</a>
+                <Link :href="route('local-pos.create')" class="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover">
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                    Tambah
+                </Link>
+            </div>
+        </div>
+
+        <div class="mb-4 flex flex-wrap gap-3">
+            <input v-model="search" @input="doSearch" type="search" placeholder="Cari PO / arrival no…" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
+            <select v-model="supplierId" @change="doSearch" class="rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                <option value="">Semua supplier</option>
+                <option v-for="s in suppliers" :key="s.id" :value="s.id">{{ s.supplier_code ? `${s.supplier_code} — ` : '' }}{{ s.supplier_name }}</option>
+            </select>
+        </div>
+
+        <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
+            <table class="min-w-full divide-y divide-borderline text-sm">
+                <thead class="bg-background">
+                    <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
+                        <th class="px-4 py-3">PO No / Arrival</th>
+                        <th class="px-4 py-3">PO Date</th>
+                        <th class="px-4 py-3">Supplier</th>
+                        <th class="px-4 py-3 text-right">Items</th>
+                        <th class="px-4 py-3 text-right">Sisa</th>
+                        <th class="px-4 py-3">Status</th>
+                        <th class="px-4 py-3 text-right">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-borderline">
+                    <tr v-for="po in localPos.data" :key="po.id" class="hover:bg-primary-light/40">
+                        <td class="px-4 py-3 font-medium text-ink-primary">
+                            <Link :href="route('local-pos.show', po.id)" class="hover:text-primary">{{ po.invoice_no ?? '—' }}</Link>
+                            <div class="text-xs text-ink-secondary">{{ po.arrival_no }}</div>
+                        </td>
+                        <td class="px-4 py-3 text-ink-primary">{{ po.invoice_date ?? '—' }}</td>
+                        <td class="px-4 py-3 text-ink-primary">{{ po.supplier?.supplier_name ?? '—' }}</td>
+                        <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ po.items_count ?? 0 }}</td>
+                        <td class="px-4 py-3 text-right tabular-nums font-semibold" :class="(po.remaining_qty ?? 0) > 0 ? 'text-warning' : 'text-success'">{{ po.remaining_qty ?? 0 }}</td>
+                        <td class="px-4 py-3">
+                            <span :class="statusTone(po.status)" class="rounded-md px-2 py-0.5 text-xs font-semibold uppercase">{{ po.status }}</span>
+                        </td>
+                        <td class="px-4 py-3">
+                            <div class="flex justify-end gap-1.5">
+                                <ActionButton :href="route('local-pos.show', po.id)" label="Lihat" variant="view" />
+                                <ActionButton :href="route('local-pos.edit', po.id)" label="Edit" variant="edit" />
+                                <ActionButton label="Hapus" variant="delete" @click="remove(po.id, po.invoice_no)" />
+                            </div>
+                        </td>
+                    </tr>
+                    <tr v-if="!localPos.data.length">
+                        <td colspan="7" class="px-4 py-12 text-center text-sm text-ink-secondary">Tidak ada Local PO.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <Pagination :links="localPos.links" />
+    </AppLayout>
+</template>

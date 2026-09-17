@@ -308,6 +308,12 @@ export interface PartStock {
     part?: (Pick<Part, 'id' | 'part_number' | 'part_name'> & { part_type?: PartType | null }) | null;
 }
 
+export interface WorkOrderMachine {
+    id: number;
+    machine_code: string;
+    machine_name: string;
+}
+
 export interface WorkOrderItem {
     id: number;
     work_order_id: number;

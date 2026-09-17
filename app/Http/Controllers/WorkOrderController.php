@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Machine;
 use App\Models\Part;
 use App\Models\PartSubstitute;
 use App\Models\WorkOrder;
@@ -98,9 +99,11 @@ class WorkOrderController extends Controller
             'items' => fn ($q) => $q->with(['process', 'machine', 'parentPart', 'childPart.partSubstitutes.substitutePart', 'selectedPart']),
             'consumptions',
         ]);
+        $machines = Machine::query()->where('is_active', true)->orderBy('machine_name')->get(['id', 'machine_code', 'machine_name']);
 
         return Inertia::render('Production/WorkOrder/Show', [
             'workOrder' => $workOrder,
+            'machines' => $machines,
             'can' => [
                 'release' => Gate::allows('release', $workOrder),
                 'complete' => Gate::allows('update', $workOrder),
@@ -115,11 +118,17 @@ class WorkOrderController extends Controller
         Gate::authorize('update', $workOrder);
         abort_unless($item->work_order_id === $workOrder->id && $workOrder->status === 'planned', 422, 'Item WO tidak dapat diubah.');
 
-        $data = $request->validate(['selected_part_id' => ['required', 'integer', 'exists:parts,id']]);
+        $data = $request->validate([
+            'selected_part_id' => ['required', 'integer', 'exists:parts,id'],
+            'machine_id' => ['nullable', 'integer', 'exists:machines,id'],
+        ]);
         $allowed = (int) $data['selected_part_id'] === (int) $item->child_part_id
             || PartSubstitute::where('part_id', $item->child_part_id)->where('substitute_part_id', $data['selected_part_id'])->where('is_active', true)->exists();
         abort_unless($allowed, 422, 'Part bukan main material atau substitute aktif untuk material BOM ini.');
-        $item->update(['selected_part_id' => $data['selected_part_id']]);
+        $item->update([
+            'selected_part_id' => $data['selected_part_id'],
+            'machine_id' => $data['machine_id'] ?? null,
+        ]);
 
         return back()->with('success', 'Material WO diperbarui.');
     }

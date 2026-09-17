@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
-import type { WorkOrder, WorkOrderItem } from '@/types';
+import type { WorkOrder, WorkOrderItem, WorkOrderMachine } from '@/types';
 
 const props = defineProps<{
     workOrder: WorkOrder;
     can: { release: boolean; complete: boolean; cancel: boolean; delete: boolean };
+    machines: WorkOrderMachine[];
 }>();
 
 const items = computed(() => props.workOrder.items ?? []);
@@ -42,16 +43,31 @@ const completeForm = useForm({});
 const cancelForm = useForm({});
 const deleteForm = useForm({});
 const itemForms = new Map<number, ReturnType<typeof useForm>>();
+const editingRows = ref<number[]>([]);
 
 function itemForm(id: number) {
-    if (!itemForms.has(id)) itemForms.set(id, useForm({ selected_part_id: '' }));
+    if (!itemForms.has(id)) itemForms.set(id, useForm({ selected_part_id: '', machine_id: '' }));
     return itemForms.get(id)!;
 }
 
-function saveMaterial(item: WorkOrderItem) {
-    const selected = item.selected_part_id || item.child_part_id;
-    itemForm(item.id).selected_part_id = String(selected ?? '');
-    itemForm(item.id).patch(route('work-orders.items.update', [props.workOrder.id, item.id]));
+function isEditing(id: number) {
+    return editingRows.value.includes(id);
+}
+
+function startEdit(item: WorkOrderItem) {
+    itemForm(item.id).selected_part_id = String(item.selected_part_id || item.child_part_id || '');
+    itemForm(item.id).machine_id = String(item.machine_id || '');
+    if (!editingRows.value.includes(item.id)) editingRows.value.push(item.id);
+}
+
+function cancelEdit(id: number) {
+    editingRows.value = editingRows.value.filter((rowId) => rowId !== id);
+}
+
+function saveItem(item: WorkOrderItem) {
+    itemForm(item.id).patch(route('work-orders.items.update', [props.workOrder.id, item.id]), {
+        onSuccess: () => cancelEdit(item.id),
+    });
 }
 
 function doRelease() {
@@ -144,6 +160,7 @@ function doDestroy() {
                             <th class="px-3 py-3">Mesin</th>
                             <th class="px-3 py-3">Material / Subs</th>
                             <th class="px-3 py-3">Parent</th>
+                            <th class="px-3 py-3 text-center">Aksi</th>
                             <th class="px-3 py-3 text-right">Child Qty</th>
                             <th class="px-3 py-3">UOM</th>
                             <th class="px-3 py-3">Source</th>
@@ -156,10 +173,13 @@ function doDestroy() {
                             <td class="px-3 py-2.5 tabular-nums text-ink-secondary">{{ it.sequence ?? '—' }}</td>
                             <td class="px-3 py-2.5 text-ink-primary">{{ it.process?.process_name ?? '—' }}</td>
                             <td class="px-3 py-2.5">
-                                <div class="flex items-center gap-2 whitespace-nowrap">
+                                <div v-if="!isEditing(it.id)" class="flex items-center gap-2 whitespace-nowrap">
                                     <span class="text-ink-primary">{{ it.machine?.machine_name ?? '—' }}</span>
-                                    <a v-if="it.machine_id" :href="route('machines.edit', it.machine_id)" title="Edit mesin di Master" class="text-ink-secondary hover:text-primary">✎</a>
                                 </div>
+                                <select v-else v-model="itemForm(it.id).machine_id" class="w-44 rounded-md border-borderline bg-background px-2 py-1 text-sm text-ink-primary">
+                                    <option value="">— Pilih mesin —</option>
+                                    <option v-for="m in machines" :key="m.id" :value="m.id">{{ m.machine_code }} · {{ m.machine_name }}</option>
+                                </select>
                             </td>
                             <td class="px-3 py-2.5">
                                 <div class="min-w-64">
@@ -168,7 +188,7 @@ function doDestroy() {
                                             :list="`wo-material-${it.id}`"
                                             :value="it.selected_part?.part_number ?? it.child_part?.part_number ?? it.child_part_name ?? ''"
                                             :disabled="workOrder.status !== 'planned'"
-                                            @change="(e) => { const p = [...(it.child_part?.partSubstitutes ?? []).map((s) => s.substitute_part), it.child_part].find((p) => p && p.part_number === (e.target as HTMLInputElement).value); if (p) { it.selected_part_id = p.id; saveMaterial(it); } }"
+                                            @change="(e) => { const p = [...(it.child_part?.partSubstitutes ?? []).map((s) => s.substitute_part), it.child_part].find((p) => p && p.part_number === (e.target as HTMLInputElement).value); if (p) { it.selected_part_id = p.id; saveItem(it); } }"
                                             class="w-full rounded-md border-borderline bg-background px-2 py-1 text-sm text-ink-primary"
                                         />
                                         <span v-if="itemForm(it.id).processing" class="text-xs text-ink-secondary">Menyimpan…</span>
@@ -190,9 +210,21 @@ function doDestroy() {
                             </td>
                             <td class="px-3 py-2.5 text-right tabular-nums text-ink-secondary">{{ fmt(it.qty_required) }}</td>
                             <td class="px-3 py-2.5 text-right tabular-nums" :class="Number(it.qty_consumed) < Number(it.qty_required) ? 'text-danger' : 'text-success'">{{ fmt(it.qty_consumed) }}</td>
+                            <td class="px-3 py-2.5 text-center">
+                                <template v-if="workOrder.status === 'planned' && can.release">
+                                    <div v-if="!isEditing(it.id)">
+                                        <button type="button" @click="startEdit(it)" title="Edit routing WO" class="rounded-md px-2 py-1 text-lg leading-none text-ink-secondary hover:bg-primary-light hover:text-primary">✎</button>
+                                    </div>
+                                    <div v-else class="flex items-center justify-center gap-1">
+                                        <button type="button" @click="saveItem(it)" :disabled="itemForm(it.id).processing" title="Simpan" class="rounded-md px-2 py-1 text-success hover:bg-success/10">✓</button>
+                                        <button type="button" @click="cancelEdit(it.id)" title="Batal" class="rounded-md px-2 py-1 text-danger hover:bg-danger/10">×</button>
+                                    </div>
+                                </template>
+                                <span v-else class="text-ink-secondary">—</span>
+                            </td>
                         </tr>
                         <tr v-if="items.length === 0">
-                            <td colspan="10" class="px-4 py-12 text-center text-sm text-ink-secondary">Tidak ada routing.</td>
+                            <td colspan="11" class="px-4 py-12 text-center text-sm text-ink-secondary">Tidak ada routing.</td>
                         </tr>
                     </tbody>
                 </table>

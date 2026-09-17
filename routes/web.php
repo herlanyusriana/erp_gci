@@ -9,6 +9,7 @@ use App\Http\Controllers\PartController;
 use App\Http\Controllers\PartStockController;
 use App\Http\Controllers\PartSubstituteController;
 use App\Http\Controllers\ProcessController;
+use App\Http\Controllers\ProductionPlanController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\ReceiveController;
@@ -21,6 +22,8 @@ use App\Http\Controllers\WorkOrderController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
+
+Route::post('/locale', \App\Http\Controllers\LocaleController::class)->name('locale.update');
 
 Route::get('/', function () {
     return Inertia::render('Welcome', [
@@ -84,6 +87,13 @@ Route::middleware(['auth'])->group(function () {
 
     // Stock (simple per-part ledger)
     Route::get('stocks', [PartStockController::class, 'index'])->name('stocks.index');
+
+    // Production Plan (papan harian; sumber WO)
+    Route::get('production-plans', [ProductionPlanController::class, 'index'])->name('production-plans.index');
+    Route::post('production-plans', [ProductionPlanController::class, 'store'])->name('production-plans.store');
+    Route::post('production-plans/items/reorder', [ProductionPlanController::class, 'reorder'])->name('production-plans.items.reorder');
+    Route::patch('production-plans/items/{item}', [ProductionPlanController::class, 'update'])->name('production-plans.items.update');
+    Route::delete('production-plans/items/{item}', [ProductionPlanController::class, 'detach'])->name('production-plans.items.detach');
 
     // Work Order (Production)
     Route::get('work-orders', [WorkOrderController::class, 'index'])->name('work-orders.index');

@@ -48,7 +48,7 @@ class ConfigMasterController extends Controller
             array_diff_key($data, array_flip(['group', 'key'])),
         );
 
-        return redirect()->route('config.index')->with('success', 'Config tersimpan.');
+        return redirect()->route('config.index')->with('success', __('Config tersimpan.'));
     }
 
     public function update(Request $request, ConfigMaster $config): RedirectResponse
@@ -65,13 +65,13 @@ class ConfigMasterController extends Controller
         $data['updated_by'] = $request->user()?->id;
         $config->update($data);
 
-        return redirect()->route('config.index')->with('success', 'Config diperbarui.');
+        return redirect()->route('config.index')->with('success', __('Config diperbarui.'));
     }
 
     public function destroy(ConfigMaster $config): RedirectResponse
     {
         $config->delete();
 
-        return redirect()->route('config.index')->with('success', 'Config dihapus.');
+        return redirect()->route('config.index')->with('success', __('Config dihapus.'));
     }
 }

@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { useForm } from '@inertiajs/vue3';
+import { useI18n } from 'vue-i18n';
+import { Head, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import InputError from '@/Components/InputError.vue';
 import type { IncomingReceive, IncomingArrivalItem } from '@/types';
+
+const { t } = useI18n();
 
 const props = defineProps<{
     receive: IncomingReceive;
@@ -46,61 +49,62 @@ function submit() {
 </script>
 
 <template>
+    <Head :title="t('incoming.editReceive', { number: receive.id })" />
     <AppLayout>
         <BackButton :href="backHref()" class="mb-4" />
 
-        <h1 class="mb-4 text-2xl font-bold tracking-tight text-ink-primary">Edit Receive #{{ receive.id }}</h1>
+        <h1 class="mb-4 text-2xl font-bold tracking-tight text-ink-primary">{{ t('incoming.editReceive', { number: receive.id }) }}</h1>
         <p class="mb-6 flex flex-wrap items-center justify-between gap-3 text-sm text-ink-secondary">
             <span>{{ arrivalItem.part?.part_number ?? '—' }} · {{ receive.tag }}</span>
-            <a :href="route('receive.label', receive.id)" target="_blank" rel="noopener" class="rounded-md bg-primary px-4 py-2 text-xs font-semibold text-white transition hover:bg-primary-hover">Cetak Label</a>
+            <a :href="route('receive.label', receive.id)" target="_blank" rel="noopener" class="rounded-md bg-primary px-4 py-2 text-xs font-semibold text-white transition hover:bg-primary-hover">{{ t('incoming.printLabel') }}</a>
         </p>
 
         <form @submit.prevent="submit" class="max-w-2xl space-y-4 rounded-xl border border-borderline bg-surface p-5">
             <div class="grid gap-4 sm:grid-cols-2">
                 <div>
-                    <label class="text-xs font-semibold text-ink-secondary">Tanggal Terima</label>
+                    <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.receiveDate') }}</label>
                     <input v-model="form.receive_date" type="date" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     <InputError :message="form.errors.receive_date" class="mt-1" />
                 </div>
                 <div>
-                    <label class="text-xs font-semibold text-ink-secondary">Tag</label>
+                    <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.tag') }}</label>
                     <input v-model="form.tag" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     <InputError :message="form.errors.tag" class="mt-1" />
                 </div>
                 <div>
-                    <label class="text-xs font-semibold text-ink-secondary">Truck No</label>
+                    <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.truckNo') }}</label>
                     <input v-model="form.truck_no" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                 </div>
                 <div>
-                    <label class="text-xs font-semibold text-ink-secondary">Qty</label>
+                    <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.qty') }}</label>
                     <input v-model="form.qty" type="number" step="0.0001" min="0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     <InputError :message="form.errors.qty" class="mt-1" />
                 </div>
                 <div>
-                    <label class="text-xs font-semibold text-ink-secondary">Bundle Qty</label>
+                    <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.bundleQty') }}</label>
                     <input v-model="form.bundle_qty" type="number" step="0.0001" min="0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                 </div>
                 <div>
-                    <label class="text-xs font-semibold text-ink-secondary">Bundle Unit</label>
+                    <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.bundleUnit') }}</label>
                     <select v-model="form.bundle_unit" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
-                        <option>PALLET</option><option>BUNDLE</option><option>BOX</option><option>BAG</option><option>ROLL</option><option>PACKAGES</option>
+                        <option value="PALLET">{{ t('incoming.unit_PALLET') }}</option><option value="BUNDLE">{{ t('incoming.unit_BUNDLE') }}</option><option value="BOX">{{ t('incoming.unit_BOX') }}</option><option value="BAG">{{ t('incoming.unit_BAG') }}</option><option value="ROLL">{{ t('incoming.unit_ROLL') }}</option><option value="PACKAGES">{{ t('incoming.unit_PACKAGES') }}</option>
                     </select>
                 </div>
                 <div v-if="weightBasis">
-                    <label class="text-xs font-semibold text-ink-secondary">Net Weight (KGM)</label>
+                    <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.netUnit', { unit: 'KGM' }) }}</label>
                     <input v-model="form.net_weight" type="number" step="0.0001" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     <InputError :message="form.errors.net_weight" class="mt-1" />
                 </div>
                 <div v-if="weightBasis">
-                    <label class="text-xs font-semibold text-ink-secondary">Gross Weight (KGM)</label>
+                    <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.grossUnit', { unit: 'KGM' }) }}</label>
                     <input v-model="form.gross_weight" type="number" step="0.0001" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                 </div>
             </div>
 
             <div class="flex items-center justify-end gap-3 pt-2">
-                <BackButton :href="route('incoming-arrivals.show', arrivalItem.arrival_id)">Batal</BackButton>
+                <BackButton :href="route('incoming-arrivals.show', arrivalItem.arrival_id)">{{ t('incoming.cancel') }}</BackButton>
                 <button type="submit" :disabled="form.processing" class="rounded-md bg-primary px-5 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60">
-                    {{ form.processing ? 'Menyimpan…' : 'Simpan' }}
+                    {{ form.processing ? t('incoming.saving') : t('incoming.save') }}
                 </button>
             </div>
         </form>

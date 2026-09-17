@@ -7,7 +7,10 @@ import ActionButton from '@/Components/ActionButton.vue';
 import Pagination from '@/Components/Pagination.vue';
 import Modal from '@/Components/Modal.vue';
 import InputError from '@/Components/InputError.vue';
+import { useI18n } from 'vue-i18n';
 import type { Role, Permission, Paginated, PageProps } from '@/types';
+
+const { t } = useI18n();
 
 const page = usePage<PageProps>();
 
@@ -90,7 +93,7 @@ function submit() {
 }
 
 function remove(role: Role) {
-    if (confirm(`Hapus role ${role.name}?`)) router.delete(route('roles.destroy', role.id));
+    if (confirm(t('account.deleteRoleConfirm', { name: role.name }))) router.delete(route('roles.destroy', role.id));
 }
 </script>
 
@@ -100,27 +103,27 @@ function remove(role: Role) {
 
         <div class="mb-6 flex items-end justify-between gap-4">
             <div>
-                <h1 class="text-2xl font-bold tracking-tight text-ink-primary">Role & Permission</h1>
-                <p class="mt-1 text-sm text-ink-secondary">Kelola role dan permission akses.</p>
+                <h1 class="text-2xl font-bold tracking-tight text-ink-primary">{{ t('account.rolesPermissions') }}</h1>
+                <p class="mt-1 text-sm text-ink-secondary">{{ t('account.rolesHelp') }}</p>
             </div>
             <button v-if="perms.create" @click="openCreate" class="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover">
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                Tambah Role
+                {{ t('account.addRole') }}
             </button>
         </div>
 
         <!-- Search -->
-        <input v-model="search" @input="doSearch" type="search" placeholder="Cari role…" class="mb-4 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
+        <input v-model="search" @input="doSearch" type="search" :placeholder="t('account.searchRoles')" class="mb-4 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
 
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
             <table class="min-w-full divide-y divide-borderline text-sm">
                 <thead class="bg-background">
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th class="px-4 py-3">Role</th>
-                        <th class="px-4 py-3">Label</th>
-                        <th class="px-4 py-3">Users</th>
-                        <th class="px-4 py-3">Permissions</th>
-                        <th class="px-4 py-3 text-right">Aksi</th>
+                        <th class="px-4 py-3">{{ t('account.role') }}</th>
+                        <th class="px-4 py-3">{{ t('account.label') }}</th>
+                        <th class="px-4 py-3">{{ t('account.users') }}</th>
+                        <th class="px-4 py-3">{{ t('account.permissions') }}</th>
+                        <th class="px-4 py-3 text-right">{{ t('account.actions') }}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-borderline">
@@ -131,13 +134,13 @@ function remove(role: Role) {
                         <td class="px-4 py-3 text-ink-secondary">{{ (r.permissions ?? []).length }}</td>
                         <td class="px-4 py-3">
                             <div class="flex justify-end gap-1.5">
-                                <ActionButton v-if="perms.update && r.name !== 'super-admin'" label="Edit" variant="edit" @click="openEdit(r)" />
-                                <ActionButton v-if="perms.delete && r.name !== 'super-admin'" label="Hapus" variant="delete" @click="remove(r)" />
+                                <ActionButton v-if="perms.update && r.name !== 'super-admin'" :label="t('account.edit')" variant="edit" @click="openEdit(r)" />
+                                <ActionButton v-if="perms.delete && r.name !== 'super-admin'" :label="t('account.delete')" variant="delete" @click="remove(r)" />
                             </div>
                         </td>
                     </tr>
                     <tr v-if="roles.data.length === 0">
-                        <td colspan="5" class="px-4 py-12 text-center text-sm text-ink-secondary">Tidak ada role.</td>
+                        <td colspan="5" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('account.emptyRoles') }}</td>
                     </tr>
                 </tbody>
             </table>
@@ -148,31 +151,31 @@ function remove(role: Role) {
         <!-- Create/Edit modal -->
         <Modal :show="showForm" max-width="2xl" @close="closeForm">
             <form @submit.prevent="submit" class="p-6">
-                <h2 class="mb-4 text-base font-semibold text-ink-primary">{{ editing ? 'Edit Role' : 'Tambah Role' }}</h2>
+                <h2 class="mb-4 text-base font-semibold text-ink-primary">{{ editing ? t('account.editRole') : t('account.addRole') }}</h2>
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
-                        <label class="text-xs font-semibold text-ink-secondary">Name (slug)</label>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('account.slugName') }}</label>
                         <input v-model="form.name" type="text" placeholder="warehouse" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.name" class="mt-1" />
                     </div>
                     <div>
-                        <label class="text-xs font-semibold text-ink-secondary">Label</label>
-                        <input v-model="form.label" type="text" placeholder="Warehouse" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('account.label') }}</label>
+                        <input v-model="form.label" type="text" :placeholder="t('account.warehouseLabel')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.label" class="mt-1" />
                     </div>
                     <div class="sm:col-span-2">
-                        <label class="text-xs font-semibold text-ink-secondary">Description</label>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('account.description') }}</label>
                         <input v-model="form.description" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     </div>
                 </div>
 
                 <div class="mt-5">
-                    <h3 class="mb-3 text-sm font-semibold text-ink-primary">Permissions</h3>
+                    <h3 class="mb-3 text-sm font-semibold text-ink-primary">{{ t('account.permissions') }}</h3>
                     <div class="max-h-[45vh] overflow-y-auto pr-1">
                         <div v-for="g in groupedPermissions" :key="g.module" class="mb-4 rounded-lg border border-borderline bg-background/40 p-3">
                             <label class="mb-2 flex cursor-pointer items-center gap-2">
                                 <input type="checkbox" :checked="g.items.every((p) => form.permissions.includes(p.id))" @change="toggleModule(g.module, g.items)" class="h-4 w-4 rounded border-borderline text-primary focus:ring-primary" />
-                                <span class="text-sm font-semibold uppercase tracking-wide text-ink-primary">{{ g.module }}</span>
+                                <span class="text-sm font-semibold uppercase tracking-wide text-ink-primary">{{ g.module === 'other' ? t('account.otherPermissions') : g.module }}</span>
                             </label>
                             <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                                 <label v-for="p in g.items" :key="p.id" class="flex cursor-pointer items-center gap-2 text-sm text-ink-secondary">
@@ -186,8 +189,8 @@ function remove(role: Role) {
                 </div>
 
                 <div class="mt-4 flex items-center justify-end gap-3">
-                    <button type="button" @click="closeForm" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-primary hover:bg-background">Batal</button>
-                    <button type="submit" :disabled="form.processing" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60">{{ form.processing ? 'Menyimpan…' : 'Simpan' }}</button>
+                    <button type="button" @click="closeForm" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-primary hover:bg-background">{{ t('account.cancel') }}</button>
+                    <button type="submit" :disabled="form.processing" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60">{{ form.processing ? t('account.saving') : t('account.save') }}</button>
                 </div>
             </form>
         </Modal>

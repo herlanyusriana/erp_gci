@@ -80,7 +80,7 @@ class WoService
     public function createWorkOrder(int $partId, float $qty, ?string $plannedDate, ?string $remarks, int $creatorId): array
     {
         $bom = $this->activeBomFor($partId);
-        abort_unless($bom !== null, 422, 'Belum ada BOM aktif untuk part ini.');
+        abort_unless($bom !== null, 422, __('Belum ada BOM aktif untuk part ini.'));
 
         $fgKey = $bom->part?->part_number ?? (string) $bom->part_id;
         $requirements = $this->buildRequirements($bom->items, $qty, $fgKey);
@@ -167,15 +167,14 @@ class WoService
                 $avail = $this->stockService->availableFifo($leaf['id'], $leaf['uom']);
                 if ($avail + 1e-9 < $leaf['need']) {
                     $short = $leaf['need'] - $avail;
-                    $warnings[] = sprintf(
-                        '%s (%s) kurang %.4f %s (butuh %.4f, stok %.4f)',
-                        $leaf['name'] ?? ('#' . $leaf['id']),
-                        $leaf['no'],
-                        $short,
-                        strtoupper((string) $leaf['uom']),
-                        $leaf['need'],
-                        $avail,
-                    );
+                    $warnings[] = __(':name (:number) kurang :short :unit (butuh :needed, stok :available)', [
+                        'name' => $leaf['name'] ?? ('#' . $leaf['id']),
+                        'number' => $leaf['no'],
+                        'short' => sprintf('%.4f', $short),
+                        'unit' => strtoupper((string) $leaf['uom']),
+                        'needed' => sprintf('%.4f', $leaf['need']),
+                        'available' => sprintf('%.4f', $avail),
+                    ]);
                 }
             }
 
@@ -204,7 +203,7 @@ class WoService
      */
     public function releaseWorkOrder(WorkOrder $workOrder, ?int $actorId = null): array
     {
-        abort_if($workOrder->status !== 'planned', 422, 'WO hanya bisa di-release dari status planned.');
+        abort_if($workOrder->status !== 'planned', 422, __('WO hanya bisa di-release dari status planned.'));
 
         $items = $workOrder->items()->with(['parentPart', 'childPart'])->get();
         $workOrder->load('part');
@@ -338,7 +337,7 @@ class WoService
 
     public function complete(WorkOrder $workOrder, ?int $actorId = null): WorkOrder
     {
-        abort_unless($workOrder->status === 'in_progress', 422, 'WO belum bisa di-complete.');
+        abort_unless($workOrder->status === 'in_progress', 422, __('WO belum bisa di-complete.'));
         $workOrder->update([
             'status' => 'completed',
             'completed_at' => now(),
@@ -350,7 +349,7 @@ class WoService
 
     public function cancel(WorkOrder $workOrder, ?int $actorId = null): WorkOrder
     {
-        abort_if($workOrder->status === 'completed', 422, 'WO completed tidak bisa dibatalkan.');
+        abort_if($workOrder->status === 'completed', 422, __('WO completed tidak bisa dibatalkan.'));
         $workOrder->update(['status' => 'cancelled', 'updated_by' => $actorId]);
 
         return $workOrder->fresh();

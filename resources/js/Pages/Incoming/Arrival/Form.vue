@@ -1,10 +1,13 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n';
 import { computed, ref } from 'vue';
-import { useForm } from '@inertiajs/vue3';
+import { Head, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import InputError from '@/Components/InputError.vue';
 import type { IncomingArrival, Supplier, PurchaseOrder, TruckingCompany } from '@/types';
+
+const { t } = useI18n();
 
 interface ItemRow {
     id: number | null;
@@ -204,11 +207,12 @@ function submit() {
 </script>
 
 <template>
+    <Head :title="arrival ? t('incoming.editArrival', { number: arrival.arrival_no }) : t('incoming.newArrival')" />
     <AppLayout>
         <BackButton :href="route('incoming-arrivals.index')" class="mb-4" />
 
         <h1 class="mb-6 text-2xl font-bold tracking-tight text-ink-primary">
-            {{ arrival ? `Edit ${arrival.arrival_no}` : 'Tambah Arrival' }}
+            {{ arrival ? t('incoming.editArrival', { number: arrival.arrival_no }) : t('incoming.newArrival') }}
         </h1>
 
         <form @submit.prevent="submit" class="space-y-6">
@@ -216,71 +220,71 @@ function submit() {
             <div class="rounded-xl border border-borderline bg-surface p-5">
                 <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     <div>
-                        <label class="text-xs font-semibold text-ink-secondary">Invoice No</label>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.invoiceNo') }}</label>
                         <input v-model="form.invoice_no" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.invoice_no" class="mt-1" />
                     </div>
                     <div>
-                        <label class="text-xs font-semibold text-ink-secondary">Invoice Date</label>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.invoiceDate') }}</label>
                         <input v-model="form.invoice_date" type="date" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     </div>
                     <div>
-                        <label class="text-xs font-semibold text-ink-secondary">Supplier</label>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.supplier') }}</label>
                         <select v-model="form.supplier_id" @change="resetMaterialRows" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
-                            <option value="">— Pilih —</option>
+                            <option value="">{{ t('incoming.choose') }}</option>
                             <option v-for="s in suppliers" :key="s.id" :value="s.id">{{ s.supplier_code }} · {{ s.supplier_name }}</option>
                         </select>
                         <InputError :message="form.errors.supplier_id" class="mt-1" />
                     </div>
                     <div>
-                        <label class="text-xs font-semibold text-ink-secondary">Trucking</label>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.trucking') }}</label>
                         <select v-model="form.trucking_company_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
-                            <option value="">— Pilih —</option>
+                            <option value="">{{ t('incoming.choose') }}</option>
                             <option v-for="t in truckings" :key="t.id" :value="t.id">{{ t.company_name }}</option>
                         </select>
                         <InputError :message="form.errors.trucking_company_id" class="mt-1" />
                     </div>
                     <div>
-                        <label class="text-xs font-semibold text-ink-secondary">Purchase Order</label>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.purchaseOrder') }}</label>
                         <select v-model="form.purchase_order_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
-                            <option value="">— Pilih —</option>
+                            <option value="">{{ t('incoming.choose') }}</option>
                             <option v-for="po in purchaseOrders" :key="po.id" :value="po.id">{{ po.po_no }}</option>
                         </select>
                     </div>
                     <div>
-                        <label class="text-xs font-semibold text-ink-secondary">Vessel</label>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.vessel') }}</label>
                         <input v-model="form.vessel" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     </div>
                     <div>
-                        <label class="text-xs font-semibold text-ink-secondary">ETA GCI</label>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.etaGci') }}</label>
                         <input v-model="form.eta_gci" type="date" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     </div>
                     <div>
-                        <label class="text-xs font-semibold text-ink-secondary">ETD</label>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.etd') }}</label>
                         <input v-model="form.etd" type="date" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     </div>
                     <div>
-                        <label class="text-xs font-semibold text-ink-secondary">ETA</label>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.eta') }}</label>
                         <input v-model="form.eta" type="date" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     </div>
                     <div>
-                        <label class="text-xs font-semibold text-ink-secondary">Bill of Lading</label>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.billOfLading') }}</label>
                         <input v-model="form.bill_of_lading" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     </div>
                     <div>
-                        <label class="text-xs font-semibold text-ink-secondary">PEN No</label>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.penNo') }}</label>
                         <input v-model="form.pen_no" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     </div>
                     <div>
-                        <label class="text-xs font-semibold text-ink-secondary">PEN Date</label>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.penDate') }}</label>
                         <input v-model="form.pen_date" type="date" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     </div>
                     <div>
-                        <label class="text-xs font-semibold text-ink-secondary">AJU No</label>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.ajuNo') }}</label>
                         <input v-model="form.aju_no" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     </div>
                     <div>
-                        <label class="text-xs font-semibold text-ink-secondary">Price Term</label>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.priceTerm') }}</label>
                         <select v-model="form.price_term" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                             <option value="">—</option>
                             <option value="FOB">FOB</option>
@@ -289,19 +293,19 @@ function submit() {
                         </select>
                     </div>
                     <div>
-                        <label class="text-xs font-semibold text-ink-secondary">HS Code</label>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.hsCode') }}</label>
                         <input v-model="form.hs_code" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     </div>
                     <div>
-                        <label class="text-xs font-semibold text-ink-secondary">Port of Loading</label>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.portLoading') }}</label>
                         <input v-model="form.port_of_loading" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     </div>
                     <div>
-                        <label class="text-xs font-semibold text-ink-secondary">Country</label>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.country') }}</label>
                         <input v-model="form.country" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     </div>
                     <div>
-                        <label class="text-xs font-semibold text-ink-secondary">Currency</label>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.currency') }}</label>
                         <select v-model="form.currency" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                             <option value="USD">USD</option>
                             <option value="IDR">IDR</option>
@@ -314,85 +318,85 @@ function submit() {
             <!-- Items -->
             <div class="rounded-xl border border-borderline bg-surface p-5">
                 <div class="mb-4 flex items-center justify-between">
-                    <h2 class="text-base font-semibold text-ink-primary">Items</h2>
+                    <h2 class="text-base font-semibold text-ink-primary">{{ t('incoming.items') }}</h2>
                     <button type="button" @click="addItem" class="inline-flex items-center gap-1.5 rounded-md border border-primary px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-primary-light">
                         <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                        Tambah Baris
+                        {{ t('incoming.addRow') }}
                     </button>
                 </div>
                 <InputError :message="form.errors.items" class="mb-3" />
                 <p v-if="rowErrorList.length" class="mb-3 rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">
-                    <span v-for="(err, ei) in rowErrorList" :key="ei" class="block">Item {{ err.row }}: {{ err.msg }}</span>
+                    <span v-for="(err, ei) in rowErrorList" :key="ei" class="block">{{ t('incoming.itemError', { row: err.row, message: err.msg }) }}</span>
                 </p>
                 <div v-for="(r, i) in itemRows" :key="i" class="border-t border-borderline py-3">
                         <div class="grid gap-3 sm:grid-cols-12">
                             <div class="sm:col-span-2">
-                                <label class="text-xs font-semibold text-ink-secondary">Material Group</label>
+                                <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.materialGroup') }}</label>
                                 <select v-model="r.material_group" @change="r.size = ''; syncMaterial(r)" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
-                                    <option value="">— Pilih Group —</option>
+                                    <option value="">{{ t('incoming.chooseGroup') }}</option>
                                     <option v-for="group in materialGroups" :key="group" :value="group">{{ group }}</option>
                                 </select>
                             </div>
                             <div class="sm:col-span-2">
-                                <label class="text-xs font-semibold text-ink-secondary">Size</label>
+                                <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.size') }}</label>
                                 <select v-model="r.size" @change="syncMaterial(r)" :disabled="!form.supplier_id || !r.material_group" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary disabled:opacity-50">
-                                    <option value="">— Pilih Size —</option>
+                                    <option value="">{{ t('incoming.chooseSize') }}</option>
                                     <option v-for="option in sizesFor(r.material_group)" :key="option.part_id" :value="option.size">{{ option.size }}</option>
                                 </select>
                             </div>
                             <div class="sm:col-span-2">
-                                <label class="text-xs font-semibold text-ink-secondary">Qty Goods</label>
+                                <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.qtyGoods') }}</label>
                                 <input v-model="r.qty_goods" type="number" step="0.0001" min="0" @input="recalcPrice(r)" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                             </div>
                             <div class="sm:col-span-2">
-                                <label class="text-xs font-semibold text-ink-secondary">Unit Goods</label>
+                                <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.unitGoods') }}</label>
                                 <input v-model="r.unit_goods" type="text" placeholder="KGM / PCS" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                             </div>
                             <div class="sm:col-span-2">
-                                <label class="text-xs font-semibold text-ink-secondary">Qty Packing</label>
+                                <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.packingQty') }}</label>
                                 <input v-model="r.qty_bundle" type="number" step="0.0001" min="0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                             </div>
                             <div class="sm:col-span-2">
-                                <label class="text-xs font-semibold text-ink-secondary">Jenis Packing</label>
+                                <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.packingType') }}</label>
                                 <select v-model="r.unit_bundle" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
-                                    <option value="">— Pilih —</option>
-                                    <option value="PALLET">PALLET</option>
-                                    <option value="BUNDLE">BUNDLE</option>
-                                    <option value="BOX">BOX</option>
-                                    <option value="BAG">BAG</option>
-                                    <option value="ROLL">ROLL</option>
-                                    <option value="PACKAGES">PACKAGES</option>
+                                    <option value="">{{ t('incoming.choose') }}</option>
+                                    <option value="PALLET">{{ t('incoming.unit_PALLET') }}</option>
+                                    <option value="BUNDLE">{{ t('incoming.unit_BUNDLE') }}</option>
+                                    <option value="BOX">{{ t('incoming.unit_BOX') }}</option>
+                                    <option value="BAG">{{ t('incoming.unit_BAG') }}</option>
+                                    <option value="ROLL">{{ t('incoming.unit_ROLL') }}</option>
+                                    <option value="PACKAGES">{{ t('incoming.unit_PACKAGES') }}</option>
                                 </select>
                             </div>
                         </div>
                         <div class="mt-3 grid gap-3 sm:grid-cols-12">
                             <div class="sm:col-span-2">
-                                <label class="text-xs font-semibold text-ink-secondary">Nett Weight</label>
+                                <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.netWeight') }}</label>
                                 <input v-model="r.weight_nett" type="number" step="0.0001" @input="recalcPrice(r)" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                             </div>
                             <div class="sm:col-span-2">
-                                <label class="text-xs font-semibold text-ink-secondary">Gross Weight</label>
+                                <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.grossWeight') }}</label>
                                 <input v-model="r.weight_gross" type="number" step="0.0001" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                             </div>
                             <div class="sm:col-span-2">
-                                <label class="text-xs font-semibold text-ink-secondary">Total Price</label>
+                                <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.totalPrice') }}</label>
                                 <input v-model="r.total_price" type="number" step="0.01" @input="recalcPrice(r)" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                             </div>
                             <div class="sm:col-span-2">
-                                <label class="text-xs font-semibold text-ink-secondary">Price (auto)</label>
+                                <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.autoPrice') }}</label>
                                 <input :value="formatMilli(r.price)" type="text" readonly class="mt-1 w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-secondary" />
                             </div>
                             <div class="flex items-end sm:col-span-3">
                                 <label class="flex items-center gap-2 text-sm text-ink-primary">
                                     <input v-model="r.is_foc" type="checkbox" class="h-4 w-4 rounded border-borderline text-primary focus:ring-primary" />
-                                    FOC
+                                    {{ t('incoming.foc') }}
                                 </label>
                                 <p v-if="weightInvalid(r)" class="ml-4 text-xs font-semibold text-danger">
-                                    Net weight harus lebih kecil atau sama dengan gross weight.
+                                    {{ t('incoming.invalidWeight') }}
                                 </p>
                             </div>
                             <div class="flex items-end justify-end sm:col-span-1">
-                                <button type="button" @click="removeItem(i)" :disabled="itemRows.length <= 1" class="rounded-lg border border-borderline px-3 py-2 text-sm text-danger transition hover:bg-danger/10 disabled:opacity-40">✕</button>
+                                <button type="button" @click="removeItem(i)" :disabled="itemRows.length <= 1" class="rounded-lg border border-borderline px-3 py-2 text-sm text-danger transition hover:bg-danger/10 disabled:opacity-40" :aria-label="t('incoming.delete')">✕</button>
                             </div>
                         </div>
                     </div>
@@ -401,35 +405,35 @@ function submit() {
             <!-- Containers -->
             <div v-if="!arrival" class="rounded-xl border border-borderline bg-surface p-5">
                 <div class="mb-4 flex items-center justify-between">
-                        <h2 class="text-base font-semibold text-ink-primary">Containers</h2>
+                        <h2 class="text-base font-semibold text-ink-primary">{{ t('incoming.containers') }}</h2>
                         <button type="button" @click="addContainer" class="inline-flex items-center gap-1.5 rounded-md border border-primary px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-primary-light">
                             <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                            Tambah Container
+                            {{ t('incoming.addContainer') }}
                         </button>
                     </div>
                     <div v-for="(c, i) in containerRows" :key="i" class="grid gap-3 border-t border-borderline py-3 sm:grid-cols-12">
                         <div class="sm:col-span-4">
-                            <label class="text-xs font-semibold text-ink-secondary">Container No</label>
+                            <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.containerNo') }}</label>
                             <input v-model="c.container_no" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         </div>
                         <div class="sm:col-span-3">
-                            <label class="text-xs font-semibold text-ink-secondary">Seal Code</label>
+                            <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.sealCode') }}</label>
                             <input v-model="c.seal_code" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         </div>
                         <div class="sm:col-span-3">
-                            <label class="text-xs font-semibold text-ink-secondary">Size</label>
-                            <input v-model="c.size" type="text" placeholder="20ft / 40ft" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                            <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.size') }}</label>
+                            <input v-model="c.size" type="text" :placeholder="t('incoming.containerSize')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         </div>
                         <div class="flex items-end sm:col-span-2">
-                            <button type="button" @click="removeContainer(i)" class="rounded-lg border border-borderline px-3 py-2 text-sm text-danger transition hover:bg-danger/10">Hapus</button>
+                            <button type="button" @click="removeContainer(i)" class="rounded-lg border border-borderline px-3 py-2 text-sm text-danger transition hover:bg-danger/10">{{ t('incoming.delete') }}</button>
                         </div>
                     </div>
                 </div>
 
             <div class="flex items-center justify-end gap-3">
-                <BackButton :href="route('incoming-arrivals.index')">Batal</BackButton>
+                <BackButton :href="route('incoming-arrivals.index')">{{ t('incoming.cancel') }}</BackButton>
                 <button type="submit" :disabled="form.processing" class="rounded-md bg-primary px-5 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60">
-                    {{ form.processing ? 'Menyimpan…' : 'Simpan' }}
+                    {{ form.processing ? t('incoming.saving') : t('incoming.save') }}
                 </button>
             </div>
         </form>

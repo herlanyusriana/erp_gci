@@ -37,7 +37,7 @@ class MachineController extends Controller
         $data['created_by'] = $request->user()?->id;
         Machine::create($data);
 
-        return redirect()->route('machines.index')->with('success', 'Machine created.');
+        return redirect()->route('machines.index')->with('success', __('Machine created.'));
     }
 
     public function update(Request $request, Machine $machine): RedirectResponse
@@ -51,13 +51,13 @@ class MachineController extends Controller
         $data['updated_by'] = $request->user()?->id;
         $machine->update($data);
 
-        return redirect()->route('machines.index')->with('success', 'Machine updated.');
+        return redirect()->route('machines.index')->with('success', __('Machine updated.'));
     }
 
     public function destroy(Machine $machine): RedirectResponse
     {
         $machine->delete();
 
-        return redirect()->route('machines.index')->with('success', 'Machine deleted.');
+        return redirect()->route('machines.index')->with('success', __('Machine deleted.'));
     }
 }

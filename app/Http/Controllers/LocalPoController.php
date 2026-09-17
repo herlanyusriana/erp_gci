@@ -71,7 +71,9 @@ class LocalPoController extends Controller
             'suppliers' => \App\Models\Supplier::select('id', 'supplier_code', 'supplier_name')
                 ->where('is_active', true)->orderBy('supplier_name')->get(),
             'parts' => \App\Models\Part::select('id', 'part_number', 'part_name')
-                ->where('is_active', true)->orderBy('part_number')->get(),
+                ->where('is_active', true)
+                ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))
+                ->orderBy('part_number')->get(),
         ]);
     }
 
@@ -88,7 +90,7 @@ class LocalPoController extends Controller
             'currency' => ['nullable', 'string', 'max:10'],
             'notes' => ['nullable', 'string'],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.part_id' => ['required', 'exists:parts,id'],
+            'items.*.part_id' => ['required', 'exists:parts,id', \App\Rules\PartTypeRule::notFg()],
             'items.*.size' => ['nullable', 'string', 'max:100'],
             'items.*.qty_goods' => ['required', 'numeric', 'min:0'],
             'items.*.unit_goods' => ['required', 'in:PCS,COIL,SHEET,SET,EA,KGM,ROLL,UOM'],
@@ -138,7 +140,7 @@ class LocalPoController extends Controller
             return $arrival;
         });
 
-        return redirect()->route('local-pos.show', $arrival)->with('success', 'Local PO created. Silakan lakukan receive.');
+        return redirect()->route('local-pos.show', $arrival)->with('success', __('Local PO created. Silakan lakukan receive.'));
     }
 
     public function show(IncomingArrival $localPo): Response
@@ -176,7 +178,9 @@ class LocalPoController extends Controller
             'suppliers' => \App\Models\Supplier::select('id', 'supplier_code', 'supplier_name')
                 ->where('is_active', true)->orderBy('supplier_name')->get(),
             'parts' => \App\Models\Part::select('id', 'part_number', 'part_name')
-                ->where('is_active', true)->orderBy('part_number')->get(),
+                ->where('is_active', true)
+                ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))
+                ->orderBy('part_number')->get(),
         ]);
     }
 
@@ -195,7 +199,7 @@ class LocalPoController extends Controller
             'notes' => ['nullable', 'string'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.id' => ['nullable', 'integer'],
-            'items.*.part_id' => ['required', 'exists:parts,id'],
+            'items.*.part_id' => ['required', 'exists:parts,id', \App\Rules\PartTypeRule::notFg()],
             'items.*.size' => ['nullable', 'string', 'max:100'],
             'items.*.qty_goods' => ['required', 'numeric', 'min:0'],
             'items.*.unit_goods' => ['required', 'in:PCS,COIL,SHEET,SET,EA,KGM,ROLL,UOM'],
@@ -218,7 +222,7 @@ class LocalPoController extends Controller
             $toDelete = $arrival->items()->whereNotIn('id', $inputIds)->get();
             foreach ($toDelete as $doomed) {
                 if ($doomed->receives()->exists()) {
-                    return "Item {$doomed->part?->part_number} sudah ada receive, tidak bisa dihapus via Edit.";
+                    return __('Item :number sudah ada receive, tidak bisa dihapus via Edit.', ['number' => $doomed->part?->part_number]);
                 }
                 $doomed->delete();
             }
@@ -241,7 +245,7 @@ class LocalPoController extends Controller
                 if (!empty($itemData['id'])) {
                     $itemModel = $arrival->items()->findOrFail((int) $itemData['id']);
                     if ($itemModel->receives()->exists() && (int) $itemModel->part_id !== (int) $data['part_id']) {
-                        return "Item {$itemModel->part?->part_number} sudah ada receive, part tidak boleh diganti.";
+                        return __('Item :number sudah ada receive, part tidak boleh diganti.', ['number' => $itemModel->part?->part_number]);
                     }
                     $itemModel->update($data);
                 } else {
@@ -256,7 +260,7 @@ class LocalPoController extends Controller
             return back()->withInput()->withErrors(['items' => $blocked]);
         }
 
-        return redirect()->route('local-pos.index')->with('success', 'Local PO updated.');
+        return redirect()->route('local-pos.index')->with('success', __('Local PO updated.'));
     }
 
     public function destroy(IncomingArrival $localPo): RedirectResponse
@@ -269,7 +273,7 @@ class LocalPoController extends Controller
             $arrival->delete();
         });
 
-        return redirect()->route('local-pos.index')->with('success', 'Local PO deleted.');
+        return redirect()->route('local-pos.index')->with('success', __('Local PO deleted.'));
     }
 
     public function export()

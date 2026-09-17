@@ -50,7 +50,7 @@ class RoleController extends Controller
         ]);
         $role->permissions()->sync($data['permissions'] ?? []);
 
-        return redirect()->route('roles.index')->with('success', 'Role tersimpan.');
+        return redirect()->route('roles.index')->with('success', __('Role tersimpan.'));
     }
 
     public function update(Request $request, Role $role): RedirectResponse
@@ -72,17 +72,17 @@ class RoleController extends Controller
         ]);
         $role->permissions()->sync($data['permissions'] ?? []);
 
-        return redirect()->route('roles.index')->with('success', 'Role diperbarui.');
+        return redirect()->route('roles.index')->with('success', __('Role diperbarui.'));
     }
 
     public function destroy(Role $role): RedirectResponse
     {
         Gate::authorize('delete', $role);
 
-        abort_if($role->name === 'super-admin', 400, 'Role super-admin tidak dapat dihapus.');
+        abort_if($role->name === 'super-admin', 400, __('Role super-admin tidak dapat dihapus.'));
 
         $role->delete();
 
-        return redirect()->route('roles.index')->with('success', 'Role dihapus.');
+        return redirect()->route('roles.index')->with('success', __('Role dihapus.'));
     }
 }

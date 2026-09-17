@@ -71,6 +71,14 @@ class WorkOrderController extends Controller
             'remarks' => ['nullable', 'string', 'max:2000'],
         ]);
 
+        $isFg = Part::query()
+            ->whereKey($validated['part_id'])
+            ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) = ?', ['fg']))
+            ->exists();
+        if (! $isFg) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['part_id' => __('Work Order hanya untuk part FG.')]);
+        }
+
         [$workOrderId, $warnings] = $this->woService->createWorkOrder(
             (int) $validated['part_id'],
             (float) $validated['qty'],
@@ -82,12 +90,11 @@ class WorkOrderController extends Controller
         if (count($warnings) > 0) {
             return redirect()
                 ->route('work-orders.show', $workOrderId)
-                ->with('error', 'WO dibuat, tapi ada kekurangan stok: ' . implode(' · ', array_slice($warnings, 0, 5)) . (count($warnings) > 5 ? ' …' : ''));
+                ->with('error', __('WO dibuat, tapi ada kekurangan stok: :details', ['details' => implode(' · ', array_slice($warnings, 0, 5)) . (count($warnings) > 5 ? ' …' : '')]));
         }
 
         return redirect()
-            ->route('work-orders.show', $workOrderId)
-            ->with('success', 'Work Order dibuat.');
+            ->route('work-orders.show', $workOrderId)->with('success', __('Work Order dibuat.'));
     }
 
     public function show(WorkOrder $workOrder): Response
@@ -116,7 +123,7 @@ class WorkOrderController extends Controller
     public function editItem(WorkOrder $workOrder, WorkOrderItem $item): Response
     {
         Gate::authorize('update', $workOrder);
-        abort_unless($item->work_order_id === $workOrder->id && $workOrder->status === 'planned', 403, 'Item WO tidak dapat diubah.');
+        abort_unless($item->work_order_id === $workOrder->id && $workOrder->status === 'planned', 403, __('Item WO tidak dapat diubah.'));
 
         $item->load([
             'process',
@@ -137,7 +144,7 @@ class WorkOrderController extends Controller
     public function updateItem(Request $request, WorkOrder $workOrder, WorkOrderItem $item): RedirectResponse
     {
         Gate::authorize('update', $workOrder);
-        abort_unless($item->work_order_id === $workOrder->id && $workOrder->status === 'planned', 422, 'Item WO tidak dapat diubah.');
+        abort_unless($item->work_order_id === $workOrder->id && $workOrder->status === 'planned', 422, __('Item WO tidak dapat diubah.'));
 
         $data = $request->validate([
             'selected_part_id' => ['required', 'integer', 'exists:parts,id'],
@@ -145,15 +152,14 @@ class WorkOrderController extends Controller
         ]);
         $allowed = (int) $data['selected_part_id'] === (int) $item->child_part_id
             || PartSubstitute::where('part_id', $item->child_part_id)->where('substitute_part_id', $data['selected_part_id'])->where('is_active', true)->exists();
-        abort_unless($allowed, 422, 'Part bukan main material atau substitute aktif untuk material BOM ini.');
+        abort_unless($allowed, 422, __('Part bukan main material atau substitute aktif untuk material BOM ini.'));
         $item->update([
             'selected_part_id' => $data['selected_part_id'],
             'machine_id' => $data['machine_id'] ?? null,
         ]);
 
         return redirect()
-            ->route('work-orders.show', $workOrder)
-            ->with('success', 'Routing WO diperbarui.');
+            ->route('work-orders.show', $workOrder)->with('success', __('Routing WO diperbarui.'));
     }
 
     public function release(WorkOrder $workOrder): RedirectResponse
@@ -164,18 +170,17 @@ class WorkOrderController extends Controller
 
         if (count($shortages) > 0) {
             $lines = array_map(
-                fn ($s) => "{$s['child_part_name']} ({$s['child_part_no']}) kurang {$s['short']} {$s['uom']}",
+                fn ($s) => __(':name (:number) kurang :short :unit', ['name' => $s['child_part_name'], 'number' => $s['child_part_no'], 'short' => $s['short'], 'unit' => $s['uom']]),
                 $shortages,
             );
 
             return redirect()
                 ->route('work-orders.show', $workOrder)
-                ->with('error', 'WO di-release, tapi ada kekurangan: ' . implode(' · ', array_slice($lines, 0, 5)) . (count($lines) > 5 ? ' …' : ''));
+                ->with('error', __('WO di-release, tapi ada kekurangan: :details', ['details' => implode(' · ', array_slice($lines, 0, 5)) . (count($lines) > 5 ? ' …' : '')]));
         }
 
         return redirect()
-            ->route('work-orders.show', $workOrder)
-            ->with('success', 'WO di-release, material & WIP dikonsumsi FIFO.');
+            ->route('work-orders.show', $workOrder)->with('success', __('WO di-release, material & WIP dikonsumsi FIFO.'));
     }
 
     public function complete(WorkOrder $workOrder): RedirectResponse
@@ -185,8 +190,7 @@ class WorkOrderController extends Controller
         $this->woService->complete($workOrder, (int) auth()->id());
 
         return redirect()
-            ->route('work-orders.show', $workOrder)
-            ->with('success', 'WO selesai.');
+            ->route('work-orders.show', $workOrder)->with('success', __('WO selesai.'));
     }
 
     public function cancel(WorkOrder $workOrder): RedirectResponse
@@ -196,8 +200,7 @@ class WorkOrderController extends Controller
         $this->woService->cancel($workOrder, (int) auth()->id());
 
         return redirect()
-            ->route('work-orders.show', $workOrder)
-            ->with('success', 'WO dibatalkan.');
+            ->route('work-orders.show', $workOrder)->with('success', __('WO dibatalkan.'));
     }
 
     public function destroy(WorkOrder $workOrder): RedirectResponse
@@ -206,6 +209,6 @@ class WorkOrderController extends Controller
 
         $workOrder->delete();
 
-        return redirect()->route('work-orders.index')->with('success', 'WO dihapus.');
+        return redirect()->route('work-orders.index')->with('success', __('WO dihapus.'));
     }
 }

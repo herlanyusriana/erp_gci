@@ -1,3 +1,5 @@
+export type SupportedLocale = 'id' | 'en' | 'ko';
+
 export interface User {
     id: number;
     name: string;
@@ -17,6 +19,8 @@ export interface AppSettings {
 export type PageProps<
     T extends Record<string, unknown> = Record<string, unknown>,
 > = T & {
+    locale: SupportedLocale;
+    flash: { success?: string; error?: string };
     auth: {
         user: User;
         roles: string[];
@@ -369,4 +373,30 @@ export interface WorkOrder {
     }) | null;
     items?: WorkOrderItem[];
     consumptions?: WorkOrderConsumption[];
+}
+
+export interface ProductionPlan {
+    id: number;
+    plan_date: string;
+    notes: string | null;
+}
+
+export interface ProductionPlanItem {
+    id: number;
+    production_plan_id: number;
+    machine_id: number | null;
+    work_order_id: number | null;
+    fg_part_id: number | null;
+    wip_part_id: number | null;
+    sequence: number;
+    target_d: number | null;
+    target_d1: number | null;
+    target_d2: number | null;
+    avail_qty: number;
+    machine?: Pick<Machine, 'id' | 'machine_code' | 'machine_name'> | null;
+    work_order?: Pick<WorkOrder, 'id' | 'wo_no' | 'part_id' | 'qty' | 'status'> & {
+        part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
+    } | null;
+    fg_part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
+    wip_part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
 }

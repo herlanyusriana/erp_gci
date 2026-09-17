@@ -33,16 +33,16 @@ class PartSubstituteController extends Controller
             'substitutes' => $substitutes,
             'filters' => $request->only('search', 'supplier_id'),
             'suppliers' => Supplier::orderBy('supplier_name')->get(['id', 'supplier_code', 'supplier_name']),
-            'parts' => Part::orderBy('part_number')->get(['id', 'part_number', 'part_name']),
+            'parts' => Part::whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))
+                ->orderBy('part_number')->get(['id', 'part_number', 'part_name']),
         ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
         $data = $request->validate([
-            'part_id' => ['required', 'exists:parts,id'],
-            'substitute_part_id' => ['required', 'exists:parts,id', 'different:part_id'],
-            'supplier_id' => ['nullable', 'exists:suppliers,id'],
+            'part_id' => ['required', 'exists:parts,id', \App\Rules\PartTypeRule::notFg()],
+            'substitute_part_id' => ['required', 'exists:parts,id', 'different:part_id', \App\Rules\PartTypeRule::notFg()],
             'material_group' => ['nullable', 'string', 'max:255'],
             'source' => ['nullable', 'string', 'max:120'],
             'is_active' => ['sometimes', 'boolean'],
@@ -58,14 +58,14 @@ class PartSubstituteController extends Controller
             array_diff_key($data, array_flip(['part_id', 'substitute_part_id', 'supplier_id'])),
         );
 
-        return redirect()->route('substitutes.index')->with('success', 'Substitute tersimpan.');
+        return redirect()->route('substitutes.index')->with('success', __('Substitute tersimpan.'));
     }
 
     public function update(Request $request, PartSubstitute $substitute): RedirectResponse
     {
         $data = $request->validate([
-            'part_id' => ['required', 'exists:parts,id'],
-            'substitute_part_id' => ['required', 'exists:parts,id', 'different:part_id'],
+            'part_id' => ['required', 'exists:parts,id', \App\Rules\PartTypeRule::notFg()],
+            'substitute_part_id' => ['required', 'exists:parts,id', 'different:part_id', \App\Rules\PartTypeRule::notFg()],
             'supplier_id' => ['nullable', 'exists:suppliers,id'],
             'material_group' => ['nullable', 'string', 'max:255'],
             'source' => ['nullable', 'string', 'max:120'],
@@ -75,13 +75,13 @@ class PartSubstituteController extends Controller
         $data['updated_by'] = $request->user()?->id;
         $substitute->update($data);
 
-        return redirect()->route('substitutes.index')->with('success', 'Substitute diperbarui.');
+        return redirect()->route('substitutes.index')->with('success', __('Substitute diperbarui.'));
     }
 
     public function destroy(PartSubstitute $substitute): RedirectResponse
     {
         $substitute->delete();
 
-        return redirect()->route('substitutes.index')->with('success', 'Substitute dihapus.');
+        return redirect()->route('substitutes.index')->with('success', __('Substitute dihapus.'));
     }
 }

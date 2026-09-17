@@ -93,7 +93,7 @@ class ReceiveController extends Controller
 
         if ($totalRequested > $remainingQty + 1e-9) {
             return back()->withInput()->withErrors([
-                'tags' => "Total ({$totalRequested} {$unitLabel}) melebihi sisa ({$remainingQty} {$unitLabel}).",
+                'tags' => __('Total (:total :unit) melebihi sisa (:remaining :unit).', ['total' => $totalRequested, 'unit' => $unitLabel, 'remaining' => $remainingQty]),
             ]);
         }
 
@@ -107,7 +107,7 @@ class ReceiveController extends Controller
             foreach ($validated['tags'] as $tagData) {
                 if (strtoupper((string) $tagData['qty_unit']) !== $goodsUnit) {
                     throw ValidationException::withMessages([
-                        'tags' => "Unit qty tidak sesuai. Item ini menggunakan unit {$goodsUnit}.",
+                        'tags' => __('Unit qty tidak sesuai. Item ini menggunakan unit :unit.', ['unit' => $goodsUnit]),
                     ]);
                 }
 
@@ -149,15 +149,14 @@ class ReceiveController extends Controller
                 $arrival->save();
             }
             $message = $isComplete
-                ? 'Invoice complete receive. Transaction No: ' . $arrival->transaction_no
-                : 'TAG tersimpan. Masih ada pending.';
+                ? __('Invoice complete receive. Transaction No: :number', ['number' => $arrival->transaction_no])
+                : __('TAG tersimpan. Masih ada pending.');
 
             return redirect()
-                ->route(($arrival->is_local ? 'local-pos.show' : 'incoming-arrivals.show'), $arrival)
-                ->with('success', $message);
+                ->route(($arrival->is_local ? 'local-pos.show' : 'incoming-arrivals.show'), $arrival)->with('success', $message);
         }
 
-        return redirect()->route('receive.index')->with('success', 'TAG tersimpan.');
+        return redirect()->route('receive.index')->with('success', __('TAG tersimpan.'));
     }
 
     public function printLabel(IncomingReceive $receive)
@@ -266,8 +265,7 @@ class ReceiveController extends Controller
         $route = $arrivalItem->arrival?->is_local ? 'local-pos.show' : 'incoming-arrivals.show';
 
         return redirect()
-            ->route($route, $arrivalItem->arrival)
-            ->with('success', 'Receive updated.');
+            ->route($route, $arrivalItem->arrival)->with('success', __('Receive updated.'));
     }
 
     public function destroy(IncomingReceive $receive): RedirectResponse
@@ -283,7 +281,6 @@ class ReceiveController extends Controller
         $route = $receive->arrivalItem->arrival?->is_local ? 'local-pos.show' : 'incoming-arrivals.show';
 
         return redirect()
-            ->route($route, $receive->arrivalItem->arrival)
-            ->with('success', "Receive {$receive->tag} deleted.");
+            ->route($route, $receive->arrivalItem->arrival)->with('success', __('Receive :tag deleted.', ['tag' => $receive->tag]));
     }
 }

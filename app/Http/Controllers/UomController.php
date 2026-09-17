@@ -36,7 +36,7 @@ class UomController extends Controller
 
         Uom::create($data);
 
-        return redirect()->route('uoms.index')->with('success', 'UOM created.');
+        return redirect()->route('uoms.index')->with('success', __('UOM created.'));
     }
 
     public function update(Request $request, Uom $uom): RedirectResponse
@@ -49,13 +49,13 @@ class UomController extends Controller
 
         $uom->update($data);
 
-        return redirect()->route('uoms.index')->with('success', 'UOM updated.');
+        return redirect()->route('uoms.index')->with('success', __('UOM updated.'));
     }
 
     public function destroy(Uom $uom): RedirectResponse
     {
         $uom->delete();
 
-        return redirect()->route('uoms.index')->with('success', 'UOM deleted.');
+        return redirect()->route('uoms.index')->with('success', __('UOM deleted.'));
     }
 }

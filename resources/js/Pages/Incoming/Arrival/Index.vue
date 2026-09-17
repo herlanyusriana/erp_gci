@@ -1,12 +1,15 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n';
 import { ref } from 'vue';
-import { router } from '@inertiajs/vue3';
+import { Head, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import ActionButton from '@/Components/ActionButton.vue';
 import Pagination from '@/Components/Pagination.vue';
 import { Link } from '@inertiajs/vue3';
 import type { IncomingArrival, Paginated } from '@/types';
+
+const { t } = useI18n();
 
 const props = defineProps<{
     arrivals: Paginated<IncomingArrival>;
@@ -22,7 +25,7 @@ function doSearch() {
 }
 
 function remove(a: IncomingArrival) {
-    if (confirm(`Hapus arrival ${a.arrival_no}?`)) router.delete(route('incoming-arrivals.destroy', a.id));
+    if (confirm(t('incoming.deleteArrival', { number: a.arrival_no }))) router.delete(route('incoming-arrivals.destroy', a.id));
 }
 
 const statusTone = (s: string) => {
@@ -38,30 +41,31 @@ const statusTone = (s: string) => {
 </script>
 
 <template>
+    <Head :title="t('incoming.incomingArrival')" />
     <AppLayout>
         <BackButton :href="route('incoming-data')" class="mb-4" />
 
         <div class="mb-6 flex items-end justify-between gap-4">
             <div>
-                <h1 class="text-2xl font-bold tracking-tight text-ink-primary">Incoming Arrival</h1>
-                <p class="mt-1 text-sm text-ink-secondary">Kedatangan barang inbound · item · container · dokumen.</p>
+                <h1 class="text-2xl font-bold tracking-tight text-ink-primary">{{ t('incoming.incomingArrival') }}</h1>
+                <p class="mt-1 text-sm text-ink-secondary">{{ t('incoming.arrivalDescription') }}</p>
             </div>
             <Link
                 :href="route('incoming-arrivals.create')"
                 class="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover"
             >
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                Tambah
+                {{ t('incoming.add') }}
             </Link>
         </div>
 
         <div class="mb-4 flex flex-col gap-3 sm:flex-row">
-            <input v-model="search" @input="doSearch" type="search" placeholder="Cari arrival / invoice / supplier…" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
+            <input v-model="search" @input="doSearch" type="search" :placeholder="t('incoming.searchArrival')" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
             <select v-model="status" @change="doSearch" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-40">
-                <option value="">Semua Status</option>
-                <option value="pending">Pending</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option>
+                <option value="">{{ t('incoming.allStatuses') }}</option>
+                <option value="pending">{{ t('incoming.status_pending') }}</option>
+                <option value="completed">{{ t('incoming.status_completed') }}</option>
+                <option value="cancelled">{{ t('incoming.status_cancelled') }}</option>
             </select>
         </div>
 
@@ -69,13 +73,13 @@ const statusTone = (s: string) => {
             <table class="min-w-full divide-y divide-borderline text-sm">
                 <thead class="bg-background">
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th class="px-4 py-3">Arrival No</th>
-                        <th class="px-4 py-3">Invoice</th>
-                        <th class="px-4 py-3">Supplier</th>
-                        <th class="px-4 py-3">Items</th>
-                        <th class="px-4 py-3">ETA</th>
-                        <th class="px-4 py-3">Status</th>
-                        <th class="px-4 py-3 text-right">Aksi</th>
+                        <th class="px-4 py-3">{{ t('incoming.arrivalNo') }}</th>
+                        <th class="px-4 py-3">{{ t('incoming.invoice') }}</th>
+                        <th class="px-4 py-3">{{ t('incoming.supplier') }}</th>
+                        <th class="px-4 py-3">{{ t('incoming.items') }}</th>
+                        <th class="px-4 py-3">{{ t('incoming.eta') }}</th>
+                        <th class="px-4 py-3">{{ t('incoming.status') }}</th>
+                        <th class="px-4 py-3 text-right">{{ t('incoming.actions') }}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-borderline">
@@ -88,18 +92,18 @@ const statusTone = (s: string) => {
                         <td class="px-4 py-3 text-ink-primary">{{ a.items_count ?? 0 }}</td>
                         <td class="px-4 py-3 text-ink-primary">{{ a.eta_gci ?? a.eta ?? '—' }}</td>
                         <td class="px-4 py-3">
-                            <span :class="statusTone(a.status)" class="rounded-md px-2 py-0.5 text-xs font-semibold uppercase">{{ a.status }}</span>
+                            <span :class="statusTone(a.status)" class="rounded-md px-2 py-0.5 text-xs font-semibold uppercase">{{ t('incoming.status_' + a.status) }}</span>
                         </td>
                         <td class="px-4 py-3">
                             <div class="flex justify-end gap-1.5">
-                                <ActionButton :href="route('incoming-arrivals.show', a.id)" label="Lihat" variant="view" />
-                                <ActionButton :href="route('incoming-arrivals.edit', a.id)" label="Edit" variant="edit" />
-                                <ActionButton label="Hapus" variant="delete" @click="remove(a)" />
+                                <ActionButton :href="route('incoming-arrivals.show', a.id)" :label="t('incoming.view')" variant="view" />
+                                <ActionButton :href="route('incoming-arrivals.edit', a.id)" :label="t('incoming.edit')" variant="edit" />
+                                <ActionButton :label="t('incoming.delete')" variant="delete" @click="remove(a)" />
                             </div>
                         </td>
                     </tr>
                     <tr v-if="arrivals.data.length === 0">
-                        <td colspan="7" class="px-4 py-12 text-center text-sm text-ink-secondary">Tidak ada arrival.</td>
+                        <td colspan="7" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noArrivals') }}</td>
                     </tr>
                 </tbody>
             </table>

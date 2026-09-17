@@ -59,7 +59,7 @@ class ReceiveMaterialService
             $key = $errorKey . '.' . $idx . '.tag';
             if (isset($seen[$tag])) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
-                    $key => "TAG '{$tag}' duplikat dalam item ini.",
+                    $key => __("TAG ':tag' duplikat dalam item ini.", ['tag' => $tag]),
                 ]);
             }
             $seen[$tag] = true;
@@ -71,7 +71,7 @@ class ReceiveMaterialService
                 ->exists();
             if ($existing) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
-                    $key => "TAG '{$tag}' sudah dipakai pada item ini.",
+                    $key => __("TAG ':tag' sudah dipakai pada item ini.", ['tag' => $tag]),
                 ]);
             }
         }

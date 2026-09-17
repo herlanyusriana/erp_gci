@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
 
 defineProps<{
     links: Array<{ url: string | null; label: string; active: boolean }>;
@@ -7,8 +10,8 @@ defineProps<{
 </script>
 
 <template>
-    <nav v-if="links.length > 3" class="mt-4 flex items-center justify-between">
-        <div class="flex flex-1 justify-between sm:hidden">
+    <nav v-if="links.length > 3" :aria-label="t('common.pagination')" class="mt-4 flex items-center justify-between">
+        <div class="flex flex-1 flex-wrap justify-between gap-1 sm:hidden">
             <Link
                 v-for="(link, i) in links"
                 :key="i"
@@ -23,12 +26,12 @@ defineProps<{
                 ]"
                 :aria-disabled="!link.url"
             >
-                <span v-html="link.label.replace(/&laquo;|&raquo;|&nbsp;/g, (m) => ({'&laquo;':'«','&raquo;':'»','&nbsp;':' '}[m] ?? m))" />
+                <span>{{ i === 0 ? `« ${t('common.previous')}` : i === links.length - 1 ? `${t('common.next')} »` : link.label }}</span>
             </Link>
         </div>
         <div class="hidden flex-1 items-center justify-between sm:flex">
             <div class="text-sm text-ink-secondary">
-                Halaman
+                {{ t('common.page') }}
                 <span class="font-medium text-ink-primary">{{
                     links.find((l) => l.active)?.label ?? '1'
                 }}</span>
@@ -48,11 +51,7 @@ defineProps<{
                     ]"
                     :aria-disabled="!link.url"
                 >
-                    <span
-                        v-if="link.label.includes('&laquo;') || link.label.includes('&raquo;')"
-                        v-html="link.label.replace(/&laquo;|&raquo;/g, (m) => (m === '&laquo;' ? '«' : '»'))"
-                    />
-                    <span v-else>{{ link.label }}</span>
+                    <span>{{ i === 0 ? `« ${t('common.previous')}` : i === links.length - 1 ? `${t('common.next')} »` : link.label }}</span>
                 </Link>
             </div>
         </div>

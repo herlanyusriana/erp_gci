@@ -26,7 +26,7 @@ class CheckPermission
             }
         }
 
-        abort(403, 'You do not have permission to perform this action.');
+        abort(403, __('You do not have permission to perform this action.'));
     }
 
     /**

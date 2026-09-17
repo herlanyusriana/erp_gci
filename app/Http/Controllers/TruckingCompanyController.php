@@ -46,7 +46,7 @@ class TruckingCompanyController extends Controller
         $data['created_by'] = $request->user()?->id;
         TruckingCompany::create($data);
 
-        return redirect()->route('trucking-companies.index')->with('success', 'Trucking company created.');
+        return redirect()->route('trucking-companies.index')->with('success', __('Trucking company created.'));
     }
 
     public function update(Request $request, TruckingCompany $trucking): RedirectResponse
@@ -66,7 +66,7 @@ class TruckingCompanyController extends Controller
         $data['updated_by'] = $request->user()?->id;
         $trucking->update($data);
 
-        return redirect()->route('trucking-companies.index')->with('success', 'Trucking company updated.');
+        return redirect()->route('trucking-companies.index')->with('success', __('Trucking company updated.'));
     }
 
     public function destroy(TruckingCompany $trucking): RedirectResponse
@@ -75,6 +75,6 @@ class TruckingCompanyController extends Controller
 
         $trucking->delete();
 
-        return redirect()->route('trucking-companies.index')->with('success', 'Trucking company deleted.');
+        return redirect()->route('trucking-companies.index')->with('success', __('Trucking company deleted.'));
     }
 }

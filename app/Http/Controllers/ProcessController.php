@@ -37,7 +37,7 @@ class ProcessController extends Controller
         $data['created_by'] = $request->user()?->id;
         Process::create($data);
 
-        return redirect()->route('processes.index')->with('success', 'Process created.');
+        return redirect()->route('processes.index')->with('success', __('Process created.'));
     }
 
     public function update(Request $request, Process $process): RedirectResponse
@@ -51,13 +51,13 @@ class ProcessController extends Controller
         $data['updated_by'] = $request->user()?->id;
         $process->update($data);
 
-        return redirect()->route('processes.index')->with('success', 'Process updated.');
+        return redirect()->route('processes.index')->with('success', __('Process updated.'));
     }
 
     public function destroy(Process $process): RedirectResponse
     {
         $process->delete();
 
-        return redirect()->route('processes.index')->with('success', 'Process deleted.');
+        return redirect()->route('processes.index')->with('success', __('Process deleted.'));
     }
 }

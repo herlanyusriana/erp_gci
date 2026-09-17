@@ -40,20 +40,10 @@ class PurchaseOrderController extends Controller
         return Inertia::render('Incoming/PurchaseOrder/Form', [
             'purchaseOrder' => null,
             'suppliers' => \App\Models\Supplier::select('id', 'supplier_code', 'supplier_name')->orderBy('supplier_name')->get(),
-            'parts' => \App\Models\Part::select('id', 'part_number', 'part_name')->where('is_active', true)->orderBy('part_number')->get(),
-        ]);
-    }
-
-    public function edit(PurchaseOrder $purchaseOrder): Response
-    {
-        Gate::authorize('update', $purchaseOrder);
-
-        $purchaseOrder->load(['supplier', 'items.part']);
-
-        return Inertia::render('Incoming/PurchaseOrder/Form', [
-            'purchaseOrder' => $purchaseOrder,
-            'suppliers' => \App\Models\Supplier::select('id', 'supplier_code', 'supplier_name')->orderBy('supplier_name')->get(),
-            'parts' => \App\Models\Part::select('id', 'part_number', 'part_name')->where('is_active', true)->orderBy('part_number')->get(),
+            'parts' => \App\Models\Part::select('id', 'part_number', 'part_name')
+                ->where('is_active', true)
+                ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))
+                ->orderBy('part_number')->get(),
         ]);
     }
 
@@ -78,7 +68,7 @@ class PurchaseOrderController extends Controller
             'notes' => ['nullable', 'string'],
             'status' => ['required', 'in:draft,confirmed,cancelled'],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.part_id' => ['required', 'exists:parts,id'],
+            'items.*.part_id' => ['required', 'exists:parts,id', \App\Rules\PartTypeRule::notFg()],
             'items.*.qty' => ['required', 'numeric', 'min:0'],
             'items.*.unit' => ['nullable', 'string', 'max:20'],
             'items.*.price' => ['nullable', 'numeric', 'min:0'],
@@ -110,7 +100,7 @@ class PurchaseOrderController extends Controller
             return $po;
         });
 
-        return redirect()->route('purchase-orders.show', $po)->with('success', 'Purchase order created.');
+        return redirect()->route('purchase-orders.show', $po)->with('success', __('Purchase order created.'));
     }
 
     public function update(Request $request, PurchaseOrder $purchaseOrder): RedirectResponse
@@ -123,7 +113,7 @@ class PurchaseOrderController extends Controller
             'notes' => ['nullable', 'string'],
             'status' => ['required', 'in:draft,confirmed,cancelled'],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.part_id' => ['required', 'exists:parts,id'],
+            'items.*.part_id' => ['required', 'exists:parts,id', \App\Rules\PartTypeRule::notFg()],
             'items.*.qty' => ['required', 'numeric', 'min:0'],
             'items.*.unit' => ['nullable', 'string', 'max:20'],
             'items.*.price' => ['nullable', 'numeric', 'min:0'],
@@ -154,13 +144,13 @@ class PurchaseOrderController extends Controller
             }
         });
 
-        return redirect()->route('purchase-orders.show', $purchaseOrder)->with('success', 'Purchase order updated.');
+        return redirect()->route('purchase-orders.show', $purchaseOrder)->with('success', __('Purchase order updated.'));
     }
 
     public function destroy(PurchaseOrder $purchaseOrder): RedirectResponse
     {
         $purchaseOrder->delete();
 
-        return redirect()->route('purchase-orders.index')->with('success', 'Purchase order deleted.');
+        return redirect()->route('purchase-orders.index')->with('success', __('Purchase order deleted.'));
     }
 }

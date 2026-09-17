@@ -1,9 +1,13 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n';
+import { Head } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import { useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import type { WorkOrder } from '@/types';
+
+const { t, locale, te } = useI18n();
 
 const props = defineProps<{
     workOrder: WorkOrder;
@@ -14,8 +18,10 @@ const items = computed(() => props.workOrder.items ?? []);
 
 const fmt = (n: number | null | undefined, decimals = 4) => {
     if (n == null) return '—';
-    return Number(n).toLocaleString('en-US', { maximumFractionDigits: decimals });
+    return Number(n).toLocaleString(locale.value, { maximumFractionDigits: decimals });
 };
+
+const sourceLabel = (source: string | null) => source && te(`production.sources.${source}`) ? t(`production.sources.${source}`) : source ?? '—';
 
 const sourceBadge = (s: string | null) => {
     switch (s) {
@@ -26,6 +32,8 @@ const sourceBadge = (s: string | null) => {
         default: return 'bg-ink-secondary/10 text-ink-secondary';
     }
 };
+
+const statusLabel = (status: string) => te(`production.statuses.${status}`) ? t(`production.statuses.${status}`) : status;
 
 const statusBadge = (s: string) => {
     switch (s) {
@@ -43,22 +51,22 @@ const cancelForm = useForm({});
 const deleteForm = useForm({});
 
 function doRelease() {
-    if (confirm('Release WO ini? Material & WIP akan dikonsumsi stok (FIFO).')) {
+    if (confirm(t('production.releaseConfirm'))) {
         releaseForm.post(route('work-orders.release', props.workOrder.id));
     }
 }
 function doComplete() {
-    if (confirm('Tandai WO selesai?')) {
+    if (confirm(t('production.completeConfirm'))) {
         completeForm.post(route('work-orders.complete', props.workOrder.id));
     }
 }
 function doCancel() {
-    if (confirm('Batalkan WO ini?')) {
+    if (confirm(t('production.cancelConfirm'))) {
         cancelForm.post(route('work-orders.cancel', props.workOrder.id));
     }
 }
 function doDestroy() {
-    if (confirm('Hapus WO ini?')) {
+    if (confirm(t('production.deleteConfirm'))) {
         deleteForm.delete(route('work-orders.destroy', props.workOrder.id));
     }
 }
@@ -66,13 +74,14 @@ function doDestroy() {
 
 <template>
     <AppLayout>
+        <Head :title="t('production.detailTitle', { number: workOrder.wo_no })" />
         <BackButton :href="route('work-orders.index')" class="mb-4" />
 
         <div class="mb-6 flex flex-wrap items-start justify-between gap-3">
             <div>
                 <h1 class="flex items-center gap-3 text-2xl font-bold tracking-tight text-ink-primary">
                     {{ workOrder.wo_no }}
-                    <span :class="statusBadge(workOrder.status)" class="rounded-md px-2 py-0.5 text-xs font-semibold uppercase">{{ workOrder.status }}</span>
+                    <span :class="statusBadge(workOrder.status)" class="rounded-md px-2 py-0.5 text-xs font-semibold uppercase">{{ statusLabel(workOrder.status) }}</span>
                 </h1>
                 <p class="mt-1 text-sm text-ink-secondary">
                     {{ workOrder.part?.part_number }} · {{ workOrder.part?.part_name }}
@@ -83,19 +92,19 @@ function doDestroy() {
             <div class="flex flex-wrap items-center gap-2">
                 <button v-if="workOrder.status === 'planned' && can.release" @click="doRelease" :disabled="releaseForm.processing"
                     class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60">
-                    {{ releaseForm.processing ? 'Me-release…' : 'Release' }}
+                    {{ releaseForm.processing ? t('production.releasing') : t('production.release') }}
                 </button>
                 <button v-if="workOrder.status === 'in_progress' && can.complete" @click="doComplete" :disabled="completeForm.processing"
                     class="rounded-md bg-success px-4 py-2 text-sm font-semibold text-white transition hover:bg-success/90 disabled:opacity-60">
-                    {{ completeForm.processing ? '…' : 'Complete' }}
+                    {{ completeForm.processing ? '…' : t('production.complete') }}
                 </button>
                 <button v-if="['planned', 'in_progress'].includes(workOrder.status) && can.cancel" @click="doCancel" :disabled="cancelForm.processing"
                     class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-secondary transition hover:bg-background">
-                    Cancel
+                    {{ t('production.cancel') }}
                 </button>
                 <button v-if="can.delete" @click="doDestroy" :disabled="deleteForm.processing"
                     class="rounded-md border border-danger/30 px-4 py-2 text-sm font-medium text-danger transition hover:bg-danger/10">
-                    Hapus
+                    {{ t('production.delete') }}
                 </button>
             </div>
         </div>
@@ -103,41 +112,41 @@ function doDestroy() {
         <!-- Summary -->
         <div class="mb-6 grid gap-4 sm:grid-cols-4">
             <div class="rounded-xl border border-borderline bg-surface p-4">
-                <div class="text-xs font-medium uppercase text-ink-secondary">Qty FG</div>
+                <div class="text-xs font-medium uppercase text-ink-secondary">{{ t('production.fgQty') }}</div>
                 <div class="mt-1 text-xl font-bold tabular-nums text-ink-primary">{{ fmt(workOrder.qty, 2) }}</div>
             </div>
             <div class="rounded-xl border border-borderline bg-surface p-4">
-                <div class="text-xs font-medium uppercase text-ink-secondary">Item Routing</div>
+                <div class="text-xs font-medium uppercase text-ink-secondary">{{ t('production.routingItems') }}</div>
                 <div class="mt-1 text-xl font-bold tabular-nums text-ink-primary">{{ items.length }}</div>
             </div>
             <div class="rounded-xl border border-borderline bg-surface p-4">
-                <div class="text-xs font-medium uppercase text-ink-secondary">Rencana</div>
+                <div class="text-xs font-medium uppercase text-ink-secondary">{{ t('production.planned') }}</div>
                 <div class="mt-1 text-lg font-semibold text-ink-primary">{{ workOrder.planned_date ?? '—' }}</div>
             </div>
             <div class="rounded-xl border border-borderline bg-surface p-4">
-                <div class="text-xs font-medium uppercase text-ink-secondary">Release</div>
+                <div class="text-xs font-medium uppercase text-ink-secondary">{{ t('production.releasedAt') }}</div>
                 <div class="mt-1 text-lg font-semibold text-ink-primary">{{ workOrder.released_at ?? '—' }}</div>
             </div>
         </div>
 
         <!-- Routing table -->
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
-            <div class="border-b border-borderline px-4 py-3 text-sm font-semibold text-ink-primary">Routing Produksi (snapshot BOM)</div>
+            <div class="border-b border-borderline px-4 py-3 text-sm font-semibold text-ink-primary">{{ t('production.routing') }}</div>
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-borderline text-sm">
                     <thead class="bg-background">
                         <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                            <th class="px-3 py-3">Seq</th>
-                            <th class="px-3 py-3">Proses</th>
-                            <th class="px-3 py-3">Mesin</th>
-                            <th class="px-3 py-3">Material / Subs</th>
-                            <th class="px-3 py-3">Parent</th>
-                            <th class="px-3 py-3 text-right">Child Qty</th>
-                            <th class="px-3 py-3">UOM</th>
-                            <th class="px-3 py-3">Source</th>
-                            <th class="px-3 py-3 text-right">Butuh</th>
-                            <th class="px-3 py-3 text-right">Terpakai</th>
-                            <th class="px-3 py-3 text-center">Aksi</th>
+                            <th class="px-3 py-3">{{ t('production.sequence') }}</th>
+                            <th class="px-3 py-3">{{ t('production.process') }}</th>
+                            <th class="px-3 py-3">{{ t('production.machine') }}</th>
+                            <th class="px-3 py-3">{{ t('production.materialSubstitute') }}</th>
+                            <th class="px-3 py-3">{{ t('production.parent') }}</th>
+                            <th class="px-3 py-3 text-right">{{ t('production.childQty') }}</th>
+                            <th class="px-3 py-3">{{ t('production.uom') }}</th>
+                            <th class="px-3 py-3">{{ t('production.source') }}</th>
+                            <th class="px-3 py-3 text-right">{{ t('production.required') }}</th>
+                            <th class="px-3 py-3 text-right">{{ t('production.consumed') }}</th>
+                            <th class="px-3 py-3 text-center">{{ t('production.actions') }}</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-borderline">
@@ -147,8 +156,8 @@ function doDestroy() {
                             <td class="px-3 py-2.5 whitespace-nowrap text-ink-primary">{{ it.machine?.machine_name ?? '—' }}</td>
                             <td class="px-3 py-2.5">
                                 <div class="font-medium text-ink-primary">{{ it.selected_part?.part_number ?? it.child_part?.part_number ?? it.child_part_name ?? '—' }}</div>
-                                <div v-if="it.child_part" class="text-xs text-ink-secondary">Main: {{ it.child_part.part_number }}</div>
-                                <div v-if="it.selected_part && it.selected_part.id !== it.child_part_id" class="text-xs text-purple-700">Substitute</div>
+                                <div v-if="it.child_part" class="text-xs text-ink-secondary">{{ t('production.mainPart', { part: it.child_part.part_number }) }}</div>
+                                <div v-if="it.selected_part && it.selected_part.id !== it.child_part_id" class="text-xs text-purple-700">{{ t('production.substitute') }}</div>
                             </td>
                             <td class="px-3 py-2.5">
                                 <span class="font-medium text-ink-primary">{{ it.parent_part?.part_number ?? it.parent_part_name ?? '—' }}</span>
@@ -156,7 +165,7 @@ function doDestroy() {
                             <td class="px-3 py-2.5 text-right tabular-nums text-ink-primary">{{ fmt(it.child_qty) }}</td>
                             <td class="px-3 py-2.5 text-ink-secondary">{{ it.uom_rm ?? '—' }}</td>
                             <td class="px-3 py-2.5">
-                                <span :class="sourceBadge(it.source)" class="rounded-md px-2 py-0.5 text-xs font-semibold">{{ it.source ?? '—' }}</span>
+                                <span :class="sourceBadge(it.source)" class="rounded-md px-2 py-0.5 text-xs font-semibold">{{ sourceLabel(it.source) }}</span>
                             </td>
                             <td class="px-3 py-2.5 text-right tabular-nums text-ink-secondary">{{ fmt(it.qty_required) }}</td>
                             <td class="px-3 py-2.5 text-right tabular-nums" :class="Number(it.qty_consumed) < Number(it.qty_required) ? 'text-danger' : 'text-success'">{{ fmt(it.qty_consumed) }}</td>
@@ -164,8 +173,8 @@ function doDestroy() {
                                 <a
                                     v-if="workOrder.status === 'planned' && can.release"
                                     :href="route('work-orders.items.edit', [workOrder.id, it.id])"
-                                    title="Edit routing WO"
-                                    aria-label="Edit routing WO"
+                                    :title="t('production.editRouting')"
+                                    :aria-label="t('production.editRouting')"
                                     class="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-secondary transition hover:bg-primary-light hover:text-primary"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
@@ -176,7 +185,7 @@ function doDestroy() {
                             </td>
                         </tr>
                         <tr v-if="items.length === 0">
-                            <td colspan="11" class="px-4 py-12 text-center text-sm text-ink-secondary">Tidak ada routing.</td>
+                            <td colspan="11" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('production.noRouting') }}</td>
                         </tr>
                     </tbody>
                 </table>

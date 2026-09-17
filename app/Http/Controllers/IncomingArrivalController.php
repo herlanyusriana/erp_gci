@@ -67,7 +67,7 @@ class IncomingArrivalController extends Controller
 
             if (!$mapping || !$mapping->substitutePart) {
                 throw ValidationException::withMessages([
-                    "items.{$index}.size" => 'Size tidak tersedia untuk supplier dan material group yang dipilih.',
+                    "items.{$index}.size" => __('Size tidak tersedia untuk supplier dan material group yang dipilih.'),
                 ]);
             }
 
@@ -220,7 +220,7 @@ class IncomingArrivalController extends Controller
             return $arrival;
         });
 
-        return redirect()->route('incoming-arrivals.show', $arrival)->with('success', 'Arrival created.');
+        return redirect()->route('incoming-arrivals.show', $arrival)->with('success', __('Arrival created.'));
     }
 
     public function show(IncomingArrival $arrival): Response
@@ -331,7 +331,7 @@ class IncomingArrivalController extends Controller
             }
         });
 
-        return redirect()->route('incoming-arrivals.show', $arrival)->with('success', 'Arrival updated.');
+        return redirect()->route('incoming-arrivals.show', $arrival)->with('success', __('Arrival updated.'));
     }
 
     public function destroy(IncomingArrival $arrival): RedirectResponse
@@ -340,7 +340,7 @@ class IncomingArrivalController extends Controller
 
         $arrival->delete();
 
-        return redirect()->route('incoming-arrivals.index')->with('success', 'Arrival deleted.');
+        return redirect()->route('incoming-arrivals.index')->with('success', __('Arrival deleted.'));
     }
 
     /**
@@ -371,7 +371,7 @@ class IncomingArrivalController extends Controller
             ]
         );
 
-        return back()->with('success', 'Inspection saved.');
+        return back()->with('success', __('Inspection saved.'));
     }
 
     /**

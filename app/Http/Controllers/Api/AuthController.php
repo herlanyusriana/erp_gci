@@ -25,7 +25,7 @@ class AuthController extends Controller
 
         if (!$user || ($user->is_active ?? true) === false || !Hash::check((string) $request->input('password'), (string) $user->password)) {
             throw ValidationException::withMessages([
-                'email' => ['Email atau password salah.'],
+                'email' => [__('Email atau password salah.')],
             ]);
         }
 

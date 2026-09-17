@@ -74,9 +74,9 @@ class IncomingApiController extends Controller
                 ['tag' => trim($validated['tag']), 'qty' => $validated['qty'], 'qc_status' => $validated['qc_status']],
             ], 'tags');
         } catch (\Illuminate\Validation\ValidationException) {
-            return response()->json(['ok' => false, 'message' => 'Tag sudah pernah dipakai pada item ini.'], 422);
+            return response()->json(['ok' => false, 'message' => __('Tag sudah pernah dipakai pada item ini.')], 422);
         } catch (\Illuminate\Http\Exceptions\HttpResponseException) {
-            return response()->json(['ok' => false, 'message' => 'Tag sudah pernah dipakai pada item ini.'], 422);
+            return response()->json(['ok' => false, 'message' => __('Tag sudah pernah dipakai pada item ini.')], 422);
         }
 
         $totalRequested = (float) $validated['qty'];
@@ -84,7 +84,7 @@ class IncomingApiController extends Controller
         if ($totalRequested > $remainingQty + 1e-9) {
             return response()->json([
                 'ok' => false,
-                'message' => "Qty melebihi sisa ({$remainingQty} {$goodsUnit}).",
+                'message' => __('Qty melebihi sisa (:remaining :unit).', ['remaining' => $remainingQty, 'unit' => $goodsUnit]),
             ], 422);
         }
 
@@ -132,7 +132,7 @@ class IncomingApiController extends Controller
 
         return response()->json([
             'ok' => true,
-            'message' => "Tag {$receive->tag} diterima ({$validated['qty']} {$goodsUnit}).",
+            'message' => __('Tag :tag diterima (:qty :unit).', ['tag' => $receive->tag, 'qty' => $validated['qty'], 'unit' => $goodsUnit]),
             'data' => ['receive_id' => $receive->id],
         ]);
     }

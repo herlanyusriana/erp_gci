@@ -57,7 +57,7 @@ class PartController extends Controller
 
         Part::create($data);
 
-        return redirect()->route('parts.index')->with('success', 'Part created.');
+        return redirect()->route('parts.index')->with('success', __('Part created.'));
     }
 
     public function edit(Part $part): Response
@@ -79,7 +79,7 @@ class PartController extends Controller
 
         $part->update($data);
 
-        return redirect()->route('parts.index')->with('success', 'Part updated.');
+        return redirect()->route('parts.index')->with('success', __('Part updated.'));
     }
 
     public function destroy(Part $part): RedirectResponse
@@ -88,6 +88,6 @@ class PartController extends Controller
 
         $part->delete();
 
-        return redirect()->route('parts.index')->with('success', 'Part deleted.');
+        return redirect()->route('parts.index')->with('success', __('Part deleted.'));
     }
 }

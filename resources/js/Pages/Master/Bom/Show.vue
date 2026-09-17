@@ -1,8 +1,11 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n';
 import { computed } from 'vue';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import type { Bom } from '@/types';
+
+const { t } = useI18n();
 
 const props = defineProps<{
     bom: Bom;
@@ -29,6 +32,16 @@ const sourceBadge = (s: string | null) => {
             return 'bg-ink-secondary/10 text-ink-secondary';
     }
 };
+
+function sourceLabel(source: string | null): string {
+    switch (source) {
+        case 'Prod': return t('master.productionSource');
+        case 'Vendor': return t('master.vendorSource');
+        case 'Subcon': return t('master.subcontractSource');
+        case 'FREE_ISSUE': return t('master.freeIssueSource');
+        default: return source ?? '—';
+    }
+}
 </script>
 
 <template>
@@ -38,17 +51,17 @@ const sourceBadge = (s: string | null) => {
         <div class="mb-6 flex flex-wrap items-start justify-between gap-3">
             <div>
                 <h1 class="text-2xl font-bold tracking-tight text-ink-primary">
-                    BOM — {{ bom.part?.part_number }}
+                    {{ t('master.bomPartTitle', { name: bom.part?.part_number ?? '' }) }}
                 </h1>
                 <p class="mt-1 text-sm text-ink-secondary">
                     {{ bom.part?.part_name }} · {{ bom.part?.model ?? '—' }} ·
-                    <span class="font-medium text-ink-primary">v{{ bom.version }}</span> ·
-                    {{ items.length }} item ops
+                    <span class="font-medium text-ink-primary">{{ t('master.version', { version: bom.version }) }}</span> ·
+                    {{ t('master.operationCount', { count: items.length }) }}
                 </p>
             </div>
             <div class="rounded-lg border border-borderline bg-surface px-4 py-2 text-sm text-ink-secondary">
-                Tipe: <span class="font-semibold text-primary">{{ bom.part?.part_type?.code ?? '—' }}</span>
-                · UOM: <span class="font-semibold text-ink-primary">{{ bom.part?.uom?.code ?? '—' }}</span>
+                {{ t('master.type') }}: <span class="font-semibold text-primary">{{ bom.part?.part_type?.code ?? '—' }}</span>
+                · {{ t('master.uom') }}: <span class="font-semibold text-ink-primary">{{ bom.part?.uom?.code ?? '—' }}</span>
             </div>
         </div>
 
@@ -57,17 +70,17 @@ const sourceBadge = (s: string | null) => {
                 <table class="min-w-full divide-y divide-borderline text-sm">
                     <thead class="bg-background">
                         <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                            <th class="px-3 py-3">Seq</th>
-                            <th class="px-3 py-3">Proses</th>
-                            <th class="px-3 py-3">Mesin</th>
-                            <th class="px-3 py-3">Parent</th>
-                            <th class="px-3 py-3 text-right">Parent Qty</th>
-                            <th class="px-3 py-3">Child</th>
-                            <th class="px-3 py-3">Size</th>
-                            <th class="px-3 py-3 text-right">Child Qty</th>
-                            <th class="px-3 py-3">UOM</th>
-                            <th class="px-3 py-3">Spesial</th>
-                            <th class="px-3 py-3">Source</th>
+                            <th class="px-3 py-3">{{ t('master.sequence') }}</th>
+                            <th class="px-3 py-3">{{ t('master.process') }}</th>
+                            <th class="px-3 py-3">{{ t('master.machine') }}</th>
+                            <th class="px-3 py-3">{{ t('master.parent') }}</th>
+                            <th class="px-3 py-3 text-right">{{ t('master.parentQty') }}</th>
+                            <th class="px-3 py-3">{{ t('master.child') }}</th>
+                            <th class="px-3 py-3">{{ t('master.size') }}</th>
+                            <th class="px-3 py-3 text-right">{{ t('master.childQty') }}</th>
+                            <th class="px-3 py-3">{{ t('master.uom') }}</th>
+                            <th class="px-3 py-3">{{ t('master.special') }}</th>
+                            <th class="px-3 py-3">{{ t('master.source') }}</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-borderline">
@@ -91,11 +104,11 @@ const sourceBadge = (s: string | null) => {
                                 <span v-else class="text-ink-secondary">—</span>
                             </td>
                             <td class="px-3 py-2.5">
-                                <span :class="sourceBadge(it.source)" class="rounded-md px-2 py-0.5 text-xs font-semibold">{{ it.source ?? '—' }}</span>
+                                <span :class="sourceBadge(it.source)" class="rounded-md px-2 py-0.5 text-xs font-semibold">{{ sourceLabel(it.source) }}</span>
                             </td>
                         </tr>
                         <tr v-if="items.length === 0">
-                            <td colspan="11" class="px-4 py-12 text-center text-sm text-ink-secondary">BOM ini belum memiliki item.</td>
+                            <td colspan="11" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.bomItemsEmpty') }}</td>
                         </tr>
                     </tbody>
                 </table>

@@ -48,7 +48,7 @@ class SupplierController extends Controller
         $data['created_by'] = $request->user()?->id;
         $supplier = Supplier::create($data);
 
-        return redirect()->route('suppliers.index')->with('success', 'Supplier created.');
+        return redirect()->route('suppliers.index')->with('success', __('Supplier created.'));
     }
 
     public function update(Request $request, Supplier $supplier): RedirectResponse
@@ -72,7 +72,7 @@ class SupplierController extends Controller
         $data['updated_by'] = $request->user()?->id;
         $supplier->update($data);
 
-        return redirect()->route('suppliers.index')->with('success', 'Supplier updated.');
+        return redirect()->route('suppliers.index')->with('success', __('Supplier updated.'));
     }
 
     /**
@@ -94,6 +94,6 @@ class SupplierController extends Controller
     {
         $supplier->delete();
 
-        return redirect()->route('suppliers.index')->with('success', 'Supplier deleted.');
+        return redirect()->route('suppliers.index')->with('success', __('Supplier deleted.'));
     }
 }

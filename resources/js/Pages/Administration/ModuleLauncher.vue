@@ -1,21 +1,25 @@
 <script setup lang="ts">
+import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import LauncherTile from '@/Components/LauncherTile.vue';
 
-const items = [
-    { href: '/config', title: 'Config Master', subtitle: 'Pengaturan sistem per group/key' },
-    { href: '/roles', title: 'Role & Permission', subtitle: 'Kelola role dan permission akses' },
-    { href: '/users', title: 'User Management', subtitle: 'Kelola pengguna dan role' },
-];
+const { t } = useI18n();
+
+const items = computed(() => [
+    { href: '/config', title: t('account.configMaster'), subtitle: t('account.configTileHelp') },
+    { href: '/roles', title: t('account.rolesPermissions'), subtitle: t('account.rolesTileHelp') },
+    { href: '/users', title: t('account.userManagement'), subtitle: t('account.usersTileHelp') },
+]);
 </script>
 
 <template>
     <AppLayout>
         <BackButton :href="route('launcher')" class="mb-4" />
 
-        <h1 class="mb-2 text-2xl font-bold tracking-tight text-ink-primary">ADMINISTRATION</h1>
-        <p class="mb-6 text-sm text-ink-secondary">Pengaturan aplikasi dan akses.</p>
+        <h1 class="mb-2 text-2xl font-bold tracking-tight text-ink-primary">{{ t('account.administration') }}</h1>
+        <p class="mb-6 text-sm text-ink-secondary">{{ t('account.administrationHelp') }}</p>
 
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <LauncherTile

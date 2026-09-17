@@ -1,11 +1,14 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n';
 import { ref } from 'vue';
-import { Link, router } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import ActionButton from '@/Components/ActionButton.vue';
 import Pagination from '@/Components/Pagination.vue';
 import type { IncomingArrival, Paginated } from '@/types';
+
+const { t } = useI18n();
 
 interface SupplierOpt { id: number; supplier_code: string | null; supplier_name: string; }
 
@@ -38,34 +41,35 @@ const statusTone = (s: string) => {
 };
 
 function remove(id: number, no: string | null) {
-    if (confirm(`Hapus Local PO ${no ?? ''}?`)) {
+    if (confirm(t('incoming.deleteLocal', { number: no ?? '' }))) {
         router.delete(route('local-pos.destroy', id));
     }
 }
 </script>
 
 <template>
+    <Head :title="t('incoming.localPo')" />
     <AppLayout>
         <BackButton :href="route('incoming-data')" class="mb-4" />
 
         <div class="mb-6 flex items-end justify-between gap-4">
             <div>
-                <h1 class="text-2xl font-bold tracking-tight text-ink-primary">Local PO</h1>
-                <p class="mt-1 text-sm text-ink-secondary">PO lokal — tanpa vessel/container, receive langsung per item.</p>
+                <h1 class="text-2xl font-bold tracking-tight text-ink-primary">{{ t('incoming.localPo') }}</h1>
+                <p class="mt-1 text-sm text-ink-secondary">{{ t('incoming.localDescription') }}</p>
             </div>
             <div class="flex gap-2">
-                <a :href="route('local-pos.export')" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-primary transition hover:bg-background">Export Excel</a>
+                <a :href="route('local-pos.export')" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-primary transition hover:bg-background">{{ t('incoming.exportExcel') }}</a>
                 <Link :href="route('local-pos.create')" class="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover">
                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                    Tambah
+                    {{ t('incoming.add') }}
                 </Link>
             </div>
         </div>
 
         <div class="mb-4 flex flex-wrap gap-3">
-            <input v-model="search" @input="doSearch" type="search" placeholder="Cari PO / arrival no…" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
+            <input v-model="search" @input="doSearch" type="search" :placeholder="t('incoming.searchLocal')" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
             <select v-model="supplierId" @change="doSearch" class="rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
-                <option value="">Semua supplier</option>
+                <option value="">{{ t('incoming.allSuppliers') }}</option>
                 <option v-for="s in suppliers" :key="s.id" :value="s.id">{{ s.supplier_code ? `${s.supplier_code} — ` : '' }}{{ s.supplier_name }}</option>
             </select>
         </div>
@@ -74,13 +78,13 @@ function remove(id: number, no: string | null) {
             <table class="min-w-full divide-y divide-borderline text-sm">
                 <thead class="bg-background">
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th class="px-4 py-3">PO No / Arrival</th>
-                        <th class="px-4 py-3">PO Date</th>
-                        <th class="px-4 py-3">Supplier</th>
-                        <th class="px-4 py-3 text-right">Items</th>
-                        <th class="px-4 py-3 text-right">Sisa</th>
-                        <th class="px-4 py-3">Status</th>
-                        <th class="px-4 py-3 text-right">Aksi</th>
+                        <th class="px-4 py-3">{{ t('incoming.poArrival') }}</th>
+                        <th class="px-4 py-3">{{ t('incoming.poDate') }}</th>
+                        <th class="px-4 py-3">{{ t('incoming.supplier') }}</th>
+                        <th class="px-4 py-3 text-right">{{ t('incoming.items') }}</th>
+                        <th class="px-4 py-3 text-right">{{ t('incoming.remaining') }}</th>
+                        <th class="px-4 py-3">{{ t('incoming.status') }}</th>
+                        <th class="px-4 py-3 text-right">{{ t('incoming.actions') }}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-borderline">
@@ -94,18 +98,18 @@ function remove(id: number, no: string | null) {
                         <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ po.items_count ?? 0 }}</td>
                         <td class="px-4 py-3 text-right tabular-nums font-semibold" :class="(po.remaining_qty ?? 0) > 0 ? 'text-warning' : 'text-success'">{{ po.remaining_qty ?? 0 }}</td>
                         <td class="px-4 py-3">
-                            <span :class="statusTone(po.status)" class="rounded-md px-2 py-0.5 text-xs font-semibold uppercase">{{ po.status }}</span>
+                            <span :class="statusTone(po.status)" class="rounded-md px-2 py-0.5 text-xs font-semibold uppercase">{{ t('incoming.status_' + po.status) }}</span>
                         </td>
                         <td class="px-4 py-3">
                             <div class="flex justify-end gap-1.5">
-                                <ActionButton :href="route('local-pos.show', po.id)" label="Lihat" variant="view" />
-                                <ActionButton :href="route('local-pos.edit', po.id)" label="Edit" variant="edit" />
-                                <ActionButton label="Hapus" variant="delete" @click="remove(po.id, po.invoice_no)" />
+                                <ActionButton :href="route('local-pos.show', po.id)" :label="t('incoming.view')" variant="view" />
+                                <ActionButton :href="route('local-pos.edit', po.id)" :label="t('incoming.edit')" variant="edit" />
+                                <ActionButton :label="t('incoming.delete')" variant="delete" @click="remove(po.id, po.invoice_no)" />
                             </div>
                         </td>
                     </tr>
                     <tr v-if="!localPos.data.length">
-                        <td colspan="7" class="px-4 py-12 text-center text-sm text-ink-secondary">Tidak ada Local PO.</td>
+                        <td colspan="7" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noLocal') }}</td>
                     </tr>
                 </tbody>
             </table>

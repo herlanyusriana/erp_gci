@@ -56,7 +56,7 @@ class UserController extends Controller
         ]);
         $user->roles()->sync($data['roles'] ?? []);
 
-        return redirect()->route('users.index')->with('success', 'User dibuat.');
+        return redirect()->route('users.index')->with('success', __('User dibuat.'));
     }
 
     public function update(Request $request, User $user): RedirectResponse
@@ -82,17 +82,17 @@ class UserController extends Controller
 
         $user->roles()->sync($data['roles'] ?? []);
 
-        return redirect()->route('users.index')->with('success', 'User diperbarui.');
+        return redirect()->route('users.index')->with('success', __('User diperbarui.'));
     }
 
     public function destroy(Request $request, User $user): RedirectResponse
     {
         Gate::authorize('delete', $user);
 
-        abort_if($user->id === $request->user()->id, 400, 'Tidak dapat menonaktifkan diri sendiri.');
+        abort_if($user->id === $request->user()->id, 400, __('Tidak dapat menonaktifkan diri sendiri.'));
 
         $user->delete();
 
-        return redirect()->route('users.index')->with('success', 'User dinonaktifkan.');
+        return redirect()->route('users.index')->with('success', __('User dinonaktifkan.'));
     }
 }

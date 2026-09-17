@@ -33,6 +33,7 @@ class HandleInertiaRequests extends Middleware
 
         return [
             ...parent::share($request),
+            'locale' => app()->getLocale(),
             'auth' => [
                 'user' => $user,
                 'roles' => $user?->roles()->pluck('name')->all() ?? [],
@@ -45,6 +46,7 @@ class HandleInertiaRequests extends Middleware
             ],
         ];
     }
+
 
     /**
      * Config-master backed application settings shared to the frontend.

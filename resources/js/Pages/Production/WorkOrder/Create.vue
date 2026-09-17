@@ -39,7 +39,7 @@ function submit() {
                     <select v-model="form.part_id" required class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                         <option value="" disabled>— Pilih FG —</option>
                         <option v-for="p in fgParts" :key="p.id" :value="p.id">
-                            {{ p.part_number }} · {{ p.part_name }}
+                            {{ p.part_number }} · {{ p.part_name }} · {{ p.model || '—' }}
                         </option>
                     </select>
                     <div v-if="form.errors.part_id" class="mt-1 text-xs text-danger">{{ form.errors.part_id }}</div>

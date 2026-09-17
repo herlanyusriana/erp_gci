@@ -337,7 +337,7 @@ export interface WorkOrderItem {
     qty_required: number;
     qty_consumed: number;
     parent_part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
-    child_part?: (Pick<Part, 'id' | 'part_number' | 'part_name'> & { partSubstitutes?: PartSubstitute[] }) | null;
+    child_part?: (Pick<Part, 'id' | 'part_number' | 'part_name'> & { part_substitutes?: PartSubstitute[] }) | null;
     selected_part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
 }
 

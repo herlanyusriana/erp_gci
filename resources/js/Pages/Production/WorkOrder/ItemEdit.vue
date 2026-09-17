@@ -26,7 +26,7 @@ const materialOptions = computed(() => {
             kind: 'Main Material',
         });
     }
-    for (const s of props.item.child_part?.partSubstitutes ?? []) {
+    for (const s of props.item.child_part?.part_substitutes ?? []) {
         const sp = s.substitute_part;
         if (!sp) continue;
         rows.push({

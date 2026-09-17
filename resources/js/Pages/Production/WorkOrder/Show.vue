@@ -175,7 +175,7 @@ function doDestroy() {
                                     </div>
                                     <datalist :id="`wo-material-${it.id}`">
                                         <option v-if="it.child_part" :value="it.child_part.part_number">{{ it.child_part.part_name }} (Main)</option>
-                                        <option v-for="s in (it.child_part?.partSubstitutes ?? [])" :key="s.id" :value="s.substitute_part?.part_number ?? ''">{{ s.substitutePart?.part_name }} (Subs)</option>
+                                        <option v-for="s in (it.child_part?.partSubstitutes ?? [])" :key="s.id" :value="s.substitute_part?.part_number ?? ''">{{ s.substitute_part?.part_name }} (Subs)</option>
                                     </datalist>
                                     <div class="text-xs text-ink-secondary">Main: {{ it.child_part?.part_number ?? it.child_part_name ?? '—' }}</div>
                                 </div>

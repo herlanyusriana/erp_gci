@@ -149,6 +149,7 @@ class WoService
                     'parent_qty' => $it->parent_qty,
                     'parent_uom' => $it->parent_uom,
                     'child_part_id' => $it->child_part_id,
+                    'selected_part_id' => $it->child_part_id,
                     'child_part_name' => $it->child_part_name,
                     'size' => $it->size,
                     'child_qty' => $it->child_qty,
@@ -210,6 +211,8 @@ class WoService
         $fgKey = $workOrder->part?->part_number ?? (string) $workOrder->part_id;
         $requirements = $this->buildRequirements($items, (float) $workOrder->qty, $fgKey);
 
+        $selectedIds = $items->mapWithKeys(fn ($it) => [$it->id => $it->selected_part_id ?: $it->child_part_id]);
+
         // Parent yang output-nya TIDAK di-post menurut design: source=Subcon →
         // output balik via Receive manual.
         $postedParentIds = [];
@@ -223,7 +226,7 @@ class WoService
         // Aggregasi per (child_part_id, uom) untuk duplikat/shared leaf.
         $leafNeeds = [];
         foreach ($items as $it) {
-            $cid = $it->child_part_id;
+            $cid = $selectedIds[$it->id] ?? $it->child_part_id;
             $need = (float) $it->qty_required;
             if ($cid === null || $need <= 0) {
                 continue;
@@ -257,12 +260,12 @@ class WoService
 
         $shortages = [];
 
-        $workOrder = DB::transaction(function () use ($workOrder, $items, $requirements, $ratio, $actorId, &$shortages) {
+        $workOrder = DB::transaction(function () use ($workOrder, $items, $requirements, $ratio, $actorId, $selectedIds, &$shortages) {
             $releasedAt = now();
             $postedParents = []; // dedupe posting output (parent bisa multi-row join)
 
             foreach ($this->sorted($items) as $it) {
-                $childPartId = $it->child_part_id;
+                $childPartId = $selectedIds[$it->id] ?? $it->child_part_id;
                 $need = (float) $it->qty_required;
                 $target = round($need * $ratio, 4);
 

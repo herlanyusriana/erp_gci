@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Part;
+use App\Models\PartSubstitute;
 use App\Models\WorkOrder;
+use App\Models\WorkOrderItem;
 use App\Services\WoService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -93,7 +95,7 @@ class WorkOrderController extends Controller
 
         $workOrder->load([
             'part' => fn ($q) => $q->with('partType', 'uom'),
-            'items' => fn ($q) => $q->with(['process', 'machine', 'parentPart', 'childPart']),
+            'items' => fn ($q) => $q->with(['process', 'machine', 'parentPart', 'childPart.partSubstitutes.substitutePart', 'selectedPart']),
             'consumptions',
         ]);
 
@@ -106,6 +108,20 @@ class WorkOrderController extends Controller
                 'delete' => Gate::allows('delete', $workOrder),
             ],
         ]);
+    }
+
+    public function updateItem(Request $request, WorkOrder $workOrder, WorkOrderItem $item): RedirectResponse
+    {
+        Gate::authorize('update', $workOrder);
+        abort_unless($item->work_order_id === $workOrder->id && $workOrder->status === 'planned', 422, 'Item WO tidak dapat diubah.');
+
+        $data = $request->validate(['selected_part_id' => ['required', 'integer', 'exists:parts,id']]);
+        $allowed = (int) $data['selected_part_id'] === (int) $item->child_part_id
+            || PartSubstitute::where('part_id', $item->child_part_id)->where('substitute_part_id', $data['selected_part_id'])->where('is_active', true)->exists();
+        abort_unless($allowed, 422, 'Part bukan main material atau substitute aktif untuk material BOM ini.');
+        $item->update(['selected_part_id' => $data['selected_part_id']]);
+
+        return back()->with('success', 'Material WO diperbarui.');
     }
 
     public function release(WorkOrder $workOrder): RedirectResponse

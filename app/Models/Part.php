@@ -33,7 +33,7 @@ class Part extends Model
 
     public function partSubstitutes(): HasMany
     {
-        return $this->hasMany(PartSubstitute::class, 'part_id');
+        return $this->hasMany(PartSubstitute::class, 'part_id')->where('is_active', true);
     }
 
     public function substituteOf(): HasMany

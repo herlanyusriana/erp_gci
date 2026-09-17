@@ -3,7 +3,7 @@ import { computed } from 'vue';
 import { useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
-import type { WorkOrder } from '@/types';
+import type { WorkOrder, WorkOrderItem } from '@/types';
 
 const props = defineProps<{
     workOrder: WorkOrder;
@@ -41,6 +41,18 @@ const releaseForm = useForm({});
 const completeForm = useForm({});
 const cancelForm = useForm({});
 const deleteForm = useForm({});
+const itemForms = new Map<number, ReturnType<typeof useForm>>();
+
+function itemForm(id: number) {
+    if (!itemForms.has(id)) itemForms.set(id, useForm({ selected_part_id: '' }));
+    return itemForms.get(id)!;
+}
+
+function saveMaterial(item: WorkOrderItem) {
+    const selected = item.selected_part_id || item.child_part_id;
+    itemForm(item.id).selected_part_id = String(selected ?? '');
+    itemForm(item.id).patch(route('work-orders.items.update', [props.workOrder.id, item.id]));
+}
 
 function doRelease() {
     if (confirm('Release WO ini? Material & WIP akan dikonsumsi stok (FIFO).')) {
@@ -150,12 +162,22 @@ function doDestroy() {
                                 </div>
                             </td>
                             <td class="px-3 py-2.5">
-                                <div class="flex items-center gap-2">
-                                    <div>
-                                        <div class="font-medium text-ink-primary">{{ it.child_part?.part_number ?? it.child_part_name ?? '—' }}</div>
-                                        <div v-if="it.child_part_name" class="text-xs text-ink-secondary">{{ it.child_part_name }}</div>
+                                <div class="min-w-64">
+                                    <div class="flex items-center gap-2">
+                                        <input
+                                            :list="`wo-material-${it.id}`"
+                                            :value="it.selected_part?.part_number ?? it.child_part?.part_number ?? it.child_part_name ?? ''"
+                                            :disabled="workOrder.status !== 'planned'"
+                                            @change="(e) => { const p = [...(it.child_part?.partSubstitutes ?? []).map((s) => s.substitute_part), it.child_part].find((p) => p && p.part_number === (e.target as HTMLInputElement).value); if (p) { it.selected_part_id = p.id; saveMaterial(it); } }"
+                                            class="w-full rounded-md border-borderline bg-background px-2 py-1 text-sm text-ink-primary"
+                                        />
+                                        <span v-if="itemForm(it.id).processing" class="text-xs text-ink-secondary">Menyimpan…</span>
                                     </div>
-                                    <a v-if="it.child_part_id" :href="route('parts.edit', it.child_part_id)" title="Edit material/subs di Master" class="text-ink-secondary hover:text-primary">✎</a>
+                                    <datalist :id="`wo-material-${it.id}`">
+                                        <option v-if="it.child_part" :value="it.child_part.part_number">{{ it.child_part.part_name }} (Main)</option>
+                                        <option v-for="s in (it.child_part?.partSubstitutes ?? [])" :key="s.id" :value="s.substitute_part?.part_number ?? ''">{{ s.substitutePart?.part_name }} (Subs)</option>
+                                    </datalist>
+                                    <div class="text-xs text-ink-secondary">Main: {{ it.child_part?.part_number ?? it.child_part_name ?? '—' }}</div>
                                 </div>
                             </td>
                             <td class="px-3 py-2.5">

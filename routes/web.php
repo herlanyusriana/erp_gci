@@ -90,6 +90,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('work-orders/create', [WorkOrderController::class, 'create'])->name('work-orders.create');
     Route::post('work-orders', [WorkOrderController::class, 'store'])->name('work-orders.store');
     Route::get('work-orders/{workOrder}', [WorkOrderController::class, 'show'])->name('work-orders.show');
+    Route::patch('work-orders/{workOrder}/items/{item}', [WorkOrderController::class, 'updateItem'])->name('work-orders.items.update');
     Route::post('work-orders/{workOrder}/release', [WorkOrderController::class, 'release'])->name('work-orders.release');
     Route::post('work-orders/{workOrder}/complete', [WorkOrderController::class, 'complete'])->name('work-orders.complete');
     Route::post('work-orders/{workOrder}/cancel', [WorkOrderController::class, 'cancel'])->name('work-orders.cancel');

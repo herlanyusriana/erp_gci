@@ -321,6 +321,7 @@ export interface WorkOrderItem {
     parent_qty: number | null;
     parent_uom: string | null;
     child_part_id: number | null;
+    selected_part_id: number | null;
     child_part_name: string | null;
     size: string | null;
     child_qty: number | null;
@@ -330,7 +331,8 @@ export interface WorkOrderItem {
     qty_required: number;
     qty_consumed: number;
     parent_part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
-    child_part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
+    child_part?: (Pick<Part, 'id' | 'part_number' | 'part_name'> & { partSubstitutes?: PartSubstitute[] }) | null;
+    selected_part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
 }
 
 export interface WorkOrderConsumption {

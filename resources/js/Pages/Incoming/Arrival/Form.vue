@@ -326,14 +326,14 @@ function submit() {
                 </p>
                 <div v-for="(r, i) in itemRows" :key="i" class="border-t border-borderline py-3">
                         <div class="grid gap-3 sm:grid-cols-12">
-                            <div class="sm:col-span-3">
+                            <div class="sm:col-span-2">
                                 <label class="text-xs font-semibold text-ink-secondary">Material Group</label>
                                 <select v-model="r.material_group" @change="r.size = ''; syncMaterial(r)" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                                     <option value="">— Pilih Group —</option>
                                     <option v-for="group in materialGroups" :key="group" :value="group">{{ group }}</option>
                                 </select>
                             </div>
-                            <div class="sm:col-span-3">
+                            <div class="sm:col-span-2">
                                 <label class="text-xs font-semibold text-ink-secondary">Size</label>
                                 <select v-model="r.size" @change="syncMaterial(r)" :disabled="!form.supplier_id || !r.material_group" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary disabled:opacity-50">
                                     <option value="">— Pilih Size —</option>
@@ -348,8 +348,21 @@ function submit() {
                                 <label class="text-xs font-semibold text-ink-secondary">Unit Goods</label>
                                 <input v-model="r.unit_goods" type="text" placeholder="KGM / PCS" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                             </div>
-                            <div class="flex items-end sm:col-span-1">
-                                <button type="button" @click="removeItem(i)" :disabled="itemRows.length <= 1" class="rounded-lg border border-borderline px-3 py-2 text-sm text-danger transition hover:bg-danger/10 disabled:opacity-40">✕</button>
+                            <div class="sm:col-span-2">
+                                <label class="text-xs font-semibold text-ink-secondary">Qty Packing</label>
+                                <input v-model="r.qty_bundle" type="number" step="0.0001" min="0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                            </div>
+                            <div class="sm:col-span-2">
+                                <label class="text-xs font-semibold text-ink-secondary">Jenis Packing</label>
+                                <select v-model="r.unit_bundle" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                                    <option value="">— Pilih —</option>
+                                    <option value="PALLET">PALLET</option>
+                                    <option value="BUNDLE">BUNDLE</option>
+                                    <option value="BOX">BOX</option>
+                                    <option value="BAG">BAG</option>
+                                    <option value="ROLL">ROLL</option>
+                                    <option value="PACKAGES">PACKAGES</option>
+                                </select>
                             </div>
                         </div>
                         <div class="mt-3 grid gap-3 sm:grid-cols-12">
@@ -369,7 +382,7 @@ function submit() {
                                 <label class="text-xs font-semibold text-ink-secondary">Price (auto)</label>
                                 <input :value="formatMilli(r.price)" type="text" readonly class="mt-1 w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-secondary" />
                             </div>
-                            <div class="flex items-end sm:col-span-4">
+                            <div class="flex items-end sm:col-span-3">
                                 <label class="flex items-center gap-2 text-sm text-ink-primary">
                                     <input v-model="r.is_foc" type="checkbox" class="h-4 w-4 rounded border-borderline text-primary focus:ring-primary" />
                                     FOC
@@ -377,6 +390,9 @@ function submit() {
                                 <p v-if="weightInvalid(r)" class="ml-4 text-xs font-semibold text-danger">
                                     Net weight harus lebih kecil atau sama dengan gross weight.
                                 </p>
+                            </div>
+                            <div class="flex items-end justify-end sm:col-span-1">
+                                <button type="button" @click="removeItem(i)" :disabled="itemRows.length <= 1" class="rounded-lg border border-borderline px-3 py-2 text-sm text-danger transition hover:bg-danger/10 disabled:opacity-40">✕</button>
                             </div>
                         </div>
                     </div>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
@@ -16,9 +16,38 @@ const form = useForm({
     remarks: '',
 });
 
+const fgQuery = ref('');
+const showSuggestions = ref(false);
+const selectedFg = computed(() => props.fgParts.find((p) => String(p.id) === String(form.part_id)) ?? null);
+const filteredFgParts = computed(() => {
+    const query = fgQuery.value.trim().toLowerCase();
+    if (!query) return props.fgParts.slice(0, 25);
+    return props.fgParts.filter((p) => [p.part_number, p.part_name, p.model]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query))).slice(0, 25);
+});
+
+function selectFg(part: (typeof props.fgParts)[number]) {
+    form.part_id = String(part.id);
+    fgQuery.value = `${part.part_number} · ${part.part_name} · ${part.model || '—'}`;
+    showSuggestions.value = false;
+}
+
+function clearFg() {
+    form.part_id = '';
+    fgQuery.value = '';
+    showSuggestions.value = true;
+}
+
+function resetForm() {
+    form.reset();
+    fgQuery.value = '';
+    showSuggestions.value = false;
+}
+
 function submit() {
     form.post(route('work-orders.store'), {
-        onSuccess: () => form.reset(),
+        onSuccess: resetForm,
     });
 }
 </script>
@@ -36,12 +65,32 @@ function submit() {
             <form @submit.prevent="submit" class="space-y-5 rounded-xl border border-borderline bg-surface p-6">
                 <div>
                     <label class="mb-1 block text-sm font-medium text-ink-primary">Finished Good</label>
-                    <select v-model="form.part_id" required class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
-                        <option value="" disabled>— Pilih FG —</option>
-                        <option v-for="p in fgParts" :key="p.id" :value="p.id">
-                            {{ p.part_number }} · {{ p.part_name }} · {{ p.model || '—' }}
-                        </option>
-                    </select>
+                    <div class="relative">
+                        <input
+                            v-model="fgQuery"
+                            type="text"
+                            required
+                            autocomplete="off"
+                            placeholder="Ketik part number, nama, atau model..."
+                            @focus="showSuggestions = true"
+                            @input="showSuggestions = true; form.part_id = ''"
+                            class="w-full rounded-lg border-borderline bg-background px-3 py-2 pr-20 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                        />
+                        <button v-if="selectedFg" type="button" @click="clearFg" class="absolute inset-y-0 right-2 my-auto h-7 rounded px-2 text-xs text-ink-secondary hover:bg-background">Ganti</button>
+                        <div v-if="showSuggestions" class="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-borderline bg-surface py-1 shadow-lg">
+                            <button
+                                v-for="p in filteredFgParts"
+                                :key="p.id"
+                                type="button"
+                                @mousedown.prevent="selectFg(p)"
+                                class="block w-full px-3 py-2 text-left text-sm hover:bg-primary-light"
+                            >
+                                <span class="font-medium text-ink-primary">{{ p.part_number }}</span>
+                                <span class="text-ink-secondary"> · {{ p.part_name }} · {{ p.model || '—' }}</span>
+                            </button>
+                            <div v-if="filteredFgParts.length === 0" class="px-3 py-3 text-sm text-ink-secondary">FG tidak ditemukan.</div>
+                        </div>
+                    </div>
                     <div v-if="form.errors.part_id" class="mt-1 text-xs text-danger">{{ form.errors.part_id }}</div>
                 </div>
 
@@ -64,7 +113,7 @@ function submit() {
                 </div>
 
                 <div class="flex items-center justify-end gap-3 pt-2">
-                    <button type="button" @click="form.reset()" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-secondary transition hover:bg-background">Reset</button>
+                    <button type="button" @click="resetForm" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-secondary transition hover:bg-background">Reset</button>
                     <button type="submit" :disabled="form.processing" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60">
                         {{ form.processing ? 'Menyimpan…' : 'Simpan WO' }}
                     </button>

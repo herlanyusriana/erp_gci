@@ -129,8 +129,9 @@ function doDestroy() {
                         <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                             <th class="px-3 py-3">Seq</th>
                             <th class="px-3 py-3">Proses</th>
+                            <th class="px-3 py-3">Mesin</th>
+                            <th class="px-3 py-3">Material / Subs</th>
                             <th class="px-3 py-3">Parent</th>
-                            <th class="px-3 py-3">Child</th>
                             <th class="px-3 py-3 text-right">Child Qty</th>
                             <th class="px-3 py-3">UOM</th>
                             <th class="px-3 py-3">Source</th>
@@ -143,10 +144,22 @@ function doDestroy() {
                             <td class="px-3 py-2.5 tabular-nums text-ink-secondary">{{ it.sequence ?? '—' }}</td>
                             <td class="px-3 py-2.5 text-ink-primary">{{ it.process?.process_name ?? '—' }}</td>
                             <td class="px-3 py-2.5">
-                                <span class="font-medium text-ink-primary">{{ it.parent_part?.part_number ?? it.parent_part_name ?? '—' }}</span>
+                                <div class="flex items-center gap-2 whitespace-nowrap">
+                                    <span class="text-ink-primary">{{ it.machine?.machine_name ?? '—' }}</span>
+                                    <a v-if="it.machine_id" :href="route('machines.edit', it.machine_id)" title="Edit mesin di Master" class="text-ink-secondary hover:text-primary">✎</a>
+                                </div>
                             </td>
                             <td class="px-3 py-2.5">
-                                <span class="font-medium text-ink-primary">{{ it.child_part?.part_number ?? it.child_part_name ?? '—' }}</span>
+                                <div class="flex items-center gap-2">
+                                    <div>
+                                        <div class="font-medium text-ink-primary">{{ it.child_part?.part_number ?? it.child_part_name ?? '—' }}</div>
+                                        <div v-if="it.child_part_name" class="text-xs text-ink-secondary">{{ it.child_part_name }}</div>
+                                    </div>
+                                    <a v-if="it.child_part_id" :href="route('parts.edit', it.child_part_id)" title="Edit material/subs di Master" class="text-ink-secondary hover:text-primary">✎</a>
+                                </div>
+                            </td>
+                            <td class="px-3 py-2.5">
+                                <span class="font-medium text-ink-primary">{{ it.parent_part?.part_number ?? it.parent_part_name ?? '—' }}</span>
                             </td>
                             <td class="px-3 py-2.5 text-right tabular-nums text-ink-primary">{{ fmt(it.child_qty) }}</td>
                             <td class="px-3 py-2.5 text-ink-secondary">{{ it.uom_rm ?? '—' }}</td>
@@ -157,7 +170,7 @@ function doDestroy() {
                             <td class="px-3 py-2.5 text-right tabular-nums" :class="Number(it.qty_consumed) < Number(it.qty_required) ? 'text-danger' : 'text-success'">{{ fmt(it.qty_consumed) }}</td>
                         </tr>
                         <tr v-if="items.length === 0">
-                            <td colspan="9" class="px-4 py-12 text-center text-sm text-ink-secondary">Tidak ada routing.</td>
+                            <td colspan="10" class="px-4 py-12 text-center text-sm text-ink-secondary">Tidak ada routing.</td>
                         </tr>
                     </tbody>
                 </table>

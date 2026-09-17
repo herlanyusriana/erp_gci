@@ -113,6 +113,27 @@ class WorkOrderController extends Controller
         ]);
     }
 
+    public function editItem(WorkOrder $workOrder, WorkOrderItem $item): Response
+    {
+        Gate::authorize('update', $workOrder);
+        abort_unless($item->work_order_id === $workOrder->id && $workOrder->status === 'planned', 403, 'Item WO tidak dapat diubah.');
+
+        $item->load([
+            'process',
+            'machine',
+            'childPart.partSubstitutes.substitutePart',
+            'selectedPart',
+        ]);
+
+        $machines = Machine::query()->where('is_active', true)->orderBy('machine_name')->get(['id', 'machine_code', 'machine_name']);
+
+        return Inertia::render('Production/WorkOrder/ItemEdit', [
+            'workOrder' => $workOrder->only(['id', 'wo_no']),
+            'item' => $item,
+            'machines' => $machines,
+        ]);
+    }
+
     public function updateItem(Request $request, WorkOrder $workOrder, WorkOrderItem $item): RedirectResponse
     {
         Gate::authorize('update', $workOrder);
@@ -130,7 +151,9 @@ class WorkOrderController extends Controller
             'machine_id' => $data['machine_id'] ?? null,
         ]);
 
-        return back()->with('success', 'Material WO diperbarui.');
+        return redirect()
+            ->route('work-orders.show', $workOrder)
+            ->with('success', 'Routing WO diperbarui.');
     }
 
     public function release(WorkOrder $workOrder): RedirectResponse

@@ -1,14 +1,13 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed } from 'vue';
 import { useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
-import type { WorkOrder, WorkOrderItem, WorkOrderMachine } from '@/types';
+import type { WorkOrder } from '@/types';
 
 const props = defineProps<{
     workOrder: WorkOrder;
     can: { release: boolean; complete: boolean; cancel: boolean; delete: boolean };
-    machines: WorkOrderMachine[];
 }>();
 
 const items = computed(() => props.workOrder.items ?? []);
@@ -42,33 +41,6 @@ const releaseForm = useForm({});
 const completeForm = useForm({});
 const cancelForm = useForm({});
 const deleteForm = useForm({});
-const itemForms = new Map<number, ReturnType<typeof useForm>>();
-const editingRows = ref<number[]>([]);
-
-function itemForm(id: number) {
-    if (!itemForms.has(id)) itemForms.set(id, useForm({ selected_part_id: '', machine_id: '' }));
-    return itemForms.get(id)!;
-}
-
-function isEditing(id: number) {
-    return editingRows.value.includes(id);
-}
-
-function startEdit(item: WorkOrderItem) {
-    itemForm(item.id).selected_part_id = String(item.selected_part_id || item.child_part_id || '');
-    itemForm(item.id).machine_id = String(item.machine_id || '');
-    if (!editingRows.value.includes(item.id)) editingRows.value.push(item.id);
-}
-
-function cancelEdit(id: number) {
-    editingRows.value = editingRows.value.filter((rowId) => rowId !== id);
-}
-
-function saveItem(item: WorkOrderItem) {
-    itemForm(item.id).patch(route('work-orders.items.update', [props.workOrder.id, item.id]), {
-        onSuccess: () => cancelEdit(item.id),
-    });
-}
 
 function doRelease() {
     if (confirm('Release WO ini? Material & WIP akan dikonsumsi stok (FIFO).')) {
@@ -160,45 +132,23 @@ function doDestroy() {
                             <th class="px-3 py-3">Mesin</th>
                             <th class="px-3 py-3">Material / Subs</th>
                             <th class="px-3 py-3">Parent</th>
-                            <th class="px-3 py-3 text-center">Aksi</th>
                             <th class="px-3 py-3 text-right">Child Qty</th>
                             <th class="px-3 py-3">UOM</th>
                             <th class="px-3 py-3">Source</th>
                             <th class="px-3 py-3 text-right">Butuh</th>
                             <th class="px-3 py-3 text-right">Terpakai</th>
+                            <th class="px-3 py-3 text-center">Aksi</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-borderline">
                         <tr v-for="it in items" :key="it.id" class="align-top hover:bg-primary-light/40">
                             <td class="px-3 py-2.5 tabular-nums text-ink-secondary">{{ it.sequence ?? '—' }}</td>
                             <td class="px-3 py-2.5 text-ink-primary">{{ it.process?.process_name ?? '—' }}</td>
+                            <td class="px-3 py-2.5 whitespace-nowrap text-ink-primary">{{ it.machine?.machine_name ?? '—' }}</td>
                             <td class="px-3 py-2.5">
-                                <div v-if="!isEditing(it.id)" class="flex items-center gap-2 whitespace-nowrap">
-                                    <span class="text-ink-primary">{{ it.machine?.machine_name ?? '—' }}</span>
-                                </div>
-                                <select v-else v-model="itemForm(it.id).machine_id" class="w-44 rounded-md border-borderline bg-background px-2 py-1 text-sm text-ink-primary">
-                                    <option value="">— Pilih mesin —</option>
-                                    <option v-for="m in machines" :key="m.id" :value="m.id">{{ m.machine_code }} · {{ m.machine_name }}</option>
-                                </select>
-                            </td>
-                            <td class="px-3 py-2.5">
-                                <div class="min-w-64">
-                                    <div class="flex items-center gap-2">
-                                        <input
-                                            :list="`wo-material-${it.id}`"
-                                            :value="it.selected_part?.part_number ?? it.child_part?.part_number ?? it.child_part_name ?? ''"
-                                            :disabled="workOrder.status !== 'planned'"
-                                            @change="(e) => { const p = [...(it.child_part?.partSubstitutes ?? []).map((s) => s.substitute_part), it.child_part].find((p) => p && p.part_number === (e.target as HTMLInputElement).value); if (p) { it.selected_part_id = p.id; saveItem(it); } }"
-                                            class="w-full rounded-md border-borderline bg-background px-2 py-1 text-sm text-ink-primary"
-                                        />
-                                        <span v-if="itemForm(it.id).processing" class="text-xs text-ink-secondary">Menyimpan…</span>
-                                    </div>
-                                    <datalist :id="`wo-material-${it.id}`">
-                                        <option v-if="it.child_part" :value="it.child_part.part_number">{{ it.child_part.part_name }} (Main)</option>
-                                        <option v-for="s in (it.child_part?.partSubstitutes ?? [])" :key="s.id" :value="s.substitute_part?.part_number ?? ''">{{ s.substitute_part?.part_name }} (Subs)</option>
-                                    </datalist>
-                                    <div class="text-xs text-ink-secondary">Main: {{ it.child_part?.part_number ?? it.child_part_name ?? '—' }}</div>
-                                </div>
+                                <div class="font-medium text-ink-primary">{{ it.selected_part?.part_number ?? it.child_part?.part_number ?? it.child_part_name ?? '—' }}</div>
+                                <div v-if="it.child_part" class="text-xs text-ink-secondary">Main: {{ it.child_part.part_number }}</div>
+                                <div v-if="it.selected_part && it.selected_part.id !== it.child_part_id" class="text-xs text-purple-700">Substitute</div>
                             </td>
                             <td class="px-3 py-2.5">
                                 <span class="font-medium text-ink-primary">{{ it.parent_part?.part_number ?? it.parent_part_name ?? '—' }}</span>
@@ -211,15 +161,17 @@ function doDestroy() {
                             <td class="px-3 py-2.5 text-right tabular-nums text-ink-secondary">{{ fmt(it.qty_required) }}</td>
                             <td class="px-3 py-2.5 text-right tabular-nums" :class="Number(it.qty_consumed) < Number(it.qty_required) ? 'text-danger' : 'text-success'">{{ fmt(it.qty_consumed) }}</td>
                             <td class="px-3 py-2.5 text-center">
-                                <template v-if="workOrder.status === 'planned' && can.release">
-                                    <div v-if="!isEditing(it.id)">
-                                        <button type="button" @click="startEdit(it)" title="Edit routing WO" class="rounded-md px-2 py-1 text-lg leading-none text-ink-secondary hover:bg-primary-light hover:text-primary">✎</button>
-                                    </div>
-                                    <div v-else class="flex items-center justify-center gap-1">
-                                        <button type="button" @click="saveItem(it)" :disabled="itemForm(it.id).processing" title="Simpan" class="rounded-md px-2 py-1 text-success hover:bg-success/10">✓</button>
-                                        <button type="button" @click="cancelEdit(it.id)" title="Batal" class="rounded-md px-2 py-1 text-danger hover:bg-danger/10">×</button>
-                                    </div>
-                                </template>
+                                <a
+                                    v-if="workOrder.status === 'planned' && can.release"
+                                    :href="route('work-orders.items.edit', [workOrder.id, it.id])"
+                                    title="Edit routing WO"
+                                    aria-label="Edit routing WO"
+                                    class="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-secondary transition hover:bg-primary-light hover:text-primary"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
+                                        <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                                    </svg>
+                                </a>
                                 <span v-else class="text-ink-secondary">—</span>
                             </td>
                         </tr>

@@ -314,6 +314,8 @@ export interface WorkOrderItem {
     sequence: number | null;
     process?: Process | null;
     machine?: Machine | null;
+    process_id: number | null;
+    machine_id: number | null;
     parent_part_id: number | null;
     parent_part_name: string | null;
     parent_qty: number | null;

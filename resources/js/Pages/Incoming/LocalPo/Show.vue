@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import StatusBadge from '@/Components/StatusBadge.vue';
 import { useI18n } from 'vue-i18n';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
@@ -19,13 +20,6 @@ defineProps<{
     pending: PendingRow[];
 }>();
 
-const statusTone = (s: string) => {
-    switch (s) {
-        case 'completed': return 'bg-success/10 text-success';
-        case 'cancelled': return 'bg-danger/10 text-danger';
-        default: return 'bg-warning/10 text-warning';
-    }
-};
 </script>
 
 <template>
@@ -39,7 +33,7 @@ const statusTone = (s: string) => {
                 <p class="mt-1 text-sm text-ink-secondary">
                     {{ arrival.supplier?.supplier_name ?? '—' }}
                     · {{ arrival.arrival_no }}
-                    · <span :class="statusTone(arrival.status)" class="rounded-md px-2 py-0.5 text-xs font-semibold uppercase">{{ t('incoming.status_' + arrival.status) }}</span>
+                    · <StatusBadge uppercase :status="arrival.status">{{ t('incoming.status_' + arrival.status) }}</StatusBadge>
                     <span v-if="arrival.transaction_no" class="ml-2 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">{{ t('incoming.salesOrder', { number: arrival.transaction_no }) }}</span>
                 </p>
             </div>

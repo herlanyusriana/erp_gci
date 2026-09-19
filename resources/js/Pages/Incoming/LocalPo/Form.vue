@@ -25,9 +25,13 @@ const props = defineProps<{
     arrival?: IncomingArrival | null;
     suppliers: SupplierOpt[];
     parts: PartOpt[];
+    uomCodes: string[];
+    defaultUom?: string;
 }>();
 
 const editing = computed(() => !!props.arrival);
+
+const defaultUomCode = computed(() => props.defaultUom || (props.uomCodes[0] ?? ''));
 
 const seedRows = (): ItemRow[] => {
     if (props.arrival?.items?.length) {
@@ -36,12 +40,12 @@ const seedRows = (): ItemRow[] => {
             part_id: it.part_id ?? '',
             size: it.size ?? '',
             qty_goods: it.qty_goods,
-            unit_goods: it.unit_goods ?? 'PCS',
+            unit_goods: it.unit_goods ?? defaultUomCode.value,
             price: it.price ?? '',
             notes: it.notes ?? '',
         }));
     }
-    return [{ id: null, part_id: '', size: '', qty_goods: '', unit_goods: 'PCS', price: '', notes: '' }];
+    return [{ id: null, part_id: '', size: '', qty_goods: '', unit_goods: defaultUomCode.value, price: '', notes: '' }];
 };
 
 const rows = ref<ItemRow[]>(seedRows());
@@ -56,7 +60,7 @@ const form = useForm({
 });
 
 function addRow() {
-    rows.value.push({ id: null, part_id: '', size: '', qty_goods: '', unit_goods: 'PCS', price: '', notes: '' });
+    rows.value.push({ id: null, part_id: '', size: '', qty_goods: '', unit_goods: defaultUomCode.value, price: '', notes: '' });
 }
 function removeRow(i: number) {
     if (rows.value.length > 1) rows.value.splice(i, 1);
@@ -162,7 +166,7 @@ function submit() {
                         <div class="sm:col-span-2">
                             <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.unit') }}</label>
                             <select v-model="r.unit_goods" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
-                                <option>PCS</option><option value="COIL">{{ t('incoming.unit_COIL') }}</option><option value="SHEET">{{ t('incoming.unit_SHEET') }}</option><option value="SET">{{ t('incoming.unit_SET') }}</option><option>EA</option><option>KGM</option><option value="ROLL">{{ t('incoming.unit_ROLL') }}</option><option>UOM</option>
+                                <option v-for="code in uomCodes" :key="code" :value="code">{{ code }}</option>
                             </select>
                         </div>
                         <div class="sm:col-span-1">

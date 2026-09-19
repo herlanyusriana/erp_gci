@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import StatusBadge from '@/Components/StatusBadge.vue';
 import { useI18n } from 'vue-i18n';
 import { ref } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
@@ -27,18 +28,6 @@ function remove(po: PurchaseOrder) {
     if (confirm(t('incoming.deletePo', { number: po.po_no }))) router.delete(route('purchase-orders.destroy', po.id));
 }
 
-const statusTone = (s: string) => {
-    switch (s) {
-        case 'confirmed':
-            return 'bg-info/10 text-info';
-        case 'received':
-            return 'bg-success/10 text-success';
-        case 'cancelled':
-            return 'bg-danger/10 text-danger';
-        default:
-            return 'bg-warning/10 text-warning';
-    }
-};
 </script>
 
 <template>
@@ -83,7 +72,7 @@ const statusTone = (s: string) => {
                         <td class="px-4 py-3 text-ink-primary">{{ po.items_count ?? 0 }}</td>
                         <td class="px-4 py-3 text-ink-primary">{{ po.expected_date ?? '—' }}</td>
                         <td class="px-4 py-3">
-                            <span :class="statusTone(po.status)" class="rounded-md px-2 py-0.5 text-xs font-semibold uppercase">{{ t('incoming.status_' + po.status) }}</span>
+                            <StatusBadge uppercase :status="po.status">{{ t('incoming.status_' + po.status) }}</StatusBadge>
                         </td>
                         <td class="px-4 py-3">
                             <div class="flex justify-end gap-1.5">

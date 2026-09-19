@@ -3,12 +3,18 @@
 namespace App\Services;
 
 use App\Models\Bom;
-use App\Models\BomItem;
+use App\Models\MaterialIssue;
+use App\Models\MaterialIssueItem;
+use App\Models\Part;
+use App\Models\PartSubstitute;
 use App\Models\WorkOrder;
 use App\Models\WorkOrderConsumption;
 use App\Models\WorkOrderItem;
+use App\Support\UomCatalog;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class WoService
 {
@@ -112,10 +118,10 @@ class WoService
             if ($qtyRequired <= 0) {
                 continue;
             }
-            $uom = strtoupper(trim((string) $it->uom_rm));
-            $key = $cid . '|' . $uom;
-            if (!isset($leafNeeds[$key])) {
-                $leafNeeds[$key] = ['id' => $cid, 'uom' => trim((string) $it->uom_rm), 'name' => $it->child_part_name, 'no' => $it->childPart?->part_number ?? '', 'need' => 0.0];
+            $uom = UomCatalog::normalize((string) $it->uom_rm);
+            $key = $cid.'|'.($uom ?? '');
+            if (! isset($leafNeeds[$key])) {
+                $leafNeeds[$key] = ['id' => $cid, 'uom' => $uom, 'name' => $it->child_part_name, 'no' => $it->childPart?->part_number ?? '', 'need' => 0.0];
             }
             $leafNeeds[$key]['need'] += $qtyRequired;
         }
@@ -168,10 +174,10 @@ class WoService
                 if ($avail + 1e-9 < $leaf['need']) {
                     $short = $leaf['need'] - $avail;
                     $warnings[] = __(':name (:number) kurang :short :unit (butuh :needed, stok :available)', [
-                        'name' => $leaf['name'] ?? ('#' . $leaf['id']),
+                        'name' => $leaf['name'] ?? ('#'.$leaf['id']),
                         'number' => $leaf['no'],
                         'short' => sprintf('%.4f', $short),
-                        'unit' => strtoupper((string) $leaf['uom']),
+                        'unit' => UomCatalog::normalize((string) $leaf['uom']) ?? '',
                         'needed' => sprintf('%.4f', $leaf['need']),
                         'available' => sprintf('%.4f', $avail),
                     ]);
@@ -205,12 +211,31 @@ class WoService
     {
         abort_if($workOrder->status !== 'planned', 422, __('WO hanya bisa di-release dari status planned.'));
 
-        $items = $workOrder->items()->with(['parentPart', 'childPart'])->get();
+        $items = $workOrder->items()->with(['parentPart', 'childPart', 'allocations.part'])->get();
         $workOrder->load('part');
         $fgKey = $workOrder->part?->part_number ?? (string) $workOrder->part_id;
         $requirements = $this->buildRequirements($items, (float) $workOrder->qty, $fgKey);
 
-        $selectedIds = $items->mapWithKeys(fn ($it) => [$it->id => $it->selected_part_id ?: $it->child_part_id]);
+        // Sumber material per item: daftar (part_id => qty rencana).
+        // - Ada alokasi eksplisit → pakai itu (boleh sebagian dari qty_required).
+        // - Tidak ada → fallback satu sumber (selected_part_id ?: child_part_id)
+        //   dengan qty penuh, agar perilaku lama tetap sama.
+        $sources = [];
+        foreach ($items as $it) {
+            $planned = [];
+            foreach ($it->allocations as $a) {
+                $planned[(int) $a->part_id] = ($planned[(int) $a->part_id] ?? 0.0) + (float) $a->qty;
+            }
+
+            if ($planned === []) {
+                $fallbackId = $it->selected_part_id ?: $it->child_part_id;
+                if ($fallbackId !== null) {
+                    $planned[(int) $fallbackId] = (float) $it->qty_required;
+                }
+            }
+
+            $sources[$it->id] = $planned;
+        }
 
         // Parent yang output-nya TIDAK di-post menurut design: source=Subcon →
         // output balik via Receive manual.
@@ -222,31 +247,44 @@ class WoService
         }
 
         // Leaf constraints: child yang tidak diproduksi internal → butuh stok lama.
-        // Aggregasi per (child_part_id, uom) untuk duplikat/shared leaf.
+        // Aggregasi per (part_id, uom); dengan alokasi, need = qty alokasi.
         $leafNeeds = [];
+        $leafPartIds = [];
         foreach ($items as $it) {
-            $cid = $selectedIds[$it->id] ?? $it->child_part_id;
-            $need = (float) $it->qty_required;
-            if ($cid === null || $need <= 0) {
+            if ((float) $it->qty_required <= 0) {
                 continue;
             }
-            if (isset($postedParentIds[$cid])) {
-                continue; // diproduksi dalam WO ini
+            foreach ($sources[$it->id] as $partId => $plannedQty) {
+                if ($plannedQty <= 0 || isset($postedParentIds[$partId])) {
+                    continue; // diproduksi dalam WO ini
+                }
+                $leafPartIds[$partId] = true;
+                $key = $partId.'|'.(UomCatalog::normalize((string) $it->uom_rm) ?? '');
+                if (! isset($leafNeeds[$key])) {
+                    $leafNeeds[$key] = [
+                        'part_id' => $partId,
+                        'uom' => UomCatalog::normalize((string) $it->uom_rm),
+                        'name' => $it->child_part_name,
+                        'need' => 0.0,
+                    ];
+                }
+                $leafNeeds[$key]['need'] += $plannedQty;
             }
-            $key = $cid . '|' . strtoupper(trim((string) $it->uom_rm));
-            if (!isset($leafNeeds[$key])) {
-                $leafNeeds[$key] = [
-                    'part_id' => $cid,
-                    'uom' => trim((string) $it->uom_rm),
-                    'name' => $it->child_part_name,
-                    'part_no' => $it->childPart?->part_number ?? '',
-                    'need' => 0.0,
-                ];
-            }
-            $leafNeeds[$key]['need'] += $need;
         }
 
-        // Rasio layak global.
+        // Nama + nomor part untuk pelaporan shortage, satu query untuk semua.
+        $leafParts = Part::query()
+            ->whereIn('id', array_keys($leafPartIds))
+            ->get(['id', 'part_number', 'part_name'])
+            ->keyBy('id');
+        foreach ($leafNeeds as $key => $leaf) {
+            $part = $leafParts[$leaf['part_id']] ?? null;
+            $leafNeeds[$key]['part_no'] = $part?->part_number ?? '';
+            $leafNeeds[$key]['name'] = $part?->part_name ?? $leaf['name'];
+        }
+
+        // Rasio layak global: minimum dari kecukupan tiap leaf dan kelengkapan
+        // alokasi tiap item (alokasi sebagian menurunkan output).
         $ratio = 1.0;
         foreach ($leafNeeds as $key => $leaf) {
             $avail = $this->stockService->availableFifo($leaf['part_id'], $leaf['uom']);
@@ -255,33 +293,53 @@ class WoService
                 $ratio = min($ratio, $avail / $leaf['need']);
             }
         }
+        foreach ($items as $it) {
+            $required = (float) $it->qty_required;
+            if ($required <= 0) {
+                continue;
+            }
+            $planned = $sources[$it->id] ?? [];
+            if ($planned === []) {
+                continue; // tanpa sumber (mis. child_part null) → jangan paksa ratio 0
+            }
+            $ratio = min($ratio, array_sum($planned) / $required);
+        }
         $ratio = max(0.0, min(1.0, $ratio));
 
         $shortages = [];
 
-        $workOrder = DB::transaction(function () use ($workOrder, $items, $requirements, $ratio, $actorId, $selectedIds, &$shortages) {
+        $workOrder = DB::transaction(function () use ($workOrder, $items, $requirements, $ratio, $actorId, $sources, &$shortages) {
             $releasedAt = now();
             $postedParents = []; // dedupe posting output (parent bisa multi-row join)
 
             foreach ($this->sorted($items) as $it) {
-                $childPartId = $selectedIds[$it->id] ?? $it->child_part_id;
                 $need = (float) $it->qty_required;
                 $target = round($need * $ratio, 4);
 
-                // CONSUME child sebesar r×need (per row; duplikat row = konsumsi ganda, benar).
+                // CONSUME tiap sumber sesuai porsi alokasinya, FIFO per part.
                 $taken = 0.0;
-                if ($childPartId !== null && $target > 0) {
-                    $alloc = $this->stockService->consumeFifoByUom($childPartId, $target, $it->uom_rm);
-                    foreach ($alloc as $a) {
-                        $taken += (float) $a['take_qty'];
-                        WorkOrderConsumption::create([
-                            'work_order_id' => $workOrder->id,
-                            'work_order_item_id' => $it->id,
-                            'part_stock_id' => $a['part_stock_id'],
-                            'part_id' => $childPartId,
-                            'qty' => (float) $a['take_qty'],
-                            'uom' => $a['uom'],
-                        ]);
+                $plannedTotal = array_sum($sources[$it->id] ?? []);
+                if ($target > 0 && $plannedTotal > 0) {
+                    $scale = $target / $plannedTotal;
+
+                    foreach ($sources[$it->id] as $partId => $plannedQty) {
+                        $takeFromPart = round($plannedQty * $scale, 4);
+                        if ($takeFromPart <= 0) {
+                            continue;
+                        }
+
+                        $alloc = $this->stockService->consumeFifoByUom($partId, $takeFromPart, $it->uom_rm);
+                        foreach ($alloc as $a) {
+                            $taken += (float) $a['take_qty'];
+                            WorkOrderConsumption::create([
+                                'work_order_id' => $workOrder->id,
+                                'work_order_item_id' => $it->id,
+                                'part_stock_id' => $a['part_stock_id'],
+                                'part_id' => $partId,
+                                'qty' => (float) $a['take_qty'],
+                                'uom' => $a['uom'],
+                            ]);
+                        }
                     }
                 }
                 $it->update(['qty_consumed' => $taken]);
@@ -289,7 +347,7 @@ class WoService
                 // POST output parent (non-Subcon) sebesar r×demand — SEKALI per parent.
                 if (strtoupper((string) $it->source) !== 'SUBCON' && $it->parent_part_id !== null) {
                     $parentKey = $this->parentKeyOf($it);
-                    if (!isset($postedParents[$parentKey])) {
+                    if (! isset($postedParents[$parentKey])) {
                         $demand = $requirements[$parentKey] ?? 0.0;
                         $outQty = round($demand * $ratio, 4);
                         if ($outQty > 0) {
@@ -309,9 +367,10 @@ class WoService
             return $workOrder->fresh(['items', 'part']);
         });
 
-        // Shortage report: material pengikat (binding) bila r < 1.
-        if ($ratio < 1 - 1e-9) {
-            $eps = 1e-6;
+        // Shortage report: material pengikat (binding) bila r < 1, plus sisa
+        // yang belum dialokasikan pada tiap item.
+        $eps = 1e-6;
+        if ($ratio < 1 - $eps) {
             foreach ($leafNeeds as $leaf) {
                 if ($leaf['need'] <= 0) {
                     continue;
@@ -332,7 +391,277 @@ class WoService
             }
         }
 
+        // Sisa kebutuhan yang tidak dialokasikan ke part mana pun.
+        foreach ($items as $it) {
+            $required = (float) $it->qty_required;
+            if ($required <= 0) {
+                continue;
+            }
+            $plannedTotal = array_sum($sources[$it->id] ?? []);
+            if ($plannedTotal + $eps >= $required) {
+                continue;
+            }
+            $shortages[] = [
+                'child_part_name' => $it->child_part_name,
+                'child_part_no' => $it->childPart?->part_number ?? '',
+                'uom' => UomCatalog::normalize((string) $it->uom_rm),
+                'required' => round($required, 4),
+                'available' => round($plannedTotal, 4),
+                'consumed' => round($plannedTotal, 4),
+                'short' => round($required - $plannedTotal, 4),
+            ];
+        }
+
         return [$workOrder, $shortages];
+    }
+
+    /**
+     * Release WO dari scan label (mobile "issue out to production").
+     *
+     * Konsumsi tag stok yang di-scan (spesifik, bukan FIFO), catat dokumen
+     * material issue, lalu posting output WIP/FG seperti release biasa.
+     *
+     * @param  array<int, array{work_order_item_id:int, scans: array<int, array{tag:string, qty:float, part_id?:int|null}>}>  $itemScans
+     * @param  array{issue_date?:string|null, received_by?:string|null, idempotency_key?:string|null, notes?:string|null}  $meta
+     * @return array{0: WorkOrder, 1: array<int, array<string, mixed>>, 2: MaterialIssue}
+     */
+    public function releaseWithScans(WorkOrder $workOrder, array $itemScans, array $meta, ?int $actorId = null): array
+    {
+        $idempotencyKey = $meta['idempotency_key'] ?? null;
+        if ($idempotencyKey !== null) {
+            $existing = MaterialIssue::query()->where('idempotency_key', $idempotencyKey)->first();
+            if ($existing !== null) {
+                return [$workOrder->fresh(['items', 'part']), [], $existing];
+            }
+        }
+
+        abort_if($workOrder->status !== 'planned', 422, __('WO hanya bisa di-release dari status planned.'));
+
+        $items = $workOrder->items()->with(['parentPart', 'childPart', 'allocations'])->get();
+        $workOrder->load('part');
+        $fgKey = $workOrder->part?->part_number ?? (string) $workOrder->part_id;
+        $requirements = $this->buildRequirements($items, (float) $workOrder->qty, $fgKey);
+
+        $postedParentIds = [];
+        foreach ($items as $it) {
+            if (strtoupper((string) $it->source) !== 'SUBCON' && $it->parent_part_id !== null) {
+                $postedParentIds[$it->parent_part_id] = true;
+            }
+        }
+
+        $itemsById = $items->keyBy('id');
+
+        // Normalisasi + validasi scan per item.
+        $scansByItem = [];
+        foreach ($itemScans as $row) {
+            $itemId = (int) ($row['work_order_item_id'] ?? 0);
+            /** @var WorkOrderItem|null $item */
+            $item = $itemsById->get($itemId);
+            if ($item === null) {
+                throw ValidationException::withMessages(['items' => __('Item WO tidak dikenal.')]);
+            }
+
+            $allowed = $this->allowedPartIdsForItem($item);
+            $scans = [];
+            $total = 0.0;
+            foreach (($row['scans'] ?? []) as $i => $scan) {
+                $tag = trim((string) ($scan['tag'] ?? ''));
+                if ($tag === '') {
+                    continue;
+                }
+                $partId = isset($scan['part_id']) && $scan['part_id'] !== null ? (int) $scan['part_id'] : null;
+                if ($partId !== null && ! in_array($partId, $allowed, true)) {
+                    throw ValidationException::withMessages([
+                        "items.$itemId.scans.$i.tag" => __('Tag tidak sesuai material item ini.'),
+                    ]);
+                }
+                $qty = (float) ($scan['qty'] ?? 0);
+                if ($qty <= 0) {
+                    throw ValidationException::withMessages([
+                        "items.$itemId.scans.$i.qty" => __('Qty scan harus lebih dari 0.'),
+                    ]);
+                }
+                $total += $qty;
+                $scans[] = ['tag' => $tag, 'part_id' => $partId, 'qty' => $qty];
+            }
+
+            $required = (float) $item->qty_required;
+            if ($total > $required + 1e-9) {
+                throw ValidationException::withMessages([
+                    "items.$itemId" => __('Total scan (:total) melebihi kebutuhan (:required).', [
+                        'total' => round($total, 4),
+                        'required' => round($required, 4),
+                    ]),
+                ]);
+            }
+
+            $scansByItem[$itemId] = $scans;
+        }
+
+        // Ratio: min kecukupan leaf item (child bukan internal). Leaf tanpa scan → 0.
+        $ratio = 1.0;
+        foreach ($items as $it) {
+            $required = (float) $it->qty_required;
+            if ($required <= 0) {
+                continue;
+            }
+            if ($it->child_part_id !== null && isset($postedParentIds[$it->child_part_id])) {
+                continue; // diproduksi internal
+            }
+            $scanned = collect($scansByItem[$it->id] ?? [])->sum('qty');
+            $ratio = min($ratio, $scanned / $required);
+        }
+        $ratio = max(0.0, min(1.0, $ratio));
+
+        $shortages = [];
+
+        $issue = DB::transaction(function () use ($workOrder, $items, $requirements, $ratio, $scansByItem, $postedParentIds, $meta, $actorId, &$shortages) {
+            $releasedAt = now();
+            $issueDate = isset($meta['issue_date']) && $meta['issue_date']
+                ? Carbon::parse($meta['issue_date'])->toDateString()
+                : $releasedAt->toDateString();
+
+            $issue = MaterialIssue::create([
+                'issue_no' => MaterialIssue::generateIssueNo(),
+                'work_order_id' => $workOrder->id,
+                'issue_date' => $issueDate,
+                'issued_by' => $actorId,
+                'received_by' => $meta['received_by'] ?? null,
+                'status' => 'posted',
+                'idempotency_key' => $meta['idempotency_key'] ?? null,
+                'notes' => $meta['notes'] ?? null,
+                'created_by' => $actorId,
+                'updated_by' => $actorId,
+            ]);
+
+            $postedParents = [];
+
+            foreach ($this->sorted($items) as $it) {
+                $required = (float) $it->qty_required;
+                $isInternal = $it->child_part_id !== null && isset($postedParentIds[$it->child_part_id]);
+                $taken = 0.0;
+
+                if (! $isInternal) {
+                    // Leaf: konsumsi tag yang di-scan (spesifik).
+                    foreach ($scansByItem[$it->id] ?? [] as $scan) {
+                        $alloc = $this->stockService->consumeFromTag($scan['tag'], $scan['part_id'], $scan['qty']);
+                        if ($alloc === null) {
+                            throw ValidationException::withMessages([
+                                'items' => __('Tag :tag tidak ditemukan atau stok tidak cukup.', ['tag' => $scan['tag']]),
+                            ]);
+                        }
+                        if (abs((float) $alloc['take_qty'] - (float) $scan['qty']) > 1e-6) {
+                            throw ValidationException::withMessages([
+                                'items' => __('Stok tag :tag berubah. Silakan scan ulang.', ['tag' => $scan['tag']]),
+                            ]);
+                        }
+
+                        $taken += (float) $alloc['take_qty'];
+                        WorkOrderConsumption::create([
+                            'work_order_id' => $workOrder->id,
+                            'work_order_item_id' => $it->id,
+                            'part_stock_id' => $alloc['part_stock_id'],
+                            'part_id' => $scan['part_id'] ?? $it->child_part_id,
+                            'qty' => (float) $alloc['take_qty'],
+                            'uom' => $alloc['uom'],
+                        ]);
+                        MaterialIssueItem::create([
+                            'material_issue_id' => $issue->id,
+                            'work_order_item_id' => $it->id,
+                            'part_id' => $scan['part_id'] ?? $it->child_part_id,
+                            'part_stock_id' => $alloc['part_stock_id'],
+                            'tag' => $alloc['tag'],
+                            'invoice' => $alloc['invoice'],
+                            'supplier' => $alloc['supplier'],
+                            'qty' => (float) $alloc['take_qty'],
+                            'uom' => $alloc['uom'],
+                            'price' => $alloc['price'],
+                        ]);
+                    }
+
+                    if ($taken + 1e-9 < $required) {
+                        $shortages[] = [
+                            'child_part_name' => $it->child_part_name,
+                            'child_part_no' => $it->childPart?->part_number ?? '',
+                            'uom' => UomCatalog::normalize((string) $it->uom_rm),
+                            'required' => round($required, 4),
+                            'available' => round($taken, 4),
+                            'consumed' => round($taken, 4),
+                            'short' => round($required - $taken, 4),
+                        ];
+                    }
+                } else {
+                    // Internal (WIP): konsumsi FIFO dari stok WIP yang sudah diposting.
+                    $target = round($required * $ratio, 4);
+                    if ($target > 0) {
+                        $alloc = $this->stockService->consumeFifoByUom((int) $it->child_part_id, $target, $it->uom_rm);
+                        foreach ($alloc as $a) {
+                            $taken += (float) $a['take_qty'];
+                            WorkOrderConsumption::create([
+                                'work_order_id' => $workOrder->id,
+                                'work_order_item_id' => $it->id,
+                                'part_stock_id' => $a['part_stock_id'],
+                                'part_id' => $it->child_part_id,
+                                'qty' => (float) $a['take_qty'],
+                                'uom' => $a['uom'],
+                            ]);
+                        }
+                    }
+                }
+
+                $it->update(['qty_consumed' => $taken]);
+
+                // Posting output parent (non-Subcon) = demand × ratio.
+                if (strtoupper((string) $it->source) !== 'SUBCON' && $it->parent_part_id !== null) {
+                    $parentKey = $this->parentKeyOf($it);
+                    if (! isset($postedParents[$parentKey])) {
+                        $demand = $requirements[$parentKey] ?? 0.0;
+                        $outQty = round($demand * $ratio, 4);
+                        if ($outQty > 0) {
+                            $this->postStepOutput($workOrder, $it, $outQty, $releasedAt);
+                        }
+                        $postedParents[$parentKey] = true;
+                    }
+                }
+            }
+
+            $workOrder->update([
+                'status' => 'in_progress',
+                'released_at' => $releasedAt,
+                'updated_by' => $actorId,
+            ]);
+
+            return $issue;
+        });
+
+        return [$workOrder->fresh(['items', 'part']), $shortages, $issue];
+    }
+
+    /**
+     * Part yang sah untuk sebuah item WO: alokasi, main material, dan substitute aktif.
+     *
+     * @return list<int>
+     */
+    public function allowedPartIdsForItem(WorkOrderItem $item): array
+    {
+        $ids = $item->allocations->pluck('part_id')->map(fn ($id) => (int) $id)->all();
+        foreach ([$item->selected_part_id, $item->child_part_id] as $id) {
+            if ($id !== null) {
+                $ids[] = (int) $id;
+            }
+        }
+        if ($item->child_part_id !== null) {
+            $subs = PartSubstitute::query()
+                ->where('part_id', $item->child_part_id)
+                ->where('is_active', true)
+                ->pluck('substitute_part_id')
+                ->all();
+            foreach ($subs as $id) {
+                $ids[] = (int) $id;
+            }
+        }
+
+        return array_values(array_unique($ids));
     }
 
     public function complete(WorkOrder $workOrder, ?int $actorId = null): WorkOrder
@@ -363,8 +692,8 @@ class WoService
     private function postStepOutput(WorkOrder $workOrder, WorkOrderItem $row, float $qty, $receivedAt): void
     {
         $partId = $row->parent_part_id;
-        $uom = strtoupper(trim((string) $row->parent_uom)) ?: 'PCS';
-        $tag = $workOrder->wo_no . '#' . ($row->parentPart?->part_number ?? $row->parent_part_name ?? $partId);
+        $uom = UomCatalog::normalize((string) $row->parent_uom) ?? UomCatalog::PIECE;
+        $tag = $workOrder->wo_no.'#'.($row->parentPart?->part_number ?? $row->parent_part_name ?? $partId);
 
         $this->stockService->postProductionStock($partId, $tag, $qty, $uom, $receivedAt);
     }

@@ -1,75 +1,88 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
-import { Head } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
-import { useForm } from '@inertiajs/vue3';
+import { Head, useForm } from '@inertiajs/vue3';
+import { computed } from 'vue';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
+import StatusBadge from '@/Components/StatusBadge.vue';
 import type { WorkOrderItem, WorkOrderMachine } from '@/types';
 
 const { t } = useI18n();
+
+interface MaterialOption {
+    id: number;
+    part_number: string;
+    part_name: string;
+    kind: 'mainMaterial' | 'substitute';
+    stock: number;
+}
+
+interface AllocationRow {
+    part_id: number | '';
+    qty: number | '';
+}
 
 const props = defineProps<{
     workOrder: { id: number; wo_no: string };
     item: WorkOrderItem;
     machines: WorkOrderMachine[];
+    materialOptions: MaterialOption[];
+    allocations: Array<{ part_id: number; qty: number }>;
 }>();
 
+const required = computed(() => Number(props.item.qty_required ?? 0));
+const unit = computed(() => (props.item.uom_rm ?? '').toUpperCase());
+
+const seedRows = (): AllocationRow[] => {
+    if (props.allocations?.length) {
+        return props.allocations.map((a) => ({ part_id: a.part_id, qty: a.qty }));
+    }
+    // Item lama tanpa alokasi: fallback ke main material sebesar kebutuhan.
+    const fallback = props.item.selected_part_id ?? props.item.child_part_id ?? '';
+    return [{ part_id: fallback, qty: required.value > 0 ? required.value : '' }];
+};
+
 const form = useForm({
-    selected_part_id: String(props.item.selected_part_id || props.item.child_part_id || ''),
+    allocations: seedRows() as AllocationRow[],
     machine_id: String(props.item.machine_id || ''),
 });
 
-const materialOptions = computed(() => {
-    const rows = [];
-    if (props.item.child_part) {
-        rows.push({
-            id: props.item.child_part.id,
-            part_number: props.item.child_part.part_number,
-            part_name: props.item.child_part.part_name,
-            kind: 'mainMaterial',
-        });
-    }
-    for (const s of props.item.child_part?.part_substitutes ?? []) {
-        const sp = s.substitute_part;
-        if (!sp) continue;
-        rows.push({
-            id: sp.id,
-            part_number: sp.part_number,
-            part_name: sp.part_name,
-            kind: 'substitute',
-        });
-    }
-    return rows;
-});
+const optionById = (id: number | '') => props.materialOptions.find((o) => o.id === Number(id)) ?? null;
 
-const selected = computed(() => materialOptions.value.find((o) => String(o.id) === String(form.selected_part_id)) ?? null);
+const allocatedTotal = computed(() => form.allocations.reduce((sum, r) => sum + (r.qty === '' ? 0 : Number(r.qty)), 0));
+const remaining = computed(() => Number((required.value - allocatedTotal.value).toFixed(4)));
+const overAllocated = computed(() => allocatedTotal.value > required.value + 1e-9);
 
-const queryText = ref<string | null>('');
-const query = computed({
-    get: () => queryText.value ?? (selected.value
-        ? `${selected.value.part_number} · ${selected.value.part_name} (${t(`production.${selected.value.kind}`)})`
-        : ''),
-    set: (value: string) => { queryText.value = value; },
-});
-const showSuggestions = ref(false);
+function stockFor(row: AllocationRow) {
+    return optionById(row.part_id)?.stock ?? 0;
+}
 
-const filtered = computed(() => {
-    const q = query.value.trim().toLowerCase();
-    const list = materialOptions.value;
-    if (!q) return list.slice(0, 50);
-    return list.filter((o) => [o.part_number, o.part_name, t(`production.${o.kind}`)]
-        .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(q))).slice(0, 50);
-});
+function rowExceedsStock(row: AllocationRow) {
+    const qty = row.qty === '' ? 0 : Number(row.qty);
+    return qty > stockFor(row) + 1e-9;
+}
 
-function selectOption(opt: (typeof materialOptions.value)[number]) {
-    form.selected_part_id = String(opt.id);
-    queryText.value = null;
-    showSuggestions.value = false;
+function addRow() {
+    const used = new Set(form.allocations.map((r) => Number(r.part_id)));
+    const next = props.materialOptions.find((o) => !used.has(o.id));
+    form.allocations.push({ part_id: next?.id ?? '', qty: '' });
+}
+
+function removeRow(index: number) {
+    if (form.allocations.length > 1) form.allocations.splice(index, 1);
+}
+
+function fillRemaining(row: AllocationRow) {
+    if (remaining.value > 0) row.qty = remaining.value;
 }
 
 function submit() {
+    form.transform((data) => ({
+        ...data,
+        allocations: data.allocations
+            .filter((r) => r.part_id !== '' && r.qty !== '')
+            .map((r) => ({ part_id: Number(r.part_id), qty: Number(r.qty) })),
+    }));
     form.patch(route('work-orders.items.update', [props.workOrder.id, props.item.id]));
 }
 </script>
@@ -77,7 +90,7 @@ function submit() {
 <template>
     <AppLayout>
         <Head :title="t('production.editRouting')" />
-        <div class="mx-auto max-w-2xl">
+        <div class="mx-auto max-w-3xl">
             <BackButton :href="route('work-orders.show', workOrder.id)" class="mb-4" />
 
             <div class="mb-6">
@@ -88,36 +101,70 @@ function submit() {
             </div>
 
             <form @submit.prevent="submit" class="space-y-6 rounded-xl border border-borderline bg-surface p-6">
-                <!-- Material / Substitute -->
+                <!-- Ringkasan kebutuhan -->
+                <div class="grid gap-3 sm:grid-cols-3">
+                    <div class="rounded-lg border border-borderline bg-background p-3">
+                        <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('production.requiredQty') }}</div>
+                        <div class="mt-1 text-lg font-semibold tabular-nums text-ink-primary">{{ required }} <span class="text-sm text-ink-secondary">{{ unit }}</span></div>
+                    </div>
+                    <div class="rounded-lg border border-borderline bg-background p-3">
+                        <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('production.allocatedQty') }}</div>
+                        <div class="mt-1 text-lg font-semibold tabular-nums" :class="overAllocated ? 'text-danger' : 'text-ink-primary'">{{ allocatedTotal.toFixed(4) }}</div>
+                    </div>
+                    <div class="rounded-lg border border-borderline bg-background p-3">
+                        <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('production.remainingQty') }}</div>
+                        <div class="mt-1 text-lg font-semibold tabular-nums" :class="remaining > 0 ? 'text-warning' : 'text-success'">{{ remaining.toFixed(4) }}</div>
+                    </div>
+                </div>
+
+                <!-- Alokasi material -->
                 <div>
-                    <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.materialSubstitute') }}</label>
-                    <div class="relative">
-                        <input
-                            v-model="query"
-                            type="text"
-                            autocomplete="off"
-                            :placeholder="selected ? selected.part_number : t('production.searchMaterial')"
-                            @focus="showSuggestions = true"
-                            @input="showSuggestions = true"
-                            class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
-                        />
-                        <div v-if="showSuggestions" class="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-borderline bg-surface py-1 shadow-lg">
-                            <button
-                                v-for="o in filtered"
-                                :key="o.id"
-                                type="button"
-                                @mousedown.prevent="selectOption(o)"
-                                class="block w-full px-3 py-2 text-left text-sm hover:bg-primary-light"
-                            >
-                                <span class="font-medium text-ink-primary">{{ o.part_number }}</span>
-                                <span class="text-ink-secondary"> · {{ o.part_name }}</span>
-                                <span :class="o.kind === 'mainMaterial' ? 'text-primary' : 'text-purple-700'" class="ml-2 text-xs font-semibold">{{ t(`production.${o.kind}`) }}</span>
-                            </button>
-                            <div v-if="filtered.length === 0" class="px-3 py-3 text-sm text-ink-secondary">{{ t('production.noMaterial') }}</div>
+                    <div class="mb-2 flex items-center justify-between gap-3">
+                        <label class="block text-sm font-medium text-ink-primary">{{ t('production.materialAllocation') }}</label>
+                        <button type="button" @click="addRow" class="inline-flex items-center gap-1.5 rounded-md border border-primary px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary-light">
+                            <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                            {{ t('production.addAllocation') }}
+                        </button>
+                    </div>
+
+                    <div class="space-y-3">
+                        <div v-for="(row, index) in form.allocations" :key="index" class="rounded-lg border border-borderline p-3">
+                            <div class="grid gap-3 sm:grid-cols-12">
+                                <div class="sm:col-span-7">
+                                    <label class="text-xs font-semibold text-ink-secondary">{{ t('production.material') }}</label>
+                                    <select v-model="row.part_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                                        <option value="">{{ t('production.searchMaterial') }}</option>
+                                        <option v-for="o in materialOptions" :key="o.id" :value="o.id">
+                                            {{ o.part_number }} · {{ o.part_name }} — {{ t(`production.${o.kind}`) }}
+                                        </option>
+                                    </select>
+                                </div>
+                                <div class="sm:col-span-3">
+                                    <label class="text-xs font-semibold text-ink-secondary">{{ t('production.allocQty') }}</label>
+                                    <input v-model="row.qty" type="number" step="0.0001" min="0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                                </div>
+                                <div class="flex items-end gap-2 sm:col-span-2">
+                                    <button type="button" @click="fillRemaining(row)" :disabled="remaining <= 0" class="flex-1 rounded-md border border-borderline px-2 py-2 text-xs font-medium text-ink-secondary transition hover:bg-background disabled:opacity-40">
+                                        {{ t('production.fillRemaining') }}
+                                    </button>
+                                    <button type="button" @click="removeRow(index)" :disabled="form.allocations.length <= 1" class="rounded-md border border-borderline px-3 py-2 text-sm text-danger transition hover:bg-danger/10 disabled:opacity-40" :aria-label="t('production.delete')">✕</button>
+                                </div>
+                            </div>
+
+                            <!-- Stok part terpilih -->
+                            <div v-if="row.part_id !== ''" class="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                                <span class="text-ink-secondary">{{ t('production.stockAvailable') }}:</span>
+                                <StatusBadge :tone="stockFor(row) > 0 ? 'success' : 'neutral'">
+                                    {{ stockFor(row).toFixed(4) }} {{ unit }}
+                                </StatusBadge>
+                                <StatusBadge v-if="rowExceedsStock(row)" tone="danger">{{ t('production.exceedsStock') }}</StatusBadge>
+                            </div>
                         </div>
                     </div>
-                    <p class="mt-1 text-xs text-ink-secondary">{{ t('production.materialHelp') }}</p>
-                    <div v-if="form.errors.selected_part_id" class="mt-1 text-xs text-danger">{{ form.errors.selected_part_id }}</div>
+
+                    <p v-if="overAllocated" class="mt-2 text-xs font-medium text-danger">{{ t('production.overAllocated') }}</p>
+                    <p class="mt-1 text-xs text-ink-secondary">{{ t('production.allocationHelp') }}</p>
+                    <div v-if="form.errors.allocations" class="mt-1 text-xs text-danger">{{ form.errors.allocations }}</div>
                 </div>
 
                 <!-- Machine -->
@@ -132,7 +179,7 @@ function submit() {
 
                 <div class="flex items-center justify-end gap-3 border-t border-borderline pt-4">
                     <a :href="route('work-orders.show', workOrder.id)" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-secondary transition hover:bg-background">{{ t('production.cancel') }}</a>
-                    <button type="submit" :disabled="form.processing" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60">
+                    <button type="submit" :disabled="form.processing || overAllocated" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60">
                         {{ form.processing ? t('production.saving') : t('production.save') }}
                     </button>
                 </div>

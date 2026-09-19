@@ -37,10 +37,13 @@ class MasterDataSeeder extends Seeder
             )->id;
         }
 
-        // UOMs
+        // UOMs — master resmi di-seed oleh UomSeeder; di sini hanya lookup.
         $uomIds = [];
         foreach ($data['uoms'] as $code) {
-            $uomIds[$code] = Uom::updateOrCreate(['code' => $code], ['name' => $code, 'is_active' => true])->id;
+            $uomIds[$code] = Uom::firstOrCreate(
+                ['code' => strtoupper($code)],
+                ['name' => strtoupper($code), 'is_active' => true],
+            )->id;
         }
 
         // Parts
@@ -139,6 +142,6 @@ class MasterDataSeeder extends Seeder
         $slug = trim((string) $slug, '_');
         $slug = strtoupper($slug);
 
-        return $slug !== '' ? $slug : 'X' . substr(md5($name), 0, 6);
+        return $slug !== '' ? $slug : 'X'.substr(md5($name), 0, 6);
     }
 }

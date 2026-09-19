@@ -3,7 +3,7 @@ import { useI18n } from 'vue-i18n';
 
 const { t } = useI18n();
 import Checkbox from '@/Components/Checkbox.vue';
-import GuestLayout from '@/Layouts/GuestLayout.vue';
+import AuthLayout from '@/Layouts/AuthLayout.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
@@ -31,71 +31,70 @@ const submit = () => {
 </script>
 
 <template>
-    <GuestLayout>
+    <AuthLayout>
         <Head :title="t('account.login')" />
 
-        <div v-if="status" class="mb-4 text-sm font-medium text-green-600">
+        <div v-if="status" class="mb-5 rounded-lg border border-success/30 bg-success/10 px-4 py-3 text-sm font-medium text-success">
             {{ status }}
         </div>
 
-        <form @submit.prevent="submit">
+        <div class="mb-8">
+            <h1 class="text-2xl font-bold tracking-tight text-ink-primary">{{ t('auth.loginTitle') }}</h1>
+            <p class="mt-1.5 text-sm text-ink-secondary">{{ t('auth.loginSubtitle') }}</p>
+        </div>
+
+        <form @submit.prevent="submit" class="space-y-5">
             <div>
                 <InputLabel for="email" :value="t('account.email')" />
-
                 <TextInput
                     id="email"
                     type="email"
-                    class="mt-1 block w-full"
+                    class="mt-1.5 block w-full"
                     v-model="form.email"
                     required
                     autofocus
                     autocomplete="username"
+                    :placeholder="t('auth.emailPlaceholder')"
                 />
-
                 <InputError class="mt-2" :message="form.errors.email" />
             </div>
 
-            <div class="mt-4">
+            <div>
                 <InputLabel for="password" :value="t('account.password')" />
-
                 <TextInput
                     id="password"
                     type="password"
-                    class="mt-1 block w-full"
+                    class="mt-1.5 block w-full"
                     v-model="form.password"
                     required
                     autocomplete="current-password"
+                    :placeholder="t('auth.passwordPlaceholder')"
                 />
-
                 <InputError class="mt-2" :message="form.errors.password" />
             </div>
 
-            <div class="mt-4 block">
-                <label class="flex items-center">
+            <div class="flex items-center justify-between gap-3">
+                <label class="flex cursor-pointer items-center">
                     <Checkbox name="remember" v-model:checked="form.remember" />
-                    <span class="ms-2 text-sm text-gray-600"
-                        >{{ t('account.remember') }}</span
-                    >
+                    <span class="ms-2 text-sm text-ink-secondary">{{ t('account.remember') }}</span>
                 </label>
-            </div>
 
-            <div class="mt-4 flex items-center justify-end">
                 <Link
                     v-if="canResetPassword"
                     :href="route('password.request')"
-                    class="rounded-md text-sm text-gray-600 underline hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                    class="rounded-md text-sm font-medium text-primary underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                     {{ t('account.forgotLink') }}
                 </Link>
-
-                <PrimaryButton
-                    class="ms-4"
-                    :class="{ 'opacity-25': form.processing }"
-                    :disabled="form.processing"
-                >
-                    {{ t('account.login') }}
-                </PrimaryButton>
             </div>
+
+            <PrimaryButton
+                class="w-full justify-center py-2.5"
+                :class="{ 'opacity-25': form.processing }"
+                :disabled="form.processing"
+            >
+                {{ t('account.login') }}
+            </PrimaryButton>
         </form>
-    </GuestLayout>
+    </AuthLayout>
 </template>

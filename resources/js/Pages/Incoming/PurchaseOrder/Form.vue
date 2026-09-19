@@ -21,6 +21,7 @@ const props = defineProps<{
     purchaseOrder: PurchaseOrder | null;
     suppliers: Array<Pick<Supplier, 'id' | 'supplier_code' | 'supplier_name'>>;
     parts: Array<Pick<Part, 'id' | 'part_number' | 'part_name'>>;
+    uomCodes: string[];
 }>();
 
 const blankItem = (): ItemRow => ({ part_id: '', qty: '', unit: '', price: '', notes: '' });
@@ -142,7 +143,10 @@ function submit() {
                     </div>
                     <div class="sm:col-span-2">
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.unit') }}</label>
-                        <input v-model="r.unit" type="text" placeholder="PCS" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <select v-model="r.unit" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                            <option value="">—</option>
+                            <option v-for="code in uomCodes" :key="code" :value="code">{{ code }}</option>
+                        </select>
                     </div>
                     <div class="sm:col-span-2">
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.price') }}</label>

@@ -27,6 +27,14 @@ class WorkOrderPolicy
         return $user->hasAnyPermission(['work_order.update', 'production.update']);
     }
 
+    /**
+     * Issue material ke produksi lewat scan label (mobile).
+     */
+    public function issue(User $user, WorkOrder $workOrder): bool
+    {
+        return $user->hasAnyPermission(['stock.issue', 'work_order.update', 'production.update']);
+    }
+
     public function update(User $user, WorkOrder $workOrder): bool
     {
         return $user->hasAnyPermission(['work_order.update']);

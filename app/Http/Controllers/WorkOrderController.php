@@ -4,19 +4,24 @@ namespace App\Http\Controllers;
 
 use App\Models\Machine;
 use App\Models\Part;
-use App\Models\PartSubstitute;
 use App\Models\WorkOrder;
 use App\Models\WorkOrderItem;
+use App\Services\ReceiveMaterialService;
 use App\Services\WoService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class WorkOrderController extends Controller
 {
-    public function __construct(protected WoService $woService) {}
+    public function __construct(
+        protected WoService $woService,
+        protected ReceiveMaterialService $receiveService,
+    ) {}
 
     public function index(Request $request): Response
     {
@@ -76,7 +81,7 @@ class WorkOrderController extends Controller
             ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) = ?', ['fg']))
             ->exists();
         if (! $isFg) {
-            throw \Illuminate\Validation\ValidationException::withMessages(['part_id' => __('Work Order hanya untuk part FG.')]);
+            throw ValidationException::withMessages(['part_id' => __('Work Order hanya untuk part FG.')]);
         }
 
         [$workOrderId, $warnings] = $this->woService->createWorkOrder(
@@ -90,7 +95,7 @@ class WorkOrderController extends Controller
         if (count($warnings) > 0) {
             return redirect()
                 ->route('work-orders.show', $workOrderId)
-                ->with('error', __('WO dibuat, tapi ada kekurangan stok: :details', ['details' => implode(' · ', array_slice($warnings, 0, 5)) . (count($warnings) > 5 ? ' …' : '')]));
+                ->with('error', __('WO dibuat, tapi ada kekurangan stok: :details', ['details' => implode(' · ', array_slice($warnings, 0, 5)).(count($warnings) > 5 ? ' …' : '')]));
         }
 
         return redirect()
@@ -103,7 +108,7 @@ class WorkOrderController extends Controller
 
         $workOrder->load([
             'part' => fn ($q) => $q->with('partType', 'uom'),
-            'items' => fn ($q) => $q->with(['process', 'machine', 'parentPart', 'childPart.partSubstitutes.substitutePart', 'selectedPart']),
+            'items' => fn ($q) => $q->with(['process', 'machine', 'parentPart', 'childPart.partSubstitutes.substitutePart', 'selectedPart', 'allocations.part']),
             'consumptions',
         ]);
         $machines = Machine::query()->where('is_active', true)->orderBy('machine_name')->get(['id', 'machine_code', 'machine_name']);
@@ -130,6 +135,7 @@ class WorkOrderController extends Controller
             'machine',
             'childPart.partSubstitutes.substitutePart',
             'selectedPart',
+            'allocations',
         ]);
 
         $machines = Machine::query()->where('is_active', true)->orderBy('machine_name')->get(['id', 'machine_code', 'machine_name']);
@@ -138,7 +144,54 @@ class WorkOrderController extends Controller
             'workOrder' => $workOrder->only(['id', 'wo_no']),
             'item' => $item,
             'machines' => $machines,
+            'materialOptions' => $this->materialOptionsWithStock($item),
+            'allocations' => $item->allocations
+                ->map(fn ($a) => ['part_id' => (int) $a->part_id, 'qty' => (float) $a->qty])
+                ->values(),
         ]);
+    }
+
+    /**
+     * Opsi material untuk sebuah item WO: main material BOM (acuan, tanpa stok)
+     * + substitute aktif yang memegang stok. Stok diambil sekali (batch) agar
+     * tidak N+1 walau substitute puluhan.
+     *
+     * @return list<array{id:int, part_number:string, part_name:string, kind:string, stock:float}>
+     */
+    private function materialOptionsWithStock(WorkOrderItem $item): array
+    {
+        $main = $item->childPart;
+        $subs = collect($main?->partSubstitutes ?? [])
+            ->map(fn ($s) => $s->substitutePart)
+            ->filter()
+            ->unique('id')
+            ->values();
+
+        $uuids = collect([$main?->id, ...$subs->pluck('id')->all()])->filter()->unique();
+        $stocks = $this->receiveService->availableFifoBatch($uuids, $item->uom_rm);
+
+        $rows = [];
+        if ($main !== null) {
+            $rows[] = [
+                'id' => (int) $main->id,
+                'part_number' => (string) $main->part_number,
+                'part_name' => (string) $main->part_name,
+                'kind' => 'mainMaterial',
+                'stock' => (float) ($stocks[$main->id] ?? 0),
+            ];
+        }
+
+        foreach ($subs as $sub) {
+            $rows[] = [
+                'id' => (int) $sub->id,
+                'part_number' => (string) $sub->part_number,
+                'part_name' => (string) $sub->part_name,
+                'kind' => 'substitute',
+                'stock' => (float) ($stocks[$sub->id] ?? 0),
+            ];
+        }
+
+        return $rows;
     }
 
     public function updateItem(Request $request, WorkOrder $workOrder, WorkOrderItem $item): RedirectResponse
@@ -147,16 +200,50 @@ class WorkOrderController extends Controller
         abort_unless($item->work_order_id === $workOrder->id && $workOrder->status === 'planned', 422, __('Item WO tidak dapat diubah.'));
 
         $data = $request->validate([
-            'selected_part_id' => ['required', 'integer', 'exists:parts,id'],
+            'allocations' => ['required', 'array', 'min:1'],
+            'allocations.*.part_id' => ['required', 'integer', 'exists:parts,id', 'distinct'],
+            'allocations.*.qty' => ['required', 'numeric', 'gt:0'],
             'machine_id' => ['nullable', 'integer', 'exists:machines,id'],
         ]);
-        $allowed = (int) $data['selected_part_id'] === (int) $item->child_part_id
-            || PartSubstitute::where('part_id', $item->child_part_id)->where('substitute_part_id', $data['selected_part_id'])->where('is_active', true)->exists();
-        abort_unless($allowed, 422, __('Part bukan main material atau substitute aktif untuk material BOM ini.'));
-        $item->update([
-            'selected_part_id' => $data['selected_part_id'],
-            'machine_id' => $data['machine_id'] ?? null,
-        ]);
+
+        $allowedIds = collect($this->materialOptionsWithStock($item))->pluck('id')->all();
+        foreach ($data['allocations'] as $index => $row) {
+            if (! in_array((int) $row['part_id'], $allowedIds, true)) {
+                throw ValidationException::withMessages([
+                    "allocations.{$index}.part_id" => __('Part bukan main material atau substitute aktif untuk material BOM ini.'),
+                ]);
+            }
+        }
+
+        // Boleh sebagian (sisanya jadi shortage saat release), tapi tidak boleh
+        // melebihi kebutuhan.
+        $allocatedTotal = collect($data['allocations'])->sum(fn ($row) => (float) $row['qty']);
+        if ($allocatedTotal > (float) $item->qty_required + 1e-9) {
+            throw ValidationException::withMessages([
+                'allocations' => __('Total alokasi (:total) melebihi kebutuhan (:required).', [
+                    'total' => rtrim(rtrim(number_format($allocatedTotal, 4, '.', ''), '0'), '.'),
+                    'required' => rtrim(rtrim(number_format((float) $item->qty_required, 4, '.', ''), '0'), '.'),
+                ]),
+            ]);
+        }
+
+        DB::transaction(function () use ($item, $data) {
+            $item->update(['machine_id' => $data['machine_id'] ?? null]);
+            $item->allocations()->delete();
+            $item->allocations()->createMany(
+                collect($data['allocations'])->map(fn ($row) => [
+                    'part_id' => (int) $row['part_id'],
+                    'qty' => (float) $row['qty'],
+                    'created_by' => auth()->id(),
+                    'updated_by' => auth()->id(),
+                ])->all(),
+            );
+
+            // selected_part_id dipertahankan untuk kompatibilitas tampilan lama:
+            // pakai alokasi terbesar.
+            $primary = collect($data['allocations'])->sortByDesc('qty')->first();
+            $item->update(['selected_part_id' => (int) $primary['part_id']]);
+        });
 
         return redirect()
             ->route('work-orders.show', $workOrder)->with('success', __('Routing WO diperbarui.'));
@@ -176,7 +263,7 @@ class WorkOrderController extends Controller
 
             return redirect()
                 ->route('work-orders.show', $workOrder)
-                ->with('error', __('WO di-release, tapi ada kekurangan: :details', ['details' => implode(' · ', array_slice($lines, 0, 5)) . (count($lines) > 5 ? ' …' : '')]));
+                ->with('error', __('WO di-release, tapi ada kekurangan: :details', ['details' => implode(' · ', array_slice($lines, 0, 5)).(count($lines) > 5 ? ' …' : '')]));
         }
 
         return redirect()

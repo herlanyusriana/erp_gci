@@ -45,6 +45,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'part_substitute.view', 'part_substitute.create', 'part_substitute.update', 'part_substitute.delete',
             'uom.view', 'uom.create', 'uom.update', 'uom.delete',
             'stock.view',
+            'stock.issue',
             'config.view', 'config.update',
             'role.view', 'role.create', 'role.update', 'role.delete',
             'user.view', 'user.create', 'user.update', 'user.delete',
@@ -73,6 +74,12 @@ class RolesAndPermissionsSeeder extends Seeder
         $management->permissions()->sync(
             Permission::whereIn('name', $viewOnly)->pluck('id')->all()
         );
+
+        // Warehouse & Production boleh issue material ke produksi (scan label).
+        $issuePerms = Permission::whereIn('name', ['stock.view', 'stock.issue', 'work_order.view'])->pluck('id')->all();
+        foreach (['warehouse', 'production'] as $roleName) {
+            Role::find($roleIds[$roleName])->permissions()->syncWithoutDetaching($issuePerms);
+        }
 
         // Create the seed admin user (userId 5 is the real operator's id in other apps;
         // here we create a deterministic local admin).

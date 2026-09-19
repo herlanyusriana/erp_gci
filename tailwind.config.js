@@ -16,11 +16,11 @@ export default {
                 sans: ['Figtree', ...defaultTheme.fontFamily.sans],
             },
             colors: {
-                // Geum Cheon theme (spec 0.6)
+                // Geum Cheon theme — primary diselaraskan dengan warna logo (#24106C)
                 primary: {
-                    DEFAULT: '#0B3A6E',
-                    hover: '#092F59',
-                    light: '#EAF2FA',
+                    DEFAULT: '#24106C',
+                    hover: '#1B0C52',
+                    light: '#EEEBF6',
                 },
                 surface: '#FFFFFF',
                 background: '#F7F9FC',

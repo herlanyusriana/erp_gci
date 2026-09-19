@@ -12,7 +12,7 @@ const modules = computed(() => [
     { href: '#', title: t('account.inventory'), subtitle: t('account.notAvailable') },
     { href: '/production-data', title: t('account.production'), subtitle: t('account.productionSubtitle') },
     { href: '#', title: t('account.quality'), subtitle: t('account.notAvailable') },
-    { href: '#', title: t('account.outgoing'), subtitle: t('account.notAvailable') },
+    { href: '/outgoing', title: t('account.outgoing'), subtitle: t('account.outgoingSubtitle') },
     { href: '#', title: t('account.purchasing'), subtitle: t('account.notAvailable') },
     { href: '#', title: t('account.planning'), subtitle: t('account.notAvailable') },
     { href: '/administration', title: t('account.administration'), subtitle: t('account.administrationSubtitle') },

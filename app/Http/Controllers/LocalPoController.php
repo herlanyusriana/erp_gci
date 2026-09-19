@@ -5,7 +5,11 @@ namespace App\Http\Controllers;
 use App\Exports\ArrivalDetailExport;
 use App\Exports\LocalPoExport;
 use App\Models\IncomingArrival;
-use App\Models\IncomingArrivalItem;
+use App\Models\Part;
+use App\Models\Supplier;
+use App\Rules\PartTypeRule;
+use App\Rules\UomCode;
+use App\Support\UomCatalog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -56,7 +60,7 @@ class LocalPoController extends Controller
 
         return Inertia::render('Incoming/LocalPo/Index', [
             'localPos' => $localPos,
-            'suppliers' => \App\Models\Supplier::select('id', 'supplier_code', 'supplier_name')
+            'suppliers' => Supplier::select('id', 'supplier_code', 'supplier_name')
                 ->orderBy('supplier_name')->get(),
             'filters' => $request->only('search', 'supplier_id'),
         ]);
@@ -68,12 +72,14 @@ class LocalPoController extends Controller
 
         return Inertia::render('Incoming/LocalPo/Form', [
             'arrival' => null,
-            'suppliers' => \App\Models\Supplier::select('id', 'supplier_code', 'supplier_name')
+            'suppliers' => Supplier::select('id', 'supplier_code', 'supplier_name')
                 ->where('is_active', true)->orderBy('supplier_name')->get(),
-            'parts' => \App\Models\Part::select('id', 'part_number', 'part_name')
+            'parts' => Part::select('id', 'part_number', 'part_name')
                 ->where('is_active', true)
                 ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))
                 ->orderBy('part_number')->get(),
+            'uomCodes' => UomCatalog::codes(),
+            'defaultUom' => UomCatalog::defaultCode(),
         ]);
     }
 
@@ -90,10 +96,10 @@ class LocalPoController extends Controller
             'currency' => ['nullable', 'string', 'max:10'],
             'notes' => ['nullable', 'string'],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.part_id' => ['required', 'exists:parts,id', \App\Rules\PartTypeRule::notFg()],
+            'items.*.part_id' => ['required', 'exists:parts,id', PartTypeRule::notFg()],
             'items.*.size' => ['nullable', 'string', 'max:100'],
             'items.*.qty_goods' => ['required', 'numeric', 'min:0'],
-            'items.*.unit_goods' => ['required', 'in:PCS,COIL,SHEET,SET,EA,KGM,ROLL,UOM'],
+            'items.*.unit_goods' => ['required', 'string', 'max:20', new UomCode],
             'items.*.price' => ['nullable', 'numeric', 'min:0'],
             'items.*.notes' => ['nullable', 'string'],
         ]);
@@ -125,11 +131,11 @@ class LocalPoController extends Controller
                     'size' => isset($item['size']) && trim((string) $item['size']) !== ''
                         ? strtoupper(trim((string) $item['size'])) : null,
                     'qty_goods' => $qtyGoods,
-                    'unit_goods' => strtoupper((string) $item['unit_goods']),
+                    'unit_goods' => UomCatalog::normalize((string) $item['unit_goods']),
                     'qty_bundle' => 0,
-                    'unit_bundle' => 'PALLET',
+                    'unit_bundle' => UomCatalog::PALLET,
                     'weight_nett' => 0,
-                    'unit_weight' => 'KGM',
+                    'unit_weight' => UomCatalog::WEIGHT,
                     'weight_gross' => 0,
                     'price' => $price,
                     'total_price' => $qtyGoods * $price,
@@ -175,12 +181,14 @@ class LocalPoController extends Controller
 
         return Inertia::render('Incoming/LocalPo/Form', [
             'arrival' => $arrival,
-            'suppliers' => \App\Models\Supplier::select('id', 'supplier_code', 'supplier_name')
+            'suppliers' => Supplier::select('id', 'supplier_code', 'supplier_name')
                 ->where('is_active', true)->orderBy('supplier_name')->get(),
-            'parts' => \App\Models\Part::select('id', 'part_number', 'part_name')
+            'parts' => Part::select('id', 'part_number', 'part_name')
                 ->where('is_active', true)
                 ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))
                 ->orderBy('part_number')->get(),
+            'uomCodes' => UomCatalog::codes(),
+            'defaultUom' => UomCatalog::defaultCode(),
         ]);
     }
 
@@ -199,10 +207,10 @@ class LocalPoController extends Controller
             'notes' => ['nullable', 'string'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.id' => ['nullable', 'integer'],
-            'items.*.part_id' => ['required', 'exists:parts,id', \App\Rules\PartTypeRule::notFg()],
+            'items.*.part_id' => ['required', 'exists:parts,id', PartTypeRule::notFg()],
             'items.*.size' => ['nullable', 'string', 'max:100'],
             'items.*.qty_goods' => ['required', 'numeric', 'min:0'],
-            'items.*.unit_goods' => ['required', 'in:PCS,COIL,SHEET,SET,EA,KGM,ROLL,UOM'],
+            'items.*.unit_goods' => ['required', 'string', 'max:20', new UomCode],
             'items.*.price' => ['nullable', 'numeric', 'min:0'],
             'items.*.notes' => ['nullable', 'string'],
         ]);
@@ -236,13 +244,13 @@ class LocalPoController extends Controller
                     'size' => isset($itemData['size']) && trim((string) $itemData['size']) !== ''
                         ? strtoupper(trim((string) $itemData['size'])) : null,
                     'qty_goods' => $qtyGoods,
-                    'unit_goods' => strtoupper((string) $itemData['unit_goods']),
+                    'unit_goods' => UomCatalog::normalize((string) $itemData['unit_goods']),
                     'price' => $price,
                     'total_price' => $qtyGoods * $price,
                     'notes' => $itemData['notes'] ?? null,
                 ];
 
-                if (!empty($itemData['id'])) {
+                if (! empty($itemData['id'])) {
                     $itemModel = $arrival->items()->findOrFail((int) $itemData['id']);
                     if ($itemModel->receives()->exists() && (int) $itemModel->part_id !== (int) $data['part_id']) {
                         return __('Item :number sudah ada receive, part tidak boleh diganti.', ['number' => $itemModel->part?->part_number]);
@@ -280,7 +288,7 @@ class LocalPoController extends Controller
     {
         Gate::authorize('viewAny', IncomingArrival::class);
 
-        return Excel::download(new LocalPoExport(), 'local_po_' . date('Y-m-d_His') . '.xlsx');
+        return Excel::download(new LocalPoExport, 'local_po_'.date('Y-m-d_His').'.xlsx');
     }
 
     public function exportDetail(IncomingArrival $localPo)
@@ -290,6 +298,6 @@ class LocalPoController extends Controller
 
         $poNo = preg_replace('/[^A-Za-z0-9_-]/', '_', $arrival->invoice_no ?? 'PO');
 
-        return Excel::download(new ArrivalDetailExport($arrival), 'local_po_' . $poNo . '_' . date('Y-m-d') . '.xlsx');
+        return Excel::download(new ArrivalDetailExport($arrival), 'local_po_'.$poNo.'_'.date('Y-m-d').'.xlsx');
     }
 }

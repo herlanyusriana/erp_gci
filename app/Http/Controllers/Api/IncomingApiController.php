@@ -6,11 +6,14 @@ use App\Http\Controllers\Controller;
 use App\Models\IncomingArrival as Arrival;
 use App\Models\IncomingArrivalItem as ArrivalItem;
 use App\Services\ReceiveMaterialService;
+use App\Support\UomCatalog;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\ValidationException;
 
 /**
  * JSON API untuk Flutter "Material Tracker" — incoming receiving.
@@ -67,15 +70,15 @@ class IncomingApiController extends Controller
         ]);
 
         $arrivalItem->loadMissing(['arrival']);
-        $goodsUnit = strtoupper((string) ($arrivalItem->unit_goods ?? 'KGM'));
+        $goodsUnit = UomCatalog::normalize($arrivalItem->unit_goods) ?? UomCatalog::WEIGHT;
 
         try {
             $this->receiveService->ensureTagsUniqueForArrivalItem($arrivalItem, [
                 ['tag' => trim($validated['tag']), 'qty' => $validated['qty'], 'qc_status' => $validated['qc_status']],
             ], 'tags');
-        } catch (\Illuminate\Validation\ValidationException) {
+        } catch (ValidationException) {
             return response()->json(['ok' => false, 'message' => __('Tag sudah pernah dipakai pada item ini.')], 422);
-        } catch (\Illuminate\Http\Exceptions\HttpResponseException) {
+        } catch (HttpResponseException) {
             return response()->json(['ok' => false, 'message' => __('Tag sudah pernah dipakai pada item ini.')], 422);
         }
 
@@ -93,7 +96,7 @@ class IncomingApiController extends Controller
         $receive = DB::transaction(function () use ($validated, $arrivalItem, $goodsUnit, $receiveAt) {
             $tag = $this->receiveService->normalizeTag($validated['tag']);
 
-            $netWeight = $goodsUnit === 'KGM' ? (float) $validated['qty'] : null;
+            $netWeight = UomCatalog::isWeight($goodsUnit) ? (float) $validated['qty'] : null;
 
             $receive = $arrivalItem->receives()->create([
                 'part_id' => $this->receiveService->resolvePartId($arrivalItem),
@@ -125,7 +128,7 @@ class IncomingApiController extends Controller
         });
 
         $arrival = $arrivalItem->arrival()->with('items.receives')->first();
-        if ($arrival && !$this->receiveService->hasPendingReceives($arrival) && empty($arrival->transaction_no)) {
+        if ($arrival && ! $this->receiveService->hasPendingReceives($arrival) && empty($arrival->transaction_no)) {
             $arrival->transaction_no = Arrival::generateTransactionNo($receiveAt->toDateString());
             $arrival->save();
         }

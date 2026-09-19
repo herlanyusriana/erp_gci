@@ -33,11 +33,7 @@ watch(
                         :href="route('launcher')"
                         class="flex items-center gap-2 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                     >
-                        <span
-                            class="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-sm font-bold text-white"
-                        >
-                            GC
-                        </span>
+                        <img src="/images/logo-mark.png" alt="" class="h-8 w-auto" aria-hidden="true" />
                         <span class="text-base font-semibold text-ink-primary sm:text-lg">
                             {{ $page.props.appSettings.applicationName ?? 'Geum Cheon ERP' }}
                         </span>

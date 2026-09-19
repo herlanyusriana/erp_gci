@@ -5,10 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\IncomingArrival;
 use App\Models\IncomingArrivalItem;
 use App\Models\IncomingReceive;
+use App\Rules\UomCode;
 use App\Services\ReceiveMaterialService;
 use App\Support\QrSvg;
+use App\Support\UomCatalog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
@@ -57,6 +60,9 @@ class ReceiveController extends Controller
             'totalReceived' => $totalReceived,
             'weightBasis' => $this->receiveService->usesWeightBasis($arrivalItem),
             'isLocal' => (bool) $arrivalItem->arrival?->is_local,
+            'uomCodes' => UomCatalog::codes(),
+            'packingUnits' => UomCatalog::packingUnits(),
+            'weightUnit' => UomCatalog::WEIGHT,
         ]);
     }
 
@@ -74,12 +80,12 @@ class ReceiveController extends Controller
             'tags.*.tag' => ['required', 'string', 'max:255'],
             'tags.*.qty' => ['required', 'numeric', 'min:0.0001'],
             'tags.*.bundle_qty' => ['nullable', 'numeric', 'min:0'],
-            'tags.*.bundle_unit' => ['nullable', 'in:PALLET,BUNDLE,BOX,BAG,ROLL,PACKAGES'],
+            'tags.*.bundle_unit' => ['nullable', 'string', 'max:20', Rule::in(UomCatalog::packingUnits())],
             'tags.*.net_weight' => $weightBasis
                 ? ['required', 'numeric', 'min:0.0001']
                 : ['nullable', 'numeric'],
             'tags.*.gross_weight' => ['nullable', 'numeric'],
-            'tags.*.qty_unit' => ['required', 'string', 'max:20'],
+            'tags.*.qty_unit' => ['required', 'string', 'max:20', new UomCode],
         ]);
 
         $this->receiveService->ensureTagsUniqueForArrivalItem($arrivalItem, $validated['tags'], 'tags');
@@ -89,7 +95,9 @@ class ReceiveController extends Controller
             ? collect($validated['tags'])->sum(fn ($t) => (float) ($t['net_weight'] ?? $t['qty']))
             : collect($validated['tags'])->sum('qty');
         $remainingQty = $this->receiveService->remainingQty($arrivalItem);
-        $unitLabel = $weightBasis ? 'KGM' : strtoupper((string) ($arrivalItem->unit_goods ?? 'qty'));
+        $unitLabel = $weightBasis
+            ? UomCatalog::WEIGHT
+            : (UomCatalog::normalize($arrivalItem->unit_goods) ?? 'qty');
 
         if ($totalRequested > $remainingQty + 1e-9) {
             return back()->withInput()->withErrors([
@@ -97,8 +105,8 @@ class ReceiveController extends Controller
             ]);
         }
 
-        $goodsUnit = strtoupper((string) ($arrivalItem->unit_goods ?? 'KGM'));
-        $receiveAt = \Illuminate\Support\Carbon::parse($validated['receive_date'])->setTimeFromTimeString(now()->format('H:i:s'));
+        $goodsUnit = UomCatalog::normalize($arrivalItem->unit_goods) ?? UomCatalog::WEIGHT;
+        $receiveAt = Carbon::parse($validated['receive_date'])->setTimeFromTimeString(now()->format('H:i:s'));
         $truckNo = trim((string) ($validated['truck_no'] ?? '')) !== '' ? strtoupper(trim((string) $validated['truck_no'])) : null;
 
         DB::transaction(function () use ($validated, $arrivalItem, $goodsUnit, $receiveAt, $truckNo, $weightBasis) {
@@ -143,7 +151,7 @@ class ReceiveController extends Controller
 
         $arrival = $arrivalItem->arrival()->with('items.receives')->first();
         if ($arrival) {
-            $isComplete = !$this->receiveService->hasPendingReceives($arrival);
+            $isComplete = ! $this->receiveService->hasPendingReceives($arrival);
             if ($isComplete && empty($arrival->transaction_no)) {
                 $arrival->transaction_no = IncomingArrival::generateTransactionNo($receiveAt->toDateString());
                 $arrival->save();
@@ -174,7 +182,7 @@ class ReceiveController extends Controller
         $monthNumber = (int) $receivedAt->format('m');
 
         // Unit & qty teks menyesuaikan basis item (KGM untuk incoming, qty untuk local).
-        $goodsUnit = strtoupper(trim((string) ($arrivalItem?->unit_goods ?? $receive->qty_unit ?? '')));
+        $goodsUnit = UomCatalog::normalize($arrivalItem?->unit_goods ?? $receive->qty_unit);
         $weightBasis = $this->receiveService->usesWeightBasisItem($receive);
 
         // Payload QR — standar scan app: identify part + tag + receive.
@@ -207,6 +215,9 @@ class ReceiveController extends Controller
             'arrivalItem' => $receive->arrivalItem,
             'weightBasis' => $this->receiveService->usesWeightBasisItem($receive),
             'isLocal' => (bool) $receive->arrivalItem?->arrival?->is_local,
+            'uomCodes' => UomCatalog::codes(),
+            'packingUnits' => UomCatalog::packingUnits(),
+            'weightUnit' => UomCatalog::WEIGHT,
         ]);
     }
 
@@ -223,7 +234,7 @@ class ReceiveController extends Controller
             'truck_no' => ['nullable', 'string', 'max:50'],
             'qty' => ['required', 'numeric', 'min:0.0001'],
             'bundle_qty' => ['nullable', 'numeric', 'min:0'],
-            'bundle_unit' => ['nullable', 'in:PALLET,BUNDLE,BOX,BAG,ROLL,PACKAGES'],
+            'bundle_unit' => ['nullable', 'string', 'max:20', Rule::in(UomCatalog::packingUnits())],
             'net_weight' => $weightBasis
                 ? ['required', 'numeric', 'min:0.0001']
                 : ['nullable', 'numeric'],
@@ -231,14 +242,14 @@ class ReceiveController extends Controller
         ]);
 
         $arrivalItem = $receive->arrivalItem;
-        $goodsUnit = strtoupper((string) ($arrivalItem->unit_goods ?? 'KGM'));
+        $goodsUnit = UomCatalog::normalize($arrivalItem->unit_goods) ?? UomCatalog::WEIGHT;
 
         $tag = $this->receiveService->normalizeTag($validated['tag'] ?? null);
         if ($tag !== null) {
             $this->receiveService->ensureTagsUniqueForArrivalItem($arrivalItem, [['tag' => $tag]], 'tag', (int) $receive->id);
         }
 
-        $receiveAt = \Illuminate\Support\Carbon::parse($validated['receive_date'])->setTimeFromTimeString(now()->format('H:i:s'));
+        $receiveAt = Carbon::parse($validated['receive_date'])->setTimeFromTimeString(now()->format('H:i:s'));
         $netWeight = $weightBasis ? (float) ($validated['net_weight'] ?? $validated['qty']) : null;
 
         DB::transaction(function () use ($receive, $validated, $tag, $goodsUnit, $receiveAt, $netWeight) {

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import StatusBadge from '@/Components/StatusBadge.vue';
 import { useI18n } from 'vue-i18n';
 import { computed } from 'vue';
 import AppLayout from '@/Layouts/AppLayout.vue';
@@ -23,6 +24,7 @@ interface ReceiveRow {
 const props = defineProps<{
     arrival: IncomingArrival;
     pending: PendingRow[];
+    weightUnit: string;
 }>();
 
 const receiveRows = computed<ReceiveRow[]>(() =>
@@ -31,16 +33,6 @@ const receiveRows = computed<ReceiveRow[]>(() =>
     ),
 );
 
-const statusTone = (s: string) => {
-    switch (s) {
-        case 'completed':
-            return 'bg-success/10 text-success';
-        case 'cancelled':
-            return 'bg-danger/10 text-danger';
-        default:
-            return 'bg-warning/10 text-warning';
-    }
-};
 
 function removeItem(id: number) {
     // placeholder no-op; keep for future per-item delete wiring
@@ -59,7 +51,7 @@ function removeItem(id: number) {
                     {{ arrival.supplier?.supplier_name ?? '—' }}
                     <span v-if="arrival.trucking">· {{ t('incoming.truckingValue', { name: arrival.trucking.company_name }) }}</span>
                     · {{ t('incoming.invoiceValue', { number: arrival.invoice_no ?? '—' }) }}
-                    · <span :class="statusTone(arrival.status)" class="rounded-md px-2 py-0.5 text-xs font-semibold uppercase">{{ t('incoming.status_' + arrival.status) }}</span>
+                    · <StatusBadge uppercase :status="arrival.status">{{ t('incoming.status_' + arrival.status) }}</StatusBadge>
                     <span v-if="arrival.transaction_no" class="ml-2 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">{{ t('incoming.salesOrder', { number: arrival.transaction_no }) }}</span>
                 </p>
             </div>
@@ -101,8 +93,8 @@ function removeItem(id: number) {
                         <th class="px-4 py-3">{{ t('incoming.groupSize') }}</th>
                         <th class="px-4 py-3 text-right">{{ t('incoming.qtyGoods') }}</th>
                         <th class="px-4 py-3">{{ t('incoming.unit') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('incoming.receivedUnit', { unit: 'KGM' }) }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('incoming.remainingUnit', { unit: 'KGM' }) }}</th>
+                        <th class="px-4 py-3 text-right">{{ t('incoming.receivedUnit', { unit: weightUnit }) }}</th>
+                        <th class="px-4 py-3 text-right">{{ t('incoming.remainingUnit', { unit: weightUnit }) }}</th>
                         <th class="px-4 py-3 text-right">{{ t('incoming.actions') }}</th>
                     </tr>
                 </thead>
@@ -139,7 +131,7 @@ function removeItem(id: number) {
                         <th class="px-4 py-3">{{ t('incoming.part') }}</th>
                         <th class="px-4 py-3">{{ t('incoming.tag') }}</th>
                         <th class="px-4 py-3 text-right">{{ t('incoming.qty') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('incoming.netUnit', { unit: 'KGM' }) }}</th>
+                        <th class="px-4 py-3 text-right">{{ t('incoming.netUnit', { unit: weightUnit }) }}</th>
                         <th class="px-4 py-3">{{ t('incoming.date') }}</th>
                         <th class="px-4 py-3 text-right">{{ t('incoming.actions') }}</th>
                     </tr>

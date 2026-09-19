@@ -6,6 +6,7 @@ use App\Http\Requests\StorePartRequest;
 use App\Models\Part;
 use App\Models\PartType;
 use App\Models\Uom;
+use App\Support\UomCatalog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -46,6 +47,7 @@ class PartController extends Controller
             'part' => null,
             'partTypes' => PartType::orderBy('code')->get(),
             'uoms' => Uom::where('is_active', true)->orderBy('code')->get(),
+            'defaultUomId' => Uom::where('code', UomCatalog::defaultCode())->value('id'),
             'defaultType' => $request->input('type'),
         ]);
     }

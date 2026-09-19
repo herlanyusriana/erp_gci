@@ -2,18 +2,23 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\ArrivalDetailExport;
 use App\Models\IncomingArrival;
 use App\Models\IncomingArrivalContainer;
-use App\Models\IncomingArrivalContainerInspection;
 use App\Models\IncomingArrivalItem;
 use App\Models\IncomingReceive;
 use App\Models\PartSubstitute;
-use App\Exports\ArrivalDetailExport;
+use App\Models\PurchaseOrder;
+use App\Models\Supplier;
+use App\Models\TruckingCompany;
+use App\Rules\UomCode;
+use App\Support\UomCatalog;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -33,7 +38,7 @@ class IncomingArrivalController extends Controller
             ->get()
             ->map(function (PartSubstitute $mapping) {
                 $part = $mapping->substitutePart;
-                if (!$part || trim((string) $part->size) === '') {
+                if (! $part || trim((string) $part->size) === '') {
                     return null;
                 }
 
@@ -65,7 +70,7 @@ class IncomingArrivalController extends Controller
                 ->with('substitutePart:id,size,uom_id')
                 ->first();
 
-            if (!$mapping || !$mapping->substitutePart) {
+            if (! $mapping || ! $mapping->substitutePart) {
                 throw ValidationException::withMessages([
                     "items.{$index}.size" => __('Size tidak tersedia untuk supplier dan material group yang dipilih.'),
                 ]);
@@ -109,10 +114,12 @@ class IncomingArrivalController extends Controller
 
         return Inertia::render('Incoming/Arrival/Form', [
             'arrival' => null,
-            'suppliers' => \App\Models\Supplier::select('id', 'supplier_code', 'supplier_name')->orderBy('supplier_name')->get(),
-            'truckings' => \App\Models\TruckingCompany::select('id', 'company_code', 'company_name')->where('is_active', true)->orderBy('company_name')->get(),
+            'suppliers' => Supplier::select('id', 'supplier_code', 'supplier_name')->orderBy('supplier_name')->get(),
+            'truckings' => TruckingCompany::select('id', 'company_code', 'company_name')->where('is_active', true)->orderBy('company_name')->get(),
             'materialOptions' => $this->materialOptions(),
-            'purchaseOrders' => \App\Models\PurchaseOrder::select('id', 'po_no', 'supplier_id')->orderByDesc('created_at')->get(),
+            'purchaseOrders' => PurchaseOrder::select('id', 'po_no', 'supplier_id')->orderByDesc('created_at')->get(),
+            'uomCodes' => UomCatalog::codes(),
+            'packingUnits' => UomCatalog::packingUnits(),
         ]);
     }
 
@@ -148,11 +155,11 @@ class IncomingArrivalController extends Controller
             'items.*.material_group' => ['required', 'string', 'max:255'],
             'items.*.size' => ['required', 'string', 'max:100'],
             'items.*.qty_goods' => ['required', 'numeric', 'min:0'],
-            'items.*.unit_goods' => ['nullable', 'string', 'max:20'],
+            'items.*.unit_goods' => ['nullable', 'string', 'max:20', UomCode::optional()],
             'items.*.qty_bundle' => ['nullable', 'numeric', 'min:0'],
-            'items.*.unit_bundle' => ['nullable', 'string', 'max:20'],
+            'items.*.unit_bundle' => ['nullable', 'string', 'max:20', Rule::in(UomCatalog::packingUnits())],
             'items.*.weight_nett' => ['nullable', 'numeric', 'min:0'],
-            'items.*.unit_weight' => ['nullable', 'string', 'max:20'],
+            'items.*.unit_weight' => ['nullable', 'string', 'max:20', UomCode::optional()],
             'items.*.weight_gross' => ['nullable', 'numeric', 'min:0'],
             'items.*.price' => ['nullable', 'numeric', 'min:0'],
             'items.*.total_price' => ['nullable', 'numeric', 'min:0'],
@@ -250,6 +257,7 @@ class IncomingArrivalController extends Controller
         return Inertia::render('Incoming/Arrival/Show', [
             'arrival' => $arrival,
             'pending' => $pending,
+            'weightUnit' => UomCatalog::WEIGHT,
         ]);
     }
 
@@ -261,10 +269,12 @@ class IncomingArrivalController extends Controller
 
         return Inertia::render('Incoming/Arrival/Form', [
             'arrival' => $arrival,
-            'suppliers' => \App\Models\Supplier::select('id', 'supplier_code', 'supplier_name')->orderBy('supplier_name')->get(),
-            'truckings' => \App\Models\TruckingCompany::select('id', 'company_code', 'company_name')->where('is_active', true)->orderBy('company_name')->get(),
+            'suppliers' => Supplier::select('id', 'supplier_code', 'supplier_name')->orderBy('supplier_name')->get(),
+            'truckings' => TruckingCompany::select('id', 'company_code', 'company_name')->where('is_active', true)->orderBy('company_name')->get(),
             'materialOptions' => $this->materialOptions(),
-            'purchaseOrders' => \App\Models\PurchaseOrder::select('id', 'po_no', 'supplier_id')->orderByDesc('created_at')->get(),
+            'purchaseOrders' => PurchaseOrder::select('id', 'po_no', 'supplier_id')->orderByDesc('created_at')->get(),
+            'uomCodes' => UomCatalog::codes(),
+            'packingUnits' => UomCatalog::packingUnits(),
         ]);
     }
 
@@ -298,11 +308,11 @@ class IncomingArrivalController extends Controller
             'items.*.material_group' => ['required', 'string', 'max:255'],
             'items.*.size' => ['required', 'string', 'max:100'],
             'items.*.qty_goods' => ['required', 'numeric', 'min:0'],
-            'items.*.unit_goods' => ['nullable', 'string', 'max:20'],
+            'items.*.unit_goods' => ['nullable', 'string', 'max:20', UomCode::optional()],
             'items.*.qty_bundle' => ['nullable', 'numeric', 'min:0'],
-            'items.*.unit_bundle' => ['nullable', 'string', 'max:20'],
+            'items.*.unit_bundle' => ['nullable', 'string', 'max:20', Rule::in(UomCatalog::packingUnits())],
             'items.*.weight_nett' => ['nullable', 'numeric', 'min:0'],
-            'items.*.unit_weight' => ['nullable', 'string', 'max:20'],
+            'items.*.unit_weight' => ['nullable', 'string', 'max:20', UomCode::optional()],
             'items.*.weight_gross' => ['nullable', 'numeric', 'min:0'],
             'items.*.price' => ['nullable', 'numeric', 'min:0'],
             'items.*.total_price' => ['nullable', 'numeric', 'min:0'],
@@ -408,7 +418,7 @@ class IncomingArrivalController extends Controller
 
         $arrival->load(['supplier', 'trucking', 'purchaseOrder', 'items.part', 'containers']);
 
-        $filename = 'Commercial-Invoice-' . str_replace(['/', '\\'], '-', ($arrival->invoice_no ?: $arrival->arrival_no)) . '.pdf';
+        $filename = 'Commercial-Invoice-'.str_replace(['/', '\\'], '-', ($arrival->invoice_no ?: $arrival->arrival_no)).'.pdf';
 
         $pdf = Pdf::loadView('arrivals.invoice', [
             'arrival' => $arrival,

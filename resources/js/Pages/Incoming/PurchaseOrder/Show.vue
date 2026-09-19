@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import StatusBadge from '@/Components/StatusBadge.vue';
 import { useI18n } from 'vue-i18n';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
@@ -11,18 +12,6 @@ defineProps<{
     purchaseOrder: PurchaseOrder;
 }>();
 
-const statusTone = (s: string) => {
-    switch (s) {
-        case 'confirmed':
-            return 'bg-info/10 text-info';
-        case 'received':
-            return 'bg-success/10 text-success';
-        case 'cancelled':
-            return 'bg-danger/10 text-danger';
-        default:
-            return 'bg-warning/10 text-warning';
-    }
-};
 </script>
 
 <template>
@@ -35,7 +24,7 @@ const statusTone = (s: string) => {
                 <h1 class="text-2xl font-bold tracking-tight text-ink-primary">{{ t('incoming.poTitle', { number: purchaseOrder.po_no }) }}</h1>
                 <p class="mt-1 text-sm text-ink-secondary">
                     {{ purchaseOrder.supplier?.supplier_name ?? '—' }}
-                    · <span :class="statusTone(purchaseOrder.status)" class="rounded-md px-2 py-0.5 text-xs font-semibold uppercase">{{ t('incoming.status_' + purchaseOrder.status) }}</span>
+                    · <StatusBadge uppercase :status="purchaseOrder.status">{{ t('incoming.status_' + purchaseOrder.status) }}</StatusBadge>
                 </p>
             </div>
             <Link

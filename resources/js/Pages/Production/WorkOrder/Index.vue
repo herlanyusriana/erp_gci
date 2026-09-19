@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import StatusBadge from '@/Components/StatusBadge.vue';
 import { useI18n } from 'vue-i18n';
 import { Head } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
@@ -33,15 +34,6 @@ function applyFilter() {
 
 const statusLabel = (status: string) => te(`production.statuses.${status}`) ? t(`production.statuses.${status}`) : status;
 
-const statusBadge = (s: string) => {
-    switch (s) {
-        case 'planned': return 'bg-info/10 text-info';
-        case 'in_progress': return 'bg-warning/10 text-warning';
-        case 'completed': return 'bg-success/10 text-success';
-        case 'cancelled': return 'bg-ink-secondary/10 text-ink-secondary';
-        default: return 'bg-ink-secondary/10 text-ink-secondary';
-    }
-};
 
 const fmt = (n: number | null | undefined) => n == null ? '—' : Number(n).toLocaleString(locale.value, { maximumFractionDigits: 2 });
 </script>
@@ -94,7 +86,7 @@ const fmt = (n: number | null | undefined) => n == null ? '—' : Number(n).toLo
                         <td class="px-4 py-3 text-right tabular-nums font-semibold text-ink-primary">{{ fmt(wo.qty) }}</td>
                         <td class="px-4 py-3 text-center tabular-nums text-ink-secondary">{{ wo.items_count ?? 0 }}</td>
                         <td class="px-4 py-3">
-                            <span :class="statusBadge(wo.status)" class="rounded-md px-2 py-0.5 text-xs font-semibold uppercase">{{ statusLabel(wo.status) }}</span>
+                            <StatusBadge uppercase :status="wo.status">{{ statusLabel(wo.status) }}</StatusBadge>
                         </td>
                         <td class="px-4 py-3 text-ink-secondary">{{ wo.planned_date ?? '—' }}</td>
                         <td class="px-4 py-3">

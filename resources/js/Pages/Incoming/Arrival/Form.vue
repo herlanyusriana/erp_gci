@@ -38,6 +38,8 @@ const props = defineProps<{
     truckings: Array<Pick<TruckingCompany, 'id' | 'company_code' | 'company_name'>>;
     materialOptions: Array<{ supplier_id: number; group: string; size: string; part_id: number; unit: string | null }>;
     purchaseOrders: Array<Pick<PurchaseOrder, 'id' | 'po_no' | 'supplier_id'>>;
+    uomCodes: string[];
+    packingUnits: string[];
 }>();
 
 const blankItem = (): ItemRow => ({
@@ -216,6 +218,9 @@ function submit() {
         </h1>
 
         <form @submit.prevent="submit" class="space-y-6">
+            <datalist id="uom-codes">
+                <option v-for="code in uomCodes" :key="code" :value="code" />
+            </datalist>
             <!-- Header -->
             <div class="rounded-xl border border-borderline bg-surface p-5">
                 <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -350,7 +355,7 @@ function submit() {
                             </div>
                             <div class="sm:col-span-2">
                                 <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.unitGoods') }}</label>
-                                <input v-model="r.unit_goods" type="text" placeholder="KGM / PCS" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                                <input v-model="r.unit_goods" list="uom-codes" type="text" placeholder="KGM / PCS" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                             </div>
                             <div class="sm:col-span-2">
                                 <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.packingQty') }}</label>
@@ -360,12 +365,7 @@ function submit() {
                                 <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.packingType') }}</label>
                                 <select v-model="r.unit_bundle" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                                     <option value="">{{ t('incoming.choose') }}</option>
-                                    <option value="PALLET">{{ t('incoming.unit_PALLET') }}</option>
-                                    <option value="BUNDLE">{{ t('incoming.unit_BUNDLE') }}</option>
-                                    <option value="BOX">{{ t('incoming.unit_BOX') }}</option>
-                                    <option value="BAG">{{ t('incoming.unit_BAG') }}</option>
-                                    <option value="ROLL">{{ t('incoming.unit_ROLL') }}</option>
-                                    <option value="PACKAGES">{{ t('incoming.unit_PACKAGES') }}</option>
+                                    <option v-for="code in packingUnits" :key="code" :value="code">{{ code }}</option>
                                 </select>
                             </div>
                         </div>

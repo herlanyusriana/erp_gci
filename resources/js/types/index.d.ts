@@ -343,6 +343,15 @@ export interface WorkOrderItem {
     parent_part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
     child_part?: (Pick<Part, 'id' | 'part_number' | 'part_name'> & { part_substitutes?: PartSubstitute[] }) | null;
     selected_part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
+    allocations?: WorkOrderItemAllocation[];
+}
+
+export interface WorkOrderItemAllocation {
+    id: number;
+    work_order_item_id: number;
+    part_id: number;
+    qty: number;
+    part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
 }
 
 export interface WorkOrderConsumption {
@@ -353,6 +362,33 @@ export interface WorkOrderConsumption {
     part_id: number | null;
     qty: number;
     uom: string | null;
+}
+
+export interface MaterialIssueItem {
+    id: number;
+    material_issue_id: number;
+    work_order_item_id: number;
+    part_id: number;
+    tag: string | null;
+    qty: number;
+    uom: string | null;
+    price: number | null;
+    part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
+}
+
+export interface MaterialIssue {
+    id: number;
+    issue_no: string;
+    work_order_id: number;
+    issue_date: string;
+    issued_by: number | null;
+    received_by: string | null;
+    status: string;
+    notes: string | null;
+    items_count?: number;
+    work_order?: (Pick<WorkOrder, 'id' | 'wo_no' | 'part_id'> & { part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null }) | null;
+    issuer?: Pick<User, 'id' | 'name'> | null;
+    items?: MaterialIssueItem[];
 }
 
 export interface WorkOrder {

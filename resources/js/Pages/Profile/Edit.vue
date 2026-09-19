@@ -2,7 +2,8 @@
 import { useI18n } from 'vue-i18n';
 
 const { t } = useI18n();
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import AppLayout from '@/Layouts/AppLayout.vue';
+import BackButton from '@/Components/BackButton.vue';
 import DeleteUserForm from './Partials/DeleteUserForm.vue';
 import UpdatePasswordForm from './Partials/UpdatePasswordForm.vue';
 import UpdateProfileInformationForm from './Partials/UpdateProfileInformationForm.vue';
@@ -17,39 +18,30 @@ defineProps<{
 <template>
     <Head :title="t('account.profile')" />
 
-    <AuthenticatedLayout>
-        <template #header>
-            <h2
-                class="text-xl font-semibold leading-tight text-gray-800"
-            >
-                {{ t('account.profile') }}
-            </h2>
-        </template>
+    <AppLayout>
+        <BackButton :href="route('launcher')" class="mb-4" />
 
-        <div class="py-12">
-            <div class="mx-auto max-w-7xl space-y-6 sm:px-6 lg:px-8">
-                <div
-                    class="bg-white p-4 shadow sm:rounded-lg sm:p-8"
-                >
-                    <UpdateProfileInformationForm
-                        :must-verify-email="mustVerifyEmail"
-                        :status="status"
-                        class="max-w-xl"
-                    />
-                </div>
+        <div class="mb-6">
+            <h1 class="text-2xl font-bold tracking-tight text-ink-primary">{{ t('account.profile') }}</h1>
+            <p class="mt-1 text-sm text-ink-secondary">{{ t('account.profileHelp') }}</p>
+        </div>
 
-                <div
-                    class="bg-white p-4 shadow sm:rounded-lg sm:p-8"
-                >
-                    <UpdatePasswordForm class="max-w-xl" />
-                </div>
+        <div class="max-w-3xl space-y-6">
+            <div class="rounded-xl border border-borderline bg-surface p-6">
+                <UpdateProfileInformationForm
+                    :must-verify-email="mustVerifyEmail"
+                    :status="status"
+                    class="max-w-xl"
+                />
+            </div>
 
-                <div
-                    class="bg-white p-4 shadow sm:rounded-lg sm:p-8"
-                >
-                    <DeleteUserForm class="max-w-xl" />
-                </div>
+            <div class="rounded-xl border border-borderline bg-surface p-6">
+                <UpdatePasswordForm class="max-w-xl" />
+            </div>
+
+            <div class="rounded-xl border border-borderline bg-surface p-6">
+                <DeleteUserForm class="max-w-xl" />
             </div>
         </div>
-    </AuthenticatedLayout>
+    </AppLayout>
 </template>

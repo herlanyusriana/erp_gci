@@ -13,11 +13,16 @@ const props = defineProps<{
     arrivalItem: IncomingArrivalItem;
     weightBasis: boolean;
     isLocal: boolean;
+    uomCodes: string[];
+    packingUnits: string[];
+    weightUnit: string;
 }>();
 
 const backHref = () => props.isLocal
     ? route('local-pos.show', props.arrivalItem.arrival_id)
     : route('incoming-arrivals.show', props.arrivalItem.arrival_id);
+
+const weightUnit = () => props.receive.qty_unit?.toUpperCase() || props.weightUnit || 'KGM';
 
 const form = useForm({
     receive_date: props.receive.ata_date?.slice(0, 10) ?? '',
@@ -25,7 +30,7 @@ const form = useForm({
     truck_no: props.receive.truck_no ?? '',
     qty: props.receive.qty,
     bundle_qty: props.receive.bundle_qty ?? '',
-    bundle_unit: props.receive.bundle_unit ?? 'PALLET',
+    bundle_unit: props.receive.bundle_unit ?? props.packingUnits[0] ?? 'PALLET',
     net_weight: props.receive.net_weight ?? '',
     gross_weight: props.receive.gross_weight ?? '',
 });
@@ -87,16 +92,16 @@ function submit() {
                 <div>
                     <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.bundleUnit') }}</label>
                     <select v-model="form.bundle_unit" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
-                        <option value="PALLET">{{ t('incoming.unit_PALLET') }}</option><option value="BUNDLE">{{ t('incoming.unit_BUNDLE') }}</option><option value="BOX">{{ t('incoming.unit_BOX') }}</option><option value="BAG">{{ t('incoming.unit_BAG') }}</option><option value="ROLL">{{ t('incoming.unit_ROLL') }}</option><option value="PACKAGES">{{ t('incoming.unit_PACKAGES') }}</option>
+                        <option v-for="code in packingUnits" :key="code" :value="code">{{ code }}</option>
                     </select>
                 </div>
                 <div v-if="weightBasis">
-                    <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.netUnit', { unit: 'KGM' }) }}</label>
+                    <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.netUnit', { unit: weightUnit() }) }}</label>
                     <input v-model="form.net_weight" type="number" step="0.0001" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     <InputError :message="form.errors.net_weight" class="mt-1" />
                 </div>
                 <div v-if="weightBasis">
-                    <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.grossUnit', { unit: 'KGM' }) }}</label>
+                    <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.grossUnit', { unit: weightUnit() }) }}</label>
                     <input v-model="form.gross_weight" type="number" step="0.0001" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                 </div>
             </div>

@@ -6,7 +6,9 @@ use App\Models\IncomingArrival;
 use App\Models\IncomingArrivalItem;
 use App\Models\IncomingReceive;
 use App\Models\PartStock;
+use App\Support\UomCatalog;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class ReceiveMaterialService
 {
@@ -38,7 +40,7 @@ class ReceiveMaterialService
 
         $receivedAt ??= now();
 
-        return 'AUTO-' . $receivedAt->format('ymd') . '-' . str_pad((string) $receiveId, 4, '0', STR_PAD_LEFT);
+        return 'AUTO-'.$receivedAt->format('ymd').'-'.str_pad((string) $receiveId, 4, '0', STR_PAD_LEFT);
     }
 
     /**
@@ -56,9 +58,9 @@ class ReceiveMaterialService
             if ($tag === null) {
                 continue;
             }
-            $key = $errorKey . '.' . $idx . '.tag';
+            $key = $errorKey.'.'.$idx.'.tag';
             if (isset($seen[$tag])) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
+                throw ValidationException::withMessages([
                     $key => __("TAG ':tag' duplikat dalam item ini.", ['tag' => $tag]),
                 ]);
             }
@@ -70,7 +72,7 @@ class ReceiveMaterialService
                 ->when($ignoreReceiveId !== null, fn ($q) => $q->where('id', '!=', $ignoreReceiveId))
                 ->exists();
             if ($existing) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
+                throw ValidationException::withMessages([
                     $key => __("TAG ':tag' sudah dipakai pada item ini.", ['tag' => $tag]),
                 ]);
             }
@@ -156,7 +158,7 @@ class ReceiveMaterialService
         }
 
         foreach ($arrival->containers as $container) {
-            if (!$container->inspection) {
+            if (! $container->inspection) {
                 return true;
             }
         }
@@ -189,7 +191,9 @@ class ReceiveMaterialService
         }
 
         // Unit stok: KGM bila item ber-basis berat; selain itu unit barang item.
-        $unit = $this->usesWeightBasisItem($receive) ? 'KGM' : strtoupper((string) ($receive->qty_unit ?? $receive->arrivalItem?->unit_goods ?? 'PCS'));
+        $unit = $this->usesWeightBasisItem($receive)
+            ? UomCatalog::WEIGHT
+            : UomCatalog::normalize($receive->qty_unit ?? $receive->arrivalItem?->unit_goods) ?? UomCatalog::PIECE;
         $receivedAt = $receive->ata_date ?? now();
 
         DB::transaction(function () use ($partId, $receive, $unit, $contribution, $receivedAt) {
@@ -214,7 +218,7 @@ class ReceiveMaterialService
                     'received_at' => $receivedAt,
                     'receive_id' => $receive->id,
                     'price' => $receive->arrivalItem?->price ?? null,
-                    'remarks' => 'Receive #' . $receive->id,
+                    'remarks' => 'Receive #'.$receive->id,
                 ]);
             }
         });
@@ -242,7 +246,7 @@ class ReceiveMaterialService
                 ->lockForUpdate()
                 ->first();
 
-            if (!$stock) {
+            if (! $stock) {
                 return;
             }
 
@@ -322,11 +326,104 @@ class ReceiveMaterialService
             ->where('part_id', $partId)
             ->where('qty', '>', 0);
 
-        if ($uom !== null && trim((string) $uom) !== '') {
-            $q->whereRaw('LOWER(COALESCE(qty_unit, \'\')) = ?', [strtolower(trim((string) $uom))]);
+        $normalized = UomCatalog::normalize($uom);
+        if ($normalized !== null) {
+            $q->whereRaw('UPPER(COALESCE(qty_unit, \'\')) = ?', [$normalized]);
         }
 
         return (float) $q->sum('qty');
+    }
+
+    /**
+     * Stok FIFO untuk banyak part sekaligus dalam satu query — dipakai saat
+     * menampilkan saran substitute (bisa puluhan part) agar tidak N+1.
+     *
+     * @param  iterable<int>  $partIds
+     * @return array<int, float> part_id => qty tersedia
+     */
+    public function availableFifoBatch(iterable $partIds, ?string $uom = null): array
+    {
+        $ids = collect($partIds)->map(fn ($id) => (int) $id)->filter()->unique()->values();
+
+        if ($ids->isEmpty()) {
+            return [];
+        }
+
+        $q = PartStock::query()
+            ->whereIn('part_id', $ids)
+            ->where('qty', '>', 0);
+
+        $normalized = UomCatalog::normalize($uom);
+        if ($normalized !== null) {
+            $q->whereRaw('UPPER(COALESCE(qty_unit, \'\')) = ?', [$normalized]);
+        }
+
+        $totals = $q->groupBy('part_id')
+            ->selectRaw('part_id, SUM(qty) AS total')
+            ->pluck('total', 'part_id');
+
+        // Pastikan semua id hadir (0 bila tak ada stok).
+        return $ids->mapWithKeys(fn ($id) => [$id => (float) ($totals[$id] ?? 0)])->all();
+    }
+
+    /**
+     * Consume dari SATU tag stok spesifik (dipakai scan label di mobile).
+     * Berbeda dari consumeFifoByUom yang menyusuri FIFO lintas tag.
+     *
+     * @return array{part_stock_id:int, tag:string|null, take_qty:float, remaining_stock_after:float, uom:string, price:float|null, invoice:string|null, supplier:string|null}|null
+     */
+    public function consumeFromTag(string $tag, ?int $partId, ?float $qty = null): ?array
+    {
+        $tag = trim($tag);
+        if ($tag === '') {
+            return null;
+        }
+
+        return DB::transaction(function () use ($tag, $partId, $qty) {
+            $stock = PartStock::query()
+                ->whereRaw('LOWER(COALESCE(tag, \'\')) = ?', [mb_strtolower($tag)])
+                ->where('qty', '>', 0)
+                ->when($partId !== null, fn ($q) => $q->where('part_id', $partId))
+                ->orderByRaw('received_at ASC NULLS LAST')
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->first();
+
+            if ($stock === null) {
+                return null;
+            }
+
+            // Ambil asal material sebelum baris stok mungkin terhapus.
+            $receive = $stock->receive;
+            $invoice = $receive?->invoice_no;
+            $supplier = $receive?->arrivalItem?->arrival?->supplier?->supplier_name;
+
+            $available = (float) $stock->qty;
+            $take = $qty === null ? $available : min($qty, $available);
+            if ($take <= 0) {
+                return null;
+            }
+
+            $newQty = $available - $take;
+            $stockId = $stock->id;
+            if ($newQty <= 1e-9) {
+                $stock->delete();
+                $newQty = 0.0;
+            } else {
+                $stock->update(['qty' => $newQty]);
+            }
+
+            return [
+                'part_stock_id' => $stockId,
+                'tag' => $stock->tag,
+                'take_qty' => $take,
+                'remaining_stock_after' => $newQty,
+                'uom' => (string) ($stock->qty_unit ?? ''),
+                'price' => $stock->price !== null ? (float) $stock->price : null,
+                'invoice' => $invoice !== null ? (string) $invoice : null,
+                'supplier' => $supplier !== null ? (string) $supplier : null,
+            ];
+        });
     }
 
     /**
@@ -349,8 +446,8 @@ class ReceiveMaterialService
                 ->orderByRaw('received_at ASC NULLS LAST')
                 ->orderBy('id');
 
-            if ($uom !== null && trim((string) $uom) !== '') {
-                $stocksQ->whereRaw('LOWER(COALESCE(qty_unit, \'\')) = ?', [strtolower(trim((string) $uom))]);
+            if (UomCatalog::normalize($uom) !== null) {
+                $stocksQ->whereRaw('UPPER(COALESCE(qty_unit, \'\')) = ?', [UomCatalog::normalize($uom)]);
             }
 
             $stocks = $stocksQ->lockForUpdate()->get();
@@ -392,10 +489,10 @@ class ReceiveMaterialService
      * Post stok hasil produksi (WO output WIP/FG).
      * receive_id = null, tag produksi bebas, received_at = waktu produksi.
      */
-    public function postProductionStock(int $partId, string $tag, float $qty, ?string $uom = 'PCS', $receivedAt = null): PartStock
+    public function postProductionStock(int $partId, string $tag, float $qty, ?string $uom = null, $receivedAt = null): PartStock
     {
         $receivedAt = $receivedAt ?? now();
-        $uom = strtoupper(trim((string) $uom));
+        $uom = UomCatalog::normalize($uom) ?? UomCatalog::PIECE;
 
         return DB::transaction(function () use ($partId, $tag, $qty, $uom, $receivedAt) {
             $stock = PartStock::query()

@@ -3,7 +3,7 @@ import { useI18n } from 'vue-i18n';
 
 const { t } = useI18n();
 import { computed } from 'vue';
-import GuestLayout from '@/Layouts/GuestLayout.vue';
+import AuthLayout from '@/Layouts/AuthLayout.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 
@@ -23,37 +23,40 @@ const verificationLinkSent = computed(
 </script>
 
 <template>
-    <GuestLayout>
+    <AuthLayout>
         <Head :title="t('account.verifyEmail')" />
 
-        <div class="mb-4 text-sm text-gray-600">
-            {{ t('account.verifyHelp') }}
+        <div class="mb-8">
+            <h1 class="text-2xl font-bold tracking-tight text-ink-primary">{{ t('account.verifyEmail') }}</h1>
+            <p class="mt-1.5 text-sm leading-relaxed text-ink-secondary">{{ t('account.verifyHelp') }}</p>
         </div>
 
         <div
-            class="mb-4 text-sm font-medium text-green-600"
             v-if="verificationLinkSent"
+            class="mb-5 rounded-lg border border-success/30 bg-success/10 px-4 py-3 text-sm font-medium text-success"
         >
             {{ t('account.verificationSent') }}
         </div>
 
-        <form @submit.prevent="submit">
-            <div class="mt-4 flex items-center justify-between">
-                <PrimaryButton
-                    :class="{ 'opacity-25': form.processing }"
-                    :disabled="form.processing"
-                >
-                    {{ t('account.resendVerification') }}
-                </PrimaryButton>
+        <form @submit.prevent="submit" class="space-y-5">
+            <PrimaryButton
+                class="w-full justify-center py-2.5"
+                :class="{ 'opacity-25': form.processing }"
+                :disabled="form.processing"
+            >
+                {{ t('account.resendVerification') }}
+            </PrimaryButton>
 
+            <div class="text-center">
                 <Link
                     :href="route('logout')"
                     method="post"
                     as="button"
-                    class="rounded-md text-sm text-gray-600 underline hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                    >{{ t('account.logout') }}</Link
+                    class="rounded-md text-sm font-medium text-ink-secondary underline-offset-2 hover:text-primary hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
+                    {{ t('account.logout') }}
+                </Link>
             </div>
         </form>
-    </GuestLayout>
+    </AuthLayout>
 </template>

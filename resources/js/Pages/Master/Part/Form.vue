@@ -14,6 +14,7 @@ const props = defineProps<{
     part: Part | null;
     partTypes: PartType[];
     uoms: Uom[];
+    defaultUomId?: number | null;
     defaultType?: string;
 }>();
 
@@ -27,7 +28,7 @@ const form = useForm({
         ? (props.partTypes.find((t) => t.code === props.defaultType)?.id ?? ('' as number | ''))
         : ('' as number | '')),
     model: props.part?.model ?? '',
-    uom_id: props.part?.uom?.id ?? ('' as number | ''),
+    uom_id: props.part?.uom?.id ?? props.defaultUomId ?? ('' as number | ''),
     size: props.part?.size ?? '',
     nett_weight: props.part?.nett_weight ?? ('' as number | ''),
     is_active: props.part?.is_active ?? true,

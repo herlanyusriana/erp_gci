@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import StatusBadge from '@/Components/StatusBadge.vue';
 import { useI18n } from 'vue-i18n';
 import { computed } from 'vue';
 import AppLayout from '@/Layouts/AppLayout.vue';
@@ -18,20 +19,6 @@ const fmt = (n: number | null | undefined) => {
     return Number(n).toLocaleString('en-US', { maximumFractionDigits: 4 });
 };
 
-const sourceBadge = (s: string | null) => {
-    switch (s) {
-        case 'Prod':
-            return 'bg-primary-light text-primary';
-        case 'Vendor':
-            return 'bg-amber-100 text-amber-700';
-        case 'Subcon':
-            return 'bg-purple-100 text-purple-700';
-        case 'FREE_ISSUE':
-            return 'bg-emerald-100 text-emerald-700';
-        default:
-            return 'bg-ink-secondary/10 text-ink-secondary';
-    }
-};
 
 function sourceLabel(source: string | null): string {
     switch (source) {
@@ -100,11 +87,11 @@ function sourceLabel(source: string | null): string {
                             <td class="px-3 py-2.5 text-right tabular-nums text-ink-primary">{{ fmt(it.child_qty) }}</td>
                             <td class="px-3 py-2.5 text-ink-secondary">{{ it.uom_rm ?? '-' }}</td>
                             <td class="px-3 py-2.5">
-                                <span v-if="it.special_code" class="rounded-md bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-700">{{ it.special_code }}</span>
+                                <StatusBadge v-if="it.special_code" tone="danger">{{ it.special_code }}</StatusBadge>
                                 <span v-else class="text-ink-secondary">—</span>
                             </td>
                             <td class="px-3 py-2.5">
-                                <span :class="sourceBadge(it.source)" class="rounded-md px-2 py-0.5 text-xs font-semibold">{{ sourceLabel(it.source) }}</span>
+                                <StatusBadge :status="it.source">{{ sourceLabel(it.source) }}</StatusBadge>
                             </td>
                         </tr>
                         <tr v-if="items.length === 0">

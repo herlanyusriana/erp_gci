@@ -3,8 +3,10 @@
 use App\Http\Controllers\BomController;
 use App\Http\Controllers\ConfigMasterController;
 use App\Http\Controllers\IncomingArrivalController;
+use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\LocalPoController;
 use App\Http\Controllers\MachineController;
+use App\Http\Controllers\MaterialIssueController;
 use App\Http\Controllers\PartController;
 use App\Http\Controllers\PartStockController;
 use App\Http\Controllers\PartSubstituteController;
@@ -19,20 +21,16 @@ use App\Http\Controllers\TruckingCompanyController;
 use App\Http\Controllers\UomController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\WorkOrderController;
-use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
-Route::post('/locale', \App\Http\Controllers\LocaleController::class)->name('locale.update');
+Route::post('/locale', LocaleController::class)->name('locale.update');
 
 Route::get('/', function () {
-    return Inertia::render('Welcome', [
-        'canLogin' => Route::has('login'),
-        'canRegister' => Route::has('register'),
-        'laravelVersion' => Application::VERSION,
-        'phpVersion' => PHP_VERSION,
-    ]);
-});
+    return auth()->check()
+        ? redirect()->route('launcher')
+        : redirect()->route('login');
+})->name('home');
 
 Route::get('/dashboard', fn () => redirect()->route('launcher'))
     ->middleware(['auth', 'verified'])->name('dashboard');
@@ -52,6 +50,12 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/administration', fn () => Inertia::render('Administration/ModuleLauncher'))->name('administration');
     Route::get('/incoming-data', fn () => Inertia::render('Incoming/ModuleLauncher'))->name('incoming-data');
     Route::get('/production-data', fn () => Inertia::render('Production/ModuleLauncher'))->name('production-data');
+    Route::get('/outgoing', fn () => Inertia::render('Outgoing/ModuleLauncher'))->name('outgoing-data');
+
+    // Outgoing — pengeluaran material ke produksi
+    Route::get('material-issues', [MaterialIssueController::class, 'index'])->name('material-issues.index');
+    Route::get('material-issues/{materialIssue}', [MaterialIssueController::class, 'show'])->name('material-issues.show');
+    Route::get('material-issues/{materialIssue}/print', [MaterialIssueController::class, 'print'])->name('material-issues.print');
 
     // Master Data — CRUD
     Route::resource('parts', PartController::class)->except(['show']);

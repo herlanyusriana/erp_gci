@@ -2,8 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Part;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
+use App\Models\Supplier;
+use App\Rules\PartTypeRule;
+use App\Rules\UomCode;
+use App\Support\UomCatalog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -39,11 +44,12 @@ class PurchaseOrderController extends Controller
 
         return Inertia::render('Incoming/PurchaseOrder/Form', [
             'purchaseOrder' => null,
-            'suppliers' => \App\Models\Supplier::select('id', 'supplier_code', 'supplier_name')->orderBy('supplier_name')->get(),
-            'parts' => \App\Models\Part::select('id', 'part_number', 'part_name')
+            'suppliers' => Supplier::select('id', 'supplier_code', 'supplier_name')->orderBy('supplier_name')->get(),
+            'parts' => Part::select('id', 'part_number', 'part_name')
                 ->where('is_active', true)
                 ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))
                 ->orderBy('part_number')->get(),
+            'uomCodes' => UomCatalog::codes(),
         ]);
     }
 
@@ -58,6 +64,23 @@ class PurchaseOrderController extends Controller
         ]);
     }
 
+    public function edit(PurchaseOrder $purchaseOrder): Response
+    {
+        Gate::authorize('update', $purchaseOrder);
+
+        $purchaseOrder->load(['items']);
+
+        return Inertia::render('Incoming/PurchaseOrder/Form', [
+            'purchaseOrder' => $purchaseOrder,
+            'suppliers' => Supplier::select('id', 'supplier_code', 'supplier_name')->orderBy('supplier_name')->get(),
+            'parts' => Part::select('id', 'part_number', 'part_name')
+                ->where('is_active', true)
+                ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))
+                ->orderBy('part_number')->get(),
+            'uomCodes' => UomCatalog::codes(),
+        ]);
+    }
+
     public function store(Request $request): RedirectResponse
     {
         $data = $request->validate([
@@ -68,9 +91,9 @@ class PurchaseOrderController extends Controller
             'notes' => ['nullable', 'string'],
             'status' => ['required', 'in:draft,confirmed,cancelled'],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.part_id' => ['required', 'exists:parts,id', \App\Rules\PartTypeRule::notFg()],
+            'items.*.part_id' => ['required', 'exists:parts,id', PartTypeRule::notFg()],
             'items.*.qty' => ['required', 'numeric', 'min:0'],
-            'items.*.unit' => ['nullable', 'string', 'max:20'],
+            'items.*.unit' => ['nullable', 'string', 'max:20', UomCode::optional()],
             'items.*.price' => ['nullable', 'numeric', 'min:0'],
             'items.*.notes' => ['nullable', 'string'],
         ]);
@@ -113,9 +136,9 @@ class PurchaseOrderController extends Controller
             'notes' => ['nullable', 'string'],
             'status' => ['required', 'in:draft,confirmed,cancelled'],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.part_id' => ['required', 'exists:parts,id', \App\Rules\PartTypeRule::notFg()],
+            'items.*.part_id' => ['required', 'exists:parts,id', PartTypeRule::notFg()],
             'items.*.qty' => ['required', 'numeric', 'min:0'],
-            'items.*.unit' => ['nullable', 'string', 'max:20'],
+            'items.*.unit' => ['nullable', 'string', 'max:20', UomCode::optional()],
             'items.*.price' => ['nullable', 'numeric', 'min:0'],
             'items.*.notes' => ['nullable', 'string'],
         ]);

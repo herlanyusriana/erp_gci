@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class WorkOrderItem extends Model
 {
@@ -51,5 +52,14 @@ class WorkOrderItem extends Model
     public function selectedPart(): BelongsTo
     {
         return $this->belongsTo(Part::class, 'selected_part_id');
+    }
+
+    /**
+     * Alokasi material: satu item boleh dipenuhi dari beberapa part
+     * (main material BOM sebagai acuan + substitute pemegang stok).
+     */
+    public function allocations(): HasMany
+    {
+        return $this->hasMany(WorkOrderItemAllocation::class);
     }
 }

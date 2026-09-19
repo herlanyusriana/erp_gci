@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import StatusBadge from '@/Components/StatusBadge.vue';
 import { useI18n } from 'vue-i18n';
 import { ref } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
@@ -32,13 +33,6 @@ function doSearch() {
     }, 300);
 }
 
-const statusTone = (s: string) => {
-    switch (s) {
-        case 'completed': return 'bg-success/10 text-success';
-        case 'cancelled': return 'bg-danger/10 text-danger';
-        default: return 'bg-warning/10 text-warning';
-    }
-};
 
 function remove(id: number, no: string | null) {
     if (confirm(t('incoming.deleteLocal', { number: no ?? '' }))) {
@@ -98,7 +92,7 @@ function remove(id: number, no: string | null) {
                         <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ po.items_count ?? 0 }}</td>
                         <td class="px-4 py-3 text-right tabular-nums font-semibold" :class="(po.remaining_qty ?? 0) > 0 ? 'text-warning' : 'text-success'">{{ po.remaining_qty ?? 0 }}</td>
                         <td class="px-4 py-3">
-                            <span :class="statusTone(po.status)" class="rounded-md px-2 py-0.5 text-xs font-semibold uppercase">{{ t('incoming.status_' + po.status) }}</span>
+                            <StatusBadge uppercase :status="po.status">{{ t('incoming.status_' + po.status) }}</StatusBadge>
                         </td>
                         <td class="px-4 py-3">
                             <div class="flex justify-end gap-1.5">

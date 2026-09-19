@@ -26,22 +26,28 @@ const props = defineProps<{
     totalReceived: number;
     weightBasis: boolean;
     isLocal: boolean;
+    uomCodes: string[];
+    packingUnits: string[];
+    weightUnit: string;
 }>();
 
 const backHref = () => props.isLocal
     ? route('local-pos.show', props.arrivalItem.arrival_id)
     : route('incoming-arrivals.show', props.arrivalItem.arrival_id);
 
-const unitLabel = () => (props.weightBasis ? 'KGM' : (props.arrivalItem.unit_goods ?? '').toUpperCase());
+const unitLabel = () => (props.weightBasis ? props.weightUnit : (props.arrivalItem.unit_goods ?? '').toUpperCase());
 
 const blank = (): TagRow => ({
     tag: '',
     qty: '',
     bundle_qty: '',
-    bundle_unit: 'PALLET',
+    bundle_unit: props.packingUnits[0] ?? 'PALLET',
     net_weight: '',
     gross_weight: '',
-    qty_unit: props.arrivalItem.unit_goods?.toUpperCase() ?? 'KGM',
+    qty_unit: props.arrivalItem.unit_goods?.toUpperCase()
+        ?? props.uomCodes.find((c) => c === props.weightUnit)
+        ?? props.uomCodes[0]
+        ?? '',
 });
 
 const rows = ref<TagRow[]>([blank()]);
@@ -135,7 +141,9 @@ function submit() {
                         </div>
                         <div class="sm:col-span-1">
                             <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.unit') }}</label>
-                            <input v-model="r.qty_unit" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                            <select v-model="r.qty_unit" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                                <option v-for="code in uomCodes" :key="code" :value="code">{{ code }}</option>
+                            </select>
                         </div>
                         <div class="sm:col-span-2">
                             <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.bundleQty') }}</label>
@@ -144,7 +152,7 @@ function submit() {
                         <div class="sm:col-span-2">
                             <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.bundleUnit') }}</label>
                             <select v-model="r.bundle_unit" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
-                                <option value="PALLET">{{ t('incoming.unit_PALLET') }}</option><option value="BUNDLE">{{ t('incoming.unit_BUNDLE') }}</option><option value="BOX">{{ t('incoming.unit_BOX') }}</option><option value="BAG">{{ t('incoming.unit_BAG') }}</option><option value="ROLL">{{ t('incoming.unit_ROLL') }}</option><option value="PACKAGES">{{ t('incoming.unit_PACKAGES') }}</option>
+                                <option v-for="code in packingUnits" :key="code" :value="code">{{ code }}</option>
                             </select>
                         </div>
                         <div class="flex items-end sm:col-span-3">

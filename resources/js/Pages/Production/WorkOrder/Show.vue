@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import StatusBadge from '@/Components/StatusBadge.vue';
 import { useI18n } from 'vue-i18n';
 import { Head } from '@inertiajs/vue3';
 import { computed } from 'vue';
@@ -23,27 +24,9 @@ const fmt = (n: number | null | undefined, decimals = 4) => {
 
 const sourceLabel = (source: string | null) => source && te(`production.sources.${source}`) ? t(`production.sources.${source}`) : source ?? '—';
 
-const sourceBadge = (s: string | null) => {
-    switch (s) {
-        case 'Prod': return 'bg-primary-light text-primary';
-        case 'Vendor': return 'bg-amber-100 text-amber-700';
-        case 'Subcon': return 'bg-purple-100 text-purple-700';
-        case 'FREE_ISSUE': return 'bg-emerald-100 text-emerald-700';
-        default: return 'bg-ink-secondary/10 text-ink-secondary';
-    }
-};
 
 const statusLabel = (status: string) => te(`production.statuses.${status}`) ? t(`production.statuses.${status}`) : status;
 
-const statusBadge = (s: string) => {
-    switch (s) {
-        case 'planned': return 'bg-info/10 text-info';
-        case 'in_progress': return 'bg-warning/10 text-warning';
-        case 'completed': return 'bg-success/10 text-success';
-        case 'cancelled': return 'bg-ink-secondary/10 text-ink-secondary';
-        default: return 'bg-ink-secondary/10 text-ink-secondary';
-    }
-};
 
 const releaseForm = useForm({});
 const completeForm = useForm({});
@@ -81,7 +64,7 @@ function doDestroy() {
             <div>
                 <h1 class="flex items-center gap-3 text-2xl font-bold tracking-tight text-ink-primary">
                     {{ workOrder.wo_no }}
-                    <span :class="statusBadge(workOrder.status)" class="rounded-md px-2 py-0.5 text-xs font-semibold uppercase">{{ statusLabel(workOrder.status) }}</span>
+                    <StatusBadge uppercase :status="workOrder.status">{{ statusLabel(workOrder.status) }}</StatusBadge>
                 </h1>
                 <p class="mt-1 text-sm text-ink-secondary">
                     {{ workOrder.part?.part_number }} · {{ workOrder.part?.part_name }}
@@ -157,7 +140,13 @@ function doDestroy() {
                             <td class="px-3 py-2.5">
                                 <div class="font-medium text-ink-primary">{{ it.selected_part?.part_number ?? it.child_part?.part_number ?? it.child_part_name ?? '—' }}</div>
                                 <div v-if="it.child_part" class="text-xs text-ink-secondary">{{ t('production.mainPart', { part: it.child_part.part_number }) }}</div>
-                                <div v-if="it.selected_part && it.selected_part.id !== it.child_part_id" class="text-xs text-purple-700">{{ t('production.substitute') }}</div>
+                                <div v-if="it.selected_part && it.selected_part.id !== it.child_part_id" class="text-xs font-medium text-info">{{ t('production.substitute') }}</div>
+                                <div v-if="it.allocations?.length" class="mt-1 space-y-0.5">
+                                    <div v-for="a in it.allocations" :key="a.id" class="text-xs text-ink-secondary">
+                                        <span class="font-medium text-ink-primary">{{ a.part?.part_number ?? '#' + a.part_id }}</span>
+                                        · {{ fmt(a.qty) }} {{ it.uom_rm ?? '' }}
+                                    </div>
+                                </div>
                             </td>
                             <td class="px-3 py-2.5">
                                 <span class="font-medium text-ink-primary">{{ it.parent_part?.part_number ?? it.parent_part_name ?? '—' }}</span>
@@ -165,7 +154,7 @@ function doDestroy() {
                             <td class="px-3 py-2.5 text-right tabular-nums text-ink-primary">{{ fmt(it.child_qty) }}</td>
                             <td class="px-3 py-2.5 text-ink-secondary">{{ it.uom_rm ?? '—' }}</td>
                             <td class="px-3 py-2.5">
-                                <span :class="sourceBadge(it.source)" class="rounded-md px-2 py-0.5 text-xs font-semibold">{{ sourceLabel(it.source) }}</span>
+                                <StatusBadge :status="it.source">{{ sourceLabel(it.source) }}</StatusBadge>
                             </td>
                             <td class="px-3 py-2.5 text-right tabular-nums text-ink-secondary">{{ fmt(it.qty_required) }}</td>
                             <td class="px-3 py-2.5 text-right tabular-nums" :class="Number(it.qty_consumed) < Number(it.qty_required) ? 'text-danger' : 'text-success'">{{ fmt(it.qty_consumed) }}</td>

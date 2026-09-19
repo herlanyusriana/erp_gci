@@ -112,6 +112,10 @@ Catatan penting:
   Pilihan bahasa user persist via `POST /locale` (session + cookie 1 tahun);
   default `id`, tidak tergantung `APP_LOCALE`. Data/enum/user-content JANGAN
   diterjemahkan. PDF/Excel/QR tetap tanpa terjemahan.
+- **Jebakan vue-i18n:** karakter `@`, `|`, `{`, `}` khusus di format pesan.
+  Contoh: `"nama@perusahaan.com"` melempar `Invalid linked format` saat render →
+  **seluruh halaman jadi blank putih**. Escape literal `@` sebagai `{'@'}`.
+  Guard otomatis: `node scripts/check-i18n.mjs` (jalan sebelum `vite build`).
 - Tanpa komentar kode kecuali diminta.
 - Query pencarian: pakai `ilike` (Postgres), `when(...)`, `paginate(...)->withQueryString()`.
 - Nama tabel/kolom snake_case; model Eloquent di `app/Models`.

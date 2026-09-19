@@ -8,7 +8,7 @@ export default {
         "copyright": "© {year} PT Geum Cheon Indo. Hak cipta dilindungi.",
         "loginTitle": "Masuk ke akun Anda",
         "loginSubtitle": "Gunakan kredensial yang diberikan administrator.",
-        "emailPlaceholder": "nama@perusahaan.com",
+        "emailPlaceholder": "nama{'@'}perusahaan.com",
         "passwordPlaceholder": "Masukkan kata sandi",
         "backToLogin": "Kembali ke halaman masuk",
         "resetSubtitle": "Pilih kata sandi baru untuk akun Anda."
@@ -22,7 +22,7 @@ export default {
         "copyright": "© {year} PT Geum Cheon Indo. All rights reserved.",
         "loginTitle": "Sign in to your account",
         "loginSubtitle": "Use the credentials provided by your administrator.",
-        "emailPlaceholder": "name@company.com",
+        "emailPlaceholder": "name{'@'}company.com",
         "passwordPlaceholder": "Enter your password",
         "backToLogin": "Back to sign in",
         "resetSubtitle": "Choose a new password for your account."
@@ -36,7 +36,7 @@ export default {
         "copyright": "© {year} PT Geum Cheon Indo. 모든 권리 보유.",
         "loginTitle": "계정에 로그인",
         "loginSubtitle": "관리자가 부여한 자격 증명을 사용하세요.",
-        "emailPlaceholder": "name@company.com",
+        "emailPlaceholder": "name{'@'}company.com",
         "passwordPlaceholder": "비밀번호를 입력하세요",
         "backToLogin": "로그인으로 돌아가기",
         "resetSubtitle": "계정의 새 비밀번호를 선택하세요."

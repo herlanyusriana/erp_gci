@@ -21,6 +21,45 @@ mengubah pola tanpa alasan jelas.
 
 Selalu jalankan `vendor/bin/pint` dan `npm run build` setelah perubahan PHP/Vue.
 
+## Skills — WAJIB (baca sebelum eksekusi)
+
+Sebelum mulai mengerjakan atau mengedit apa pun, **load skill yang relevan**
+dengan domain pekerjaan. Jangan menunggu diminta, jangan mengandalkan ingatan.
+Sebutkan skill yang dipakai di awal respons.
+
+Alur wajib:
+
+1. Identifikasi domain pekerjaan (mis. Laravel backend, Vue/Inertia, Tailwind,
+   test, database, diagram).
+2. Load semua skill yang relevan lewat tool `skill` **sebelum** menulis kode.
+3. Ikuti isi skill; kalau bertentangan dengan `AGENTS.md`, aturan repo menang.
+4. Untuk pekerjaan lintas domain, load lebih dari satu skill (mis. refactor
+   controller + test: `laravel-best-practices` + `testing-best-practices`).
+
+Peta domain ke skill di repo ini:
+
+| Domain pekerjaan | Skill yang wajib di-load |
+| --- | --- |
+| Controller, model, migration, query, service, policy, job, cache | `laravel-best-practices` |
+| Halaman/komponen Vue + Inertia, form, navigasi, deferred/polling | `inertia-vue-development` |
+| Styling Tailwind, layout, komponen UI, token warna | `tailwindcss-development` |
+| Menulis/mengubah test Pest | `testing-best-practices` |
+| Schema, index, query lambat, migration performa | `database-optimizer` (dan `postgres-pro` untuk query kompleks) |
+| Diagram alur/arsitektur/sequence | `archify` |
+| Konvensi/aturan repo (`.ai/rules`), standarisasi pola | `infer-conventions` |
+| Deploy / Laravel Cloud | `deploying-to-cloud` |
+
+Catatan penting:
+
+- Skill Laravel Boost tersedia di `.agents/skills/` (di-load otomatis opencode
+  sebagai external skill). Daftar: `laravel-best-practices`,
+  `inertia-vue-development`, `tailwindcss-development`, `testing-best-practices`,
+  `deploying-to-cloud`, `infer-conventions`.
+- Skill global ada di `~/.config/opencode/skills/` (mis. `database-optimizer`,
+  `archify`, `postgres-pro`, `code-reviewer`, `debugging-wizard`).
+- CodeGraph MCP tersedia untuk navigasi simbol/call path; pakai sebelum
+  menjelajah file secara manual.
+
 ## Arsitektur
 
 - Route web: `routes/web.php` (kebab-case, module launchers: `master-data`,
@@ -28,20 +67,32 @@ Selalu jalankan `vendor/bin/pint` dan `npm run build` setelah perubahan PHP/Vue.
 - Controller: `app/Http/Controllers` (root) — index/create/store/edit/update/destroy.
 - Domain logic transaksional di `app/Services` (`WoService`, `ReceiveMaterialService`),
   bukan di controller.
-- Policy: `app/Policies` (13 policy). Otorisasi WAJIB lewat `Gate::authorize(...)`
+- Policy: `app/Policies` (14 policy). Otorisasi WAJIB lewat `Gate::authorize(...)`
   di setiap action. Permission dicek via middleware alias `permission`.
-- Custom validation: `app/Http/Requests` (mis. `StorePartRequest`).
-- Excel export: `app/Exports`. Helper: `app/Support` (mis. `QrSvg`).
+- API mobile: `app/Http/Controllers/Api` (Sanctum token + `throttle:api`),
+  Flutter "Material Tracker". Auth: `POST /api/auth/login` (+`X-Device-Name`).
+- Custom validation: `app/Http/Requests` (mis. `StorePartRequest`) + `app/Rules`
+  (mis. `UomCode` — validasi satuan ke master `uoms`).
+- Excel export: `app/Exports`. Helper: `app/Support` (mis. `QrSvg`,
+  `UomCatalog` — sumber tunggal kode UOM, normalisasi, & default).
 - Migrasi: prefix `2026_*` untuk modul ERP; `0001_*` milik Breeze.
 - Seeder: `MasterDataSeeder`, `BomSeeder`, `RolesAndPermissionsSeeder`,
-  `ConfigMasterSeeder`. Admin dev: `admin@geumcheon.local`.
+  `ConfigMasterSeeder`, `UomSeeder`. Admin dev: `admin@geumcheon.local`.
+  Urutan di `DatabaseSeeder`: Roles → Config → Uom → MasterData → Bom.
 
 ## Frontend
 
 - Struktur halaman: `resources/js/Pages/<Module>/...`
-  (`Master/`, `Incoming/`, `Production/`, `Administration/`, `Profile/`, `Auth/`).
-- Layout: pakai `AppLayout.vue` untuk halaman baru. `AuthenticatedLayout.vue`
-  hanya untuk halaman bawaan Breeze.
+  (`Master/`, `Incoming/`, `Production/`, `Administration/`, `Outgoing/`,
+  `Profile/`, `Auth/`).
+- Layout: pakai `AppLayout.vue` untuk halaman baru. Halaman auth (login, reset,
+  verifikasi) pakai `AuthLayout.vue` (split-screen: panel brand navy + form).
+  `AuthenticatedLayout.vue` hanya untuk halaman bawaan Breeze.
+- Register publik dimatikan (route & halaman dihapus); akun dibuat admin via
+  Administration → Manajemen pengguna. Halaman `Welcome` dihapus; `GET /`
+  redirect ke `login` (guest) / `launcher` (auth).
+- Aset brand di `public/images/` (`logo.png`, `logo-white.png`, `logo-mark*.png`)
+  dan `public/favicon.ico`, dihasilkan dari `assets/logo-big.jpg`.
 - Komponen reusable: `resources/js/Components` (ActionButton, BackButton, Modal,
   Pagination, FlashMessages, dll). Jangan duplikasi, pakai yang ada.
 - Tipe di `resources/js/types` — update saat menambah field/props.
@@ -68,22 +119,54 @@ Selalu jalankan `vendor/bin/pint` dan `npm run build` setelah perubahan PHP/Vue.
 ## Testing — penting
 
 - Konfigurasi di `phpunit.xml` masih memakai PostgreSQL (DB sqlite di-comment).
-  Karena itu test berjalan terhadap database Postgres, **bukan** in-memory.
-- `tests/Pest.php` membungkus suite `Feature` dengan `RefreshDatabase`, tetapi
-  `tests/Feature/WorkOrderHttpTest.php` memakai `DatabaseTransactions` dan
-  bergantung pada data hasil seeder (`admin@geumcheon.local`, part number
-  `AAN30056405`, `CBKG07256C`, `4000W4A003A`, `PINCB01`, `5040JA3071C`).
-- Jalankan seeder sebelum menjalankan test yang bergantung data master.
+  Karena itu test berjalan terhadap database Postgres, **bukan** in-memory —
+  dan saat ini menunjuk ke database `erp_gci` yang sama dengan development.
+- **Konflik strategi:** `tests/Pest.php` memasang `RefreshDatabase` ke seluruh
+  suite `Feature` (menghapus + migrate ulang DB, **tanpa** seed), sementara
+  `WorkOrderHttpTest`, `WorkOrderAllocationTest`, `MaterialIssueApiTest`,
+  `MaterialIssueWebTest`, `PartTypeGuardTest`, dan `UomCatalogTest` memakai
+  `DatabaseTransactions` dan mengandalkan data seeder
+  (`admin@geumcheon.local`, part `AAN30056405`, `CBKG07256C`, `4000W4A003A`,
+  `PINCB01`, `5040JA3071C`).
+- Akibatnya: menjalankan salah satu test `RefreshDatabase` **menghapus** data
+  seeder, lalu test berbasis seeder berikutnya gagal (`actingAs(null)` /
+  TypeError). Test berbasis seeder lulus bila dijalankan sendiri setelah
+  `migrate --seed`.
+- Menjalankan `migrate --seed` sebelum suite **tidak** memperbaiki ini; suite
+  menghapusnya sendiri. Perbaikannya harus di level strategi test (pisahkan
+  grup / pakai factory / `.env.testing` DB terpisah).
+- Test yang tidak boleh dianggap regresi: kegagalan `ProfileTest` (hapus akun)
+  karena `User` memakai `SoftDeletes` sedangkan test Breeze mengharap hard
+  delete.
 
 ## Catatan domain
 
 - Tipe part: `FG`, `MATERIAL`, `WIP` (huruf besar). WO hanya untuk part `FG`.
 - Alur Work Order: `planned` → `release` → `in_progress` → `complete` / `cancel`.
-  Substitusi material divalidasi terhadap `part_substitutes` yang `is_active`.
+- **Alokasi material WO** (`work_order_item_allocations`): satu item WO boleh
+  dipenuhi dari beberapa part sekaligus. Main material BOM hanyalah **acuan**
+  (tidak memegang stok); stok ada pada substitute aktif (`part_substitutes`).
+  Alokasi **boleh sebagian** — sisa yang tidak dialokasikan dicatat sebagai
+  shortage saat release dan menurunkan output secara proporsional.
+  `work_order_items.selected_part_id` dipertahankan untuk kompatibilitas
+  (diisi part dengan alokasi terbesar).
 - Stok per-part ledger dengan FIFO: `PartStock` (+ `received_at`), konsumsi
   dicatat di `WorkOrderConsumption`.
 - Incoming: Purchase Order (import) vs Local PO (tanpa vessel/container),
   Arrival + container inspection, Receive menerbitkan tag/label QR.
+- **Issue out to production** (mobile "Material Tracker" → Outgoing): release WO
+  lewat scan label. Endpoint `GET /api/work-orders`, `GET /api/work-orders/{wo}/
+  release-context` (kebutuhan + rekomendasi tag FIFO), `POST /api/stock-tags/
+  resolve`, `POST /api/work-orders/{wo}/release` (atomik + `idempotency_key`).
+  Konsumsi **tag spesifik** (`ReceiveMaterialService::consumeFromTag`), bukan
+  FIFO; tag valid apa pun untuk part kebutuhan diterima (rekomendasi FIFO hanya
+  saran). Dokumen `material_issues` + `material_issue_items` dibuat saat release;
+  bon dicetak di web (`/material-issues/{id}/print`). Permission `stock.issue`.
+  QR label berisi **JSON** (`{tag, receive_id, part_id, part_no, part_name, qty,
+  net_weight, qty_unit, invoice, supplier}`) — app mobile **wajib parse JSON**
+  dan mengirim `tag` (bukan raw JSON). Asal material (`invoice`, `supplier`)
+  diambil server dari `part_stocks.receive_id` saat konsumsi dan disimpan di
+  `material_issue_items`, lalu tampil di bon.
 
 ===
 

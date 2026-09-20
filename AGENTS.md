@@ -79,6 +79,10 @@ Catatan penting:
 - Seeder: `MasterDataSeeder`, `BomSeeder`, `RolesAndPermissionsSeeder`,
   `ConfigMasterSeeder`, `UomSeeder`. Admin dev: `admin@geumcheon.local`.
   Urutan di `DatabaseSeeder`: Roles → Config → Uom → MasterData → Bom.
+  `RolesAndPermissionsSeeder` juga membuat user demo per role
+  (`<role>@geumcheon.local`, password `password`) untuk uji permission.
+  Matriks akses: `super-admin` semua; `management` semua kecuali `role`/`user`;
+  `it-admin` kelola config/role/user; role lain granular (lihat seeder).
 
 ## Frontend
 
@@ -128,8 +132,8 @@ Catatan penting:
 - **Konflik strategi:** `tests/Pest.php` memasang `RefreshDatabase` ke seluruh
   suite `Feature` (menghapus + migrate ulang DB, **tanpa** seed), sementara
   `WorkOrderHttpTest`, `WorkOrderAllocationTest`, `MaterialIssueApiTest`,
-  `MaterialIssueWebTest`, `PartTypeGuardTest`, dan `UomCatalogTest` memakai
-  `DatabaseTransactions` dan mengandalkan data seeder
+  `MaterialIssueWebTest`, `RolePermissionTest`, `PartTypeGuardTest`, dan
+  `UomCatalogTest` memakai `DatabaseTransactions` dan mengandalkan data seeder
   (`admin@geumcheon.local`, part `AAN30056405`, `CBKG07256C`, `4000W4A003A`,
   `PINCB01`, `5040JA3071C`).
 - Akibatnya: menjalankan salah satu test `RefreshDatabase` **menghapus** data

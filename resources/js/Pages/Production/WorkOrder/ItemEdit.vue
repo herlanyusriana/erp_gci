@@ -87,13 +87,29 @@ function fillRemaining(row: AllocationRow) {
     if (remaining.value > 0) row.qty = remaining.value;
 }
 
-function tagsFor(row: AllocationRow): StockTag[] {
-    return optionById(row.part_id)?.tags ?? [];
-}
-
 function toggleTags(row: AllocationRow) {
     row.showTags = !row.showTags;
 }
+
+/** Semua tag dari seluruh material yang diizinkan (bukan hanya part terpilih). */
+const stockTagRows = computed(() => {
+    const rows: Array<{ option: MaterialOption; tag: StockTag }> = [];
+    for (const option of props.materialOptions) {
+        for (const tag of option.tags ?? []) {
+            rows.push({ option, tag });
+        }
+    }
+
+    return rows.sort((a, b) =>
+        a.option.part_number.localeCompare(b.option.part_number)
+        || String(a.tag.received_at ?? '').localeCompare(String(b.tag.received_at ?? '')),
+    );
+});
+
+const partsWithStock = computed(() => props.materialOptions.filter((o) => (o.tags ?? []).length > 0));
+const substitutesWithoutStock = computed(() => props.materialOptions.filter((o) => o.kind === 'substitute' && (o.tags ?? []).length === 0));
+
+const isMainPart = (row: AllocationRow) => optionById(row.part_id)?.kind === 'mainMaterial';
 
 function formatReceivedAt(value: string | null) {
     if (!value) return '—';
@@ -189,38 +205,61 @@ function submit() {
 
                             <!-- Stok part terpilih -->
                             <div v-if="row.part_id !== ''" class="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                                <span class="text-ink-secondary">{{ t('production.stockAvailable') }}:</span>
-                                <StatusBadge :tone="stockFor(row) > 0 ? 'success' : 'neutral'">
-                                    {{ stockFor(row).toFixed(4) }} {{ unit }}
-                                </StatusBadge>
-                                <StatusBadge v-if="rowExceedsStock(row)" tone="danger">{{ t('production.exceedsStock') }}</StatusBadge>
+                                <template v-if="isMainPart(row)">
+                                    <StatusBadge tone="neutral">{{ t('production.bomReference') }}</StatusBadge>
+                                    <span class="text-ink-secondary">{{ t('production.bomReferenceHint') }}</span>
+                                </template>
+                                <template v-else>
+                                    <span class="text-ink-secondary">{{ t('production.stockAvailable') }}:</span>
+                                    <StatusBadge :tone="stockFor(row) > 0 ? 'success' : 'neutral'">
+                                        {{ stockFor(row).toFixed(4) }} {{ unit }}
+                                    </StatusBadge>
+                                    <StatusBadge v-if="rowExceedsStock(row)" tone="danger">{{ t('production.exceedsStock') }}</StatusBadge>
+                                </template>
                             </div>
 
-                            <!-- Tag stok FIFO untuk part terpilih -->
+                            <!-- Tag stok semua material item -->
                             <div v-if="row.showTags && row.part_id !== ''" class="mt-3 overflow-hidden rounded-lg border border-borderline">
-                                <table class="min-w-full divide-y divide-borderline text-xs">
-                                    <thead class="bg-background">
-                                        <tr class="text-left font-semibold uppercase tracking-wide text-ink-secondary">
-                                            <th class="px-3 py-2">{{ t('production.tag') }}</th>
-                                            <th class="px-3 py-2 text-right">{{ t('production.qty') }}</th>
-                                            <th class="px-3 py-2">{{ t('production.invoice') }}</th>
-                                            <th class="px-3 py-2">{{ t('production.supplier') }}</th>
-                                            <th class="px-3 py-2">{{ t('production.receivedAt') }}</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="divide-y divide-borderline">
-                                        <tr v-for="(tag, tagIndex) in tagsFor(row)" :key="tagIndex" class="text-ink-primary">
-                                            <td class="px-3 py-2 font-medium">{{ tag.tag ?? '—' }}</td>
-                                            <td class="px-3 py-2 text-right tabular-nums">{{ tag.qty }} {{ tag.uom ?? '' }}</td>
-                                            <td class="px-3 py-2">{{ tag.invoice ?? '—' }}</td>
-                                            <td class="px-3 py-2">{{ tag.supplier ?? '—' }}</td>
-                                            <td class="px-3 py-2 text-ink-secondary">{{ formatReceivedAt(tag.received_at) }}</td>
-                                        </tr>
-                                        <tr v-if="tagsFor(row).length === 0">
-                                            <td colspan="5" class="px-3 py-4 text-center text-ink-secondary">{{ t('production.noTags') }}</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
+                                <div class="flex flex-wrap items-center justify-between gap-2 border-b border-borderline bg-background px-3 py-2">
+                                    <span class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('production.stockTagsTitle') }}</span>
+                                    <span class="text-xs text-ink-secondary">{{ t('production.stockTagsSummary', { withStock: partsWithStock.length, total: materialOptions.length }) }}</span>
+                                </div>
+
+                                <div v-if="stockTagRows.length" class="overflow-x-auto">
+                                    <table class="min-w-full divide-y divide-borderline text-xs">
+                                        <thead class="bg-surface">
+                                            <tr class="text-left font-semibold uppercase tracking-wide text-ink-secondary">
+                                                <th class="px-3 py-2">{{ t('production.material') }}</th>
+                                                <th class="px-3 py-2">{{ t('production.tag') }}</th>
+                                                <th class="px-3 py-2 text-right">{{ t('production.qty') }}</th>
+                                                <th class="px-3 py-2">{{ t('production.invoice') }}</th>
+                                                <th class="px-3 py-2">{{ t('production.supplier') }}</th>
+                                                <th class="px-3 py-2">{{ t('production.receivedAt') }}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-borderline">
+                                            <tr v-for="(r, tagIndex) in stockTagRows" :key="tagIndex" :class="Number(r.option.id) === Number(row.part_id) ? 'bg-primary-light/40' : ''">
+                                                <td class="px-3 py-2 font-medium text-ink-primary">{{ r.option.part_number }}</td>
+                                                <td class="px-3 py-2 text-ink-primary">{{ r.tag.tag ?? '—' }}</td>
+                                                <td class="px-3 py-2 text-right tabular-nums text-ink-primary">{{ r.tag.qty }} {{ r.tag.uom ?? '' }}</td>
+                                                <td class="px-3 py-2 text-ink-primary">{{ r.tag.invoice ?? '—' }}</td>
+                                                <td class="px-3 py-2 text-ink-primary">{{ r.tag.supplier ?? '—' }}</td>
+                                                <td class="px-3 py-2 text-ink-secondary">{{ formatReceivedAt(r.tag.received_at) }}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <p v-else class="px-3 py-4 text-center text-xs text-ink-secondary">{{ t('production.noTagsAnyPart') }}</p>
+
+                                <p v-if="isMainPart(row)" class="border-t border-borderline px-3 py-2 text-xs text-ink-secondary">{{ t('production.mainPartNoStockHint') }}</p>
+
+                                <div v-if="substitutesWithoutStock.length" class="border-t border-borderline px-3 py-2">
+                                    <div class="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('production.substitutesWithoutStock') }}</div>
+                                    <div class="flex flex-wrap gap-1.5">
+                                        <span v-for="o in substitutesWithoutStock" :key="o.id" class="rounded-md border border-borderline bg-background px-2 py-0.5 text-[11px] text-ink-secondary">{{ o.part_number }}</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>

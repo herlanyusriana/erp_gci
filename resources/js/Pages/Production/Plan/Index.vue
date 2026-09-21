@@ -113,38 +113,28 @@ function saveTargets(it: ProductionPlanItem) {
     });
 }
 
-const emptyRow = (machineId: number | null): ProductionPlanItem => ({
-    id: -(machineId ?? 0),
-    production_plan_id: 0,
-    machine_id: machineId,
-    work_order_id: null,
-    fg_part_id: null,
-    input_part_id: null,
-    wip_part_id: null,
-    sequence: 0,
-    target_d: null,
-    target_d1: null,
-    target_d2: null,
-    avail_qty: 0,
-});
-
+/**
+ * Grup mesin dibentuk dari baris yang ada saja (mesin kosong tidak ditampilkan),
+ * urut mengikuti alur routing: server sudah mengurutkan `step_sequence`.
+ */
 const groups = computed(() => {
-    const list: Array<{ machine: MachineOpt | null; rows: ProductionPlanItem[] }> = props.machines.map((m) => {
-        const rows = filteredItems.value
-            .filter((it) => it.machine_id === m.id)
-            .sort((a, b) => (a.sequence - b.sequence) || (a.id - b.id));
-        return {
-            machine: m,
-            rows: rows.length > 0 ? rows : [emptyRow(m.id)],
-        };
-    });
+    const map = new Map<number, { machine: MachineOpt | null; rows: ProductionPlanItem[] }>();
 
-    const orphans = filteredItems.value.filter((it) => !props.machines.some((m) => m.id === it.machine_id));
-    if (orphans.length > 0) {
-        list.push({ machine: null, rows: orphans.sort((a, b) => (a.sequence - b.sequence) || (a.id - b.id)) });
+    for (const item of filteredItems.value) {
+        const key = item.machine_id ?? 0;
+        if (!map.has(key)) {
+            map.set(key, {
+                machine: props.machines.find((m) => m.id === item.machine_id) ?? null,
+                rows: [],
+            });
+        }
+        map.get(key)!.rows.push(item);
     }
 
-    return list;
+    return [...map.values()].map((group) => ({
+        ...group,
+        rows: group.rows.sort((a, b) => (a.sequence - b.sequence) || (a.id - b.id)),
+    }));
 });
 
 function move(rows: ProductionPlanItem[], index: number, dir: number) {
@@ -336,12 +326,12 @@ function submitEdit() {
                     </thead>
                     <tbody class="divide-y divide-borderline">
                         <template v-for="group in groups" :key="group.machine?.id ?? 'none'">
-                            <tr v-for="(row, index) in group.rows" :key="row.id" :class="row.id < 0 ? '' : 'hover:bg-primary-light/40'">
+                            <tr v-for="(row, index) in group.rows" :key="row.id" class="hover:bg-primary-light/40">
                                 <td v-if="index === 0" class="px-3 py-2 align-top" :rowspan="group.rows.length">
                                     <span class="font-semibold text-ink-primary">{{ group.machine?.machine_name ?? t('production.noMachine') }}</span>
                                     <span v-if="group.machine" class="block text-xs text-ink-secondary">{{ group.machine.machine_code }}</span>
                                 </td>
-                                <td v-if="row.id > 0" class="px-3 py-2">
+                                <td class="px-3 py-2">
                                     <div class="flex items-center gap-1">
                                         <span class="w-5 text-center tabular-nums text-ink-secondary">{{ index + 1 }}</span>
                                         <div class="flex flex-col">
@@ -368,27 +358,22 @@ function submitEdit() {
                                         </div>
                                     </div>
                                 </td>
-                                <td v-else-if="row.id < 0" class="px-3 py-2 text-xs text-ink-secondary">—</td>
-                                <td v-if="row.id > 0" class="px-3 py-2">
+                                <td class="px-3 py-2">
                                     <div class="font-medium text-ink-primary">{{ row.fg_part?.part_name ?? row.work_order?.part?.part_name ?? '—' }}</div>
                                     <div class="text-xs text-ink-secondary">{{ row.fg_part?.part_number ?? row.work_order?.part?.part_number ?? '' }}</div>
                                 </td>
-                                <td v-else-if="row.id < 0" class="px-3 py-2 text-xs text-ink-secondary">—</td>
-                                <td v-if="row.id > 0" class="px-3 py-2">
+                                <td class="px-3 py-2">
                                     <div class="text-ink-primary">{{ row.input_part?.part_name ?? '—' }}</div>
                                     <div class="text-xs text-ink-secondary">{{ row.input_part?.part_number ?? '' }}</div>
                                 </td>
-                                <td v-else-if="row.id < 0" class="px-3 py-2 text-xs text-ink-secondary">—</td>
-                                <td v-if="row.id > 0" class="px-3 py-2">
+                                <td class="px-3 py-2">
                                     <div class="text-ink-primary">{{ row.wip_part?.part_name ?? '—' }}</div>
                                     <div class="text-xs text-ink-secondary">{{ row.wip_part?.part_number ?? '' }}</div>
                                 </td>
-                                <td v-else-if="row.id < 0" class="px-3 py-2 text-xs text-ink-secondary">—</td>
-                                <td v-if="row.id > 0" class="px-3 py-2 text-right tabular-nums font-semibold" :class="row.avail_qty < 0 ? 'text-danger' : 'text-ink-secondary'">
+                                <td class="px-3 py-2 text-right tabular-nums font-semibold" :class="row.avail_qty < 0 ? 'text-danger' : 'text-ink-secondary'">
                                     {{ fmt(row.avail_qty) }}
                                 </td>
-                                <td v-else-if="row.id < 0" class="px-3 py-2 text-right text-xs text-ink-secondary">—</td>
-                                <template v-if="row.id > 0">
+                                <template>
                                     <td v-for="(key, idx) in ['d', 'd1', 'd2'] as const" :key="idx" class="px-2 py-1.5">
                                         <input
                                             v-model="draftFor(row)[key]"
@@ -403,10 +388,7 @@ function submitEdit() {
                                         />
                                     </td>
                                 </template>
-                                <template v-else>
-                                    <td v-for="(_, idx) in ['d', 'd1', 'd2']" :key="idx" class="px-2 py-1.5 text-center text-xs text-ink-secondary">—</td>
-                                </template>
-                                <td v-if="row.id > 0" class="px-3 py-2">
+                                <td class="px-3 py-2">
                                     <div class="flex justify-end gap-1">
                                         <a
                                             v-if="row.work_order"
@@ -446,21 +428,11 @@ function submitEdit() {
                                         </button>
                                     </div>
                                 </td>
-                                <td v-else class="px-3 py-2">
-                                    <div class="flex justify-end gap-1">
-                                        <button
-                                            type="button"
-                                            :title="t('production.addBelow')"
-                                            :aria-label="t('production.addBelow')"
-                                            class="flex h-8 w-8 items-center justify-center rounded-lg text-ink-secondary transition hover:bg-background"
-                                            @click="openCreate()"
-                                        >
-                                            <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                                        </button>
-                                    </div>
-                                </td>
                             </tr>
                         </template>
+                        <tr v-if="groups.length === 0">
+                            <td colspan="10" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('production.noPlanRows') }}</td>
+                        </tr>
                     </tbody>
                 </table>
             </div>

@@ -165,6 +165,7 @@ class WoService
                 'input_part_id' => $first->child_part_id,
                 'wip_part_id' => $last->parent_part_id,
                 'sequence' => $sequence,
+                'step_sequence' => $first->sequence,
                 'target_d' => null,
                 'created_by' => $actorId,
             ]);

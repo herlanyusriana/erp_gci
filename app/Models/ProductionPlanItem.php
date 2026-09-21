@@ -9,7 +9,7 @@ class ProductionPlanItem extends Model
 {
     protected $fillable = [
         'production_plan_id', 'machine_id', 'work_order_id',
-        'fg_part_id', 'input_part_id', 'wip_part_id', 'sequence',
+        'fg_part_id', 'input_part_id', 'wip_part_id', 'sequence', 'step_sequence',
         'target_d', 'target_d1', 'target_d2',
         'created_by', 'updated_by',
     ];

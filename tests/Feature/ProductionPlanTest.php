@@ -99,6 +99,31 @@ class ProductionPlanTest extends TestCase
                 ->where('unplannedWorkOrders', fn ($list) => ! collect($list)->pluck('id')->contains($wo->id)));
     }
 
+    public function test_plan_rows_follow_routing_order(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->post(route('work-orders.release', $wo))->assertRedirect();
+
+        $rows = ProductionPlanItem::where('work_order_id', $wo->id)
+            ->with('machine')
+            ->orderByRaw('step_sequence ASC NULLS LAST')
+            ->orderBy('machine_id')
+            ->orderBy('sequence')
+            ->get();
+
+        // Urutan grup mesin = alur routing BOM 58.
+        $this->assertSame(
+            ['TPL COMP BASE', 'ASSY. TPL COMP BASE 1', 'AUTO CAULKING', 'ASSY. TPL COMP BASE 2'],
+            $rows->pluck('machine.machine_name')->all(),
+        );
+
+        // step_sequence menaik (dasar urutan di papan).
+        $seqs = $rows->pluck('step_sequence')->map(fn ($v) => (int) $v)->all();
+        $sorted = $seqs;
+        sort($sorted);
+        $this->assertSame($sorted, $seqs);
+    }
+
     public function test_plan_row_starts_with_wo_qty_as_remaining(): void
     {
         $wo = $this->createWorkOrder();

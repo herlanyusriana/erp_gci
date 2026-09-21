@@ -42,6 +42,7 @@ class ProductionPlanController extends Controller
                     'inputPart:id,part_number,part_name',
                     'wipPart:id,part_number,part_name',
                 ])
+                ->orderByRaw('step_sequence ASC NULLS LAST')
                 ->orderBy('machine_id')
                 ->orderBy('sequence')
                 ->orderBy('id')

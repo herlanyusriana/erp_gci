@@ -441,6 +441,7 @@ export interface ProductionPlanItem {
     input_part_id: number | null;
     wip_part_id: number | null;
     sequence: number;
+    step_sequence?: number | null;
     target_d: number | null;
     target_d1: number | null;
     target_d2: number | null;

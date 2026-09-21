@@ -48,8 +48,8 @@ const totalQty = () => props.stocks.data.reduce((s, st) => s + Number(st.qty ?? 
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                         <th class="px-4 py-3">{{ t('incoming.part') }}</th>
                         <th class="px-4 py-3">{{ t('incoming.type') }}</th>
-                        <th class="px-4 py-3">{{ t('incoming.tag') }}</th>
                         <th class="px-4 py-3">{{ t('incoming.invoice') }}</th>
+                        <th class="px-4 py-3">{{ t('incoming.tag') }}</th>
                         <th class="px-4 py-3">{{ t('incoming.supplier') }}</th>
                         <th class="px-4 py-3 text-right">{{ t('incoming.qty') }}</th>
                         <th class="px-4 py-3">{{ t('incoming.unit') }}</th>
@@ -59,8 +59,8 @@ const totalQty = () => props.stocks.data.reduce((s, st) => s + Number(st.qty ?? 
                     <tr v-for="st in stocks.data" :key="st.id" class="hover:bg-primary-light/40">
                         <td class="px-4 py-3 font-medium text-ink-primary">{{ st.part?.part_number }} · {{ st.part?.part_name }}</td>
                         <td class="px-4 py-3 text-ink-primary">{{ st.part?.part_type?.name ?? '—' }}</td>
-                        <td class="px-4 py-3 text-ink-primary">{{ st.tag ?? '—' }}</td>
                         <td class="px-4 py-3 text-ink-primary">{{ st.receive?.invoice_no ?? '—' }}</td>
+                        <td class="px-4 py-3 text-ink-primary">{{ st.tag ?? '—' }}</td>
                         <td class="px-4 py-3 text-ink-primary">{{ st.receive?.arrival_item?.arrival?.supplier?.supplier_name ?? '—' }}</td>
                         <td class="px-4 py-3 text-right tabular-nums font-semibold text-ink-primary">{{ st.qty }}</td>
                         <td class="px-4 py-3 text-ink-primary">{{ st.qty_unit ?? '—' }}</td>

@@ -4,14 +4,17 @@ namespace Tests\Feature;
 
 use App\Models\Bom;
 use App\Models\BomItem;
+use App\Models\IncomingArrival;
 use App\Models\Part;
 use App\Models\PartSubstitute;
 use App\Models\PartType;
 use App\Models\PurchaseOrder;
+use App\Models\Supplier;
 use App\Models\User;
 use App\Models\WorkOrder;
+use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
-use Illuminate\Foundation\Testing\WithoutMiddleware;
 use Tests\TestCase;
 
 class PartTypeGuardTest extends TestCase
@@ -21,8 +24,8 @@ class PartTypeGuardTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->seed(\Database\Seeders\RolesAndPermissionsSeeder::class);
-        $this->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class);
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $this->withoutMiddleware(ValidateCsrfToken::class);
         $this->actingAs(User::where('email', 'admin@geumcheon.local')->first());
     }
 
@@ -49,7 +52,7 @@ class PartTypeGuardTest extends TestCase
     {
         $fg = $this->makePart('FG');
         $material = $this->makePart('MATERIAL');
-        $supplier = \App\Models\Supplier::create(['supplier_code' => 'SUP-'.uniqid(), 'supplier_name' => 'Guard Supplier', 'is_active' => true]);
+        $supplier = Supplier::create(['supplier_code' => 'SUP-'.uniqid(), 'supplier_name' => 'Guard Supplier', 'is_active' => true]);
 
         $this->post(route('purchase-orders.store'), [
             'po_no' => 'PO-GUARD-'.uniqid(),
@@ -72,19 +75,19 @@ class PartTypeGuardTest extends TestCase
     {
         $fg = $this->makePart('FG');
         $material = $this->makePart('MATERIAL');
-        $supplier = \App\Models\Supplier::create(['supplier_code' => 'SUP-'.uniqid(), 'supplier_name' => 'Local Guard Supplier', 'is_active' => true]);
+        $supplier = Supplier::create(['supplier_code' => 'SUP-'.uniqid(), 'supplier_name' => 'Local Guard Supplier', 'is_active' => true]);
 
         $payload = fn ($partId) => [
             'po_no' => 'LPO-GUARD-'.uniqid(),
             'po_date' => now()->toDateString(),
             'supplier_id' => $supplier->id,
             'currency' => 'IDR',
-            'items' => [['part_id' => $partId, 'qty_goods' => 5, 'unit_goods' => 'PCS']],
+            'items' => [['part_id' => $partId, 'qty_goods' => 5, 'unit_goods' => 'PCS', 'weight_nett' => 5]],
         ];
 
         $this->post(route('local-pos.store'), $payload($fg->id))->assertSessionHasErrors(['items.0.part_id']);
         $this->post(route('local-pos.store'), $payload($material->id))->assertSessionHasNoErrors();
-        $this->assertSame(1, \App\Models\IncomingArrival::where('is_local', true)->count());
+        $this->assertSame(1, IncomingArrival::where('is_local', true)->count());
     }
 
     public function test_substitute_rejects_fg_part(): void

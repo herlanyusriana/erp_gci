@@ -66,6 +66,7 @@ class UomCatalogTest extends TestCase
                 'size' => 'TEST',
                 'qty_goods' => 1,
                 'unit_goods' => 'NOT-A-UOM',
+                'weight_nett' => 1,
                 'price' => 1,
             ]],
         ]);
@@ -89,6 +90,7 @@ class UomCatalogTest extends TestCase
                 'size' => 'TEST',
                 'qty_goods' => 1,
                 'unit_goods' => 'coil',
+                'weight_nett' => 1,
                 'price' => 1,
             ]],
         ]);

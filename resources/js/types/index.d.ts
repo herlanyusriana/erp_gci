@@ -256,6 +256,7 @@ export interface IncomingArrival {
     id: number;
     arrival_no: string;
     transaction_no: string | null;
+    po_no: string | null;
     invoice_no: string | null;
     invoice_date: string | null;
     supplier_id: number | null;

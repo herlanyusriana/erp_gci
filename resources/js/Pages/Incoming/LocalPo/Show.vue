@@ -23,15 +23,16 @@ defineProps<{
 </script>
 
 <template>
-    <Head :title="t('incoming.poTitle', { number: arrival.invoice_no ?? arrival.arrival_no })" />
+    <Head :title="t('incoming.poTitle', { number: arrival.po_no ?? arrival.arrival_no })" />
     <AppLayout>
         <BackButton :href="route('local-pos.index')" class="mb-4" />
 
         <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
             <div>
-                <h1 class="text-2xl font-bold tracking-tight text-ink-primary">{{ arrival.invoice_no }}</h1>
+                <h1 class="text-2xl font-bold tracking-tight text-ink-primary">{{ arrival.po_no ?? '—' }}</h1>
                 <p class="mt-1 text-sm text-ink-secondary">
                     {{ arrival.supplier?.supplier_name ?? '—' }}
+                    <span v-if="arrival.invoice_no">· {{ t('incoming.invoiceNo') }}: {{ arrival.invoice_no }}</span>
                     · {{ arrival.arrival_no }}
                     · <StatusBadge uppercase :status="arrival.status">{{ t('incoming.status_' + arrival.status) }}</StatusBadge>
                     <span v-if="arrival.transaction_no" class="ml-2 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">{{ t('incoming.salesOrder', { number: arrival.transaction_no }) }}</span>
@@ -45,6 +46,10 @@ defineProps<{
         </div>
 
         <div class="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div class="rounded-xl border border-borderline bg-surface p-4">
+                <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('incoming.invoiceNo') }}</div>
+                <div class="mt-1 text-ink-primary">{{ arrival.invoice_no ?? '—' }}</div>
+            </div>
             <div class="rounded-xl border border-borderline bg-surface p-4">
                 <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('incoming.poDate') }}</div>
                 <div class="mt-1 text-ink-primary">{{ arrival.invoice_date ?? '—' }}</div>

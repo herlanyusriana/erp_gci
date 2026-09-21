@@ -40,7 +40,8 @@ class LocalPoController extends Controller
             ->with(['supplier:id,supplier_code,supplier_name', 'items.receives'])
             ->when($supplierId, fn ($qa) => $qa->where('supplier_id', $supplierId))
             ->when($q !== '', fn ($qa) => $qa->where(function ($inner) use ($q) {
-                $inner->where('invoice_no', 'ilike', "%{$q}%")
+                $inner->where('po_no', 'ilike', "%{$q}%")
+                    ->orWhere('invoice_no', 'ilike', "%{$q}%")
                     ->orWhere('arrival_no', 'ilike', "%{$q}%");
             }))
             ->orderByDesc('created_at')
@@ -79,6 +80,7 @@ class LocalPoController extends Controller
                 ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))
                 ->orderBy('part_number')->get(),
             'uomCodes' => UomCatalog::codes(),
+            'packingUnits' => UomCatalog::packingUnits(),
             'defaultUom' => UomCatalog::defaultCode(),
         ]);
     }
@@ -88,9 +90,11 @@ class LocalPoController extends Controller
         Gate::authorize('create', IncomingArrival::class);
 
         $request->merge(['po_no' => strtoupper(trim((string) $request->input('po_no', '')))]);
+        $request->merge(['invoice_no' => strtoupper(trim((string) $request->input('invoice_no', ''))) ?: null]);
 
         $validated = $request->validate([
-            'po_no' => ['required', 'string', 'max:255', Rule::unique('incoming_arrivals', 'invoice_no')],
+            'po_no' => ['required', 'string', 'max:255', Rule::unique('incoming_arrivals', 'po_no')],
+            'invoice_no' => ['nullable', 'string', 'max:255'],
             'po_date' => ['required', 'date'],
             'supplier_id' => ['required', 'exists:suppliers,id'],
             'currency' => ['nullable', 'string', 'max:10'],
@@ -100,6 +104,10 @@ class LocalPoController extends Controller
             'items.*.size' => ['nullable', 'string', 'max:100'],
             'items.*.qty_goods' => ['required', 'numeric', 'min:0'],
             'items.*.unit_goods' => ['required', 'string', 'max:20', new UomCode],
+            'items.*.qty_bundle' => ['nullable', 'numeric', 'min:0'],
+            'items.*.unit_bundle' => ['nullable', 'string', 'max:20', Rule::in(UomCatalog::packingUnits())],
+            'items.*.weight_nett' => ['required', 'numeric', 'min:0.0001'],
+            'items.*.weight_gross' => ['nullable', 'numeric', 'min:0'],
             'items.*.price' => ['nullable', 'numeric', 'min:0'],
             'items.*.notes' => ['nullable', 'string'],
         ]);
@@ -112,7 +120,8 @@ class LocalPoController extends Controller
         $arrival = DB::transaction(function () use ($validated, $request, $currency) {
             $arrival = IncomingArrival::create([
                 'arrival_no' => IncomingArrival::generateArrivalNo('LPO'),
-                'invoice_no' => $validated['po_no'],
+                'po_no' => $validated['po_no'],
+                'invoice_no' => $validated['invoice_no'] ?? null,
                 'invoice_date' => $validated['po_date'],
                 'supplier_id' => $validated['supplier_id'],
                 'currency' => $currency,
@@ -132,11 +141,11 @@ class LocalPoController extends Controller
                         ? strtoupper(trim((string) $item['size'])) : null,
                     'qty_goods' => $qtyGoods,
                     'unit_goods' => UomCatalog::normalize((string) $item['unit_goods']),
-                    'qty_bundle' => 0,
-                    'unit_bundle' => UomCatalog::PALLET,
-                    'weight_nett' => 0,
+                    'qty_bundle' => (float) ($item['qty_bundle'] ?? 0),
+                    'unit_bundle' => UomCatalog::normalize((string) ($item['unit_bundle'] ?? '')) ?? UomCatalog::PALLET,
+                    'weight_nett' => (float) $item['weight_nett'],
                     'unit_weight' => UomCatalog::WEIGHT,
-                    'weight_gross' => 0,
+                    'weight_gross' => (float) ($item['weight_gross'] ?? 0),
                     'price' => $price,
                     'total_price' => $qtyGoods * $price,
                     'notes' => $item['notes'] ?? null,
@@ -188,6 +197,7 @@ class LocalPoController extends Controller
                 ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))
                 ->orderBy('part_number')->get(),
             'uomCodes' => UomCatalog::codes(),
+            'packingUnits' => UomCatalog::packingUnits(),
             'defaultUom' => UomCatalog::defaultCode(),
         ]);
     }
@@ -198,9 +208,11 @@ class LocalPoController extends Controller
         Gate::authorize('update', $arrival);
 
         $request->merge(['po_no' => strtoupper(trim((string) $request->input('po_no', '')))]);
+        $request->merge(['invoice_no' => strtoupper(trim((string) $request->input('invoice_no', ''))) ?: null]);
 
         $validated = $request->validate([
-            'po_no' => ['required', 'string', 'max:255', Rule::unique('incoming_arrivals', 'invoice_no')->ignore($arrival->id)],
+            'po_no' => ['required', 'string', 'max:255', Rule::unique('incoming_arrivals', 'po_no')->ignore($arrival->id)],
+            'invoice_no' => ['nullable', 'string', 'max:255'],
             'po_date' => ['required', 'date'],
             'supplier_id' => ['required', 'exists:suppliers,id'],
             'currency' => ['nullable', 'string', 'max:10'],
@@ -211,13 +223,18 @@ class LocalPoController extends Controller
             'items.*.size' => ['nullable', 'string', 'max:100'],
             'items.*.qty_goods' => ['required', 'numeric', 'min:0'],
             'items.*.unit_goods' => ['required', 'string', 'max:20', new UomCode],
+            'items.*.qty_bundle' => ['nullable', 'numeric', 'min:0'],
+            'items.*.unit_bundle' => ['nullable', 'string', 'max:20', Rule::in(UomCatalog::packingUnits())],
+            'items.*.weight_nett' => ['required', 'numeric', 'min:0.0001'],
+            'items.*.weight_gross' => ['nullable', 'numeric', 'min:0'],
             'items.*.price' => ['nullable', 'numeric', 'min:0'],
             'items.*.notes' => ['nullable', 'string'],
         ]);
 
         $blocked = DB::transaction(function () use ($arrival, $validated) {
             $arrival->update([
-                'invoice_no' => $validated['po_no'],
+                'po_no' => $validated['po_no'],
+                'invoice_no' => $validated['invoice_no'] ?? null,
                 'invoice_date' => $validated['po_date'],
                 'supplier_id' => $validated['supplier_id'],
                 'currency' => strtoupper($validated['currency'] ?? 'IDR'),
@@ -245,6 +262,11 @@ class LocalPoController extends Controller
                         ? strtoupper(trim((string) $itemData['size'])) : null,
                     'qty_goods' => $qtyGoods,
                     'unit_goods' => UomCatalog::normalize((string) $itemData['unit_goods']),
+                    'qty_bundle' => (float) ($itemData['qty_bundle'] ?? 0),
+                    'unit_bundle' => UomCatalog::normalize((string) ($itemData['unit_bundle'] ?? '')) ?? UomCatalog::PALLET,
+                    'weight_nett' => (float) $itemData['weight_nett'],
+                    'unit_weight' => UomCatalog::WEIGHT,
+                    'weight_gross' => (float) ($itemData['weight_gross'] ?? 0),
                     'price' => $price,
                     'total_price' => $qtyGoods * $price,
                     'notes' => $itemData['notes'] ?? null,

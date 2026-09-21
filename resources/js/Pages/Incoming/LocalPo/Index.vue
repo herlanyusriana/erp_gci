@@ -84,8 +84,10 @@ function remove(id: number, no: string | null) {
                 <tbody class="divide-y divide-borderline">
                     <tr v-for="po in localPos.data" :key="po.id" class="hover:bg-primary-light/40">
                         <td class="px-4 py-3 font-medium text-ink-primary">
-                            <Link :href="route('local-pos.show', po.id)" class="hover:text-primary">{{ po.invoice_no ?? '—' }}</Link>
-                            <div class="text-xs text-ink-secondary">{{ po.arrival_no }}</div>
+                            <Link :href="route('local-pos.show', po.id)" class="hover:text-primary">{{ po.po_no ?? '—' }}</Link>
+                            <div class="text-xs text-ink-secondary">
+                                {{ po.invoice_no ? `${t('incoming.invoiceNo')}: ${po.invoice_no} · ` : '' }}{{ po.arrival_no }}
+                            </div>
                         </td>
                         <td class="px-4 py-3 text-ink-primary">{{ po.invoice_date ?? '—' }}</td>
                         <td class="px-4 py-3 text-ink-primary">{{ po.supplier?.supplier_name ?? '—' }}</td>
@@ -98,7 +100,7 @@ function remove(id: number, no: string | null) {
                             <div class="flex justify-end gap-1.5">
                                 <ActionButton :href="route('local-pos.show', po.id)" :label="t('incoming.view')" variant="view" />
                                 <ActionButton :href="route('local-pos.edit', po.id)" :label="t('incoming.edit')" variant="edit" />
-                                <ActionButton :label="t('incoming.delete')" variant="delete" @click="remove(po.id, po.invoice_no)" />
+                                <ActionButton :label="t('incoming.delete')" variant="delete" @click="remove(po.id, po.po_no ?? po.arrival_no)" />
                             </div>
                         </td>
                     </tr>

@@ -17,6 +17,10 @@ interface ItemRow {
     size: string;
     qty_goods: number | '';
     unit_goods: string;
+    qty_bundle: number | '';
+    unit_bundle: string;
+    weight_nett: number | '';
+    weight_gross: number | '';
     price: number | '';
     notes: string;
 }
@@ -26,6 +30,7 @@ const props = defineProps<{
     suppliers: SupplierOpt[];
     parts: PartOpt[];
     uomCodes: string[];
+    packingUnits: string[];
     defaultUom?: string;
 }>();
 
@@ -41,17 +46,22 @@ const seedRows = (): ItemRow[] => {
             size: it.size ?? '',
             qty_goods: it.qty_goods,
             unit_goods: it.unit_goods ?? defaultUomCode.value,
+            qty_bundle: it.qty_bundle ?? '',
+            unit_bundle: it.unit_bundle ?? '',
+            weight_nett: it.weight_nett ?? '',
+            weight_gross: it.weight_gross ?? '',
             price: it.price ?? '',
             notes: it.notes ?? '',
         }));
     }
-    return [{ id: null, part_id: '', size: '', qty_goods: '', unit_goods: defaultUomCode.value, price: '', notes: '' }];
+    return [{ id: null, part_id: '', size: '', qty_goods: '', unit_goods: defaultUomCode.value, qty_bundle: '', unit_bundle: '', weight_nett: '', weight_gross: '', price: '', notes: '' }];
 };
 
 const rows = ref<ItemRow[]>(seedRows());
 
 const form = useForm({
-    po_no: props.arrival?.invoice_no ?? '',
+    po_no: props.arrival?.po_no ?? '',
+    invoice_no: props.arrival?.invoice_no ?? '',
     po_date: props.arrival?.invoice_date?.slice(0, 10) ?? '',
     supplier_id: props.arrival?.supplier_id ?? ('' as number | ''),
     currency: props.arrival?.currency ?? 'IDR',
@@ -60,7 +70,7 @@ const form = useForm({
 });
 
 function addRow() {
-    rows.value.push({ id: null, part_id: '', size: '', qty_goods: '', unit_goods: defaultUomCode.value, price: '', notes: '' });
+    rows.value.push({ id: null, part_id: '', size: '', qty_goods: '', unit_goods: defaultUomCode.value, qty_bundle: '', unit_bundle: '', weight_nett: '', weight_gross: '', price: '', notes: '' });
 }
 function removeRow(i: number) {
     if (rows.value.length > 1) rows.value.splice(i, 1);
@@ -74,13 +84,17 @@ const grandTotal = () => rows.value.reduce((s, r) => s + rowTotal(r), 0);
 
 function submit() {
     form.items = rows.value
-        .filter((r) => r.part_id !== '' && r.qty_goods !== '')
+        .filter((r) => r.part_id !== '' && r.qty_goods !== '' && r.weight_nett !== '')
         .map((r) => ({
             id: r.id,
             part_id: Number(r.part_id),
             size: r.size,
             qty_goods: Number(r.qty_goods),
             unit_goods: r.unit_goods,
+            qty_bundle: r.qty_bundle === '' ? null : Number(r.qty_bundle),
+            unit_bundle: r.unit_bundle === '' ? null : r.unit_bundle,
+            weight_nett: r.weight_nett === '' ? null : Number(r.weight_nett),
+            weight_gross: r.weight_gross === '' ? null : Number(r.weight_gross),
             price: r.price === '' ? null : Number(r.price),
             notes: r.notes,
         })) as any;
@@ -108,6 +122,11 @@ function submit() {
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.poNo') }}</label>
                         <input v-model="form.po_no" type="text" placeholder="LPO-001" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.po_no" class="mt-1" />
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.invoiceNo') }}</label>
+                        <input v-model="form.invoice_no" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <InputError :message="form.errors.invoice_no" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.poDate') }}</label>
@@ -175,6 +194,27 @@ function submit() {
                         </div>
                         <div class="flex items-end sm:col-span-1">
                             <button type="button" @click="removeRow(i)" :disabled="rows.length <= 1" class="rounded-lg border border-borderline px-3 py-2 text-sm text-danger transition hover:bg-danger/10 disabled:opacity-40" :aria-label="t('incoming.delete')">✕</button>
+                        </div>
+                    </div>
+                    <div class="mt-3 grid gap-3 sm:grid-cols-12">
+                        <div class="sm:col-span-3">
+                            <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.packingQty') }}</label>
+                            <input v-model="r.qty_bundle" type="number" step="0.0001" min="0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        </div>
+                        <div class="sm:col-span-3">
+                            <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.packingType') }}</label>
+                            <select v-model="r.unit_bundle" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                                <option value="">{{ t('incoming.choose') }}</option>
+                                <option v-for="code in packingUnits" :key="code" :value="code">{{ code }}</option>
+                            </select>
+                        </div>
+                        <div class="sm:col-span-3">
+                            <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.netWeight') }}</label>
+                            <input v-model="r.weight_nett" type="number" step="0.0001" min="0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        </div>
+                        <div class="sm:col-span-3">
+                            <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.grossWeight') }}</label>
+                            <input v-model="r.weight_gross" type="number" step="0.0001" min="0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         </div>
                     </div>
                     <div class="mt-3 grid gap-3 sm:grid-cols-12">

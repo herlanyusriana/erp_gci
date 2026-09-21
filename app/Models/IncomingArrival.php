@@ -13,7 +13,7 @@ class IncomingArrival extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        'arrival_no', 'transaction_no', 'invoice_no', 'invoice_date',
+        'arrival_no', 'transaction_no', 'po_no', 'invoice_no', 'invoice_date',
         'supplier_id', 'purchase_order_id', 'trucking_company_id', 'is_local',
         'vessel', 'etd', 'eta', 'eta_gci',
         'bill_of_lading', 'pen_no', 'pen_date', 'aju_no',

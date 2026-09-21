@@ -11,7 +11,7 @@ use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class LocalPoExport implements FromCollection, WithHeadings, WithMapping, WithStyles, WithColumnWidths
+class LocalPoExport implements FromCollection, WithColumnWidths, WithHeadings, WithMapping, WithStyles
 {
     public function collection(): Enumerable
     {
@@ -20,7 +20,7 @@ class LocalPoExport implements FromCollection, WithHeadings, WithMapping, WithSt
             ->whereHas('arrival', fn ($q) => $q->where('is_local', true))
             ->join('incoming_arrivals', 'incoming_arrivals.id', '=', 'incoming_arrival_items.arrival_id')
             ->orderByDesc('incoming_arrivals.invoice_date')
-            ->orderBy('incoming_arrivals.invoice_no')
+            ->orderBy('incoming_arrivals.po_no')
             ->select('incoming_arrival_items.*')
             ->get();
     }
@@ -28,7 +28,7 @@ class LocalPoExport implements FromCollection, WithHeadings, WithMapping, WithSt
     public function headings(): array
     {
         return [
-            'PO No', 'PO Date', 'Supplier', 'Part No', 'Part Name', 'Size',
+            'PO No', 'Invoice No', 'PO Date', 'Supplier', 'Part No', 'Part Name', 'Size',
             'Qty Ordered', 'Unit', 'Price', 'Total Price',
             'Qty Received', 'Remaining', 'Currency',
         ];
@@ -40,6 +40,7 @@ class LocalPoExport implements FromCollection, WithHeadings, WithMapping, WithSt
         $received = (float) $item->receives->sum('qty');
 
         return [
+            $arrival?->po_no ?? '',
             $arrival?->invoice_no ?? '',
             optional($arrival?->invoice_date)->format('Y-m-d') ?? '',
             $arrival?->supplier?->supplier_name ?? '',

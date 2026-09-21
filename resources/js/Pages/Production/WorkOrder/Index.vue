@@ -69,6 +69,7 @@ const fmt = (n: number | null | undefined) => n == null ? '—' : Number(n).toLo
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                         <th class="px-4 py-3">{{ t('production.woNo') }}</th>
                         <th class="px-4 py-3">{{ t('production.fg') }}</th>
+                        <th class="px-4 py-3">{{ t('production.model') }}</th>
                         <th class="px-4 py-3 text-right">{{ t('production.qty') }}</th>
                         <th class="px-4 py-3 text-center">{{ t('production.item') }}</th>
                         <th class="px-4 py-3">{{ t('production.status') }}</th>
@@ -83,6 +84,7 @@ const fmt = (n: number | null | undefined) => n == null ? '—' : Number(n).toLo
                             <div class="font-medium text-ink-primary">{{ wo.part?.part_number }}</div>
                             <div class="text-xs text-ink-secondary">{{ wo.part?.part_name }}</div>
                         </td>
+                        <td class="px-4 py-3 text-ink-secondary">{{ wo.part?.model ?? '—' }}</td>
                         <td class="px-4 py-3 text-right tabular-nums font-semibold text-ink-primary">{{ fmt(wo.qty) }}</td>
                         <td class="px-4 py-3 text-center tabular-nums text-ink-secondary">{{ wo.items_count ?? 0 }}</td>
                         <td class="px-4 py-3">
@@ -96,7 +98,7 @@ const fmt = (n: number | null | undefined) => n == null ? '—' : Number(n).toLo
                         </td>
                     </tr>
                     <tr v-if="workOrders.data.length === 0">
-                        <td colspan="7" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('production.noWo') }}</td>
+                        <td colspan="8" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('production.noWo') }}</td>
                     </tr>
                 </tbody>
             </table>

@@ -6,6 +6,7 @@ import { router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import Modal from '@/Components/Modal.vue';
+import FinishedGoodPicker from '@/Components/FinishedGoodPicker.vue';
 import InputError from '@/Components/InputError.vue';
 import type { Machine, Part, ProductionPlan, ProductionPlanItem } from '@/types';
 
@@ -175,37 +176,12 @@ const createForm = useForm({
     target_d2: '',
 });
 
-const fgQuery = ref('');
-const showFgSuggestions = ref(false);
-const selectedFg = computed(() => props.fgParts.find((p) => String(p.id) === String(createForm.fg_part_id)) ?? null);
-const filteredFg = computed(() => {
-    const q = fgQuery.value.trim().toLowerCase();
-    if (!q) return props.fgParts.slice(0, 25);
-    return props.fgParts.filter((p) => [p.part_number, p.part_name, p.model]
-        .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(q))).slice(0, 25);
-});
-
 function openCreate(machineId?: number | null) {
     createForm.reset();
     createForm.clearErrors();
     createForm.plan_date = props.date;
     createForm.machine_id = machineId ? String(machineId) : '';
-    fgQuery.value = '';
-    showFgSuggestions.value = false;
     showCreate.value = true;
-}
-
-function selectFg(p: PartOpt) {
-    createForm.fg_part_id = String(p.id);
-    fgQuery.value = `${p.part_number} · ${p.part_name}`;
-    showFgSuggestions.value = false;
-}
-
-function clearFg() {
-    createForm.fg_part_id = '';
-    fgQuery.value = '';
-    showFgSuggestions.value = true;
 }
 
 function submitCreate() {
@@ -214,7 +190,6 @@ function submitCreate() {
         onSuccess: () => {
             showCreate.value = false;
             createForm.reset();
-            fgQuery.value = '';
         },
     });
 }
@@ -504,31 +479,7 @@ function submitEdit() {
 
                 <div>
                     <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.finishedGood') }}</label>
-                    <div class="relative">
-                        <input
-                            v-model="fgQuery"
-                            type="text"
-                            autocomplete="off"
-                            :placeholder="t('production.searchFg')"
-                            class="w-full rounded-lg border-borderline bg-background px-3 py-2 pr-16 text-sm text-ink-primary focus:border-primary focus:ring-primary"
-                            @focus="showFgSuggestions = true"
-                            @input="showFgSuggestions = true; createForm.fg_part_id = ''"
-                        />
-                        <button v-if="selectedFg" type="button" class="absolute inset-y-0 right-2 my-auto h-7 rounded px-2 text-xs text-ink-secondary hover:bg-background" @click="clearFg">{{ t('production.change') }}</button>
-                        <div v-if="showFgSuggestions" class="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-borderline bg-surface py-1 shadow-lg">
-                            <button
-                                v-for="p in filteredFg"
-                                :key="p.id"
-                                type="button"
-                                class="block w-full px-3 py-2 text-left text-sm hover:bg-primary-light"
-                                @mousedown.prevent="selectFg(p)"
-                            >
-                                <span class="font-medium text-ink-primary">{{ p.part_number }}</span>
-                                <span class="text-ink-secondary"> · {{ p.part_name }} · {{ p.model || '—' }}</span>
-                            </button>
-                            <div v-if="filteredFg.length === 0" class="px-3 py-3 text-sm text-ink-secondary">{{ t('production.fgNotFound') }}</div>
-                        </div>
-                    </div>
+                    <FinishedGoodPicker v-model="createForm.fg_part_id" :options="fgParts" />
                     <InputError :message="createForm.errors.fg_part_id" class="mt-1" />
                 </div>
 

@@ -30,7 +30,7 @@ class WorkOrderController extends Controller
         Gate::authorize('viewAny', WorkOrder::class);
 
         $workOrders = WorkOrder::query()
-            ->with(['part:id,part_number,part_name,part_type_id', 'part.partType:id,code,name'])
+            ->with(['part:id,part_number,part_name,model,part_type_id', 'part.partType:id,code,name'])
             ->withCount('items')
             ->when($request->input('search'), function ($q, $search) {
                 $q->where('wo_no', 'ilike', "%{$search}%")

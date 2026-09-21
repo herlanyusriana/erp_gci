@@ -201,7 +201,9 @@ Catatan penting:
   Jumlah WO" mulai dari qty WO). `WoService::populatePlanItems` mengisi baris;
   tabel Alur Produksi di WO Show memakai pengelompokan yang sama. **Subcon tidak
   masuk papan**: step ber-`source` SUBCON dilewati, dan baris/mesin Subcon
-  disembunyikan dari papan & opsi mesin.
+  disembunyikan dari papan & opsi mesin. Papan **hanya menampilkan mesin yang
+  ada barisnya**, urut **alur routing** (`production_plan_items.step_sequence`
+  dari step pertama grup).
 - **Issue out to production** (mobile "Material Tracker" → Outgoing): release WO
   lewat scan label. Endpoint `GET /api/work-orders`, `GET /api/work-orders/{wo}/
   release-context` (kebutuhan + rekomendasi tag FIFO), `POST /api/stock-tags/

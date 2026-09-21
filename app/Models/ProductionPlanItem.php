@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class ProductionPlanItem extends Model
 {
     protected $fillable = [
-        'production_plan_id', 'machine_id', 'work_order_id',
+        'production_plan_id', 'machine_id', 'process_id', 'work_order_id',
         'fg_part_id', 'input_part_id', 'wip_part_id', 'sequence', 'step_sequence',
         'target_d', 'target_d1', 'target_d2',
         'created_by', 'updated_by',
@@ -25,6 +25,11 @@ class ProductionPlanItem extends Model
     public function plan(): BelongsTo
     {
         return $this->belongsTo(ProductionPlan::class, 'production_plan_id');
+    }
+
+    public function process(): BelongsTo
+    {
+        return $this->belongsTo(Process::class);
     }
 
     public function machine(): BelongsTo

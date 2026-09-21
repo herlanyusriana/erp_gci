@@ -160,6 +160,7 @@ class WoService
 
             $plan->items()->create([
                 'machine_id' => $group['machine_id'],
+                'process_id' => $first->process_id,
                 'work_order_id' => $workOrder->id,
                 'fg_part_id' => $workOrder->part_id,
                 'input_part_id' => $first->child_part_id,

@@ -141,27 +141,50 @@ function saveTargets(it: ProductionPlanItem) {
 }
 
 /**
- * Grup mesin dibentuk dari baris yang ada saja (mesin kosong tidak ditampilkan),
- * urut mengikuti alur routing: server sudah mengurutkan `step_sequence`.
+ * Grup mesin: mesin yang punya baris tampil lebih dulu (urut alur routing —
+ * server sudah mengurutkan `step_sequence`), lalu sisanya (abjad) dengan baris
+ * kosong. Saat mencari, hanya mesin yang cocok yang ditampilkan.
  */
 const groups = computed(() => {
-    const map = new Map<number, { machine: MachineOpt | null; rows: ProductionPlanItem[] }>();
+    const byMachine = new Map<number, ProductionPlanItem[]>();
 
     for (const item of filteredItems.value) {
         const key = item.machine_id ?? 0;
-        if (!map.has(key)) {
-            map.set(key, {
-                machine: props.machines.find((m) => m.id === item.machine_id) ?? null,
-                rows: [],
-            });
+        if (!byMachine.has(key)) {
+            byMachine.set(key, []);
         }
-        map.get(key)!.rows.push(item);
+        byMachine.get(key)!.push(item);
     }
 
-    return [...map.values()].map((group) => ({
-        ...group,
-        rows: group.rows.sort((a, b) => (a.sequence - b.sequence) || (a.id - b.id)),
-    }));
+    const sortRows = (rows: ProductionPlanItem[]) =>
+        rows.slice().sort((a, b) => (a.sequence - b.sequence) || (a.id - b.id));
+
+    const result: Array<{ machine: MachineOpt | null; rows: ProductionPlanItem[] }> = [];
+    const used = new Set<number>();
+
+    for (const item of filteredItems.value) {
+        const key = item.machine_id ?? 0;
+        if (used.has(key)) {
+            continue;
+        }
+        used.add(key);
+        result.push({
+            machine: props.machines.find((m) => m.id === item.machine_id) ?? null,
+            rows: sortRows(byMachine.get(key) ?? []),
+        });
+    }
+
+    // Mesin tanpa baris tetap ditampilkan (kecuali sedang mencari).
+    if (search.value.trim() === '') {
+        for (const machine of props.machines) {
+            if (used.has(machine.id)) {
+                continue;
+            }
+            result.push({ machine, rows: [] });
+        }
+    }
+
+    return result;
 });
 
 function move(rows: ProductionPlanItem[], index: number, dir: number) {
@@ -402,30 +425,69 @@ function submitEdit() {
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
             <div class="flex flex-wrap items-center justify-between gap-2 border-b border-borderline px-4 py-3">
                 <h2 class="text-sm font-semibold text-ink-primary">{{ t('production.boardTitle') }}</h2>
-                <span class="text-xs text-ink-secondary">{{ t('production.planHelp') }}</span>
+                <span v-if="items.length === 0" class="text-xs text-ink-secondary">{{ t('production.planEmptyHint') }}</span>
+                <span v-else class="text-xs text-ink-secondary">{{ t('production.planHelp') }}</span>
             </div>
             <div class="overflow-x-auto">
-                <table class="min-w-full text-sm">
+                <table class="w-full min-w-[1240px] table-fixed text-sm">
+                    <colgroup>
+                        <col class="w-36" />
+                        <col class="w-24" />
+                        <col class="w-12" />
+                        <col class="w-44" />
+                        <col class="w-40" />
+                        <col class="w-40" />
+                        <col class="w-24" />
+                        <col class="w-24" />
+                        <col class="w-20" />
+                        <col class="w-20" />
+                        <col class="w-20" />
+                        <col class="w-28" />
+                    </colgroup>
                     <thead class="sticky top-0 z-10 bg-background">
                         <tr class="border-b border-borderline text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                            <th class="w-40 px-3 py-2.5">{{ t('production.machine') }}</th>
-                            <th class="w-16 px-3 py-2.5">{{ t('production.sequence') }}</th>
+                            <th class="px-3 py-2.5">{{ t('production.machine') }}</th>
+                            <th class="px-3 py-2.5">{{ t('production.process') }}</th>
+                            <th class="px-3 py-2.5">{{ t('production.sequence') }}</th>
                             <th class="px-3 py-2.5">{{ t('production.fgPart') }}</th>
                             <th class="px-3 py-2.5">{{ t('production.inputPart') }}</th>
                             <th class="px-3 py-2.5">{{ t('production.outputPart') }}</th>
-                            <th class="w-28 px-3 py-2.5 text-right">{{ t('production.estimatedTime') }}</th>
-                            <th class="w-28 px-3 py-2.5 text-right">{{ t('production.availableQty') }}</th>
+                            <th class="px-3 py-2.5 text-right">{{ t('production.estimatedTime') }}</th>
+                            <th class="px-3 py-2.5 text-right">{{ t('production.availableQty') }}</th>
                             <th colspan="3" class="border-l border-borderline px-2 py-2.5 text-center text-primary">{{ t('production.targetGroup') }}</th>
-                            <th class="w-32 px-3 py-2.5 text-right">{{ t('production.actions') }}</th>
+                            <th class="px-3 py-2.5 text-right">{{ t('production.actions') }}</th>
                         </tr>
                         <tr class="border-b border-borderline text-center text-[11px] font-medium uppercase tracking-wide text-ink-secondary">
-                            <th colspan="7" class="px-3 py-1.5 text-left">{{ t('production.targetHint') }}</th>
-                            <th v-for="(label, key) in dayCols" :key="key" class="w-24 border-l border-borderline px-2 py-1.5">{{ label }}</th>
-                            <th class="w-32 px-3 py-1.5"></th>
+                            <th colspan="8"></th>
+                            <th v-for="(label, key) in dayCols" :key="key" class="border-l border-borderline px-2 py-1.5">{{ label }}</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
                         <template v-for="(group, gi) in groups" :key="group.machine?.id ?? 'none'">
+                            <tr v-if="group.rows.length === 0" class="border-t border-borderline" :class="gi > 0 ? 'border-t-2 !border-t-borderline' : ''">
+                                <td class="px-3 py-2.5 align-top">
+                                    <div class="flex flex-col items-start gap-1">
+                                        <span class="font-semibold leading-tight text-ink-primary">{{ group.machine?.machine_name ?? t('production.noMachine') }}</span>
+                                        <span v-if="group.machine" class="text-[11px] uppercase tracking-wide text-ink-secondary">{{ group.machine.machine_code }}</span>
+                                    </div>
+                                </td>
+                                <td class="px-3 py-2.5 text-xs text-ink-secondary">—</td>
+                                <td class="px-3 py-2.5 text-xs text-ink-secondary">—</td>
+                                <td colspan="5" class="px-3 py-2.5 text-xs text-ink-secondary">{{ t('production.noMachineWo') }}</td>
+                                <td colspan="3" class="border-l border-borderline px-2 py-2.5 text-center text-xs text-ink-secondary">—</td>
+                                <td class="px-3 py-2.5 text-right">
+                                    <button
+                                        type="button"
+                                        :title="t('production.newWo')"
+                                        :aria-label="t('production.newWo')"
+                                        class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-secondary transition hover:bg-primary-light hover:text-primary"
+                                        @click="openCreate()"
+                                    >
+                                        <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                                    </button>
+                                </td>
+                            </tr>
                             <tr
                                 v-for="(row, index) in group.rows"
                                 :key="row.id"
@@ -438,6 +500,9 @@ function submitEdit() {
                                         <span v-if="group.machine" class="text-[11px] uppercase tracking-wide text-ink-secondary">{{ group.machine.machine_code }}</span>
                                         <span class="mt-0.5 inline-flex rounded-md bg-background px-1.5 py-0.5 text-[11px] font-medium text-ink-secondary">{{ t('production.rowsCount', { n: group.rows.length }) }}</span>
                                     </div>
+                                </td>
+                                <td class="px-3 py-2.5">
+                                    <span class="text-ink-primary">{{ row.process?.process_name ?? '—' }}</span>
                                 </td>
                                 <td class="px-3 py-2.5">
                                     <div class="flex items-center gap-1.5">
@@ -467,16 +532,16 @@ function submitEdit() {
                                     </div>
                                 </td>
                                 <td class="px-3 py-2.5">
-                                    <div class="font-medium text-ink-primary">{{ row.fg_part?.part_name ?? row.work_order?.part?.part_name ?? '—' }}</div>
-                                    <div class="text-xs text-ink-secondary">{{ row.fg_part?.part_number ?? row.work_order?.part?.part_number ?? '' }}</div>
+                                    <div class="font-medium text-ink-primary">{{ row.fg_part?.part_number ?? row.work_order?.part?.part_number ?? '—' }}</div>
+                                    <div class="truncate text-xs text-ink-secondary">{{ row.fg_part?.part_name ?? row.work_order?.part?.part_name ?? '' }}</div>
                                 </td>
                                 <td class="px-3 py-2.5">
-                                    <div class="text-ink-primary">{{ row.input_part?.part_name ?? '—' }}</div>
-                                    <div class="text-xs text-ink-secondary">{{ row.input_part?.part_number ?? '' }}</div>
+                                    <div class="text-ink-primary">{{ row.input_part?.part_number ?? '—' }}</div>
+                                    <div class="truncate text-xs text-ink-secondary">{{ row.input_part?.part_name ?? '' }}</div>
                                 </td>
                                 <td class="px-3 py-2.5">
-                                    <div class="font-medium text-ink-primary">{{ row.wip_part?.part_name ?? '—' }}</div>
-                                    <div class="text-xs text-ink-secondary">{{ row.wip_part?.part_number ?? '' }}</div>
+                                    <div class="font-medium text-ink-primary">{{ row.wip_part?.part_number ?? '—' }}</div>
+                                    <div class="truncate text-xs text-ink-secondary">{{ row.wip_part?.part_name ?? '' }}</div>
                                 </td>
                                 <td class="px-3 py-2.5 text-right">
                                     <span class="tabular-nums font-medium text-ink-primary">{{ fmtDuration(row.estimated_seconds) }}</span>
@@ -548,16 +613,7 @@ function submitEdit() {
                             </tr>
                         </template>
                         <tr v-if="groups.length === 0">
-                            <td colspan="11" class="px-4 py-16">
-                                <div class="mx-auto flex max-w-sm flex-col items-center gap-2 text-center">
-                                    <svg class="h-8 w-8 text-ink-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" /></svg>
-                                    <p class="text-sm font-medium text-ink-primary">{{ t('production.planEmptyTitle') }}</p>
-                                    <p class="text-xs text-ink-secondary">{{ t('production.planEmptyHint') }}</p>
-                                    <button type="button" class="mt-1 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-primary-hover" @click="openCreate()">
-                                        {{ t('production.newWo') }}
-                                    </button>
-                                </div>
-                            </td>
+                            <td colspan="12" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('production.noPlanRows') }}</td>
                         </tr>
                     </tbody>
                 </table>

@@ -37,6 +37,7 @@ class ProductionPlanController extends Controller
                 ->whereNotIn('machine_id', $subconMachineIds)
                 ->with([
                     'machine:id,machine_code,machine_name',
+                    'process:id,process_name',
                     'workOrder:id,wo_no,part_id,qty,status',
                     'workOrder.part:id,part_number,part_name',
                     'fgPart:id,part_number,part_name',

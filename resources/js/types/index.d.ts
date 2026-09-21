@@ -446,6 +446,7 @@ export interface ProductionPlanItem {
     id: number;
     production_plan_id: number;
     machine_id: number | null;
+    process_id?: number | null;
     work_order_id: number | null;
     fg_part_id: number | null;
     input_part_id: number | null;
@@ -458,6 +459,7 @@ export interface ProductionPlanItem {
     avail_qty: number;
     estimated_seconds?: number | null;
     machine?: Pick<Machine, 'id' | 'machine_code' | 'machine_name'> | null;
+    process?: Process | null;
     work_order?: Pick<WorkOrder, 'id' | 'wo_no' | 'part_id' | 'qty' | 'status'> & {
         part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
     } | null;

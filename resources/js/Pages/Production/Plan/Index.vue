@@ -358,7 +358,7 @@ function submitEdit() {
             <div class="overflow-x-auto">
                 <table class="min-w-full text-sm">
                     <thead class="sticky top-0 z-10 bg-background">
-                        <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
+                        <tr class="border-b border-borderline text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                             <th class="w-40 px-3 py-2.5">{{ t('production.machine') }}</th>
                             <th class="w-16 px-3 py-2.5">{{ t('production.sequence') }}</th>
                             <th class="px-3 py-2.5">{{ t('production.fgPart') }}</th>
@@ -366,8 +366,13 @@ function submitEdit() {
                             <th class="px-3 py-2.5">{{ t('production.outputPart') }}</th>
                             <th class="w-28 px-3 py-2.5 text-right">{{ t('production.estimatedTime') }}</th>
                             <th class="w-28 px-3 py-2.5 text-right">{{ t('production.availableQty') }}</th>
-                            <th v-for="(label, key) in dayCols" :key="key" class="w-24 px-2 py-2.5 text-center">{{ label }}</th>
+                            <th colspan="3" class="border-l border-borderline px-2 py-2.5 text-center text-primary">{{ t('production.targetGroup') }}</th>
                             <th class="w-32 px-3 py-2.5 text-right">{{ t('production.actions') }}</th>
+                        </tr>
+                        <tr class="border-b border-borderline text-center text-[11px] font-medium uppercase tracking-wide text-ink-secondary">
+                            <th colspan="7" class="px-3 py-1.5 text-left">{{ t('production.targetHint') }}</th>
+                            <th v-for="(label, key) in dayCols" :key="key" class="w-24 border-l border-borderline px-2 py-1.5">{{ label }}</th>
+                            <th class="w-32 px-3 py-1.5"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -436,17 +441,17 @@ function submitEdit() {
                                     </span>
                                 </td>
                                 <template>
-                                    <td v-for="(key, idx) in dayKeys" :key="idx" class="px-2 py-1.5">
+                                    <td v-for="(key, idx) in dayKeys" :key="idx" class="border-l border-borderline px-2 py-1.5">
                                         <input
                                             v-model="draftFor(row)[key]"
                                             type="number"
                                             step="any"
                                             min="0"
                                             inputmode="decimal"
-                                            :placeholder="'…'"
+                                            :placeholder="idx === 0 && row.avail_qty > 0 ? fmt(row.avail_qty) : '…'"
                                             :aria-label="t('production.dQty') + ' ' + row.fg_part?.part_number"
-                                            class="w-full rounded-md border-borderline px-2 py-1.5 text-right text-sm tabular-nums text-ink-primary focus:border-primary focus:ring-primary"
-                                            :class="draftFor(row)[key] !== '' ? 'border-primary/40 bg-primary-light/40' : 'bg-background'"
+                                            class="w-full rounded-md border px-2 py-1.5 text-right text-sm tabular-nums text-ink-primary focus:border-primary focus:ring-primary"
+                                            :class="draftFor(row)[key] !== '' ? 'border-primary/50 bg-primary-light/40' : 'border-borderline bg-background'"
                                             @change="saveTargets(row)"
                                         />
                                     </td>

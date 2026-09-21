@@ -175,8 +175,35 @@ class ReceiveMaterialService
     }
 
     /**
-     * Post a receive into the per-part, per-tag FIFO stock ledger (KGM basis).
+     * Kontribusi & satuan stok untuk sebuah receive.
+     *
+     * Material non-berat (mis. SHEET/PCS/ROLL) diposting sebesar `qty` sesuai
+     * satuannya, bukan beratnya — supaya satuan stok sama dengan `uom_rm` BOM
+     * dan bisa dicocokkan saat alokasi/release. Satuan berbasis berat (KGM/KG)
+     * tetap memakai berat (net_weight ?? weight ?? qty).
+     *
+     * @return array{0: float, 1: string}
+     */
+    private function stockContribution(IncomingReceive $receive): array
+    {
+        $unit = UomCatalog::normalize($receive->qty_unit ?? $receive->arrivalItem?->unit_goods);
+        $qty = (float) $receive->qty;
+
+        if ($unit !== null && ! UomCatalog::isWeight($unit) && $qty > 0) {
+            return [$qty, $unit];
+        }
+
+        if ($this->usesWeightBasisItem($receive)) {
+            return [$this->postedWeight($receive), UomCatalog::WEIGHT];
+        }
+
+        return [$this->postedWeight($receive), $unit ?? UomCatalog::PIECE];
+    }
+
+    /**
+     * Post a receive into the per-part, per-tag FIFO stock ledger.
      * Setiap baris stok = satu tag receive, dengan ATA (received_at) untuk urutan FIFO.
+     * Satuan stok mengikuti satuan material (lihat stockContribution).
      */
     public function postStock(IncomingReceive $receive): void
     {
@@ -185,15 +212,11 @@ class ReceiveMaterialService
             return;
         }
 
-        $contribution = $this->postedWeight($receive);
+        [$contribution, $unit] = $this->stockContribution($receive);
         if ($contribution <= 0) {
             return;
         }
 
-        // Unit stok: KGM bila item ber-basis berat; selain itu unit barang item.
-        $unit = $this->usesWeightBasisItem($receive)
-            ? UomCatalog::WEIGHT
-            : UomCatalog::normalize($receive->qty_unit ?? $receive->arrivalItem?->unit_goods) ?? UomCatalog::PIECE;
         $receivedAt = $receive->ata_date ?? now();
 
         DB::transaction(function () use ($partId, $receive, $unit, $contribution, $receivedAt) {
@@ -225,7 +248,8 @@ class ReceiveMaterialService
     }
 
     /**
-     * Reverse a receive contribution from stock (used on delete/update), KGM basis.
+     * Reverse a receive contribution from stock (used on delete/update).
+     * Wajib memakai kontribusi yang sama dengan postStock.
      */
     public function reverseStock(IncomingReceive $receive): void
     {
@@ -234,7 +258,7 @@ class ReceiveMaterialService
             return;
         }
 
-        $contribution = $this->postedWeight($receive);
+        [$contribution] = $this->stockContribution($receive);
         if ($contribution <= 0) {
             return;
         }

@@ -60,6 +60,19 @@ const dayLabels = computed(() => ({
 
 const fmt = (n: number | null | undefined) => n == null ? '—' : Number(n).toLocaleString(locale.value, { maximumFractionDigits: 2 });
 
+/** Detik → durasi ringkas (jam/menit/detik). */
+const fmtDuration = (seconds: number | null | undefined) => {
+    if (seconds == null) return '—';
+    const total = Number(seconds);
+    if (!Number.isFinite(total) || total <= 0) return '—';
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const secs = Math.round(total % 60);
+    if (hours > 0) return `${hours} ${t('master.hourShort')} ${minutes} ${t('master.minuteShort')}`;
+    if (minutes > 0) return `${minutes} ${t('master.minuteShort')} ${secs} ${t('master.secondShort')}`;
+    return `${secs} ${t('master.secondShort')}`;
+};
+
 const filteredItems = computed(() => {
     const q = search.value.trim().toLowerCase();
     if (!q) return props.items;
@@ -319,6 +332,7 @@ function submitEdit() {
                             <th class="px-3 py-2">{{ t('production.fgPart') }}</th>
                             <th class="px-3 py-2">{{ t('production.inputPart') }}</th>
                             <th class="px-3 py-2">{{ t('production.outputPart') }}</th>
+                            <th class="px-3 py-2 text-right">{{ t('production.estimatedTime') }}</th>
                             <th class="px-3 py-2 text-right">{{ t('production.availableQty') }}</th>
                             <th v-for="(label, key) in { d: dayLabels.d, d1: dayLabels.d1, d2: dayLabels.d2 }" :key="key" class="w-24 px-2 py-2 text-center">{{ label }}</th>
                             <th class="px-3 py-2 text-right">{{ t('production.actions') }}</th>
@@ -369,6 +383,9 @@ function submitEdit() {
                                 <td class="px-3 py-2">
                                     <div class="text-ink-primary">{{ row.wip_part?.part_name ?? '—' }}</div>
                                     <div class="text-xs text-ink-secondary">{{ row.wip_part?.part_number ?? '' }}</div>
+                                </td>
+                                <td class="px-3 py-2 text-right tabular-nums text-ink-primary">
+                                    {{ fmtDuration(row.estimated_seconds) }}
                                 </td>
                                 <td class="px-3 py-2 text-right tabular-nums font-semibold" :class="row.avail_qty < 0 ? 'text-danger' : 'text-ink-secondary'">
                                     {{ fmt(row.avail_qty) }}
@@ -431,7 +448,7 @@ function submitEdit() {
                             </tr>
                         </template>
                         <tr v-if="groups.length === 0">
-                            <td colspan="10" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('production.noPlanRows') }}</td>
+                            <td colspan="11" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('production.noPlanRows') }}</td>
                         </tr>
                     </tbody>
                 </table>

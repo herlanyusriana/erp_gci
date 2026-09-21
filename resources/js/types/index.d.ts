@@ -307,6 +307,16 @@ export interface IncomingReceive {
     arrival_item?: IncomingArrivalItem;
 }
 
+export interface MachineCycleTime {
+    id: number;
+    machine_id: number;
+    part_id: number;
+    cycle_time_seconds: number;
+    is_active: boolean;
+    machine?: Pick<Machine, 'id' | 'machine_code' | 'machine_name'> | null;
+    part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
+}
+
 export interface PartStock {
     id: number;
     part_id: number;
@@ -446,6 +456,7 @@ export interface ProductionPlanItem {
     target_d1: number | null;
     target_d2: number | null;
     avail_qty: number;
+    estimated_seconds?: number | null;
     machine?: Pick<Machine, 'id' | 'machine_code' | 'machine_name'> | null;
     work_order?: Pick<WorkOrder, 'id' | 'wo_no' | 'part_id' | 'qty' | 'status'> & {
         part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;

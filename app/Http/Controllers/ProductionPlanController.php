@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Machine;
+use App\Models\MachineCycleTime;
 use App\Models\Part;
 use App\Models\ProductionPlan;
 use App\Models\ProductionPlanItem;
@@ -48,6 +49,25 @@ class ProductionPlanController extends Controller
                 ->orderBy('id')
                 ->get()
             : collect();
+
+        // Estimasi waktu: qty WO × cycle time (mesin × part hasil baris itu).
+        $cycleTimes = MachineCycleTime::query()
+            ->where('is_active', true)
+            ->whereIn('machine_id', $items->pluck('machine_id')->filter()->unique()->values())
+            ->whereIn('part_id', $items->pluck('wip_part_id')->filter()->unique()->values())
+            ->get(['machine_id', 'part_id', 'cycle_time_seconds'])
+            ->keyBy(fn ($row) => $row->machine_id.'|'.$row->part_id);
+
+        $items->each(function (ProductionPlanItem $item) use ($cycleTimes) {
+            $key = ($item->machine_id ?? 0).'|'.($item->wip_part_id ?? 0);
+            $seconds = $cycleTimes->get($key)?->cycle_time_seconds;
+            $qty = (float) ($item->workOrder?->qty ?? 0);
+
+            $item->setAttribute(
+                'estimated_seconds',
+                $seconds !== null ? round($qty * (float) $seconds, 2) : null,
+            );
+        });
 
         $machines = Machine::query()
             ->where('is_active', true)

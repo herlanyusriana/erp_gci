@@ -176,6 +176,10 @@ Catatan penting:
   non-berat (SHEET/PCS/ROLL/BAG/…) diposting sebesar `qty` sesuai `qty_unit`,
   bukan berat; satuan berbasis berat (KGM/KG) tetap pakai berat. Jangan
   memaksa KGM untuk semua material.
+- **Cycle time mesin** (`machine_cycle_times`, unik per **mesin × part**, satuan
+  **detik/pcs**) — master di `Master → Cycle Time` (`/cycle-times`, permission
+  `machine.*`). Papan Production Plan menampilkan kolom **Estimasi** =
+  qty WO × cycle time baris (mesin × part hasil); kosong bila belum diisi.
 - **Generator nomor** (`IncomingArrival::generateArrivalNo/generateTransactionNo`,
   `WorkOrder::generateWoNo`) memakai `withTrashed()` karena kolomnya UNIQUE dan
   model memakai SoftDeletes — tanpa itu nomor lama terpakai ulang setelah hapus.

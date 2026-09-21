@@ -6,6 +6,7 @@ use App\Http\Controllers\IncomingArrivalController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\LocalPoController;
 use App\Http\Controllers\MachineController;
+use App\Http\Controllers\MachineCycleTimeController;
 use App\Http\Controllers\MaterialIssueController;
 use App\Http\Controllers\PartController;
 use App\Http\Controllers\PartStockController;
@@ -67,6 +68,7 @@ Route::middleware(['auth'])->group(function () {
     Route::resource('processes', ProcessController::class)->except(['show']);
     Route::resource('uoms', UomController::class)->except(['show']);
     Route::resource('substitutes', PartSubstituteController::class)->except(['show']);
+    Route::resource('cycle-times', MachineCycleTimeController::class)->except(['show']);
     Route::resource('boms', BomController::class)->only(['index', 'show']);
 
     // Incoming module

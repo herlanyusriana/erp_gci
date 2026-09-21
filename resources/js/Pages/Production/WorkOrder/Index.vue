@@ -41,7 +41,7 @@ const fmt = (n: number | null | undefined) => n == null ? '—' : Number(n).toLo
 <template>
     <AppLayout>
         <Head :title="t('production.workOrder')" />
-        <BackButton :href="route('launcher')" class="mb-4" />
+        <BackButton :href="route('production-data')" class="mb-4" />
 
         <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
             <div>

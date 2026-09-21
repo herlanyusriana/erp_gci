@@ -36,6 +36,13 @@ const statusLabel = (status: string) => te(`production.statuses.${status}`) ? t(
 
 
 const fmt = (n: number | null | undefined) => n == null ? '—' : Number(n).toLocaleString(locale.value, { maximumFractionDigits: 2 });
+
+const fmtDate = (value: string | null | undefined) => {
+    if (!value) return '—';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString(locale.value, { day: '2-digit', month: 'short', year: 'numeric' });
+};
 </script>
 
 <template>
@@ -69,28 +76,31 @@ const fmt = (n: number | null | undefined) => n == null ? '—' : Number(n).toLo
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                         <th class="px-4 py-3">{{ t('production.woNo') }}</th>
                         <th class="px-4 py-3">{{ t('production.fg') }}</th>
-                        <th class="px-4 py-3">{{ t('production.model') }}</th>
                         <th class="px-4 py-3 text-right">{{ t('production.qty') }}</th>
-                        <th class="px-4 py-3 text-center">{{ t('production.item') }}</th>
                         <th class="px-4 py-3">{{ t('production.status') }}</th>
-                        <th class="px-4 py-3">{{ t('production.date') }}</th>
                         <th class="px-4 py-3 text-right">{{ t('production.actions') }}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-borderline">
-                    <tr v-for="wo in workOrders.data" :key="wo.id" class="hover:bg-primary-light/40">
-                        <td class="px-4 py-3 font-medium text-ink-primary">{{ wo.wo_no }}</td>
+                    <tr v-for="wo in workOrders.data" :key="wo.id" class="align-top hover:bg-primary-light/40">
                         <td class="px-4 py-3">
-                            <div class="font-medium text-ink-primary">{{ wo.part?.part_number }}</div>
-                            <div class="text-xs text-ink-secondary">{{ wo.part?.part_name }}</div>
+                            <div class="font-semibold text-ink-primary">{{ wo.wo_no }}</div>
+                            <div class="mt-0.5 text-xs text-ink-secondary">{{ fmtDate(wo.planned_date) }}</div>
                         </td>
-                        <td class="px-4 py-3 text-ink-secondary">{{ wo.part?.model ?? '—' }}</td>
-                        <td class="px-4 py-3 text-right tabular-nums font-semibold text-ink-primary">{{ fmt(wo.qty) }}</td>
-                        <td class="px-4 py-3 text-center tabular-nums text-ink-secondary">{{ wo.items_count ?? 0 }}</td>
+                        <td class="px-4 py-3">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="font-medium text-ink-primary">{{ wo.part?.part_number ?? '—' }}</span>
+                                <span v-if="wo.part?.model" class="rounded-md bg-background px-1.5 py-0.5 text-[11px] font-medium text-ink-secondary">{{ wo.part.model }}</span>
+                            </div>
+                            <div class="mt-0.5 text-xs text-ink-secondary">{{ wo.part?.part_name ?? '—' }}</div>
+                        </td>
+                        <td class="px-4 py-3 text-right">
+                            <div class="font-semibold tabular-nums text-ink-primary">{{ fmt(wo.qty) }}</div>
+                            <div class="mt-0.5 text-xs text-ink-secondary">{{ t('production.itemCount', { n: wo.items_count ?? 0 }) }}</div>
+                        </td>
                         <td class="px-4 py-3">
                             <StatusBadge uppercase :status="wo.status">{{ statusLabel(wo.status) }}</StatusBadge>
                         </td>
-                        <td class="px-4 py-3 text-ink-secondary">{{ wo.planned_date ?? '—' }}</td>
                         <td class="px-4 py-3">
                             <div class="flex justify-end gap-1.5">
                                 <ActionButton :href="route('work-orders.show', wo.id)" :label="t('production.view')" variant="view" />
@@ -98,7 +108,7 @@ const fmt = (n: number | null | undefined) => n == null ? '—' : Number(n).toLo
                         </td>
                     </tr>
                     <tr v-if="workOrders.data.length === 0">
-                        <td colspan="8" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('production.noWo') }}</td>
+                        <td colspan="5" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('production.noWo') }}</td>
                     </tr>
                 </tbody>
             </table>

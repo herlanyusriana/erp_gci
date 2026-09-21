@@ -446,7 +446,7 @@ function submitEdit() {
                     </colgroup>
                     <thead class="sticky top-0 z-10 bg-background">
                         <tr class="border-b border-borderline text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                            <th class="px-3 py-2.5">{{ t('production.machine') }}</th>
+                            <th class="sticky left-0 z-30 border-r border-borderline bg-background px-3 py-2.5">{{ t('production.machine') }}</th>
                             <th class="px-3 py-2.5">{{ t('production.process') }}</th>
                             <th class="px-3 py-2.5">{{ t('production.sequence') }}</th>
                             <th class="px-3 py-2.5">{{ t('production.fgPart') }}</th>
@@ -458,15 +458,16 @@ function submitEdit() {
                             <th class="px-3 py-2.5 text-right">{{ t('production.actions') }}</th>
                         </tr>
                         <tr class="border-b border-borderline text-center text-[11px] font-medium uppercase tracking-wide text-ink-secondary">
-                            <th colspan="8"></th>
+                            <th class="sticky left-0 z-30 border-r border-borderline bg-background"></th>
+                            <th v-for="n in 7" :key="n"></th>
                             <th v-for="(label, key) in dayCols" :key="key" class="border-l border-borderline px-2 py-1.5">{{ label }}</th>
                             <th></th>
                         </tr>
                     </thead>
                     <tbody>
                         <template v-for="(group, gi) in groups" :key="group.machine?.id ?? 'none'">
-                            <tr v-if="group.rows.length === 0" class="border-t border-borderline" :class="gi > 0 ? 'border-t-2 !border-t-borderline' : ''">
-                                <td class="px-3 py-2.5 align-top">
+                            <tr v-if="group.rows.length === 0" class="group border-t border-borderline" :class="gi > 0 ? 'border-t-2 !border-t-borderline' : ''">
+                                <td class="sticky left-0 z-10 border-r border-borderline bg-surface px-3 py-2.5 align-top group-hover:bg-primary-light">
                                     <div class="flex flex-col items-start gap-1">
                                         <span class="font-semibold leading-tight text-ink-primary">{{ group.machine?.machine_name ?? t('production.noMachine') }}</span>
                                         <span v-if="group.machine" class="text-[11px] uppercase tracking-wide text-ink-secondary">{{ group.machine.machine_code }}</span>
@@ -491,10 +492,10 @@ function submitEdit() {
                             <tr
                                 v-for="(row, index) in group.rows"
                                 :key="row.id"
-                                class="border-t border-borderline transition hover:bg-primary-light/40"
+                                class="group border-t border-borderline transition hover:bg-primary-light/40"
                                 :class="[index === 0 && gi > 0 ? 'border-t-2 !border-t-borderline' : '', row.avail_qty < 0 ? 'bg-danger/5' : '']"
                             >
-                                <td v-if="index === 0" class="px-3 py-2.5 align-top" :rowspan="group.rows.length">
+                                <td v-if="index === 0" class="sticky left-0 z-10 border-r border-borderline bg-surface px-3 py-2.5 align-top group-hover:bg-primary-light" :rowspan="group.rows.length">
                                     <div class="flex flex-col items-start gap-1">
                                         <span class="font-semibold leading-tight text-ink-primary">{{ group.machine?.machine_name ?? t('production.noMachine') }}</span>
                                         <span v-if="group.machine" class="text-[11px] uppercase tracking-wide text-ink-secondary">{{ group.machine.machine_code }}</span>

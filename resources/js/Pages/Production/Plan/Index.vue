@@ -141,9 +141,9 @@ function saveTargets(it: ProductionPlanItem) {
 }
 
 /**
- * Grup mesin: mesin yang punya baris tampil lebih dulu (urut alur routing —
- * server sudah mengurutkan `step_sequence`), lalu sisanya (abjad) dengan baris
- * kosong. Saat mencari, hanya mesin yang cocok yang ditampilkan.
+ * Grup mesin mengikuti URUTAN MASTER MESIN (`props.machines` sudah diurut
+ * `sequence` lalu nama) — semua mesin tampil walau tanpa WO; saat mencari,
+ * hanya mesin yang punya baris cocok.
  */
 const groups = computed(() => {
     const byMachine = new Map<number, ProductionPlanItem[]>();
@@ -159,29 +159,21 @@ const groups = computed(() => {
     const sortRows = (rows: ProductionPlanItem[]) =>
         rows.slice().sort((a, b) => (a.sequence - b.sequence) || (a.id - b.id));
 
-    const result: Array<{ machine: MachineOpt | null; rows: ProductionPlanItem[] }> = [];
-    const used = new Set<number>();
+    const searching = search.value.trim() !== '';
 
-    for (const item of filteredItems.value) {
-        const key = item.machine_id ?? 0;
-        if (used.has(key)) {
-            continue;
-        }
-        used.add(key);
-        result.push({
-            machine: props.machines.find((m) => m.id === item.machine_id) ?? null,
-            rows: sortRows(byMachine.get(key) ?? []),
-        });
-    }
+    const result: Array<{ machine: MachineOpt | null; rows: ProductionPlanItem[] }> = props.machines
+        .map((machine) => ({
+            machine,
+            rows: sortRows(byMachine.get(machine.id) ?? []),
+        }))
+        .filter((group) => !searching || group.rows.length > 0);
 
-    // Mesin tanpa baris tetap ditampilkan (kecuali sedang mencari).
-    if (search.value.trim() === '') {
-        for (const machine of props.machines) {
-            if (used.has(machine.id)) {
-                continue;
-            }
-            result.push({ machine, rows: [] });
-        }
+    // Baris dengan mesin di luar master (mis. mesin dihapus) tetap ditampilkan.
+    const orphanRows = filteredItems.value.filter(
+        (item) => !props.machines.some((m) => m.id === item.machine_id),
+    );
+    if (orphanRows.length > 0) {
+        result.push({ machine: null, rows: sortRows(orphanRows) });
     }
 
     return result;

@@ -201,6 +201,22 @@ class ProductionPlanTest extends TestCase
         $this->assertTrue($rows->every(fn ($r) => $r->target_d === null));
     }
 
+    public function test_plan_machines_follow_master_sequence(): void
+    {
+        Machine::where('machine_name', 'AUTO CAULKING')->update(['sequence' => 1]);
+        Machine::where('machine_name', 'TPL KUKIL')->update(['sequence' => 2]);
+
+        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('machines', function ($list) {
+                    $names = collect($list)->pluck('machine_name')->values()->all();
+
+                    return ($names[0] ?? null) === 'AUTO CAULKING'
+                        && ($names[1] ?? null) === 'TPL KUKIL';
+                }));
+    }
+
     public function test_subcon_machine_rows_are_hidden_from_plan_board(): void
     {
         $wo = $this->createWorkOrder();

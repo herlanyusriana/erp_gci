@@ -11,7 +11,7 @@ class Machine extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        'machine_code', 'machine_name', 'is_active', 'created_by', 'updated_by',
+        'machine_code', 'machine_name', 'sequence', 'is_active', 'created_by', 'updated_by',
     ];
 
     protected $casts = [

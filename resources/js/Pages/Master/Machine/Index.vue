@@ -24,7 +24,7 @@ function doSearch() {
     timer = setTimeout(() => router.get(route('machines.index'), { search: search.value || undefined }, { preserveState: true, replace: true }), 300);
 }
 
-const form = useForm({ machine_code: '', machine_name: '', is_active: true });
+const form = useForm({ machine_code: '', machine_name: '', sequence: '' as number | '', is_active: true });
 const showForm = ref(false);
 const editing = ref<Machine | null>(null);
 function openCreate() { editing.value = null; form.reset(); form.clearErrors(); showForm.value = true; }
@@ -33,6 +33,7 @@ function openEdit(m: Machine) {
     form.clearErrors();
     form.machine_code = m.machine_code;
     form.machine_name = m.machine_name;
+    form.sequence = m.sequence ?? '';
     form.is_active = m.is_active;
     showForm.value = true;
 }
@@ -70,6 +71,7 @@ function remove(m: Machine) {
             <table class="min-w-full divide-y divide-borderline text-sm">
                 <thead class="bg-background">
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
+                        <th class="w-20 px-4 py-3">{{ t('master.sequenceLabel') }}</th>
                         <th class="px-4 py-3">{{ t('master.code') }}</th>
                         <th class="px-4 py-3">{{ t('master.name') }}</th>
                         <th class="px-4 py-3">{{ t('master.status') }}</th>
@@ -78,6 +80,7 @@ function remove(m: Machine) {
                 </thead>
                 <tbody class="divide-y divide-borderline">
                     <tr v-for="m in machines.data" :key="m.id" class="hover:bg-primary-light/40">
+                        <td class="px-4 py-3 tabular-nums text-ink-secondary">{{ m.sequence ?? '—' }}</td>
                         <td class="px-4 py-3 font-medium text-ink-primary">{{ m.machine_code }}</td>
                         <td class="px-4 py-3 text-ink-primary">{{ m.machine_name }}</td>
                         <td class="px-4 py-3">
@@ -92,7 +95,7 @@ function remove(m: Machine) {
                         </td>
                     </tr>
                     <tr v-if="machines.data.length === 0">
-                        <td colspan="4" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.machineEmpty') }}</td>
+                        <td colspan="5" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.machineEmpty') }}</td>
                     </tr>
                 </tbody>
             </table>
@@ -113,6 +116,12 @@ function remove(m: Machine) {
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.name') }}</label>
                         <input v-model="form.machine_name" type="text" :placeholder="t('master.machineName')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.machine_name" class="mt-1" />
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('master.sequenceLabel') }}</label>
+                        <input v-model="form.sequence" type="number" min="0" step="1" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <p class="mt-1 text-xs text-ink-secondary">{{ t('master.sequenceHelp') }}</p>
+                        <InputError :message="form.errors.sequence" class="mt-1" />
                     </div>
                 </div>
                 <div class="mt-4 flex items-center justify-end gap-3">

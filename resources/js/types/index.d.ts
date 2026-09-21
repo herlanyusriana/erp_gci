@@ -88,6 +88,7 @@ export interface Machine {
     id: number;
     machine_code: string;
     machine_name: string;
+    sequence?: number | null;
     is_active: boolean;
 }
 

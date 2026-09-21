@@ -70,11 +70,13 @@ class ProductionPlanController extends Controller
             );
         });
 
+        // Urutan papan = urutan master mesin (kolom `sequence`), fallback abjad.
         $machines = Machine::query()
             ->where('is_active', true)
             ->whereNotIn('id', $subconMachineIds)
+            ->orderByRaw('sequence ASC NULLS LAST')
             ->orderBy('machine_name')
-            ->get(['id', 'machine_code', 'machine_name']);
+            ->get(['id', 'machine_code', 'machine_name', 'sequence']);
 
         // WO planned yang BELUM masuk plan mana pun → supaya tidak "hilang" dari papan.
         $unplannedWorkOrders = WorkOrder::query()

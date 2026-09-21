@@ -17,8 +17,9 @@ class MachineController extends Controller
             ->when($request->input('search'), fn ($q, $s) => $q
                 ->where('machine_code', 'ilike', "%{$s}%")
                 ->orWhere('machine_name', 'ilike', "%{$s}%"))
-            ->orderBy('machine_code')
-            ->paginate(10)
+            ->orderByRaw('sequence ASC NULLS LAST')
+            ->orderBy('machine_name')
+            ->paginate(50)
             ->withQueryString();
 
         return Inertia::render('Master/Machine/Index', [
@@ -32,6 +33,7 @@ class MachineController extends Controller
         $data = $request->validate([
             'machine_code' => ['required', 'string', 'max:80', 'unique:machines,machine_code'],
             'machine_name' => ['required', 'string', 'max:255'],
+            'sequence' => ['nullable', 'integer', 'min:0', 'max:9999'],
             'is_active' => ['sometimes', 'boolean'],
         ]);
 
@@ -46,6 +48,7 @@ class MachineController extends Controller
         $data = $request->validate([
             'machine_code' => ['required', 'string', 'max:80', "unique:machines,machine_code,{$machine->id}"],
             'machine_name' => ['required', 'string', 'max:255'],
+            'sequence' => ['nullable', 'integer', 'min:0', 'max:9999'],
             'is_active' => ['sometimes', 'boolean'],
         ]);
 

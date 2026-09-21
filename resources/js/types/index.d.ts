@@ -435,6 +435,7 @@ export interface ProductionPlanItem {
     machine_id: number | null;
     work_order_id: number | null;
     fg_part_id: number | null;
+    input_part_id: number | null;
     wip_part_id: number | null;
     sequence: number;
     target_d: number | null;
@@ -446,5 +447,6 @@ export interface ProductionPlanItem {
         part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
     } | null;
     fg_part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
+    input_part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
     wip_part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
 }

@@ -35,6 +35,7 @@ class ProductionPlanController extends Controller
                     'workOrder:id,wo_no,part_id,qty,status',
                     'workOrder.part:id,part_number,part_name',
                     'fgPart:id,part_number,part_name',
+                    'inputPart:id,part_number,part_name',
                     'wipPart:id,part_number,part_name',
                 ])
                 ->orderBy('machine_id')

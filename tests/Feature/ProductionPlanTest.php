@@ -35,15 +35,25 @@ class ProductionPlanTest extends TestCase
         return WorkOrder::latest('id')->firstOrFail();
     }
 
-    /** @return int jumlah step (sequence + parent unik, non-Subcon) */
-    private function expectedStepCount(WorkOrder $wo): int
+    /** @return int jumlah baris papan = grup step berurutan dengan mesin sama */
+    private function expectedGroupCount(WorkOrder $wo): int
     {
-        return $wo->items()
+        $steps = $wo->items()
             ->get()
             ->filter(fn ($it) => $it->parent_part_id !== null && strtoupper((string) $it->source) !== 'SUBCON')
-            ->map(fn ($it) => ($it->sequence ?? 0).'|'.$it->parent_part_id)
-            ->unique()
-            ->count();
+            ->mapWithKeys(fn ($it) => [($it->sequence ?? 0).'|'.$it->parent_part_id => $it])
+            ->values();
+
+        $groups = 0;
+        $previousMachine = null;
+        foreach ($steps as $index => $step) {
+            if ($index === 0 || $step->machine_id !== $previousMachine) {
+                $groups++;
+            }
+            $previousMachine = $step->machine_id;
+        }
+
+        return $groups;
     }
 
     public function test_creating_wo_auto_populates_all_steps_on_plan_board(): void
@@ -53,19 +63,8 @@ class ProductionPlanTest extends TestCase
         $rows = ProductionPlanItem::where('work_order_id', $wo->id)->get();
 
         $this->assertGreaterThan(1, $rows->count());
-        $this->assertSame($this->expectedStepCount($wo), $rows->count());
-
-        // Setiap step mendarat di mesin step itu.
-        foreach ($wo->items()->get() as $item) {
-            if ($item->parent_part_id === null) {
-                continue;
-            }
-            $this->assertDatabaseHas('production_plan_items', [
-                'work_order_id' => $wo->id,
-                'machine_id' => $item->machine_id,
-                'wip_part_id' => $item->parent_part_id,
-            ]);
-        }
+        $this->assertSame($this->expectedGroupCount($wo), $rows->count());
+        $this->assertSame($rows->count(), $rows->pluck('machine_id')->unique()->count());
 
         // Tampil di papan, dan tidak lagi di panel "belum masuk plan".
         $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
@@ -97,9 +96,31 @@ class ProductionPlanTest extends TestCase
         ])->assertRedirect();
 
         $this->assertSame(
-            $this->expectedStepCount($wo),
+            $this->expectedGroupCount($wo),
             ProductionPlanItem::where('work_order_id', $wo->id)->count(),
         );
+    }
+
+    public function test_same_machine_steps_merge_into_one_row_with_input_and_output(): void
+    {
+        $fg = Part::where('part_number', 'AGU30018303')->firstOrFail();
+
+        $this->post(route('work-orders.store'), [
+            'part_id' => $fg->id,
+            'qty' => 100,
+            'planned_date' => now()->toDateString(),
+        ])->assertRedirect();
+
+        $wo = WorkOrder::latest('id')->firstOrFail();
+        $rows = ProductionPlanItem::where('work_order_id', $wo->id)->with(['inputPart', 'wipPart', 'machine'])->get();
+
+        // 3 step Press (WIP1..WIP3) di TPL DONGSHIN + 1 Assembling Full → 2 baris.
+        $this->assertSame(2, $rows->count());
+
+        $press = $rows->first(fn ($row) => $row->machine?->machine_name === 'TPL DONGSHIN');
+        $this->assertNotNull($press);
+        $this->assertSame('BPSH0257021487', $press->inputPart?->part_number);
+        $this->assertSame('AGU30018303-WIP3', $press->wipPart?->part_number);
     }
 
     public function test_attach_rejects_work_order_already_in_a_plan(): void

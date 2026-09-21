@@ -9,7 +9,7 @@ class ProductionPlanItem extends Model
 {
     protected $fillable = [
         'production_plan_id', 'machine_id', 'work_order_id',
-        'fg_part_id', 'wip_part_id', 'sequence',
+        'fg_part_id', 'input_part_id', 'wip_part_id', 'sequence',
         'target_d', 'target_d1', 'target_d2',
         'created_by', 'updated_by',
     ];
@@ -42,6 +42,13 @@ class ProductionPlanItem extends Model
         return $this->belongsTo(Part::class, 'fg_part_id');
     }
 
+    /** Material yang masuk ke mesin (child step pertama di grup mesin ini). */
+    public function inputPart(): BelongsTo
+    {
+        return $this->belongsTo(Part::class, 'input_part_id');
+    }
+
+    /** Hasil yang keluar dari mesin (parent step terakhir di grup mesin ini). */
     public function wipPart(): BelongsTo
     {
         return $this->belongsTo(Part::class, 'wip_part_id');

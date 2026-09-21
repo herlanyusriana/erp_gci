@@ -119,6 +119,7 @@ const emptyRow = (machineId: number | null): ProductionPlanItem => ({
     machine_id: machineId,
     work_order_id: null,
     fg_part_id: null,
+    input_part_id: null,
     wip_part_id: null,
     sequence: 0,
     target_d: null,
@@ -326,7 +327,8 @@ function submitEdit() {
                             <th class="px-3 py-2 w-36">{{ t('production.machine') }}</th>
                             <th class="px-3 py-2 w-20">{{ t('production.sequence') }}</th>
                             <th class="px-3 py-2">{{ t('production.fgPart') }}</th>
-                            <th class="px-3 py-2">{{ t('production.wipPart') }}</th>
+                            <th class="px-3 py-2">{{ t('production.inputPart') }}</th>
+                            <th class="px-3 py-2">{{ t('production.outputPart') }}</th>
                             <th class="px-3 py-2 text-right">{{ t('production.availableQty') }}</th>
                             <th v-for="(label, key) in { d: dayLabels.d, d1: dayLabels.d1, d2: dayLabels.d2 }" :key="key" class="w-24 px-2 py-2 text-center">{{ label }}</th>
                             <th class="px-3 py-2 text-right">{{ t('production.actions') }}</th>
@@ -370,6 +372,11 @@ function submitEdit() {
                                 <td v-if="row.id > 0" class="px-3 py-2">
                                     <div class="font-medium text-ink-primary">{{ row.fg_part?.part_name ?? row.work_order?.part?.part_name ?? '—' }}</div>
                                     <div class="text-xs text-ink-secondary">{{ row.fg_part?.part_number ?? row.work_order?.part?.part_number ?? '' }}</div>
+                                </td>
+                                <td v-else-if="row.id < 0" class="px-3 py-2 text-xs text-ink-secondary">—</td>
+                                <td v-if="row.id > 0" class="px-3 py-2">
+                                    <div class="text-ink-primary">{{ row.input_part?.part_name ?? '—' }}</div>
+                                    <div class="text-xs text-ink-secondary">{{ row.input_part?.part_number ?? '' }}</div>
                                 </td>
                                 <td v-else-if="row.id < 0" class="px-3 py-2 text-xs text-ink-secondary">—</td>
                                 <td v-if="row.id > 0" class="px-3 py-2">

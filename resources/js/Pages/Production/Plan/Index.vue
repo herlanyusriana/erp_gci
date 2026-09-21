@@ -168,19 +168,13 @@ const showCreate = ref(false);
 const createForm = useForm({
     plan_date: props.date,
     fg_part_id: '',
-    machine_id: '',
     qty: '',
-    wip_part_id: '',
-    target_d: '',
-    target_d1: '',
-    target_d2: '',
 });
 
-function openCreate(machineId?: number | null) {
+function openCreate() {
     createForm.reset();
     createForm.clearErrors();
     createForm.plan_date = props.date;
-    createForm.machine_id = machineId ? String(machineId) : '';
     showCreate.value = true;
 }
 
@@ -198,12 +192,7 @@ function submitCreate() {
 const showAttach = ref(false);
 const attachForm = useForm({
     work_order_id: '',
-    machine_id: '',
     plan_date: props.date,
-    wip_part_id: '',
-    target_d: '',
-    target_d1: '',
-    target_d2: '',
 });
 
 function openAttach(wo?: { id: number; qty: number }) {
@@ -212,7 +201,6 @@ function openAttach(wo?: { id: number; qty: number }) {
     attachForm.plan_date = props.date;
     if (wo) {
         attachForm.work_order_id = String(wo.id);
-        attachForm.target_d = String(wo.qty);
     }
     showAttach.value = true;
 }
@@ -436,7 +424,7 @@ function submitEdit() {
                                             :title="t('production.addBelow')"
                                             :aria-label="t('production.addBelow')"
                                             class="flex h-8 w-8 items-center justify-center rounded-lg text-ink-secondary transition hover:bg-background"
-                                            @click="openCreate(row.machine_id)"
+                                            @click="openCreate()"
                                         >
                                             <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
                                         </button>
@@ -458,7 +446,7 @@ function submitEdit() {
                                             :title="t('production.addBelow')"
                                             :aria-label="t('production.addBelow')"
                                             class="flex h-8 w-8 items-center justify-center rounded-lg text-ink-secondary transition hover:bg-background"
-                                            @click="openCreate(group.machine?.id)"
+                                            @click="openCreate()"
                                         >
                                             <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
                                         </button>
@@ -483,48 +471,13 @@ function submitEdit() {
                     <InputError :message="createForm.errors.fg_part_id" class="mt-1" />
                 </div>
 
-                <div class="grid gap-4 sm:grid-cols-2">
-                    <div>
-                        <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.machine') }}</label>
-                        <select v-model="createForm.machine_id" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
-                            <option value="">{{ t('production.selectMachine') }}</option>
-                            <option v-for="m in machines" :key="m.id" :value="m.id">{{ m.machine_name }}</option>
-                        </select>
-                        <InputError :message="createForm.errors.machine_id" class="mt-1" />
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.woQty') }}</label>
-                        <input v-model="createForm.qty" type="number" step="any" min="0.0001" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
-                        <InputError :message="createForm.errors.qty" class="mt-1" />
-                    </div>
-                </div>
-
                 <div>
-                    <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.wipPart') }} <span class="font-normal text-ink-secondary">{{ t('production.optionalBom') }}</span></label>
-                    <select v-model="createForm.wip_part_id" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
-                        <option value="">{{ t('production.useBom') }}</option>
-                        <option v-for="w in wipParts" :key="w.id" :value="w.id">{{ w.part_number }} · {{ w.part_name }}</option>
-                    </select>
-                    <InputError :message="createForm.errors.wip_part_id" class="mt-1" />
+                    <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.woQty') }}</label>
+                    <input v-model="createForm.qty" type="number" step="any" min="0.0001" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                    <InputError :message="createForm.errors.qty" class="mt-1" />
                 </div>
 
-                <div class="grid gap-4 sm:grid-cols-3">
-                    <div>
-                        <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.dQty') }}</label>
-                        <input v-model="createForm.target_d" type="number" step="any" min="0" :placeholder="t('production.sameWoQty')" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
-                        <InputError :message="createForm.errors.target_d" class="mt-1" />
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.d1Qty') }}</label>
-                        <input v-model="createForm.target_d1" type="number" step="any" min="0" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
-                        <InputError :message="createForm.errors.target_d1" class="mt-1" />
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.d2Qty') }}</label>
-                        <input v-model="createForm.target_d2" type="number" step="any" min="0" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
-                        <InputError :message="createForm.errors.target_d2" class="mt-1" />
-                    </div>
-                </div>
+                <p class="rounded-lg border border-borderline bg-background px-3 py-2 text-xs text-ink-secondary">{{ t('production.autoPlanHint') }}</p>
 
                 <div class="flex items-center justify-end gap-3 border-t border-borderline pt-4">
                     <button type="button" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-secondary transition hover:bg-background" @click="showCreate = false">{{ t('production.cancel') }}</button>
@@ -607,45 +560,13 @@ function submitEdit() {
                     <InputError :message="attachForm.errors.work_order_id" class="mt-1" />
                 </div>
 
-                <div class="grid gap-4 sm:grid-cols-2">
-                    <div>
-                        <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.machine') }}</label>
-                        <select v-model="attachForm.machine_id" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
-                            <option value="">{{ t('production.selectMachine') }}</option>
-                            <option v-for="m in machines" :key="m.id" :value="m.id">{{ m.machine_name }}</option>
-                        </select>
-                        <InputError :message="attachForm.errors.machine_id" class="mt-1" />
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.startDate') }}</label>
-                        <input v-model="attachForm.plan_date" type="date" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
-                        <InputError :message="attachForm.errors.plan_date" class="mt-1" />
-                    </div>
-                </div>
-
                 <div>
-                    <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.wipPart') }}</label>
-                    <select v-model="attachForm.wip_part_id" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
-                        <option value="">{{ t('production.useBom') }}</option>
-                        <option v-for="w in wipParts" :key="w.id" :value="w.id">{{ w.part_number }} · {{ w.part_name }}</option>
-                    </select>
+                    <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.startDate') }}</label>
+                    <input v-model="attachForm.plan_date" type="date" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                    <InputError :message="attachForm.errors.plan_date" class="mt-1" />
                 </div>
 
-                <div class="grid gap-4 sm:grid-cols-3">
-                    <div>
-                        <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.dQty') }}</label>
-                        <input v-model="attachForm.target_d" type="number" step="any" min="0" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
-                        <InputError :message="attachForm.errors.target_d" class="mt-1" />
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.d1Qty') }}</label>
-                        <input v-model="attachForm.target_d1" type="number" step="any" min="0" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.d2Qty') }}</label>
-                        <input v-model="attachForm.target_d2" type="number" step="any" min="0" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
-                    </div>
-                </div>
+                <p class="rounded-lg border border-borderline bg-background px-3 py-2 text-xs text-ink-secondary">{{ t('production.autoPlanHint') }}</p>
 
                 <div class="flex items-center justify-end gap-3 border-t border-borderline pt-4">
                     <button type="button" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-secondary transition hover:bg-background" @click="showAttach = false">{{ t('production.cancel') }}</button>

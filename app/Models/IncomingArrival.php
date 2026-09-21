@@ -58,25 +58,27 @@ class IncomingArrival extends Model
 
     public static function generateArrivalNo(string $prefix = 'ARV'): string
     {
-        $prefix = $prefix . '-' . Carbon::now()->format('ym');
-        $last = static::query()
-            ->where('arrival_no', 'like', $prefix . '%')
+        $prefix = $prefix.'-'.Carbon::now()->format('ym');
+        // withTrashed(): arrival_no UNIQUE juga menghitung baris ter-soft-delete.
+        $last = static::withTrashed()
+            ->where('arrival_no', 'like', $prefix.'%')
             ->orderByDesc('arrival_no')
             ->value('arrival_no');
         $seq = $last ? ((int) substr($last, strlen($prefix)) + 1) : 1;
 
-        return $prefix . str_pad((string) $seq, 4, '0', STR_PAD_LEFT);
+        return $prefix.str_pad((string) $seq, 4, '0', STR_PAD_LEFT);
     }
 
     public static function generateTransactionNo(string $date): string
     {
-        $prefix = 'SO' . Carbon::parse($date)->format('ymd');
-        $last = static::query()
-            ->where('transaction_no', 'like', $prefix . '%')
+        $prefix = 'SO'.Carbon::parse($date)->format('ymd');
+        // withTrashed(): transaction_no UNIQUE juga menghitung baris ter-soft-delete.
+        $last = static::withTrashed()
+            ->where('transaction_no', 'like', $prefix.'%')
             ->orderByDesc('transaction_no')
             ->value('transaction_no');
         $seq = $last ? ((int) substr($last, strlen($prefix)) + 1) : 1;
 
-        return $prefix . str_pad((string) $seq, 3, '0', STR_PAD_LEFT);
+        return $prefix.str_pad((string) $seq, 3, '0', STR_PAD_LEFT);
     }
 }

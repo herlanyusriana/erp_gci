@@ -7,6 +7,7 @@ use App\Models\MaterialIssue;
 use App\Models\MaterialIssueItem;
 use App\Models\Part;
 use App\Models\PartSubstitute;
+use App\Models\ProductionPlan;
 use App\Models\WorkOrder;
 use App\Models\WorkOrderConsumption;
 use App\Models\WorkOrderItem;
@@ -77,6 +78,67 @@ class WoService
         }
 
         return $memo;
+    }
+
+    /**
+     * Isi Production Plan dengan seluruh step WO: satu baris per step
+     * (parent part yang diproduksi) di mesin step tersebut.
+     *
+     * Step = pasangan (sequence, parent_part_id) non-Subcon; beberapa baris BOM
+     * dengan parent sama (mis. WIP + material free issue) digabung jadi satu step.
+     * `target_d` = kebutuhan parent part itu (qty WO × rasio BOM).
+     *
+     * @return int jumlah baris yang dibuat
+     */
+    public function populatePlanItems(WorkOrder $workOrder, string $planDate, int $actorId): int
+    {
+        $workOrder->loadMissing(['part', 'items.parentPart', 'items.childPart']);
+
+        $items = $this->sorted($workOrder->items);
+        $fgKey = $workOrder->part?->part_number ?? (string) $workOrder->part_id;
+        $requirements = $this->buildRequirements($items, (float) $workOrder->qty, $fgKey);
+
+        $plan = ProductionPlan::firstOrCreate(
+            ['plan_date' => $planDate],
+            ['created_by' => $actorId],
+        );
+
+        $seen = [];
+        $sequenceByMachine = [];
+        $created = 0;
+
+        foreach ($items as $item) {
+            if ($item->parent_part_id === null || strtoupper((string) $item->source) === 'SUBCON') {
+                continue;
+            }
+
+            $stepKey = ($item->sequence ?? 0).'|'.$item->parent_part_id;
+            if (isset($seen[$stepKey])) {
+                continue;
+            }
+            $seen[$stepKey] = true;
+
+            $machineKey = $item->machine_id ?? 'none';
+            $sequence = ($sequenceByMachine[$machineKey] ?? 0) + 1;
+            $sequenceByMachine[$machineKey] = $sequence;
+
+            $parentKey = $this->parentKeyOf($item);
+            $target = $requirements[$parentKey] ?? (float) $workOrder->qty;
+
+            $plan->items()->create([
+                'machine_id' => $item->machine_id,
+                'work_order_id' => $workOrder->id,
+                'fg_part_id' => $workOrder->part_id,
+                'wip_part_id' => $item->parent_part_id,
+                'sequence' => $sequence,
+                'target_d' => round($target, 4),
+                'created_by' => $actorId,
+            ]);
+
+            $created++;
+        }
+
+        return $created;
     }
 
     /**

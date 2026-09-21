@@ -86,12 +86,7 @@ class ProductionPlanController extends Controller
         $data = $request->validate([
             'plan_date' => ['required', 'date'],
             'fg_part_id' => ['required', 'integer', 'exists:parts,id'],
-            'machine_id' => ['required', 'integer', 'exists:machines,id'],
             'qty' => ['required', 'numeric', 'min:0.0001'],
-            'wip_part_id' => ['nullable', 'integer', 'exists:parts,id'],
-            'target_d' => ['nullable', 'numeric', 'min:0'],
-            'target_d1' => ['nullable', 'numeric', 'min:0'],
-            'target_d2' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         $isFg = Part::query()
@@ -118,41 +113,22 @@ class ProductionPlanController extends Controller
                 $actorId,
             );
 
-            $plan = ProductionPlan::firstOrCreate(
-                ['plan_date' => $data['plan_date']],
-                ['created_by' => $actorId],
-            );
+            // Semua step WO langsung masuk papan, di mesin masing-masing.
+            $workOrder = WorkOrder::query()->findOrFail($workOrderId);
+            $this->woService->populatePlanItems($workOrder, $data['plan_date'], $actorId);
 
-            $wipPartId = $data['wip_part_id'] ?? $this->deriveWipPartId($workOrderId);
-
-            $nextSequence = (int) $plan->items()
-                ->where('machine_id', $data['machine_id'])
-                ->max('sequence') + 1;
-
-            $item = $plan->items()->create([
-                'machine_id' => $data['machine_id'],
-                'work_order_id' => $workOrderId,
-                'fg_part_id' => $data['fg_part_id'],
-                'wip_part_id' => $wipPartId,
-                'sequence' => $nextSequence,
-                'target_d' => $data['target_d'] ?? $data['qty'],
-                'target_d1' => $data['target_d1'] ?? null,
-                'target_d2' => $data['target_d2'] ?? null,
-                'created_by' => $actorId,
-            ]);
-
-            return [$item, $warnings, $plan];
+            return [$workOrder, $warnings];
         });
 
-        [$item, $warnings, $plan] = $result;
+        [$workOrder, $warnings] = $result;
 
-        $redirect = redirect()->route('production-plans.index', ['date' => $plan->plan_date?->toDateString()]);
+        $redirect = redirect()->route('production-plans.index', ['date' => $data['plan_date']]);
 
         if (count($warnings) > 0) {
             return $redirect->with('error', __('WO dibuat, tapi ada kekurangan stok: :details', ['details' => implode(' · ', array_slice($warnings, 0, 5)).(count($warnings) > 5 ? ' …' : '')]));
         }
 
-        return $redirect->with('success', __('WO :number dibuat dan masuk ke Production Plan.', ['number' => $item->workOrder?->wo_no]));
+        return $redirect->with('success', __('WO :number dibuat dan masuk ke Production Plan.', ['number' => $workOrder->wo_no]));
     }
 
     /**
@@ -164,12 +140,7 @@ class ProductionPlanController extends Controller
 
         $data = $request->validate([
             'work_order_id' => ['required', 'integer', 'exists:work_orders,id'],
-            'machine_id' => ['required', 'integer', 'exists:machines,id'],
             'plan_date' => ['required', 'date'],
-            'wip_part_id' => ['nullable', 'integer', 'exists:parts,id'],
-            'target_d' => ['nullable', 'numeric', 'min:0'],
-            'target_d1' => ['nullable', 'numeric', 'min:0'],
-            'target_d2' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         $workOrder = WorkOrder::query()->findOrFail((int) $data['work_order_id']);
@@ -181,36 +152,10 @@ class ProductionPlanController extends Controller
             throw ValidationException::withMessages(['work_order_id' => __('WO ini sudah ada di Production Plan.')]);
         }
 
-        $actorId = (int) auth()->id();
-        $planDate = $data['plan_date'];
-
-        $plan = DB::transaction(function () use ($data, $workOrder, $actorId, $planDate) {
-            $plan = ProductionPlan::firstOrCreate(
-                ['plan_date' => $planDate],
-                ['created_by' => $actorId],
-            );
-
-            $nextSequence = (int) $plan->items()
-                ->where('machine_id', $data['machine_id'])
-                ->max('sequence') + 1;
-
-            $plan->items()->create([
-                'machine_id' => $data['machine_id'],
-                'work_order_id' => $workOrder->id,
-                'fg_part_id' => $workOrder->part_id,
-                'wip_part_id' => $data['wip_part_id'] ?? $this->deriveWipPartId($workOrder->id),
-                'sequence' => $nextSequence,
-                'target_d' => $data['target_d'] ?? $workOrder->qty,
-                'target_d1' => $data['target_d1'] ?? null,
-                'target_d2' => $data['target_d2'] ?? null,
-                'created_by' => $actorId,
-            ]);
-
-            return $plan;
-        });
+        $this->woService->populatePlanItems($workOrder, $data['plan_date'], (int) auth()->id());
 
         return redirect()
-            ->route('production-plans.index', ['date' => $plan->plan_date?->toDateString()])
+            ->route('production-plans.index', ['date' => $data['plan_date']])
             ->with('success', __('WO :number masuk ke Production Plan.', ['number' => $workOrder->wo_no]));
     }
 
@@ -276,24 +221,5 @@ class ProductionPlanController extends Controller
 
         return redirect()
             ->route('production-plans.index', ['date' => $planDate])->with('success', $message);
-    }
-
-    private function deriveWipPartId(int $workOrderId): ?int
-    {
-        $workOrder = WorkOrder::query()->find($workOrderId);
-
-        if ($workOrder === null) {
-            return null;
-        }
-
-        $wipItem = $workOrder->items()
-            ->with('parentPart.partType')
-            ->get()
-            ->filter(fn ($it) => $it->parentPart !== null
-                && strtoupper((string) $it->parentPart->partType?->code) === 'WIP')
-            ->sortBy(fn ($it) => [$it->sequence ?? 0, $it->id])
-            ->first();
-
-        return $wipItem?->parent_part_id;
     }
 }

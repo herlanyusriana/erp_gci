@@ -56,7 +56,8 @@ class WorkOrder extends Model
     public static function generateWoNo(): string
     {
         $prefix = 'WO-'.now()->format('ym');
-        $last = static::query()
+        // withTrashed(): wo_no UNIQUE juga menghitung baris ter-soft-delete.
+        $last = static::withTrashed()
             ->where('wo_no', 'like', $prefix.'%')
             ->orderByDesc('wo_no')
             ->value('wo_no');

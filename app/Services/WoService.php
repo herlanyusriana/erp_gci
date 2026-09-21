@@ -111,7 +111,7 @@ class WoService
      */
     public function populatePlanItems(WorkOrder $workOrder, string $planDate, int $actorId): int
     {
-        $workOrder->loadMissing(['part', 'items.parentPart', 'items.childPart']);
+        $workOrder->loadMissing(['part', 'items.machine', 'items.parentPart', 'items.childPart']);
 
         $items = $this->sorted($workOrder->items);
 
@@ -125,16 +125,17 @@ class WoService
             $steps[$stepKey] ??= $item;
         }
 
-        // Gabung step berurutan yang mesinnya sama.
+        // Gabung step berurutan yang grup mesinnya sama (3 karakter pertama nama mesin).
         $groups = [];
         foreach ($steps as $step) {
+            $key = $this->machineGroupKey($step);
             $lastIndex = count($groups) - 1;
-            if ($lastIndex >= 0 && $groups[$lastIndex]['machine_id'] === $step->machine_id) {
+            if ($lastIndex >= 0 && $groups[$lastIndex]['key'] === $key) {
                 $groups[$lastIndex]['steps'][] = $step;
 
                 continue;
             }
-            $groups[] = ['machine_id' => $step->machine_id, 'steps' => [$step]];
+            $groups[] = ['key' => $key, 'machine_id' => $step->machine_id, 'steps' => [$step]];
         }
 
         if ($groups === []) {
@@ -153,7 +154,7 @@ class WoService
             $first = $group['steps'][0];
             $last = $group['steps'][count($group['steps']) - 1];
 
-            $machineKey = $group['machine_id'] ?? 'none';
+            $machineKey = $group['key'];
             $sequence = ($sequenceByMachine[$machineKey] ?? 0) + 1;
             $sequenceByMachine[$machineKey] = $sequence;
 
@@ -705,6 +706,19 @@ class WoService
         $workOrder->update(['status' => 'cancelled', 'updated_by' => $actorId]);
 
         return $workOrder->fresh();
+    }
+
+    /**
+     * Kunci grup mesin: 3 karakter pertama nama mesin (mis. "TPL"), fallback id mesin.
+     */
+    private function machineGroupKey(WorkOrderItem $item): string
+    {
+        $name = strtoupper(trim((string) ($item->machine?->machine_name ?? '')));
+        if ($name !== '') {
+            return substr($name, 0, 3);
+        }
+
+        return $item->machine_id !== null ? 'id:'.$item->machine_id : 'none';
     }
 
     private function sorted(Collection $items): Collection

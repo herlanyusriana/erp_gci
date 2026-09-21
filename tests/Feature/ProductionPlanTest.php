@@ -35,22 +35,30 @@ class ProductionPlanTest extends TestCase
         return WorkOrder::latest('id')->firstOrFail();
     }
 
-    /** @return int jumlah baris papan = grup step berurutan dengan mesin sama */
+    /** @return int jumlah baris papan = grup step berurutan dengan 3 huruf pertama nama mesin sama */
     private function expectedGroupCount(WorkOrder $wo): int
     {
         $steps = $wo->items()
+            ->with('machine')
             ->get()
             ->filter(fn ($it) => $it->parent_part_id !== null && strtoupper((string) $it->source) !== 'SUBCON')
             ->mapWithKeys(fn ($it) => [($it->sequence ?? 0).'|'.$it->parent_part_id => $it])
             ->values();
 
+        $keyOf = function ($it): string {
+            $name = strtoupper(trim((string) ($it->machine?->machine_name ?? '')));
+
+            return $name !== '' ? substr($name, 0, 3) : (string) $it->machine_id;
+        };
+
         $groups = 0;
-        $previousMachine = null;
+        $previousKey = null;
         foreach ($steps as $index => $step) {
-            if ($index === 0 || $step->machine_id !== $previousMachine) {
+            $key = $keyOf($step);
+            if ($index === 0 || $key !== $previousKey) {
                 $groups++;
             }
-            $previousMachine = $step->machine_id;
+            $previousKey = $key;
         }
 
         return $groups;

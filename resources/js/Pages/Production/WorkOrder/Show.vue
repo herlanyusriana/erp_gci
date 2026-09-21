@@ -6,7 +6,7 @@ import { computed } from 'vue';
 import { useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
-import type { WorkOrder } from '@/types';
+import type { WorkOrder, WorkOrderItem } from '@/types';
 
 const { t, locale, te } = useI18n();
 
@@ -16,6 +16,30 @@ const props = defineProps<{
 }>();
 
 const items = computed(() => props.workOrder.items ?? []);
+
+/** Kunci grup mesin: 3 karakter pertama nama mesin (mis. "TPL"). */
+const machineKey = (it: WorkOrderItem) => {
+    const name = (it.machine?.machine_name ?? '').trim().toUpperCase();
+    return name !== '' ? name.slice(0, 3) : (it.machine_id != null ? `id:${it.machine_id}` : 'none');
+};
+
+/** Baris routing: step berurutan di grup mesin yang sama digabung jadi satu baris. */
+const head = (g: { key: string; items: WorkOrderItem[] }) => g.items[0];
+const tail = (g: { key: string; items: WorkOrderItem[] }) => g.items[g.items.length - 1];
+
+const routingGroups = computed(() => {
+    const groups: Array<{ key: string; items: WorkOrderItem[] }> = [];
+    for (const it of items.value) {
+        const key = machineKey(it);
+        const last = groups[groups.length - 1];
+        if (last && last.key === key) {
+            last.items.push(it);
+            continue;
+        }
+        groups.push({ key, items: [it] });
+    }
+    return groups;
+});
 
 const fmt = (n: number | null | undefined, decimals = 4) => {
     if (n == null) return '—';
@@ -137,35 +161,38 @@ function doDestroy() {
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-borderline">
-                        <tr v-for="it in items" :key="it.id" class="align-top hover:bg-primary-light/40">
-                            <td class="px-3 py-2.5 tabular-nums text-ink-secondary">{{ it.sequence ?? '—' }}</td>
-                            <td class="px-3 py-2.5 text-ink-primary">{{ it.process?.process_name ?? '—' }}</td>
-                            <td class="px-3 py-2.5 whitespace-nowrap text-ink-primary">{{ it.machine?.machine_name ?? '—' }}</td>
+                        <tr v-for="g in routingGroups" :key="g.key + '-' + head(g).id" class="align-top hover:bg-primary-light/40">
+                            <td class="px-3 py-2.5 tabular-nums text-ink-secondary">{{ head(g).sequence ?? '—' }}</td>
+                            <td class="px-3 py-2.5 text-ink-primary">{{ head(g).process?.process_name ?? '—' }}</td>
+                            <td class="px-3 py-2.5 whitespace-nowrap text-ink-primary">{{ head(g).machine?.machine_name ?? '—' }}</td>
                             <td class="px-3 py-2.5">
-                                <div class="font-medium text-ink-primary">{{ it.selected_part?.part_number ?? it.child_part?.part_number ?? it.child_part_name ?? '—' }}</div>
-                                <div v-if="it.child_part" class="text-xs text-ink-secondary">{{ t('production.mainPart', { part: it.child_part.part_number }) }}</div>
-                                <div v-if="it.selected_part && it.selected_part.id !== it.child_part_id" class="text-xs font-medium text-info">{{ t('production.substitute') }}</div>
-                                <div v-if="it.allocations?.length" class="mt-1 space-y-0.5">
-                                    <div v-for="a in it.allocations" :key="a.id" class="text-xs text-ink-secondary">
+                                <div class="font-medium text-ink-primary">{{ head(g).selected_part?.part_number ?? head(g).child_part?.part_number ?? head(g).child_part_name ?? '—' }}</div>
+                                <div v-if="head(g).child_part" class="text-xs text-ink-secondary">{{ t('production.mainPart', { part: head(g).child_part?.part_number }) }}</div>
+                                <div v-if="head(g).selected_part?.id != null && head(g).selected_part?.id !== head(g).child_part_id" class="text-xs font-medium text-info">{{ t('production.substitute') }}</div>
+                                <div v-if="head(g).allocations?.length" class="mt-1 space-y-0.5">
+                                    <div v-for="a in head(g).allocations" :key="a.id" class="text-xs text-ink-secondary">
                                         <span class="font-medium text-ink-primary">{{ a.part?.part_number ?? '#' + a.part_id }}</span>
-                                        · {{ fmt(a.qty) }} {{ it.uom_rm ?? '' }}
+                                        · {{ fmt(a.qty) }} {{ head(g).uom_rm ?? '' }}
                                     </div>
+                                </div>
+                                <div v-if="g.items.length > 1" class="mt-1">
+                                    <span class="rounded-md bg-background px-1.5 py-0.5 text-[11px] font-medium text-ink-secondary">{{ t('production.stepCount', { n: g.items.length }) }}</span>
                                 </div>
                             </td>
                             <td class="px-3 py-2.5">
-                                <span class="font-medium text-ink-primary">{{ it.parent_part?.part_number ?? it.parent_part_name ?? '—' }}</span>
+                                <span class="font-medium text-ink-primary">{{ tail(g).parent_part?.part_number ?? tail(g).parent_part_name ?? '—' }}</span>
                             </td>
-                            <td class="px-3 py-2.5 text-right tabular-nums text-ink-primary">{{ fmt(it.child_qty) }}</td>
-                            <td class="px-3 py-2.5 text-ink-secondary">{{ it.uom_rm ?? '—' }}</td>
+                            <td class="px-3 py-2.5 text-right tabular-nums text-ink-primary">{{ fmt(head(g).child_qty) }}</td>
+                            <td class="px-3 py-2.5 text-ink-secondary">{{ head(g).uom_rm ?? '—' }}</td>
                             <td class="px-3 py-2.5">
-                                <StatusBadge :status="it.source">{{ sourceLabel(it.source) }}</StatusBadge>
+                                <StatusBadge :status="head(g).source">{{ sourceLabel(head(g).source) }}</StatusBadge>
                             </td>
-                            <td class="px-3 py-2.5 text-right tabular-nums text-ink-secondary">{{ fmt(it.qty_required) }}</td>
-                            <td class="px-3 py-2.5 text-right tabular-nums" :class="Number(it.qty_consumed) < Number(it.qty_required) ? 'text-danger' : 'text-success'">{{ fmt(it.qty_consumed) }}</td>
+                            <td class="px-3 py-2.5 text-right tabular-nums text-ink-secondary">{{ fmt(tail(g).qty_required) }}</td>
+                            <td class="px-3 py-2.5 text-right tabular-nums" :class="Number(tail(g).qty_consumed) < Number(tail(g).qty_required) ? 'text-danger' : 'text-success'">{{ fmt(tail(g).qty_consumed) }}</td>
                             <td class="px-3 py-2.5 text-center">
                                 <a
                                     v-if="workOrder.status === 'planned' && can.release"
-                                    :href="route('work-orders.items.edit', [workOrder.id, it.id])"
+                                    :href="route('work-orders.items.edit', [workOrder.id, head(g).id])"
                                     :title="t('production.editRouting')"
                                     :aria-label="t('production.editRouting')"
                                     class="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-secondary transition hover:bg-primary-light hover:text-primary"
@@ -177,7 +204,7 @@ function doDestroy() {
                                 <span v-else class="text-ink-secondary">—</span>
                             </td>
                         </tr>
-                        <tr v-if="items.length === 0">
+                        <tr v-if="routingGroups.length === 0">
                             <td colspan="11" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('production.noRouting') }}</td>
                         </tr>
                     </tbody>

@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Storage;
 
@@ -30,8 +30,8 @@ class Supplier extends Model
         return $this->signature_path ? Storage::disk('public')->url($this->signature_path) : null;
     }
 
-    public function partSubstitutes(): BelongsTo
+    public function partSubstitutes(): HasMany
     {
-        return $this->belongsTo(PartSubstitute::class);
+        return $this->hasMany(PartSubstitute::class);
     }
 }

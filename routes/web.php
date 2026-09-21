@@ -12,6 +12,7 @@ use App\Http\Controllers\PartStockController;
 use App\Http\Controllers\PartSubstituteController;
 use App\Http\Controllers\ProcessController;
 use App\Http\Controllers\ProductionPlanController;
+use App\Http\Controllers\ProductionResultController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\ReceiveController;
@@ -97,6 +98,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('production-plans', [ProductionPlanController::class, 'index'])->name('production-plans.index');
     Route::post('production-plans', [ProductionPlanController::class, 'store'])->name('production-plans.store');
     Route::post('production-plans/items/reorder', [ProductionPlanController::class, 'reorder'])->name('production-plans.items.reorder');
+    Route::post('production-plans/attach', [ProductionPlanController::class, 'attachWorkOrder'])->name('production-plans.attach');
     Route::patch('production-plans/items/{item}', [ProductionPlanController::class, 'update'])->name('production-plans.items.update');
     Route::delete('production-plans/items/{item}', [ProductionPlanController::class, 'detach'])->name('production-plans.items.detach');
 
@@ -108,6 +110,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('work-orders/{workOrder}/items/{item}/edit', [WorkOrderController::class, 'editItem'])->name('work-orders.items.edit');
     Route::patch('work-orders/{workOrder}/items/{item}', [WorkOrderController::class, 'updateItem'])->name('work-orders.items.update');
     Route::post('work-orders/{workOrder}/release', [WorkOrderController::class, 'release'])->name('work-orders.release');
+    Route::get('work-orders/{workOrder}/results', [ProductionResultController::class, 'create'])->name('work-orders.results.create');
+    Route::post('work-orders/{workOrder}/results', [ProductionResultController::class, 'store'])->name('work-orders.results.store');
+    Route::delete('work-orders/{workOrder}/results/{result}', [ProductionResultController::class, 'destroy'])->name('work-orders.results.destroy');
     Route::post('work-orders/{workOrder}/complete', [WorkOrderController::class, 'complete'])->name('work-orders.complete');
     Route::post('work-orders/{workOrder}/cancel', [WorkOrderController::class, 'cancel'])->name('work-orders.cancel');
     Route::delete('work-orders/{workOrder}', [WorkOrderController::class, 'destroy'])->name('work-orders.destroy');

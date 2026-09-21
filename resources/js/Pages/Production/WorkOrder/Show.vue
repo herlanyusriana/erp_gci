@@ -73,6 +73,10 @@ function doDestroy() {
             </div>
 
             <div class="flex flex-wrap items-center gap-2">
+                <a v-if="workOrder.status === 'in_progress' && can.complete" :href="route('work-orders.results.create', workOrder.id)"
+                    class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover">
+                    {{ t('production.results') }}
+                </a>
                 <button v-if="workOrder.status === 'planned' && can.release" @click="doRelease" :disabled="releaseForm.processing"
                     class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60">
                     {{ releaseForm.processing ? t('production.releasing') : t('production.release') }}

@@ -21,6 +21,15 @@ const props = defineProps<{
     machines: MachineOpt[];
     fgParts: PartOpt[];
     wipParts: Array<Pick<Part, 'id' | 'part_number' | 'part_name'>>;
+    unplannedWorkOrders: Array<{
+        id: number;
+        wo_no: string;
+        part_id: number;
+        qty: number;
+        status: string;
+        planned_date: string | null;
+        part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
+    }>;
 }>();
 
 const date = ref(props.date);
@@ -210,6 +219,39 @@ function submitCreate() {
     });
 }
 
+// ── WO belum masuk plan ───────────────────────────────────
+const showAttach = ref(false);
+const attachForm = useForm({
+    work_order_id: '',
+    machine_id: '',
+    plan_date: props.date,
+    wip_part_id: '',
+    target_d: '',
+    target_d1: '',
+    target_d2: '',
+});
+
+function openAttach(wo?: { id: number; qty: number }) {
+    attachForm.reset();
+    attachForm.clearErrors();
+    attachForm.plan_date = props.date;
+    if (wo) {
+        attachForm.work_order_id = String(wo.id);
+        attachForm.target_d = String(wo.qty);
+    }
+    showAttach.value = true;
+}
+
+function submitAttach() {
+    attachForm.post(route('production-plans.attach'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            showAttach.value = false;
+            attachForm.reset();
+        },
+    });
+}
+
 // ── Edit ──────────────────────────────────────────────────
 const showEdit = ref(false);
 const editing = ref<ProductionPlanItem | null>(null);
@@ -280,6 +322,35 @@ function submitEdit() {
                     class="rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
                     @change="applyDate"
                 />
+            </div>
+        </div>
+
+        <!-- WO planned yang belum masuk plan mana pun -->
+        <div v-if="unplannedWorkOrders.length" class="mb-4 rounded-xl border border-warning/40 bg-warning/5 p-4">
+            <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <h2 class="text-sm font-semibold text-warning">
+                    {{ t('production.unplannedTitle', { count: unplannedWorkOrders.length }) }}
+                </h2>
+                <button
+                    type="button"
+                    class="rounded-md border border-warning px-3 py-1.5 text-xs font-semibold text-warning transition hover:bg-warning/10"
+                    @click="openAttach()"
+                >
+                    {{ t('production.attachWo') }}
+                </button>
+            </div>
+            <p class="mb-3 text-xs text-ink-secondary">{{ t('production.unplannedHint') }}</p>
+            <div class="flex flex-wrap gap-2">
+                <button
+                    v-for="wo in unplannedWorkOrders"
+                    :key="wo.id"
+                    type="button"
+                    class="rounded-lg border border-borderline bg-surface px-3 py-2 text-left text-xs transition hover:border-warning"
+                    @click="openAttach(wo)"
+                >
+                    <span class="block font-semibold text-ink-primary">{{ wo.wo_no }}</span>
+                    <span class="block text-ink-secondary">{{ wo.part?.part_number ?? '—' }} · {{ fmt(wo.qty) }}</span>
+                </button>
             </div>
         </div>
 
@@ -561,6 +632,74 @@ function submitEdit() {
                     <button type="button" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-secondary transition hover:bg-background" @click="showEdit = false">{{ t('production.cancel') }}</button>
                     <button type="submit" :disabled="editForm.processing" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60">
                         {{ editForm.processing ? t('production.saving') : t('production.save') }}
+                    </button>
+                </div>
+            </form>
+        </Modal>
+
+        <!-- Modal: tempel WO ke plan -->
+        <Modal :show="showAttach" max-width="lg" @close="showAttach = false">
+            <form class="space-y-4 p-6" @submit.prevent="submitAttach">
+                <div>
+                    <h3 class="text-lg font-bold text-ink-primary">{{ t('production.attachWo') }}</h3>
+                    <p class="mt-1 text-sm text-ink-secondary">{{ t('production.attachHint') }}</p>
+                </div>
+
+                <div>
+                    <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.workOrder') }}</label>
+                    <select v-model="attachForm.work_order_id" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                        <option value="">{{ t('production.selectWo') }}</option>
+                        <option v-for="wo in unplannedWorkOrders" :key="wo.id" :value="wo.id">
+                            {{ wo.wo_no }} · {{ wo.part?.part_number ?? '—' }} · {{ fmt(wo.qty) }}
+                        </option>
+                    </select>
+                    <InputError :message="attachForm.errors.work_order_id" class="mt-1" />
+                </div>
+
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.machine') }}</label>
+                        <select v-model="attachForm.machine_id" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                            <option value="">{{ t('production.selectMachine') }}</option>
+                            <option v-for="m in machines" :key="m.id" :value="m.id">{{ m.machine_name }}</option>
+                        </select>
+                        <InputError :message="attachForm.errors.machine_id" class="mt-1" />
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.startDate') }}</label>
+                        <input v-model="attachForm.plan_date" type="date" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <InputError :message="attachForm.errors.plan_date" class="mt-1" />
+                    </div>
+                </div>
+
+                <div>
+                    <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.wipPart') }}</label>
+                    <select v-model="attachForm.wip_part_id" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                        <option value="">{{ t('production.useBom') }}</option>
+                        <option v-for="w in wipParts" :key="w.id" :value="w.id">{{ w.part_number }} · {{ w.part_name }}</option>
+                    </select>
+                </div>
+
+                <div class="grid gap-4 sm:grid-cols-3">
+                    <div>
+                        <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.dQty') }}</label>
+                        <input v-model="attachForm.target_d" type="number" step="any" min="0" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <InputError :message="attachForm.errors.target_d" class="mt-1" />
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.d1Qty') }}</label>
+                        <input v-model="attachForm.target_d1" type="number" step="any" min="0" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.d2Qty') }}</label>
+                        <input v-model="attachForm.target_d2" type="number" step="any" min="0" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end gap-3 border-t border-borderline pt-4">
+                    <button type="button" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-secondary transition hover:bg-background" @click="showAttach = false">{{ t('production.cancel') }}</button>
+                    <button type="submit" :disabled="attachForm.processing" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60">
+                        {{ attachForm.processing ? t('production.saving') : t('production.attachWo') }}
                     </button>
                 </div>
             </form>

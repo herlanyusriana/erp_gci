@@ -252,4 +252,33 @@ class MaterialIssueApiTest extends TestCase
             'invoice' => 'INV-9001',
         ]);
     }
+
+    public function test_result_context_and_store_result(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->actingAsApi();
+        $scans = $this->seedStockAndBuildScans($wo);
+
+        $this->postJson("/api/work-orders/{$wo->id}/release", [
+            'idempotency_key' => 'res-ctx-1',
+            'items' => $scans,
+        ])->assertOk();
+
+        $steps = $this->getJson("/api/work-orders/{$wo->id}/result-context")
+            ->assertOk()
+            ->json('data.steps');
+
+        $this->assertNotEmpty($steps);
+        $first = $steps[0];
+
+        $this->postJson("/api/work-orders/{$wo->id}/results", [
+            'parent_part_id' => $first['parent_part_id'],
+            'qty_good' => 10,
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.parent_part_id', $first['parent_part_id']);
+
+        $after = $this->getJson("/api/work-orders/{$wo->id}/result-context")->json('data.steps');
+        $this->assertEqualsWithDelta(10.0, (float) $after[0]['produced_qty'], 0.001);
+    }
 }

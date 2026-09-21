@@ -7,6 +7,7 @@ use App\Models\Machine;
 use App\Models\Part;
 use App\Models\PartStock;
 use App\Models\WorkOrder;
+use App\Services\ProductionResultService;
 use App\Services\WoService;
 use App\Support\UomCatalog;
 use Illuminate\Http\JsonResponse;
@@ -19,7 +20,10 @@ use Illuminate\Support\Facades\Gate;
  */
 class MaterialIssueApiController extends Controller
 {
-    public function __construct(private WoService $woService) {}
+    public function __construct(
+        private WoService $woService,
+        private ProductionResultService $resultService,
+    ) {}
 
     public function workOrders(Request $request): JsonResponse
     {
@@ -30,7 +34,7 @@ class MaterialIssueApiController extends Controller
             ->when(
                 $request->input('status'),
                 fn ($q, $status) => $q->where('status', $status),
-                fn ($q) => $q->where('status', 'planned'),
+                fn ($q) => $q->whereIn('status', ['planned', 'in_progress']),
             )
             ->when($request->input('search'), fn ($q, $s) => $q->where('wo_no', 'ilike', "%{$s}%"))
             ->orderByDesc('created_at')
@@ -248,6 +252,107 @@ class MaterialIssueApiController extends Controller
                 'id' => (int) $machine->id,
                 'machine_code' => $machine->machine_code,
                 'machine_name' => $machine->machine_name,
+            ],
+        ]);
+    }
+
+    /**
+     * Step yang bisa dilaporkan + progres (mode WIP per proses).
+     */
+    public function resultContext(WorkOrder $workOrder): JsonResponse
+    {
+        Gate::authorize('update', $workOrder);
+
+        if ($workOrder->status !== 'in_progress') {
+            return response()->json([
+                'ok' => false,
+                'message' => __('WO belum di-release.'),
+            ], 422);
+        }
+
+        $produced = $workOrder->results()
+            ->selectRaw('parent_part_id, SUM(qty_good) AS good, SUM(qty_reject) AS reject')
+            ->groupBy('parent_part_id')
+            ->get()
+            ->keyBy('parent_part_id');
+
+        $items = $workOrder->items()
+            ->with([
+                'parentPart:id,part_number,part_name',
+                'parentPart.partType:id,code',
+                'process:id,process_name',
+                'machine:id,machine_code,machine_name',
+            ])
+            ->get();
+
+        $steps = $items
+            ->groupBy('parent_part_id')
+            ->map(function ($rows, $parentId) use ($workOrder, $produced) {
+                $first = $rows->sortBy(fn ($r) => [$r->sequence ?? 0, $r->id])->first();
+                $done = $produced[$parentId] ?? null;
+
+                return [
+                    'parent_part_id' => (int) $parentId,
+                    'part_number' => $first->parentPart?->part_number,
+                    'part_name' => $first->parentPart?->part_name,
+                    'part_type' => strtoupper((string) $first->parentPart?->partType?->code),
+                    'process' => $first->process?->process_name,
+                    'machine' => $first->machine?->machine_name,
+                    'sequence' => $first->sequence,
+                    'target_qty' => (float) $workOrder->qty,
+                    'produced_qty' => (float) ($done->good ?? 0),
+                    'reject_qty' => (float) ($done->reject ?? 0),
+                ];
+            })
+            ->sortBy(fn ($s) => [$s['sequence'] ?? 0, $s['parent_part_id']])
+            ->values();
+
+        return response()->json([
+            'ok' => true,
+            'data' => [
+                'work_order' => [
+                    'id' => $workOrder->id,
+                    'wo_no' => $workOrder->wo_no,
+                    'qty' => (float) $workOrder->qty,
+                    'status' => $workOrder->status,
+                ],
+                'steps' => $steps,
+            ],
+        ]);
+    }
+
+    /**
+     * Submit hasil produksi satu step (WIP per proses).
+     */
+    public function storeResult(Request $request, WorkOrder $workOrder): JsonResponse
+    {
+        Gate::authorize('update', $workOrder);
+
+        $data = $request->validate([
+            'parent_part_id' => ['required', 'integer', 'exists:parts,id'],
+            'qty_good' => ['required', 'numeric', 'gt:0'],
+            'qty_reject' => ['nullable', 'numeric', 'min:0'],
+            'result_date' => ['nullable', 'date'],
+            'shift' => ['nullable', 'string', 'max:20'],
+            'machine_id' => ['nullable', 'integer', 'exists:machines,id'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $result = $this->resultService->report(
+            $workOrder,
+            (int) $data['parent_part_id'],
+            $data,
+            (int) $request->user()->id,
+        );
+
+        return response()->json([
+            'ok' => true,
+            'message' => __('Hasil produksi tersimpan.'),
+            'data' => [
+                'id' => $result->id,
+                'parent_part_id' => (int) $result->parent_part_id,
+                'qty_good' => (float) $result->qty_good,
+                'qty_reject' => (float) $result->qty_reject,
             ],
         ]);
     }

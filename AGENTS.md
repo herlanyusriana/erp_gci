@@ -132,9 +132,9 @@ Catatan penting:
 - **Konflik strategi:** `tests/Pest.php` memasang `RefreshDatabase` ke seluruh
   suite `Feature` (menghapus + migrate ulang DB, **tanpa** seed), sementara
   `WorkOrderHttpTest`, `WorkOrderAllocationTest`, `MaterialIssueApiTest`,
-  `MaterialIssueWebTest`, `RolePermissionTest`, `MachineLabelTest`,
-  `PartTypeGuardTest`, dan `UomCatalogTest` memakai `DatabaseTransactions` dan
-  mengandalkan data seeder
+  `MaterialIssueWebTest`, `ProductionPlanTest`, `ProductionResultTest`,
+  `RolePermissionTest`, `MachineLabelTest`, `PartTypeGuardTest`, dan
+  `UomCatalogTest` memakai `DatabaseTransactions` dan mengandalkan data seeder
   (`admin@geumcheon.local`, part `AAN30056405`, `CBKG07256C`, `4000W4A003A`,
   `PINCB01`, `5040JA3071C`).
 - Akibatnya: menjalankan salah satu test `RefreshDatabase` **menghapus** data
@@ -172,6 +172,13 @@ Catatan penting:
 - **Label QR mesin**: `/machines/{machine}/label` (QR JSON `{type:"machine",
   machine_id, machine_code, machine_name}`); resolve di mobile lewat
   `POST /api/machines/resolve`.
+- **Production Result** (web `/work-orders/{wo}/results`, mobile
+  `GET /api/work-orders/{wo}/result-context` + `POST .../results`): operator
+  melaporkan hasil per step proses; hanya step sebelumnya yang sudah jadi yang
+  boleh dilaporkan (stok WIP dicek).
+- **Production Plan** (`ProductionPlanController::attachWorkOrder`,
+  `POST production-plans/attach`): WO `planned` yang belum masuk plan mana pun
+  ditampilkan di panel "belum masuk plan" agar tidak hilang dari papan.
 - **Issue out to production** (mobile "Material Tracker" → Outgoing): release WO
   lewat scan label. Endpoint `GET /api/work-orders`, `GET /api/work-orders/{wo}/
   release-context` (kebutuhan + rekomendasi tag FIFO), `POST /api/stock-tags/

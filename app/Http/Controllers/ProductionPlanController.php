@@ -48,6 +48,14 @@ class ProductionPlanController extends Controller
             ->orderBy('machine_name')
             ->get(['id', 'machine_code', 'machine_name']);
 
+        // WO planned yang BELUM masuk plan mana pun → supaya tidak "hilang" dari papan.
+        $unplannedWorkOrders = WorkOrder::query()
+            ->with('part:id,part_number,part_name')
+            ->where('status', 'planned')
+            ->whereDoesntHave('planItems')
+            ->orderByDesc('id')
+            ->get(['id', 'wo_no', 'part_id', 'qty', 'status', 'planned_date']);
+
         $fgParts = Part::query()
             ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) = ?', ['fg']))
             ->where('is_active', true)
@@ -67,6 +75,7 @@ class ProductionPlanController extends Controller
             'machines' => $machines,
             'fgParts' => $fgParts,
             'wipParts' => $wipParts,
+            'unplannedWorkOrders' => $unplannedWorkOrders,
         ]);
     }
 
@@ -140,10 +149,69 @@ class ProductionPlanController extends Controller
         $redirect = redirect()->route('production-plans.index', ['date' => $plan->plan_date?->toDateString()]);
 
         if (count($warnings) > 0) {
-            return $redirect->with('error', __('WO dibuat, tapi ada kekurangan stok: :details', ['details' => implode(' · ', array_slice($warnings, 0, 5)) . (count($warnings) > 5 ? ' …' : '')]));
+            return $redirect->with('error', __('WO dibuat, tapi ada kekurangan stok: :details', ['details' => implode(' · ', array_slice($warnings, 0, 5)).(count($warnings) > 5 ? ' …' : '')]));
         }
 
         return $redirect->with('success', __('WO :number dibuat dan masuk ke Production Plan.', ['number' => $item->workOrder?->wo_no]));
+    }
+
+    /**
+     * Tempel WO yang sudah dibuat (planned) ke Production Plan.
+     */
+    public function attachWorkOrder(Request $request): RedirectResponse
+    {
+        Gate::authorize('create', ProductionPlan::class);
+
+        $data = $request->validate([
+            'work_order_id' => ['required', 'integer', 'exists:work_orders,id'],
+            'machine_id' => ['required', 'integer', 'exists:machines,id'],
+            'plan_date' => ['required', 'date'],
+            'wip_part_id' => ['nullable', 'integer', 'exists:parts,id'],
+            'target_d' => ['nullable', 'numeric', 'min:0'],
+            'target_d1' => ['nullable', 'numeric', 'min:0'],
+            'target_d2' => ['nullable', 'numeric', 'min:0'],
+        ]);
+
+        $workOrder = WorkOrder::query()->findOrFail((int) $data['work_order_id']);
+
+        if ($workOrder->status !== 'planned') {
+            throw ValidationException::withMessages(['work_order_id' => __('Hanya WO berstatus planned yang bisa dimasukkan ke plan.')]);
+        }
+        if ($workOrder->planItems()->exists()) {
+            throw ValidationException::withMessages(['work_order_id' => __('WO ini sudah ada di Production Plan.')]);
+        }
+
+        $actorId = (int) auth()->id();
+        $planDate = $data['plan_date'];
+
+        $plan = DB::transaction(function () use ($data, $workOrder, $actorId, $planDate) {
+            $plan = ProductionPlan::firstOrCreate(
+                ['plan_date' => $planDate],
+                ['created_by' => $actorId],
+            );
+
+            $nextSequence = (int) $plan->items()
+                ->where('machine_id', $data['machine_id'])
+                ->max('sequence') + 1;
+
+            $plan->items()->create([
+                'machine_id' => $data['machine_id'],
+                'work_order_id' => $workOrder->id,
+                'fg_part_id' => $workOrder->part_id,
+                'wip_part_id' => $data['wip_part_id'] ?? $this->deriveWipPartId($workOrder->id),
+                'sequence' => $nextSequence,
+                'target_d' => $data['target_d'] ?? $workOrder->qty,
+                'target_d1' => $data['target_d1'] ?? null,
+                'target_d2' => $data['target_d2'] ?? null,
+                'created_by' => $actorId,
+            ]);
+
+            return $plan;
+        });
+
+        return redirect()
+            ->route('production-plans.index', ['date' => $plan->plan_date?->toDateString()])
+            ->with('success', __('WO :number masuk ke Production Plan.', ['number' => $workOrder->wo_no]));
     }
 
     public function update(Request $request, ProductionPlanItem $item): RedirectResponse

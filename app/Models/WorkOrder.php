@@ -41,15 +41,27 @@ class WorkOrder extends Model
         return $this->hasMany(WorkOrderConsumption::class);
     }
 
+    /** Baris Production Plan yang memuat WO ini. */
+    public function planItems(): HasMany
+    {
+        return $this->hasMany(ProductionPlanItem::class);
+    }
+
+    /** Hasil produksi per step. */
+    public function results(): HasMany
+    {
+        return $this->hasMany(ProductionResult::class);
+    }
+
     public static function generateWoNo(): string
     {
-        $prefix = 'WO-' . now()->format('ym');
+        $prefix = 'WO-'.now()->format('ym');
         $last = static::query()
-            ->where('wo_no', 'like', $prefix . '%')
+            ->where('wo_no', 'like', $prefix.'%')
             ->orderByDesc('wo_no')
             ->value('wo_no');
         $seq = $last ? ((int) substr($last, strlen($prefix)) + 1) : 1;
 
-        return $prefix . str_pad((string) $seq, 4, '0', STR_PAD_LEFT);
+        return $prefix.str_pad((string) $seq, 4, '0', STR_PAD_LEFT);
     }
 }

@@ -2,9 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Models\IncomingArrival;
+use App\Models\IncomingArrivalItem;
+use App\Models\IncomingReceive;
 use App\Models\Part;
 use App\Models\PartStock;
 use App\Models\PartSubstitute;
+use App\Models\Supplier;
 use App\Models\User;
 use App\Models\WorkOrder;
 use App\Models\WorkOrderItem;
@@ -80,6 +84,86 @@ class WorkOrderAllocationTest extends TestCase
                 ->has('allocations')
                 ->where('materialOptions', fn ($options) => collect($options)
                     ->firstWhere('id', $subA)['stock'] === 7.5));
+    }
+
+    /** Bangun asal material (supplier -> arrival -> item -> receive) untuk satu baris stok. */
+    private function linkStockOrigin(PartStock $stock, string $invoiceNo, string $supplierName): void
+    {
+        $supplier = Supplier::create([
+            'supplier_code' => 'SUP-TAG-'.$stock->id,
+            'supplier_name' => $supplierName,
+            'is_active' => true,
+        ]);
+
+        $arrival = IncomingArrival::create([
+            'arrival_no' => 'ARV-TAG-'.$stock->id,
+            'supplier_id' => $supplier->id,
+            'is_local' => false,
+            'status' => 'draft',
+        ]);
+
+        $arrivalItem = IncomingArrivalItem::create([
+            'arrival_id' => $arrival->id,
+            'part_id' => $stock->part_id,
+            'qty_goods' => 100,
+            'unit_goods' => 'KGM',
+        ]);
+
+        $receive = IncomingReceive::create([
+            'arrival_item_id' => $arrivalItem->id,
+            'part_id' => $stock->part_id,
+            'tag' => $stock->tag,
+            'qty' => (float) $stock->qty,
+            'qty_unit' => 'KGM',
+            'invoice_no' => $invoiceNo,
+        ]);
+
+        $stock->update(['receive_id' => $receive->id]);
+    }
+
+    public function test_edit_page_exposes_fifo_tags_filtered_by_uom_and_qty(): void
+    {
+        $wo = $this->createWorkOrder();
+        $item = $this->kgmItem($wo);
+        [$subA] = $this->substitutes($item->child_part_id);
+
+        PartStock::create(['part_id' => $subA, 'tag' => 'T-LAMA', 'qty' => 3, 'qty_unit' => 'KGM', 'received_at' => now()->subDays(2)]);
+        PartStock::create(['part_id' => $subA, 'tag' => 'T-BARU', 'qty' => 4, 'qty_unit' => 'KGM', 'received_at' => now()]);
+        PartStock::create(['part_id' => $subA, 'tag' => 'T-PCS', 'qty' => 9, 'qty_unit' => 'PCS', 'received_at' => now()]);
+        PartStock::create(['part_id' => $subA, 'tag' => 'T-HABIS', 'qty' => 0, 'qty_unit' => 'KGM', 'received_at' => now()]);
+
+        $this->get(route('work-orders.items.edit', [$wo, $item]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('materialOptions', function ($options) use ($subA) {
+                    $tags = collect(collect($options)->firstWhere('id', $subA)['tags']);
+
+                    return $tags->pluck('tag')->all() === ['T-LAMA', 'T-BARU'];
+                }));
+    }
+
+    public function test_edit_page_tag_list_includes_material_origin(): void
+    {
+        $wo = $this->createWorkOrder();
+        $item = $this->kgmItem($wo);
+        [$subA] = $this->substitutes($item->child_part_id);
+
+        $stock = PartStock::create([
+            'part_id' => $subA, 'tag' => 'T-ORIGIN', 'qty' => 5,
+            'qty_unit' => 'KGM', 'received_at' => now(),
+        ]);
+        $this->linkStockOrigin($stock, 'INV-TAG-001', 'PT Asal Material');
+
+        $this->get(route('work-orders.items.edit', [$wo, $item]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('materialOptions', function ($options) use ($subA) {
+                    $tag = collect(collect($options)->firstWhere('id', $subA)['tags'])->firstWhere('tag', 'T-ORIGIN');
+
+                    return $tag !== null
+                        && $tag['invoice'] === 'INV-TAG-001'
+                        && $tag['supplier'] === 'PT Asal Material';
+                }));
     }
 
     public function test_update_item_stores_multiple_allocations(): void

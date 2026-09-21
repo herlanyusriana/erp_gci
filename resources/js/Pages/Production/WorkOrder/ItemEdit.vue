@@ -9,17 +9,28 @@ import type { WorkOrderItem, WorkOrderMachine } from '@/types';
 
 const { t } = useI18n();
 
+interface StockTag {
+    tag: string | null;
+    qty: number;
+    uom: string | null;
+    received_at: string | null;
+    invoice: string | null;
+    supplier: string | null;
+}
+
 interface MaterialOption {
     id: number;
     part_number: string;
     part_name: string;
     kind: 'mainMaterial' | 'substitute';
     stock: number;
+    tags: StockTag[];
 }
 
 interface AllocationRow {
     part_id: number | '';
     qty: number | '';
+    showTags?: boolean;
 }
 
 const props = defineProps<{
@@ -74,6 +85,19 @@ function removeRow(index: number) {
 
 function fillRemaining(row: AllocationRow) {
     if (remaining.value > 0) row.qty = remaining.value;
+}
+
+function tagsFor(row: AllocationRow): StockTag[] {
+    return optionById(row.part_id)?.tags ?? [];
+}
+
+function toggleTags(row: AllocationRow) {
+    row.showTags = !row.showTags;
+}
+
+function formatReceivedAt(value: string | null) {
+    if (!value) return '—';
+    return new Date(value).toLocaleDateString();
 }
 
 function submit() {
@@ -132,12 +156,24 @@ function submit() {
                             <div class="grid gap-3 sm:grid-cols-12">
                                 <div class="sm:col-span-7">
                                     <label class="text-xs font-semibold text-ink-secondary">{{ t('production.material') }}</label>
-                                    <select v-model="row.part_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
-                                        <option value="">{{ t('production.searchMaterial') }}</option>
-                                        <option v-for="o in materialOptions" :key="o.id" :value="o.id">
-                                            {{ o.part_number }} · {{ o.part_name }} — {{ t(`production.${o.kind}`) }}
-                                        </option>
-                                    </select>
+                                    <div class="mt-1 flex gap-2">
+                                        <select v-model="row.part_id" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                                            <option value="">{{ t('production.searchMaterial') }}</option>
+                                            <option v-for="o in materialOptions" :key="o.id" :value="o.id">
+                                                {{ o.part_number }} · {{ o.part_name }} — {{ t(`production.${o.kind}`) }}
+                                            </option>
+                                        </select>
+                                        <button
+                                            type="button"
+                                            :disabled="row.part_id === ''"
+                                            :aria-expanded="row.showTags === true"
+                                            :title="t('production.showTags')"
+                                            class="shrink-0 rounded-lg border border-borderline px-3 py-2 text-ink-secondary transition hover:bg-background disabled:opacity-40"
+                                            @click="toggleTags(row)"
+                                        >
+                                            <svg class="h-4 w-4 transition-transform" :class="row.showTags ? 'rotate-90' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="m9 5 7 7-7 7" /></svg>
+                                        </button>
+                                    </div>
                                 </div>
                                 <div class="sm:col-span-3">
                                     <label class="text-xs font-semibold text-ink-secondary">{{ t('production.allocQty') }}</label>
@@ -158,6 +194,33 @@ function submit() {
                                     {{ stockFor(row).toFixed(4) }} {{ unit }}
                                 </StatusBadge>
                                 <StatusBadge v-if="rowExceedsStock(row)" tone="danger">{{ t('production.exceedsStock') }}</StatusBadge>
+                            </div>
+
+                            <!-- Tag stok FIFO untuk part terpilih -->
+                            <div v-if="row.showTags && row.part_id !== ''" class="mt-3 overflow-hidden rounded-lg border border-borderline">
+                                <table class="min-w-full divide-y divide-borderline text-xs">
+                                    <thead class="bg-background">
+                                        <tr class="text-left font-semibold uppercase tracking-wide text-ink-secondary">
+                                            <th class="px-3 py-2">{{ t('production.tag') }}</th>
+                                            <th class="px-3 py-2 text-right">{{ t('production.qty') }}</th>
+                                            <th class="px-3 py-2">{{ t('production.invoice') }}</th>
+                                            <th class="px-3 py-2">{{ t('production.supplier') }}</th>
+                                            <th class="px-3 py-2">{{ t('production.receivedAt') }}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-borderline">
+                                        <tr v-for="(tag, tagIndex) in tagsFor(row)" :key="tagIndex" class="text-ink-primary">
+                                            <td class="px-3 py-2 font-medium">{{ tag.tag ?? '—' }}</td>
+                                            <td class="px-3 py-2 text-right tabular-nums">{{ tag.qty }} {{ tag.uom ?? '' }}</td>
+                                            <td class="px-3 py-2">{{ tag.invoice ?? '—' }}</td>
+                                            <td class="px-3 py-2">{{ tag.supplier ?? '—' }}</td>
+                                            <td class="px-3 py-2 text-ink-secondary">{{ formatReceivedAt(tag.received_at) }}</td>
+                                        </tr>
+                                        <tr v-if="tagsFor(row).length === 0">
+                                            <td colspan="5" class="px-3 py-4 text-center text-ink-secondary">{{ t('production.noTags') }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>

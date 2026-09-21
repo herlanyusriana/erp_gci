@@ -4,11 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\Machine;
 use App\Models\Part;
+use App\Models\PartStock;
 use App\Models\WorkOrder;
 use App\Models\WorkOrderItem;
 use App\Services\ProductionResultService;
 use App\Services\ReceiveMaterialService;
 use App\Services\WoService;
+use App\Support\UomCatalog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -142,15 +144,62 @@ class WorkOrderController extends Controller
 
         $machines = Machine::query()->where('is_active', true)->orderBy('machine_name')->get(['id', 'machine_code', 'machine_name']);
 
+        $options = $this->materialOptionsWithStock($item);
+        $tagsByPart = $this->stockTagsForParts(array_column($options, 'id'), $item->uom_rm);
+
         return Inertia::render('Production/WorkOrder/ItemEdit', [
             'workOrder' => $workOrder->only(['id', 'wo_no']),
             'item' => $item,
             'machines' => $machines,
-            'materialOptions' => $this->materialOptionsWithStock($item),
+            'materialOptions' => array_map(
+                fn ($option) => $option + ['tags' => $tagsByPart[(int) $option['id']] ?? []],
+                $options,
+            ),
             'allocations' => $item->allocations
                 ->map(fn ($a) => ['part_id' => (int) $a->part_id, 'qty' => (float) $a->qty])
                 ->values(),
         ]);
+    }
+
+    /**
+     * Tag stok aktif per part (FIFO: received_at ASC NULLS LAST, lalu id),
+     * difilter UOM material item. Dipakai panel "tag" di halaman alokasi.
+     *
+     * @param  list<int|string>  $partIds
+     * @return array<int, list<array{tag:string|null, qty:float, uom:string|null, received_at:string|null, invoice:string|null, supplier:string|null}>>
+     */
+    private function stockTagsForParts(array $partIds, ?string $uom): array
+    {
+        $partIds = array_values(array_unique(array_map('intval', $partIds)));
+        if ($partIds === []) {
+            return [];
+        }
+
+        $normalized = UomCatalog::normalize($uom);
+
+        return PartStock::query()
+            ->whereIn('part_id', $partIds)
+            ->where('qty', '>', 0)
+            ->when($normalized !== null, fn ($q) => $q->whereRaw('UPPER(COALESCE(qty_unit, \'\')) = ?', [$normalized]))
+            ->with([
+                'receive:id,invoice_no,arrival_item_id',
+                'receive.arrivalItem:id,arrival_id',
+                'receive.arrivalItem.arrival:id,supplier_id',
+                'receive.arrivalItem.arrival.supplier:id,supplier_name',
+            ])
+            ->orderByRaw('received_at ASC NULLS LAST')
+            ->orderBy('id')
+            ->get(['id', 'part_id', 'tag', 'qty', 'qty_unit', 'received_at', 'receive_id'])
+            ->groupBy('part_id')
+            ->map(fn ($rows) => $rows->map(fn ($stock) => [
+                'tag' => $stock->tag,
+                'qty' => round((float) $stock->qty, 4),
+                'uom' => UomCatalog::normalize((string) $stock->qty_unit),
+                'received_at' => $stock->received_at?->toIso8601String(),
+                'invoice' => $stock->receive?->invoice_no,
+                'supplier' => $stock->receive?->arrivalItem?->arrival?->supplier?->supplier_name,
+            ])->values()->all())
+            ->all();
     }
 
     /**

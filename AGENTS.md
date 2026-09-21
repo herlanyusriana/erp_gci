@@ -152,12 +152,14 @@ Catatan penting:
 
 - Tipe part: `FG`, `MATERIAL`, `WIP` (huruf besar). WO hanya untuk part `FG`.
 - Alur Work Order: `planned` → `release` → `in_progress` → `complete` / `cancel`.
-- **Produksi WIP per proses** (`production_results`): release/issue **hanya
-  mengonsumsi RM** (child non-WIP); output WIP/FG lahir dari `Production Result`
-  per step (`parent_part`), bukan lagi otomatis saat release. Backflush: child
-  WIP dikonsumsi FIFO, child RM di-skip (sudah dikonsumsi saat issue). Step
-  sebelumnya harus selesai (stok WIP cukup). `complete` memperingatkan bila
-  output FG < qty WO. Layanan: `App\Services\ProductionResultService`.
+- **Produksi WIP per proses** (`production_results`): release/issue hanya
+  **BOOKING** material (`work_order_material_bookings`, status `booked`) — stok
+  fisik **belum** berkurang. Output WIP/FG lahir dari `Production Result` per
+  step (`parent_part`). Saat result (qty > 0) booking **dikonsumsi**: `part_stocks.qty`
+  baru berkurang, `work_order_consumptions` tercatat (child WIP & RM sama-sama
+  dikonsumsi; RM tidak lagi di-skip). Step sebelumnya harus selesai (stok WIP
+  cukup). `complete` memperingatkan bila output FG < qty WO. Layanan:
+  `App\Services\ProductionResultService`.
 - **Alokasi material WO** (`work_order_item_allocations`): satu item WO boleh
   dipenuhi dari beberapa part sekaligus. Main material BOM hanyalah **acuan**
   (tidak memegang stok); stok ada pada substitute aktif (`part_substitutes`).
@@ -166,9 +168,23 @@ Catatan penting:
   `work_order_items.selected_part_id` dipertahankan untuk kompatibilitas
   (diisi part dengan alokasi terbesar).
 - Stok per-part ledger dengan FIFO: `PartStock` (+ `received_at`), konsumsi
-  dicatat di `WorkOrderConsumption`.
+  dicatat di `WorkOrderConsumption`. **Booking** WO aktif mengurangi stok
+  tersedia: `ReceiveMaterialService::availableFifo()/availableFifoBatch()`
+  = `part_stocks.qty − Σ booking(status=booked)`. WO cancel melepas booking.
+  Halaman Stock menampilkan kolom **Di-book** & **Tersedia**.
+- **Satuan stok mengikuti satuan material** (`stockContribution`): material
+  non-berat (SHEET/PCS/ROLL/BAG/…) diposting sebesar `qty` sesuai `qty_unit`,
+  bukan berat; satuan berbasis berat (KGM/KG) tetap pakai berat. Jangan
+  memaksa KGM untuk semua material.
+- **Generator nomor** (`IncomingArrival::generateArrivalNo/generateTransactionNo`,
+  `WorkOrder::generateWoNo`) memakai `withTrashed()` karena kolomnya UNIQUE dan
+  model memakai SoftDeletes — tanpa itu nomor lama terpakai ulang setelah hapus.
 - Incoming: Purchase Order (import) vs Local PO (tanpa vessel/container),
   Arrival + container inspection, Receive menerbitkan tag/label QR.
+- **Local PO** (`is_local=true`, satu record = PO + kedatangan): punya
+  `po_no` (UNIQUE) **dan** `invoice_no` terpisah, dan item-nya **wajib
+  `weight_nett`** sehingga form receive-nya sama seperti import (net/gross
+  weight + bundle). Satuan item bebas (termasuk `BAG`).
 - **Label QR mesin**: `/machines/{machine}/label` (QR JSON `{type:"machine",
   machine_id, machine_code, machine_name}`); resolve di mobile lewat
   `POST /api/machines/resolve`.
@@ -176,22 +192,31 @@ Catatan penting:
   `GET /api/work-orders/{wo}/result-context` + `POST .../results`): operator
   melaporkan hasil per step proses; hanya step sebelumnya yang sudah jadi yang
   boleh dilaporkan (stok WIP dicek).
-- **Production Plan** (`ProductionPlanController::attachWorkOrder`,
-  `POST production-plans/attach`): WO `planned` yang belum masuk plan mana pun
-  ditampilkan di panel "belum masuk plan" agar tidak hilang dari papan.
+- **Production Plan** (`POST production-plans/attach` manual; otomatis lewat
+  `WoService::enterProductionPlan`): WO masuk papan **saat release**, bukan saat
+  `planned`. WO `planned` tampil di panel "menunggu release". Satu baris papan =
+  satu **grup mesin** (kunci = **3 huruf pertama nama mesin**, mis. `TPL`), berisi
+  `input_part_id` (material masuk) → `wip_part_id` (hasil keluar) dan
+  `target_d` **dikosongkan** supaya qty WO dibagi manual ke D/D1/D2 (kolom "Sisa
+  Jumlah WO" mulai dari qty WO). `WoService::populatePlanItems` mengisi baris;
+  tabel Alur Produksi di WO Show memakai pengelompokan yang sama.
 - **Issue out to production** (mobile "Material Tracker" → Outgoing): release WO
   lewat scan label. Endpoint `GET /api/work-orders`, `GET /api/work-orders/{wo}/
   release-context` (kebutuhan + rekomendasi tag FIFO), `POST /api/stock-tags/
   resolve`, `POST /api/work-orders/{wo}/release` (atomik + `idempotency_key`).
-  Konsumsi **tag spesifik** (`ReceiveMaterialService::consumeFromTag`), bukan
-  FIFO; tag valid apa pun untuk part kebutuhan diterima (rekomendasi FIFO hanya
-  saran). Dokumen `material_issues` + `material_issue_items` dibuat saat release;
+  **Booking tag spesifik** (`ReceiveMaterialService::bookFromTag`), bukan FIFO;
+  tag valid apa pun untuk part kebutuhan diterima (rekomendasi FIFO hanya saran).
+  Dokumen `material_issues` + `material_issue_items` dibuat saat release;
   bon dicetak di web (`/material-issues/{id}/print`). Permission `stock.issue`.
   QR label berisi **JSON** (`{tag, receive_id, part_id, part_no, part_name, qty,
   net_weight, qty_unit, invoice, supplier}`) — app mobile **wajib parse JSON**
   dan mengirim `tag` (bukan raw JSON). Asal material (`invoice`, `supplier`)
-  diambil server dari `part_stocks.receive_id` saat konsumsi dan disimpan di
+  diambil server dari `part_stocks.receive_id` saat booking dan disimpan di
   `material_issue_items`, lalu tampil di bon.
+- **Pemilihan material di WO** (`Production/WorkOrder/ItemEdit.vue`): dropdown
+  material dikelompokkan per inventory — optgroup "Ada stok" (urut stok
+  terbesar) vs "Tanpa stok", tiap opsi menampilkan stoknya; tombol `>` membuka
+  daftar tag FIFO semua material. Main material = acuan BOM (tidak pegang stok).
 
 ===
 

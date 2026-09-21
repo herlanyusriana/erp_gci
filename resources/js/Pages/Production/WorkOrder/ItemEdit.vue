@@ -75,7 +75,8 @@ function rowExceedsStock(row: AllocationRow) {
 
 function addRow() {
     const used = new Set(form.allocations.map((r) => Number(r.part_id)));
-    const next = props.materialOptions.find((o) => !used.has(o.id));
+    const next = optionsWithStock.value.find((o) => !used.has(o.id))
+        ?? props.materialOptions.find((o) => !used.has(o.id));
     form.allocations.push({ part_id: next?.id ?? '', qty: '' });
 }
 
@@ -110,6 +111,20 @@ const partsWithStock = computed(() => props.materialOptions.filter((o) => (o.tag
 const substitutesWithoutStock = computed(() => props.materialOptions.filter((o) => o.kind === 'substitute' && (o.tags ?? []).length === 0));
 
 const isMainPart = (row: AllocationRow) => optionById(row.part_id)?.kind === 'mainMaterial';
+
+/** Opsi material dikelompokkan berdasarkan inventory: ada stok dulu (terbesar), lalu tanpa stok. */
+const optionsWithStock = computed(() => props.materialOptions
+    .filter((o) => Number(o.stock ?? 0) > 0)
+    .slice()
+    .sort((a, b) => Number(b.stock) - Number(a.stock)));
+
+const optionsWithoutStock = computed(() => props.materialOptions
+    .filter((o) => Number(o.stock ?? 0) <= 0)
+    .slice()
+    .sort((a, b) => a.part_number.localeCompare(b.part_number)));
+
+const optionLabel = (o: MaterialOption) =>
+    `${o.part_number} · ${o.part_name} — ${t(`production.${o.kind}`)} · ${Number(o.stock ?? 0).toFixed(4)} ${unit.value}`;
 
 function formatReceivedAt(value: string | null) {
     if (!value) return '—';
@@ -175,9 +190,12 @@ function submit() {
                                     <div class="mt-1 flex gap-2">
                                         <select v-model="row.part_id" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                                             <option value="">{{ t('production.searchMaterial') }}</option>
-                                            <option v-for="o in materialOptions" :key="o.id" :value="o.id">
-                                                {{ o.part_number }} · {{ o.part_name }} — {{ t(`production.${o.kind}`) }}
-                                            </option>
+                                            <optgroup v-if="optionsWithStock.length" :label="t('production.withStock')">
+                                                <option v-for="o in optionsWithStock" :key="o.id" :value="o.id">{{ optionLabel(o) }}</option>
+                                            </optgroup>
+                                            <optgroup v-if="optionsWithoutStock.length" :label="t('production.withoutStock')">
+                                                <option v-for="o in optionsWithoutStock" :key="o.id" :value="o.id">{{ optionLabel(o) }}</option>
+                                            </optgroup>
                                         </select>
                                         <button
                                             type="button"

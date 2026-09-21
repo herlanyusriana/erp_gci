@@ -149,6 +149,32 @@ class ProductionPlanTest extends TestCase
         );
     }
 
+    public function test_rebuild_command_restores_merged_rows(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->post(route('work-orders.release', $wo))->assertRedirect();
+
+        $plan = ProductionPlanItem::where('work_order_id', $wo->id)->firstOrFail()->plan;
+        $expected = $this->expectedGroupCount($wo);
+
+        // Simulasi baris lama (per step, target terisi).
+        ProductionPlanItem::create([
+            'production_plan_id' => $plan->id,
+            'machine_id' => null,
+            'work_order_id' => $wo->id,
+            'fg_part_id' => $wo->part_id,
+            'sequence' => 99,
+            'target_d' => 5,
+        ]);
+        $this->assertSame($expected + 1, ProductionPlanItem::where('work_order_id', $wo->id)->count());
+
+        $this->artisan('production-plan:rebuild', ['--wo' => $wo->id])->assertExitCode(0);
+
+        $rows = ProductionPlanItem::where('work_order_id', $wo->id)->get();
+        $this->assertSame($expected, $rows->count());
+        $this->assertTrue($rows->every(fn ($r) => $r->target_d === null));
+    }
+
     public function test_attach_rejects_work_order_already_in_a_plan(): void
     {
         $wo = $this->createWorkOrder();

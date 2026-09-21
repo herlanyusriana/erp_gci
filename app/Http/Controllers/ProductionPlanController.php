@@ -114,11 +114,7 @@ class ProductionPlanController extends Controller
                 $actorId,
             );
 
-            // Semua step WO langsung masuk papan, di mesin masing-masing.
-            $workOrder = WorkOrder::query()->findOrFail($workOrderId);
-            $this->woService->populatePlanItems($workOrder, $data['plan_date'], $actorId);
-
-            return [$workOrder, $warnings];
+            return [WorkOrder::query()->findOrFail($workOrderId), $warnings];
         });
 
         [$workOrder, $warnings] = $result;

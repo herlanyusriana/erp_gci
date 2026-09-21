@@ -96,14 +96,6 @@ class WorkOrderController extends Controller
             (int) auth()->id(),
         );
 
-        // WO langsung masuk papan Production Plan: tiap step jadi 1 baris di mesinnya.
-        $workOrder = WorkOrder::query()->findOrFail($workOrderId);
-        $this->woService->populatePlanItems(
-            $workOrder,
-            $workOrder->planned_date?->toDateString() ?? now()->toDateString(),
-            (int) auth()->id(),
-        );
-
         if (count($warnings) > 0) {
             return redirect()
                 ->route('work-orders.show', $workOrderId)

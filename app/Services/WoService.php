@@ -80,6 +80,21 @@ class WoService
     }
 
     /**
+     * Masukkan WO ke papan Production Plan — dipanggil saat RELEASE, bukan saat
+     * WO masih `planned`. Dilewati bila barisnya sudah ada (ditempel manual).
+     */
+    private function enterProductionPlan(WorkOrder $workOrder, int $actorId): void
+    {
+        if ($workOrder->planItems()->exists()) {
+            return;
+        }
+
+        $planDate = $workOrder->planned_date?->toDateString() ?? now()->toDateString();
+
+        $this->populatePlanItems($workOrder, $planDate, $actorId);
+    }
+
+    /**
      * Isi Production Plan dengan step WO: step yang berurutan di mesin yang sama
      * digabung jadi SATU baris (satu operasi mesin).
      *
@@ -420,6 +435,9 @@ class WoService
                 'updated_by' => $actorId,
             ]);
 
+            // WO baru masuk papan Production Plan saat release.
+            $this->enterProductionPlan($workOrder, (int) $actorId);
+
             return $workOrder->fresh(['items', 'part']);
         });
 
@@ -628,6 +646,9 @@ class WoService
                 'released_at' => $releasedAt,
                 'updated_by' => $actorId,
             ]);
+
+            // WO baru masuk papan Production Plan saat release.
+            $this->enterProductionPlan($workOrder, (int) $actorId);
 
             return $issue;
         });

@@ -687,6 +687,11 @@ class WoService
     public function complete(WorkOrder $workOrder, ?int $actorId = null): WorkOrder
     {
         abort_unless($workOrder->status === 'in_progress', 422, __('WO belum bisa di-complete.'));
+
+        // Sisa booking yang belum dikonsumsi (mis. produksi kurang dari qty WO)
+        // dilepas supaya stok bisa dipakai WO lain.
+        $this->stockService->releaseBookings($workOrder->id, null, $actorId);
+
         $workOrder->update([
             'status' => 'completed',
             'completed_at' => now(),

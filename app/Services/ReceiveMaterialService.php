@@ -284,58 +284,6 @@ class ReceiveMaterialService
         });
     }
 
-    /**
-     * Consume KGM dari stok FIFO per part — tertua (ATA paling awal) didahulukan.
-     * Return list alokasi: [{ receive_id, tag, take_kgm, remaining_stock_after }].
-     * Dipakai oleh Material Allocation / WO.
-     */
-    public function consumeFifo(int $partId, float $kgmNeed): array
-    {
-        if ($kgmNeed <= 0) {
-            return [];
-        }
-
-        $result = [];
-
-        DB::transaction(function () use ($partId, $kgmNeed, &$result) {
-            $stocks = PartStock::query()
-                ->where('part_id', $partId)
-                ->where('qty', '>', 0)
-                ->orderByRaw('received_at ASC NULLS LAST')
-                ->orderBy('id')
-                ->lockForUpdate()
-                ->get();
-
-            $remainingNeed = $kgmNeed;
-
-            foreach ($stocks as $stock) {
-                if ($remainingNeed <= 1e-9) {
-                    break;
-                }
-
-                $take = min((float) $stock->qty, $remainingNeed);
-                $newQty = (float) $stock->qty - $take;
-                if ($newQty <= 1e-9) {
-                    $stock->delete();
-                    $newQty = 0;
-                } else {
-                    $stock->update(['qty' => $newQty]);
-                }
-
-                $result[] = [
-                    'receive_id' => $stock->receive_id,
-                    'tag' => $stock->tag,
-                    'take_kgm' => $take,
-                    'remaining_stock_after' => $newQty,
-                ];
-
-                $remainingNeed -= $take;
-            }
-        });
-
-        return $result;
-    }
-
     public function resolvePartId(IncomingArrivalItem $item): ?int
     {
         return $item->part_id;
@@ -753,66 +701,6 @@ class ReceiveMaterialService
     }
 
     /**
-     * Consume dari SATU tag stok spesifik (dipakai scan label di mobile).
-     * Berbeda dari consumeFifoByUom yang menyusuri FIFO lintas tag.
-     *
-     * @return array{part_stock_id:int, tag:string|null, take_qty:float, remaining_stock_after:float, uom:string, price:float|null, invoice:string|null, supplier:string|null}|null
-     */
-    public function consumeFromTag(string $tag, ?int $partId, ?float $qty = null): ?array
-    {
-        $tag = trim($tag);
-        if ($tag === '') {
-            return null;
-        }
-
-        return DB::transaction(function () use ($tag, $partId, $qty) {
-            $stock = PartStock::query()
-                ->whereRaw('LOWER(COALESCE(tag, \'\')) = ?', [mb_strtolower($tag)])
-                ->where('qty', '>', 0)
-                ->when($partId !== null, fn ($q) => $q->where('part_id', $partId))
-                ->orderByRaw('received_at ASC NULLS LAST')
-                ->orderBy('id')
-                ->lockForUpdate()
-                ->first();
-
-            if ($stock === null) {
-                return null;
-            }
-
-            // Ambil asal material sebelum baris stok mungkin terhapus.
-            $receive = $stock->receive;
-            $invoice = $receive?->invoice_no;
-            $supplier = $receive?->arrivalItem?->arrival?->supplier?->supplier_name;
-
-            $available = (float) $stock->qty;
-            $take = $qty === null ? $available : min($qty, $available);
-            if ($take <= 0) {
-                return null;
-            }
-
-            $newQty = $available - $take;
-            $stockId = $stock->id;
-            if ($newQty <= 1e-9) {
-                $stock->delete();
-                $newQty = 0.0;
-            } else {
-                $stock->update(['qty' => $newQty]);
-            }
-
-            return [
-                'part_stock_id' => $stockId,
-                'tag' => $stock->tag,
-                'take_qty' => $take,
-                'remaining_stock_after' => $newQty,
-                'uom' => (string) ($stock->qty_unit ?? ''),
-                'price' => $stock->price !== null ? (float) $stock->price : null,
-                'invoice' => $invoice !== null ? (string) $invoice : null,
-                'supplier' => $supplier !== null ? (string) $supplier : null,
-            ];
-        });
-    }
-
-    /**
      * Consume FIFO generic (by UOM) — tertua (received_at ASC NULLS LAST, lalu id) didahulukan.
      * Return list alokasi: [{ part_stock_id, tag, take_qty, remaining_stock_after, uom }].
      * Dipakai WO / Material Allocation untuk UOM apa pun (KGM/SHEET/ROLL/PCS).
@@ -838,13 +726,26 @@ class ReceiveMaterialService
 
             $stocks = $stocksQ->lockForUpdate()->get();
 
+            // Sisakan qty yang sedang di-book WO lain — jangan dicuri.
+            $bookedByStock = WorkOrderMaterialBooking::query()
+                ->whereIn('part_stock_id', $stocks->pluck('id'))
+                ->where('status', WorkOrderMaterialBooking::STATUS_BOOKED)
+                ->groupBy('part_stock_id')
+                ->selectRaw('part_stock_id, SUM(qty) AS total')
+                ->pluck('total', 'part_stock_id');
+
             $remainingNeed = $qtyNeed;
             foreach ($stocks as $stock) {
                 if ($remainingNeed <= 1e-9) {
                     break;
                 }
 
-                $take = min((float) $stock->qty, $remainingNeed);
+                $free = (float) $stock->qty - (float) ($bookedByStock[$stock->id] ?? 0);
+                if ($free <= 1e-9) {
+                    continue;
+                }
+
+                $take = min($free, $remainingNeed);
                 $newQty = (float) $stock->qty - $take;
 
                 if ($newQty <= 1e-9) {

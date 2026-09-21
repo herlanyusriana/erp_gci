@@ -355,7 +355,12 @@ class WorkOrderController extends Controller
     {
         Gate::authorize('delete', $workOrder);
 
-        $workOrder->delete();
+        // WO soft-delete → FK cascade tidak jalan, jadi lepas booking manual
+        // supaya stok tidak terkunci selamanya.
+        DB::transaction(function () use ($workOrder) {
+            $this->receiveService->releaseBookings($workOrder->id, null, (int) auth()->id());
+            $workOrder->delete();
+        });
 
         return redirect()->route('work-orders.index')->with('success', __('WO dihapus.'));
     }

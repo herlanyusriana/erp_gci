@@ -85,6 +85,7 @@ function remove(m: Machine) {
                         </td>
                         <td class="px-4 py-3">
                             <div class="flex justify-end gap-1.5">
+                                <ActionButton :label="t('master.printLabel')" variant="print" :href="route('machines.label', m.id)" />
                                 <ActionButton :label="t('master.edit')" variant="edit" @click="openEdit(m)" />
                                 <ActionButton :label="t('master.delete')" variant="delete" @click="remove(m)" />
                             </div>

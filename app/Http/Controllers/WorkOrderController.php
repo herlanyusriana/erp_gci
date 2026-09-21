@@ -6,6 +6,7 @@ use App\Models\Machine;
 use App\Models\Part;
 use App\Models\WorkOrder;
 use App\Models\WorkOrderItem;
+use App\Services\ProductionResultService;
 use App\Services\ReceiveMaterialService;
 use App\Services\WoService;
 use Illuminate\Http\RedirectResponse;
@@ -21,6 +22,7 @@ class WorkOrderController extends Controller
     public function __construct(
         protected WoService $woService,
         protected ReceiveMaterialService $receiveService,
+        protected ProductionResultService $resultService,
     ) {}
 
     public function index(Request $request): Response
@@ -267,14 +269,24 @@ class WorkOrderController extends Controller
         }
 
         return redirect()
-            ->route('work-orders.show', $workOrder)->with('success', __('WO di-release, material & WIP dikonsumsi FIFO.'));
+            ->route('work-orders.show', $workOrder)->with('success', __('WO di-release, material RM dikonsumsi.'));
     }
 
     public function complete(WorkOrder $workOrder): RedirectResponse
     {
         Gate::authorize('update', $workOrder);
 
+        $produced = $this->resultService->fgProduced($workOrder);
         $this->woService->complete($workOrder, (int) auth()->id());
+
+        if ($produced + 1e-9 < (float) $workOrder->qty) {
+            return redirect()
+                ->route('work-orders.show', $workOrder)
+                ->with('error', __('WO ditutup dengan kekurangan output FG: :produced dari :qty.', [
+                    'produced' => rtrim(rtrim(number_format($produced, 4, '.', ''), '0'), '.'),
+                    'qty' => rtrim(rtrim(number_format((float) $workOrder->qty, 4, '.', ''), '0'), '.'),
+                ]));
+        }
 
         return redirect()
             ->route('work-orders.show', $workOrder)->with('success', __('WO selesai.'));

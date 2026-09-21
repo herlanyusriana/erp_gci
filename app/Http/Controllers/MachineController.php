@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ConfigMaster;
 use App\Models\Machine;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -59,5 +60,13 @@ class MachineController extends Controller
         $machine->delete();
 
         return redirect()->route('machines.index')->with('success', __('Machine deleted.'));
+    }
+
+    public function printLabel(Machine $machine)
+    {
+        return view('machines.label', [
+            'machine' => $machine,
+            'companyName' => ConfigMaster::getValue('SYSTEM', 'company_name', 'PT Geum Cheon Indo'),
+        ]);
     }
 }

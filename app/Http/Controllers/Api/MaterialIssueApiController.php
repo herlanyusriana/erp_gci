@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Machine;
 use App\Models\Part;
 use App\Models\PartStock;
 use App\Models\WorkOrder;
@@ -214,6 +215,39 @@ class MaterialIssueApiController extends Controller
                 'invoice' => $receive?->invoice_no,
                 'supplier' => $receive?->arrivalItem?->arrival?->supplier?->supplier_name,
                 'received_at' => $stock->received_at?->toIso8601String(),
+            ],
+        ]);
+    }
+
+    /**
+     * Resolve QR label MESIN hasil scan → info mesin + step yang bisa dilaporkan.
+     */
+    public function resolveMachine(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'machine_code' => ['nullable', 'string', 'max:80'],
+            'machine_id' => ['nullable', 'integer', 'exists:machines,id'],
+        ]);
+
+        $machine = Machine::query()
+            ->when($data['machine_id'] ?? null, fn ($q, $id) => $q->whereKey($id))
+            ->when(! ($data['machine_id'] ?? null) && ($data['machine_code'] ?? null), fn ($q) => $q->whereRaw('LOWER(machine_code) = ?', [mb_strtolower(trim((string) $data['machine_code']))]))
+            ->where('is_active', true)
+            ->first();
+
+        if ($machine === null) {
+            return response()->json([
+                'ok' => false,
+                'message' => __('Mesin tidak ditemukan.'),
+            ], 404);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'data' => [
+                'id' => (int) $machine->id,
+                'machine_code' => $machine->machine_code,
+                'machine_name' => $machine->machine_name,
             ],
         ]);
     }

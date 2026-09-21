@@ -62,6 +62,7 @@ Route::middleware(['auth'])->group(function () {
     Route::resource('suppliers', SupplierController::class)->except(['show']);
     Route::resource('trucking-companies', TruckingCompanyController::class)->except(['show'])->parameters(['trucking-companies' => 'trucking']);
     Route::resource('machines', MachineController::class)->except(['show']);
+    Route::get('machines/{machine}/label', [MachineController::class, 'printLabel'])->name('machines.label');
     Route::resource('processes', ProcessController::class)->except(['show']);
     Route::resource('uoms', UomController::class)->except(['show']);
     Route::resource('substitutes', PartSubstituteController::class)->except(['show']);

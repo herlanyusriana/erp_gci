@@ -144,9 +144,9 @@ class MaterialIssueApiTest extends TestCase
         $firstTag = $scans[0]['scans'][0]['tag'];
         $this->assertSame(0.0, (float) PartStock::where('tag', $firstTag)->sum('qty'));
 
-        // Output FG penuh.
+        // Release hanya mengonsumsi RM; output FG lahir dari Production Result.
         $fgStock = PartStock::where('part_id', $wo->part_id)->where('qty', '>', 0)->sum('qty');
-        $this->assertEqualsWithDelta(10.0, (float) $fgStock, 0.001);
+        $this->assertEqualsWithDelta(0.0, (float) $fgStock, 0.001);
     }
 
     public function test_release_is_idempotent(): void

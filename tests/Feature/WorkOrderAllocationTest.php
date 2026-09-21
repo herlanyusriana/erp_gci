@@ -169,9 +169,9 @@ class WorkOrderAllocationTest extends TestCase
         $this->assertDatabaseHas('work_order_consumptions', ['work_order_item_id' => $item->id, 'part_id' => $subB]);
         $this->assertDatabaseMissing('work_order_consumptions', ['work_order_item_id' => $item->id, 'part_id' => $item->child_part_id]);
 
-        // Output FG penuh karena stok cukup.
+        // Release hanya mengonsumsi RM; FG belum diposting (menunggu Production Result).
         $fgStock = PartStock::where('part_id', $wo->part_id)->where('qty', '>', 0)->sum('qty');
-        $this->assertEqualsWithDelta(10.0, (float) $fgStock, 0.001);
+        $this->assertEqualsWithDelta(0.0, (float) $fgStock, 0.001);
     }
 
     public function test_release_reports_shortage_for_unallocated_remainder(): void
@@ -204,8 +204,8 @@ class WorkOrderAllocationTest extends TestCase
         $wo->refresh();
         $this->assertSame('in_progress', $wo->status);
 
-        // Output terbatas proporsional: 10 × (6 / 10.9) ≈ 5.5046.
+        // Release hanya mengonsumsi RM; FG belum diposting (menunggu Production Result).
         $fgStock = PartStock::where('part_id', $wo->part_id)->where('qty', '>', 0)->sum('qty');
-        $this->assertEqualsWithDelta(10.0 * (6 / 10.9), (float) $fgStock, 0.01);
+        $this->assertEqualsWithDelta(0.0, (float) $fgStock, 0.01);
     }
 }

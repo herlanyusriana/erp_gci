@@ -132,8 +132,9 @@ Catatan penting:
 - **Konflik strategi:** `tests/Pest.php` memasang `RefreshDatabase` ke seluruh
   suite `Feature` (menghapus + migrate ulang DB, **tanpa** seed), sementara
   `WorkOrderHttpTest`, `WorkOrderAllocationTest`, `MaterialIssueApiTest`,
-  `MaterialIssueWebTest`, `RolePermissionTest`, `PartTypeGuardTest`, dan
-  `UomCatalogTest` memakai `DatabaseTransactions` dan mengandalkan data seeder
+  `MaterialIssueWebTest`, `RolePermissionTest`, `MachineLabelTest`,
+  `PartTypeGuardTest`, dan `UomCatalogTest` memakai `DatabaseTransactions` dan
+  mengandalkan data seeder
   (`admin@geumcheon.local`, part `AAN30056405`, `CBKG07256C`, `4000W4A003A`,
   `PINCB01`, `5040JA3071C`).
 - Akibatnya: menjalankan salah satu test `RefreshDatabase` **menghapus** data
@@ -151,6 +152,12 @@ Catatan penting:
 
 - Tipe part: `FG`, `MATERIAL`, `WIP` (huruf besar). WO hanya untuk part `FG`.
 - Alur Work Order: `planned` → `release` → `in_progress` → `complete` / `cancel`.
+- **Produksi WIP per proses** (`production_results`): release/issue **hanya
+  mengonsumsi RM** (child non-WIP); output WIP/FG lahir dari `Production Result`
+  per step (`parent_part`), bukan lagi otomatis saat release. Backflush: child
+  WIP dikonsumsi FIFO, child RM di-skip (sudah dikonsumsi saat issue). Step
+  sebelumnya harus selesai (stok WIP cukup). `complete` memperingatkan bila
+  output FG < qty WO. Layanan: `App\Services\ProductionResultService`.
 - **Alokasi material WO** (`work_order_item_allocations`): satu item WO boleh
   dipenuhi dari beberapa part sekaligus. Main material BOM hanyalah **acuan**
   (tidak memegang stok); stok ada pada substitute aktif (`part_substitutes`).
@@ -162,6 +169,9 @@ Catatan penting:
   dicatat di `WorkOrderConsumption`.
 - Incoming: Purchase Order (import) vs Local PO (tanpa vessel/container),
   Arrival + container inspection, Receive menerbitkan tag/label QR.
+- **Label QR mesin**: `/machines/{machine}/label` (QR JSON `{type:"machine",
+  machine_id, machine_code, machine_name}`); resolve di mobile lewat
+  `POST /api/machines/resolve`.
 - **Issue out to production** (mobile "Material Tracker" → Outgoing): release WO
   lewat scan label. Endpoint `GET /api/work-orders`, `GET /api/work-orders/{wo}/
   release-context` (kebutuhan + rekomendasi tag FIFO), `POST /api/stock-tags/

@@ -6,6 +6,7 @@ use App\Models\Part;
 use App\Models\PartStock;
 use App\Models\User;
 use App\Models\WorkOrder;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
@@ -16,7 +17,7 @@ class WorkOrderHttpTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class);
+        $this->withoutMiddleware(ValidateCsrfToken::class);
         $this->actingAs(User::where('email', 'admin@geumcheon.local')->first());
     }
 
@@ -59,7 +60,7 @@ class WorkOrderHttpTest extends TestCase
         foreach ($seed as $pn => $d) {
             $p = Part::where('part_number', $pn)->first();
             PartStock::create([
-                'part_id' => $p->id, 'tag' => 'T-' . $pn,
+                'part_id' => $p->id, 'tag' => 'T-'.$pn,
                 'qty' => $d[1], 'qty_unit' => $d[0], 'received_at' => now(),
             ]);
         }
@@ -69,9 +70,9 @@ class WorkOrderHttpTest extends TestCase
         $this->assertSame('in_progress', $wo->status);
         $this->assertGreaterThan(0, $wo->consumptions()->count());
 
-        // FG stock posted
+        // Release hanya mengonsumsi RM; output WIP/FG lahir dari Production Result.
         $fgStock = PartStock::where('part_id', $fg->id)->where('qty', '>', 0)->sum('qty');
-        $this->assertEqualsWithDelta(10.0, (float) $fgStock, 0.001);
+        $this->assertEqualsWithDelta(0.0, (float) $fgStock, 0.001);
 
         // complete
         $this->post(route('work-orders.complete', $wo))->assertRedirect();
@@ -83,7 +84,7 @@ class WorkOrderHttpTest extends TestCase
         $this->assertNull(WorkOrder::find($wo->id));
     }
 
-    public function test_release_with_shortage_warns_and_partial(): void
+    public function test_release_with_shortage_warns_and_consumes_available(): void
     {
         $fg = Part::where('part_number', 'AAN30056405')->first();
 
@@ -102,14 +103,16 @@ class WorkOrderHttpTest extends TestCase
             '5040JA3071C' => ['PCS', 400],
         ] as $pn => $d) {
             $p = Part::where('part_number', $pn)->first();
-            PartStock::create(['part_id' => $p->id, 'tag' => 'T-' . $pn, 'qty' => $d[1], 'qty_unit' => $d[0], 'received_at' => now()]);
+            PartStock::create(['part_id' => $p->id, 'tag' => 'T-'.$pn, 'qty' => $d[1], 'qty_unit' => $d[0], 'received_at' => now()]);
         }
 
         $this->post(route('work-orders.release', $wo))->assertRedirect();
         $wo->refresh();
         $this->assertSame('in_progress', $wo->status);
 
-        $fgStock = PartStock::where('part_id', $fg->id)->where('qty', '>', 0)->sum('qty');
-        $this->assertEqualsWithDelta(4.5872, (float) $fgStock, 0.01);
+        // Shortage dilaporkan, RM habis terpakai, FG belum terposting.
+        $this->assertDatabaseHas('work_order_consumptions', ['work_order_id' => $wo->id]);
+        $available = PartStock::where('part_id', $fg->id)->where('qty', '>', 0)->sum('qty');
+        $this->assertEqualsWithDelta(0.0, (float) $available, 0.001);
     }
 }

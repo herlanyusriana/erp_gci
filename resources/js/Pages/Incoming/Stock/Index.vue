@@ -42,7 +42,7 @@ const totalQty = () => props.stocks.data.reduce((s, st) => s + Number(st.qty ?? 
 
         <input v-model="search" @input="doSearch" type="search" :placeholder="t('incoming.searchStock')" class="mb-4 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
 
-        <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
+        <div class="overflow-x-auto rounded-xl border border-borderline bg-surface">
             <table class="min-w-full divide-y divide-borderline text-sm">
                 <thead class="bg-background">
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">

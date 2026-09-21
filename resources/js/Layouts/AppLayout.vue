@@ -27,7 +27,7 @@ watch(
     <div class="min-h-screen bg-background">
         <!-- Topbar (spec 0.7) -->
         <nav class="border-b border-borderline bg-surface">
-            <div class="mx-auto flex min-h-16 max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-2 sm:px-6 lg:px-8">
+            <div class="flex min-h-16 flex-wrap items-center justify-between gap-2 px-4 py-2 sm:px-6 lg:px-8">
                 <div class="flex items-center gap-3">
                     <Link
                         :href="route('launcher')"
@@ -82,7 +82,7 @@ watch(
         </div>
 
         <!-- Page content -->
-        <main class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <main class="w-full px-4 py-8 sm:px-6 lg:px-8">
             <slot />
         </main>
     </div>

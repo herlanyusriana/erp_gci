@@ -145,7 +145,7 @@ function submit() {
 <template>
     <AppLayout>
         <Head :title="t('production.editRouting')" />
-        <div class="mx-auto max-w-3xl">
+        <div class="mx-auto max-w-5xl">
             <BackButton :href="route('work-orders.show', workOrder.id)" class="mb-4" />
 
             <div class="mb-6">

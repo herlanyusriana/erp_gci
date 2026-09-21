@@ -68,7 +68,7 @@ function remove(id: number, no: string | null) {
             </select>
         </div>
 
-        <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
+        <div class="overflow-x-auto rounded-xl border border-borderline bg-surface">
             <table class="min-w-full divide-y divide-borderline text-sm">
                 <thead class="bg-background">
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">

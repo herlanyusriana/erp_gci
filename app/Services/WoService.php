@@ -86,7 +86,9 @@ class WoService
      *
      * - `input_part_id`  = child step pertama grup (material yang masuk mesin)
      * - `wip_part_id`    = parent step terakhir grup (hasil yang keluar mesin)
-     * - `target_d`       = kebutuhan part hasil tersebut (qty WO × rasio BOM)
+     *
+     * `target_d` sengaja dikosongkan: qty WO dibagi manual ke D/D1/D2 oleh
+     * planner, sehingga kolom "Sisa Jumlah WO" mulai dari qty WO.
      *
      * Step = pasangan (sequence, parent_part_id) non-Subcon; beberapa baris BOM
      * dengan parent sama (mis. WIP + material free issue) digabung jadi satu step.
@@ -98,8 +100,6 @@ class WoService
         $workOrder->loadMissing(['part', 'items.parentPart', 'items.childPart']);
 
         $items = $this->sorted($workOrder->items);
-        $fgKey = $workOrder->part?->part_number ?? (string) $workOrder->part_id;
-        $requirements = $this->buildRequirements($items, (float) $workOrder->qty, $fgKey);
 
         // Step unik (sequence + parent), urut sesuai BOM.
         $steps = [];
@@ -143,9 +143,6 @@ class WoService
             $sequence = ($sequenceByMachine[$machineKey] ?? 0) + 1;
             $sequenceByMachine[$machineKey] = $sequence;
 
-            $outputKey = $this->parentKeyOf($last);
-            $target = $requirements[$outputKey] ?? (float) $workOrder->qty;
-
             $plan->items()->create([
                 'machine_id' => $group['machine_id'],
                 'work_order_id' => $workOrder->id,
@@ -153,7 +150,7 @@ class WoService
                 'input_part_id' => $first->child_part_id,
                 'wip_part_id' => $last->parent_part_id,
                 'sequence' => $sequence,
-                'target_d' => round($target, 4),
+                'target_d' => null,
                 'created_by' => $actorId,
             ]);
 

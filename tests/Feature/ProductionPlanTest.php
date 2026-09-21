@@ -101,6 +101,26 @@ class ProductionPlanTest extends TestCase
         );
     }
 
+    public function test_plan_row_starts_with_wo_qty_as_remaining(): void
+    {
+        $wo = $this->createWorkOrder();
+
+        $rows = ProductionPlanItem::where('work_order_id', $wo->id)->with('workOrder')->get();
+
+        $this->assertNotEmpty($rows);
+        foreach ($rows as $row) {
+            // target_d sengaja kosong → qty WO dibagi manual ke D/D1/D2.
+            $this->assertNull($row->target_d);
+            $this->assertEqualsWithDelta((float) $wo->qty, (float) $row->avail_qty, 0.001);
+        }
+
+        // Setelah sebagian dialokasikan ke D, sisanya menyusut.
+        $first = $rows->first();
+        $first->update(['target_d' => 4]);
+
+        $this->assertEqualsWithDelta((float) $wo->qty - 4, (float) $first->fresh()->avail_qty, 0.001);
+    }
+
     public function test_same_machine_steps_merge_into_one_row_with_input_and_output(): void
     {
         $fg = Part::where('part_number', 'AGU30018303')->firstOrFail();

@@ -183,7 +183,7 @@ export default {
         "inputPart": "Input",
         "outputPart": "Output",
         "selectWo": "— Select WO —",
-        "availableQty": "Available WO Quantity",
+        "availableQty": "Remaining WO Quantity",
         "dQty": "D Quantity",
         "d1Qty": "D+1 Quantity",
         "d2Qty": "D+2 Quantity",

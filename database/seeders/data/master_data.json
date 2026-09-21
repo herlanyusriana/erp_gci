@@ -9019,7 +9019,7 @@
     "SPOT WELDING 5 - 35 KVA",
     "Subcon",
     "TAPPING 2",
-    "TPL COMP BASE",
+    "TPL KUKIL",
     "TPL DONGSHIN",
     "WASINO 150 TON",
     "WELDING ROBOT"
@@ -9138,7 +9138,7 @@
       "process_name": "Tapping"
     },
     {
-      "machine_name": "TPL COMP BASE",
+      "machine_name": "TPL KUKIL",
       "process_name": "Press"
     },
     {

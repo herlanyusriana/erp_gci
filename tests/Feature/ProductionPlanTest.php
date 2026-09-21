@@ -113,7 +113,7 @@ class ProductionPlanTest extends TestCase
 
         // Urutan grup mesin = alur routing BOM 58.
         $this->assertSame(
-            ['TPL COMP BASE', 'ASSY. TPL COMP BASE 1', 'AUTO CAULKING', 'ASSY. TPL COMP BASE 2'],
+            ['TPL KUKIL', 'ASSY. TPL COMP BASE 1', 'AUTO CAULKING', 'ASSY. TPL COMP BASE 2'],
             $rows->pluck('machine.machine_name')->all(),
         );
 

@@ -52,6 +52,20 @@ function fmtDate(value: string): string {
     return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(locale.value, { timeZone: 'UTC', day: '2-digit', month: 'short' });
 }
 
+const dayKeys = ['d', 'd1', 'd2'] as const;
+
+const dayCols = computed(() => ({ d: dayLabels.value.d, d1: dayLabels.value.d1, d2: dayLabels.value.d2 }));
+
+/** Ringkasan papan: jumlah mesin, WO, dan total estimasi waktu. */
+const summary = computed(() => {
+    const rows = props.items;
+    return {
+        machines: new Set(rows.map((r) => r.machine_id).filter((v) => v != null)).size,
+        wo: new Set(rows.map((r) => r.work_order_id).filter((v) => v != null)).size,
+        estimate: rows.reduce((sum, r) => sum + (Number(r.estimated_seconds) || 0), 0),
+    };
+});
+
 const dayLabels = computed(() => ({
     d: fmtDate(props.date),
     d1: fmtDate(addDays(props.date, 1)),
@@ -255,7 +269,7 @@ function submitEdit() {
         <Head :title="t('production.plan')" />
         <BackButton :href="route('production-data')" class="mb-4" />
 
-        <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
+        <div class="mb-5 flex flex-wrap items-end justify-between gap-4">
             <div>
                 <h1 class="text-2xl font-bold tracking-tight text-ink-primary">{{ t('production.plan') }}</h1>
                 <p class="mt-1 text-sm text-ink-secondary">
@@ -264,21 +278,23 @@ function submitEdit() {
             </div>
             <button
                 type="button"
-                class="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover"
+                class="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover"
                 @click="openCreate()"
             >
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
                 {{ t('production.newWo') }}
             </button>
         </div>
 
-        <div class="mb-4 flex flex-wrap items-end gap-3">
-            <div>
+        <!-- Toolbar: filter + ringkasan papan -->
+        <div class="mb-4 flex flex-wrap items-end gap-3 rounded-xl border border-borderline bg-surface p-3">
+            <div class="min-w-56 flex-1">
                 <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('production.search') }}</label>
                 <input
                     v-model="search"
                     type="search"
                     :placeholder="t('production.searchPlan')"
-                    class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary placeholder-ink-secondary focus:border-primary focus:ring-primary sm:w-72"
+                    class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary placeholder-ink-secondary focus:border-primary focus:ring-primary"
                 />
             </div>
             <div>
@@ -286,9 +302,21 @@ function submitEdit() {
                 <input
                     v-model="date"
                     type="date"
-                    class="rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                    class="rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
                     @change="applyDate"
                 />
+            </div>
+            <div class="flex flex-wrap items-center gap-2 sm:ml-auto">
+                <span class="inline-flex items-center gap-1.5 rounded-lg border border-borderline bg-background px-2.5 py-1.5 text-xs text-ink-secondary">
+                    <span class="font-semibold text-ink-primary">{{ summary.machines }}</span> {{ t('production.machinesLabel') }}
+                </span>
+                <span class="inline-flex items-center gap-1.5 rounded-lg border border-borderline bg-background px-2.5 py-1.5 text-xs text-ink-secondary">
+                    <span class="font-semibold text-ink-primary">{{ summary.wo }}</span> {{ t('production.woLabel') }}
+                </span>
+                <span class="inline-flex items-center gap-1.5 rounded-lg border border-borderline bg-background px-2.5 py-1.5 text-xs text-ink-secondary">
+                    {{ t('production.totalEstimate') }}
+                    <span class="font-semibold tabular-nums text-ink-primary">{{ fmtDuration(summary.estimate) }}</span>
+                </span>
             </div>
         </div>
 
@@ -323,75 +351,92 @@ function submitEdit() {
 
 
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-borderline px-4 py-3">
+                <h2 class="text-sm font-semibold text-ink-primary">{{ t('production.boardTitle') }}</h2>
+                <span class="text-xs text-ink-secondary">{{ t('production.planHelp') }}</span>
+            </div>
             <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-borderline text-sm">
-                    <thead>
+                <table class="min-w-full text-sm">
+                    <thead class="sticky top-0 z-10 bg-background">
                         <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                            <th class="px-3 py-2 w-36">{{ t('production.machine') }}</th>
-                            <th class="px-3 py-2 w-20">{{ t('production.sequence') }}</th>
-                            <th class="px-3 py-2">{{ t('production.fgPart') }}</th>
-                            <th class="px-3 py-2">{{ t('production.inputPart') }}</th>
-                            <th class="px-3 py-2">{{ t('production.outputPart') }}</th>
-                            <th class="px-3 py-2 text-right">{{ t('production.estimatedTime') }}</th>
-                            <th class="px-3 py-2 text-right">{{ t('production.availableQty') }}</th>
-                            <th v-for="(label, key) in { d: dayLabels.d, d1: dayLabels.d1, d2: dayLabels.d2 }" :key="key" class="w-24 px-2 py-2 text-center">{{ label }}</th>
-                            <th class="px-3 py-2 text-right">{{ t('production.actions') }}</th>
+                            <th class="w-40 px-3 py-2.5">{{ t('production.machine') }}</th>
+                            <th class="w-16 px-3 py-2.5">{{ t('production.sequence') }}</th>
+                            <th class="px-3 py-2.5">{{ t('production.fgPart') }}</th>
+                            <th class="px-3 py-2.5">{{ t('production.inputPart') }}</th>
+                            <th class="px-3 py-2.5">{{ t('production.outputPart') }}</th>
+                            <th class="w-28 px-3 py-2.5 text-right">{{ t('production.estimatedTime') }}</th>
+                            <th class="w-28 px-3 py-2.5 text-right">{{ t('production.availableQty') }}</th>
+                            <th v-for="(label, key) in dayCols" :key="key" class="w-24 px-2 py-2.5 text-center">{{ label }}</th>
+                            <th class="w-32 px-3 py-2.5 text-right">{{ t('production.actions') }}</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-borderline">
-                        <template v-for="group in groups" :key="group.machine?.id ?? 'none'">
-                            <tr v-for="(row, index) in group.rows" :key="row.id" class="hover:bg-primary-light/40">
-                                <td v-if="index === 0" class="px-3 py-2 align-top" :rowspan="group.rows.length">
-                                    <span class="font-semibold text-ink-primary">{{ group.machine?.machine_name ?? t('production.noMachine') }}</span>
-                                    <span v-if="group.machine" class="block text-xs text-ink-secondary">{{ group.machine.machine_code }}</span>
+                    <tbody>
+                        <template v-for="(group, gi) in groups" :key="group.machine?.id ?? 'none'">
+                            <tr
+                                v-for="(row, index) in group.rows"
+                                :key="row.id"
+                                class="border-t border-borderline transition hover:bg-primary-light/40"
+                                :class="[index === 0 && gi > 0 ? 'border-t-2 !border-t-borderline' : '', row.avail_qty < 0 ? 'bg-danger/5' : '']"
+                            >
+                                <td v-if="index === 0" class="px-3 py-2.5 align-top" :rowspan="group.rows.length">
+                                    <div class="flex flex-col items-start gap-1">
+                                        <span class="font-semibold leading-tight text-ink-primary">{{ group.machine?.machine_name ?? t('production.noMachine') }}</span>
+                                        <span v-if="group.machine" class="text-[11px] uppercase tracking-wide text-ink-secondary">{{ group.machine.machine_code }}</span>
+                                        <span class="mt-0.5 inline-flex rounded-md bg-background px-1.5 py-0.5 text-[11px] font-medium text-ink-secondary">{{ t('production.rowsCount', { n: group.rows.length }) }}</span>
+                                    </div>
                                 </td>
-                                <td class="px-3 py-2">
-                                    <div class="flex items-center gap-1">
-                                        <span class="w-5 text-center tabular-nums text-ink-secondary">{{ index + 1 }}</span>
-                                        <div class="flex flex-col">
+                                <td class="px-3 py-2.5">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="w-4 text-center text-xs tabular-nums text-ink-secondary">{{ index + 1 }}</span>
+                                        <div class="flex flex-col gap-0.5">
                                             <button
                                                 type="button"
                                                 :title="t('production.moveUp')"
                                                 :aria-label="t('production.moveUp')"
                                                 :disabled="index === 0"
-                                                class="flex h-4 items-center justify-center rounded text-ink-secondary transition hover:bg-background disabled:opacity-30"
+                                                class="flex h-3.5 w-3.5 items-center justify-center rounded text-ink-secondary transition hover:bg-background hover:text-primary disabled:opacity-30"
                                                 @click="move(group.rows, index, -1)"
                                             >
-                                                <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" /></svg>
+                                                <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" /></svg>
                                             </button>
                                             <button
                                                 type="button"
                                                 :title="t('production.moveDown')"
                                                 :aria-label="t('production.moveDown')"
                                                 :disabled="index === group.rows.length - 1"
-                                                class="flex h-4 items-center justify-center rounded text-ink-secondary transition hover:bg-background disabled:opacity-30"
+                                                class="flex h-3.5 w-3.5 items-center justify-center rounded text-ink-secondary transition hover:bg-background hover:text-primary disabled:opacity-30"
                                                 @click="move(group.rows, index, 1)"
                                             >
-                                                <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
+                                                <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
                                             </button>
                                         </div>
                                     </div>
                                 </td>
-                                <td class="px-3 py-2">
+                                <td class="px-3 py-2.5">
                                     <div class="font-medium text-ink-primary">{{ row.fg_part?.part_name ?? row.work_order?.part?.part_name ?? '—' }}</div>
                                     <div class="text-xs text-ink-secondary">{{ row.fg_part?.part_number ?? row.work_order?.part?.part_number ?? '' }}</div>
                                 </td>
-                                <td class="px-3 py-2">
+                                <td class="px-3 py-2.5">
                                     <div class="text-ink-primary">{{ row.input_part?.part_name ?? '—' }}</div>
                                     <div class="text-xs text-ink-secondary">{{ row.input_part?.part_number ?? '' }}</div>
                                 </td>
-                                <td class="px-3 py-2">
-                                    <div class="text-ink-primary">{{ row.wip_part?.part_name ?? '—' }}</div>
+                                <td class="px-3 py-2.5">
+                                    <div class="font-medium text-ink-primary">{{ row.wip_part?.part_name ?? '—' }}</div>
                                     <div class="text-xs text-ink-secondary">{{ row.wip_part?.part_number ?? '' }}</div>
                                 </td>
-                                <td class="px-3 py-2 text-right tabular-nums text-ink-primary">
-                                    {{ fmtDuration(row.estimated_seconds) }}
+                                <td class="px-3 py-2.5 text-right">
+                                    <span class="tabular-nums font-medium text-ink-primary">{{ fmtDuration(row.estimated_seconds) }}</span>
                                 </td>
-                                <td class="px-3 py-2 text-right tabular-nums font-semibold" :class="row.avail_qty < 0 ? 'text-danger' : 'text-ink-secondary'">
-                                    {{ fmt(row.avail_qty) }}
+                                <td class="px-3 py-2.5 text-right">
+                                    <span
+                                        class="tabular-nums font-semibold"
+                                        :class="row.avail_qty < 0 ? 'text-danger' : (Number(row.avail_qty) === 0 ? 'text-success' : 'text-ink-secondary')"
+                                    >
+                                        {{ fmt(row.avail_qty) }}
+                                    </span>
                                 </td>
                                 <template>
-                                    <td v-for="(key, idx) in ['d', 'd1', 'd2'] as const" :key="idx" class="px-2 py-1.5">
+                                    <td v-for="(key, idx) in dayKeys" :key="idx" class="px-2 py-1.5">
                                         <input
                                             v-model="draftFor(row)[key]"
                                             type="number"
@@ -400,12 +445,13 @@ function submitEdit() {
                                             inputmode="decimal"
                                             :placeholder="'…'"
                                             :aria-label="t('production.dQty') + ' ' + row.fg_part?.part_number"
-                                            class="w-full rounded-md border-borderline bg-background px-2 py-1.5 text-right text-sm tabular-nums text-ink-primary focus:border-primary focus:ring-primary"
+                                            class="w-full rounded-md border-borderline px-2 py-1.5 text-right text-sm tabular-nums text-ink-primary focus:border-primary focus:ring-primary"
+                                            :class="draftFor(row)[key] !== '' ? 'border-primary/40 bg-primary-light/40' : 'bg-background'"
                                             @change="saveTargets(row)"
                                         />
                                     </td>
                                 </template>
-                                <td class="px-3 py-2">
+                                <td class="px-3 py-2.5">
                                     <div class="flex justify-end gap-1">
                                         <a
                                             v-if="row.work_order"
@@ -448,7 +494,16 @@ function submitEdit() {
                             </tr>
                         </template>
                         <tr v-if="groups.length === 0">
-                            <td colspan="11" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('production.noPlanRows') }}</td>
+                            <td colspan="11" class="px-4 py-16">
+                                <div class="mx-auto flex max-w-sm flex-col items-center gap-2 text-center">
+                                    <svg class="h-8 w-8 text-ink-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" /></svg>
+                                    <p class="text-sm font-medium text-ink-primary">{{ t('production.planEmptyTitle') }}</p>
+                                    <p class="text-xs text-ink-secondary">{{ t('production.planEmptyHint') }}</p>
+                                    <button type="button" class="mt-1 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-primary-hover" @click="openCreate()">
+                                        {{ t('production.newWo') }}
+                                    </button>
+                                </div>
+                            </td>
                         </tr>
                     </tbody>
                 </table>

@@ -62,17 +62,23 @@ class ProductionResultService
         $internalParents = $workOrder->items()->pluck('parent_part_id')
             ->filter()->unique()->values()->all();
 
-        // Step sebelumnya harus selesai: pastikan stok WIP cukup sebelum posting.
+        // Step sebelumnya harus selesai / material sudah di-book: pastikan cukup.
         foreach ($rows as $row) {
             $childId = $row->child_part_id;
-            if ($childId === null || ! in_array($childId, $internalParents, true)) {
+            if ($childId === null) {
                 continue;
             }
             $need = (float) $row->child_qty * $qtyGood;
             if ($need <= 0) {
                 continue;
             }
+
+            // WIP: stok dari step sebelumnya. RM: booking item ini + stok bebas.
             $available = $this->stockService->availableFifo((int) $childId, $row->uom_rm);
+            if (! in_array($childId, $internalParents, true)) {
+                $available += $this->stockService->bookedQtyForItem($row->id, (int) $childId, $row->uom_rm);
+            }
+
             if ($available + 1e-9 < $need) {
                 throw ValidationException::withMessages([
                     'qty_good' => __('Stok WIP :part kurang (:avail tersedia, :need dibutuhkan). Selesaikan step sebelumnya.', [
@@ -84,15 +90,16 @@ class ProductionResultService
             }
         }
 
-        return DB::transaction(function () use ($workOrder, $rows, $parentPartId, $qtyGood, $qtyReject, $data, $actorId, $internalParents) {
+        return DB::transaction(function () use ($workOrder, $rows, $parentPartId, $qtyGood, $qtyReject, $data, $actorId) {
             $reportedAt = isset($data['result_date']) && $data['result_date']
                 ? Carbon::parse($data['result_date'])
                 : now();
 
-            // Backflush: konsumsi child WIP saja.
+            // Backflush: booking item ini dulu (RM), lalu stok FIFO (WIP / sisa).
+            // Stok fisik baru berkurang di sini — bukan saat release.
             foreach ($rows as $row) {
                 $childId = $row->child_part_id;
-                if ($childId === null || ! in_array($childId, $internalParents, true)) {
+                if ($childId === null) {
                     continue;
                 }
                 $need = (float) $row->child_qty * $qtyGood;
@@ -101,7 +108,7 @@ class ProductionResultService
                 }
 
                 $taken = 0.0;
-                foreach ($this->stockService->consumeFifoByUom((int) $childId, $need, $row->uom_rm) as $alloc) {
+                foreach ($this->stockService->consumeForItem($row->id, (int) $childId, $need, $row->uom_rm, $actorId) as $alloc) {
                     $taken += (float) $alloc['take_qty'];
                     WorkOrderConsumption::create([
                         'work_order_id' => $workOrder->id,

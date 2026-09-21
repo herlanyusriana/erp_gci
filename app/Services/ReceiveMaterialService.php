@@ -6,6 +6,7 @@ use App\Models\IncomingArrival;
 use App\Models\IncomingArrivalItem;
 use App\Models\IncomingReceive;
 use App\Models\PartStock;
+use App\Models\WorkOrderMaterialBooking;
 use App\Support\UomCatalog;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -341,26 +342,58 @@ class ReceiveMaterialService
     }
 
     /**
-     * Total stok FIFO aktif untuk sebuah part, opsional difilter per UOM.
-     * UOM dicocokkan case-insensitive; bila null, semua UOM dijumlahkan.
+     * Qty yang sedang di-book (status booked) per part, opsional filter UOM.
+     *
+     * @param  iterable<int>  $partIds
+     * @return array<int, float> part_id => qty booked
      */
-    public function availableFifo(int $partId, ?string $uom = null): float
+    public function bookedQtyBatch(iterable $partIds, ?string $uom = null): array
     {
-        $q = PartStock::query()
-            ->where('part_id', $partId)
-            ->where('qty', '>', 0);
+        $ids = collect($partIds)->map(fn ($id) => (int) $id)->filter()->unique()->values();
+
+        if ($ids->isEmpty()) {
+            return [];
+        }
+
+        $q = WorkOrderMaterialBooking::query()
+            ->whereIn('part_id', $ids)
+            ->where('status', WorkOrderMaterialBooking::STATUS_BOOKED);
 
         $normalized = UomCatalog::normalize($uom);
         if ($normalized !== null) {
-            $q->whereRaw('UPPER(COALESCE(qty_unit, \'\')) = ?', [$normalized]);
+            $q->whereRaw('UPPER(COALESCE(uom, \'\')) = ?', [$normalized]);
         }
 
-        return (float) $q->sum('qty');
+        $totals = $q->groupBy('part_id')
+            ->selectRaw('part_id, SUM(qty) AS total')
+            ->pluck('total', 'part_id');
+
+        return $ids->mapWithKeys(fn ($id) => [$id => (float) ($totals[$id] ?? 0)])->all();
+    }
+
+    /**
+     * Total stok FIFO aktif untuk sebuah part, opsional difilter per UOM.
+     * UOM dicocokkan case-insensitive; bila null, semua UOM dijumlahkan.
+     * Qty yang sudah di-book WO lain dikurangi (belum bisa dipakai).
+     */
+    public function availableFifo(int $partId, ?string $uom = null): float
+    {
+        $stock = (float) PartStock::query()
+            ->where('part_id', $partId)
+            ->where('qty', '>', 0)
+            ->when(UomCatalog::normalize($uom) !== null, fn ($q) => $q
+                ->whereRaw('UPPER(COALESCE(qty_unit, \'\')) = ?', [UomCatalog::normalize($uom)]))
+            ->sum('qty');
+
+        $booked = $this->bookedQtyBatch([$partId], $uom)[$partId] ?? 0.0;
+
+        return max(0.0, $stock - $booked);
     }
 
     /**
      * Stok FIFO untuk banyak part sekaligus dalam satu query — dipakai saat
      * menampilkan saran substitute (bisa puluhan part) agar tidak N+1.
+     * Qty yang sudah di-book WO lain dikurangi.
      *
      * @param  iterable<int>  $partIds
      * @return array<int, float> part_id => qty tersedia
@@ -386,8 +419,337 @@ class ReceiveMaterialService
             ->selectRaw('part_id, SUM(qty) AS total')
             ->pluck('total', 'part_id');
 
-        // Pastikan semua id hadir (0 bila tak ada stok).
-        return $ids->mapWithKeys(fn ($id) => [$id => (float) ($totals[$id] ?? 0)])->all();
+        $booked = $this->bookedQtyBatch($ids, $uom);
+
+        // Pastikan semua id hadir (0 bila tak ada stok / habis di-book).
+        return $ids->mapWithKeys(fn ($id) => [
+            $id => max(0.0, (float) ($totals[$id] ?? 0) - (float) ($booked[$id] ?? 0)),
+        ])->all();
+    }
+
+    /**
+     * Booking stok FIFO untuk sebuah item WO — stok fisik TIDAK dikurangi,
+     * hanya dikunci sampai dikonsumsi saat Production Result.
+     *
+     * @return list<array{booking_id:int, part_stock_id:int, tag:string|null, take_qty:float, uom:string, price:float|null, invoice:string|null, supplier:string|null}>
+     */
+    public function bookFifoByUom(
+        int $partId,
+        float $qtyNeed,
+        ?string $uom,
+        int $workOrderId,
+        int $workOrderItemId,
+        ?int $actorId = null
+    ): array {
+        if ($qtyNeed <= 0) {
+            return [];
+        }
+
+        $normalized = UomCatalog::normalize($uom);
+
+        return DB::transaction(function () use ($partId, $qtyNeed, $uom, $normalized, $workOrderId, $workOrderItemId, $actorId) {
+            $stocks = PartStock::query()
+                ->where('part_id', $partId)
+                ->where('qty', '>', 0)
+                ->when($normalized !== null, fn ($q) => $q
+                    ->whereRaw('UPPER(COALESCE(qty_unit, \'\')) = ?', [$normalized]))
+                ->orderByRaw('received_at ASC NULLS LAST')
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            $bookedByStock = WorkOrderMaterialBooking::query()
+                ->whereIn('part_stock_id', $stocks->pluck('id'))
+                ->where('status', WorkOrderMaterialBooking::STATUS_BOOKED)
+                ->groupBy('part_stock_id')
+                ->selectRaw('part_stock_id, SUM(qty) AS total')
+                ->pluck('total', 'part_stock_id');
+
+            $result = [];
+            $remaining = $qtyNeed;
+
+            foreach ($stocks as $stock) {
+                if ($remaining <= 1e-9) {
+                    break;
+                }
+
+                $bookable = (float) $stock->qty - (float) ($bookedByStock[$stock->id] ?? 0);
+                if ($bookable <= 1e-9) {
+                    continue;
+                }
+
+                $take = min($bookable, $remaining);
+                $receive = $stock->receive;
+
+                $booking = WorkOrderMaterialBooking::create([
+                    'work_order_id' => $workOrderId,
+                    'work_order_item_id' => $workOrderItemId,
+                    'part_id' => $partId,
+                    'part_stock_id' => $stock->id,
+                    'tag' => $stock->tag,
+                    'qty' => $take,
+                    'uom' => $stock->qty_unit,
+                    'status' => WorkOrderMaterialBooking::STATUS_BOOKED,
+                    'booked_at' => now(),
+                    'created_by' => $actorId,
+                    'updated_by' => $actorId,
+                ]);
+
+                $result[] = [
+                    'booking_id' => $booking->id,
+                    'part_stock_id' => $stock->id,
+                    'tag' => $stock->tag,
+                    'take_qty' => $take,
+                    'uom' => (string) ($stock->qty_unit ?? $uom ?? ''),
+                    'price' => $stock->price !== null ? (float) $stock->price : null,
+                    'invoice' => $receive?->invoice_no !== null ? (string) $receive->invoice_no : null,
+                    'supplier' => $receive?->arrivalItem?->arrival?->supplier?->supplier_name,
+                ];
+
+                $remaining -= $take;
+            }
+
+            return $result;
+        });
+    }
+
+    /**
+     * Booking dari SATU tag spesifik (scan label di mobile). Stok tidak dikurangi.
+     *
+     * @return array{booking_id:int, part_stock_id:int, tag:string|null, take_qty:float, remaining_stock_after:float, uom:string, price:float|null, invoice:string|null, supplier:string|null}|null
+     */
+    public function bookFromTag(
+        string $tag,
+        ?int $partId,
+        ?float $qty,
+        int $workOrderId,
+        int $workOrderItemId,
+        ?int $actorId = null
+    ): ?array {
+        $tag = trim($tag);
+        if ($tag === '') {
+            return null;
+        }
+
+        return DB::transaction(function () use ($tag, $partId, $qty, $workOrderId, $workOrderItemId, $actorId) {
+            $stock = PartStock::query()
+                ->whereRaw('LOWER(COALESCE(tag, \'\')) = ?', [mb_strtolower($tag)])
+                ->where('qty', '>', 0)
+                ->when($partId !== null, fn ($q) => $q->where('part_id', $partId))
+                ->orderByRaw('received_at ASC NULLS LAST')
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->first();
+
+            if ($stock === null) {
+                return null;
+            }
+
+            $booked = (float) WorkOrderMaterialBooking::query()
+                ->where('part_stock_id', $stock->id)
+                ->where('status', WorkOrderMaterialBooking::STATUS_BOOKED)
+                ->sum('qty');
+
+            $bookable = (float) $stock->qty - $booked;
+            if ($bookable <= 1e-9) {
+                return null;
+            }
+
+            $take = $qty === null ? $bookable : min($qty, $bookable);
+            if ($take <= 0) {
+                return null;
+            }
+
+            $receive = $stock->receive;
+
+            $booking = WorkOrderMaterialBooking::create([
+                'work_order_id' => $workOrderId,
+                'work_order_item_id' => $workOrderItemId,
+                'part_id' => $stock->part_id,
+                'part_stock_id' => $stock->id,
+                'tag' => $stock->tag,
+                'qty' => $take,
+                'uom' => $stock->qty_unit,
+                'status' => WorkOrderMaterialBooking::STATUS_BOOKED,
+                'booked_at' => now(),
+                'created_by' => $actorId,
+                'updated_by' => $actorId,
+            ]);
+
+            return [
+                'booking_id' => $booking->id,
+                'part_stock_id' => $stock->id,
+                'tag' => $stock->tag,
+                'take_qty' => $take,
+                'remaining_stock_after' => $bookable - $take,
+                'uom' => (string) ($stock->qty_unit ?? ''),
+                'price' => $stock->price !== null ? (float) $stock->price : null,
+                'invoice' => $receive?->invoice_no !== null ? (string) $receive->invoice_no : null,
+                'supplier' => $receive?->arrivalItem?->arrival?->supplier?->supplier_name,
+            ];
+        });
+    }
+
+    /**
+     * Konsumsi booking sebuah item WO (dipakai saat Production Result):
+     * stok fisik baru berkurang di sini, booking ditandai consumed.
+     *
+     * @return list<array{booking_id:int, part_stock_id:int|null, tag:string|null, take_qty:float, uom:string|null}>
+     */
+    public function consumeBookings(
+        int $workOrderItemId,
+        int $partId,
+        float $qtyNeed,
+        ?string $uom = null,
+        ?int $actorId = null
+    ): array {
+        if ($qtyNeed <= 0) {
+            return [];
+        }
+
+        $normalized = UomCatalog::normalize($uom);
+
+        return DB::transaction(function () use ($workOrderItemId, $partId, $qtyNeed, $normalized, $actorId) {
+            $bookings = WorkOrderMaterialBooking::query()
+                ->where('work_order_item_id', $workOrderItemId)
+                ->where('part_id', $partId)
+                ->where('status', WorkOrderMaterialBooking::STATUS_BOOKED)
+                ->when($normalized !== null, fn ($q) => $q
+                    ->whereRaw('UPPER(COALESCE(uom, \'\')) = ?', [$normalized]))
+                ->orderBy('booked_at')
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            $result = [];
+            $remaining = $qtyNeed;
+
+            foreach ($bookings as $booking) {
+                if ($remaining <= 1e-9) {
+                    break;
+                }
+
+                $take = min((float) $booking->qty, $remaining);
+
+                if ($booking->part_stock_id !== null) {
+                    $stock = PartStock::query()->lockForUpdate()->find($booking->part_stock_id);
+                    if ($stock !== null) {
+                        $newQty = (float) $stock->qty - $take;
+                        if ($newQty <= 1e-9) {
+                            $stock->delete();
+                        } else {
+                            $stock->update(['qty' => $newQty]);
+                        }
+                    }
+                }
+
+                $bookingRemaining = (float) $booking->qty - $take;
+                if ($bookingRemaining <= 1e-9) {
+                    $booking->update([
+                        'status' => WorkOrderMaterialBooking::STATUS_CONSUMED,
+                        'consumed_at' => now(),
+                        'updated_by' => $actorId,
+                    ]);
+                } else {
+                    $booking->update(['qty' => $bookingRemaining, 'updated_by' => $actorId]);
+                }
+
+                $result[] = [
+                    'booking_id' => (int) $booking->id,
+                    'part_stock_id' => $booking->part_stock_id !== null ? (int) $booking->part_stock_id : null,
+                    'tag' => $booking->tag,
+                    'take_qty' => $take,
+                    'uom' => $booking->uom,
+                ];
+
+                $remaining -= $take;
+            }
+
+            return $result;
+        });
+    }
+
+    /**
+     * Qty booking aktif untuk satu item WO + part.
+     */
+    public function bookedQtyForItem(int $workOrderItemId, int $partId, ?string $uom = null): float
+    {
+        $q = WorkOrderMaterialBooking::query()
+            ->where('work_order_item_id', $workOrderItemId)
+            ->where('part_id', $partId)
+            ->where('status', WorkOrderMaterialBooking::STATUS_BOOKED);
+
+        $normalized = UomCatalog::normalize($uom);
+        if ($normalized !== null) {
+            $q->whereRaw('UPPER(COALESCE(uom, \'\')) = ?', [$normalized]);
+        }
+
+        return (float) $q->sum('qty');
+    }
+
+    /**
+     * Konsumsi material untuk sebuah item WO: habiskan booking item ini dulu
+     * (stok fisik berkurang di sini), sisanya ambil dari stok bebas FIFO
+     * (mis. WO lama yang belum punya booking).
+     *
+     * @return list<array{booking_id:int|null, part_stock_id:int|null, tag:string|null, take_qty:float, uom:string|null, from_booking:bool}>
+     */
+    public function consumeForItem(
+        int $workOrderItemId,
+        int $partId,
+        float $qtyNeed,
+        ?string $uom = null,
+        ?int $actorId = null
+    ): array {
+        if ($qtyNeed <= 0) {
+            return [];
+        }
+
+        $result = [];
+        $remaining = $qtyNeed;
+
+        foreach ($this->consumeBookings($workOrderItemId, $partId, $remaining, $uom, $actorId) as $alloc) {
+            $result[] = [
+                'booking_id' => $alloc['booking_id'],
+                'part_stock_id' => $alloc['part_stock_id'],
+                'tag' => $alloc['tag'],
+                'take_qty' => (float) $alloc['take_qty'],
+                'uom' => $alloc['uom'],
+                'from_booking' => true,
+            ];
+            $remaining -= (float) $alloc['take_qty'];
+        }
+
+        if ($remaining > 1e-9) {
+            foreach ($this->consumeFifoByUom($partId, $remaining, $uom) as $alloc) {
+                $result[] = [
+                    'booking_id' => null,
+                    'part_stock_id' => $alloc['part_stock_id'],
+                    'tag' => $alloc['tag'],
+                    'take_qty' => (float) $alloc['take_qty'],
+                    'uom' => $alloc['uom'],
+                    'from_booking' => false,
+                ];
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Lepas booking yang masih aktif (WO dibatalkan / dihapus).
+     */
+    public function releaseBookings(int $workOrderId, ?int $workOrderItemId = null, ?int $actorId = null): int
+    {
+        return WorkOrderMaterialBooking::query()
+            ->where('work_order_id', $workOrderId)
+            ->when($workOrderItemId !== null, fn ($q) => $q->where('work_order_item_id', $workOrderItemId))
+            ->where('status', WorkOrderMaterialBooking::STATUS_BOOKED)
+            ->update([
+                'status' => WorkOrderMaterialBooking::STATUS_RELEASED,
+                'updated_by' => $actorId,
+                'updated_at' => now(),
+            ]);
     }
 
     /**

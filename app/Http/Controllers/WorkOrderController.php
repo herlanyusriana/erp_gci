@@ -326,7 +326,7 @@ class WorkOrderController extends Controller
         }
 
         return redirect()
-            ->route('work-orders.show', $workOrder)->with('success', __('WO di-release, material RM dikonsumsi.'));
+            ->route('work-orders.show', $workOrder)->with('success', __('WO di-release, material RM di-booking (stok berkurang saat Production Result).'));
     }
 
     public function complete(WorkOrder $workOrder): RedirectResponse

@@ -6,6 +6,7 @@ use App\Models\Part;
 use App\Models\PartStock;
 use App\Models\User;
 use App\Models\WorkOrder;
+use App\Models\WorkOrderMaterialBooking;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
@@ -68,9 +69,13 @@ class WorkOrderHttpTest extends TestCase
         $this->post(route('work-orders.release', $wo))->assertRedirect();
         $wo->refresh();
         $this->assertSame('in_progress', $wo->status);
-        $this->assertGreaterThan(0, $wo->consumptions()->count());
 
-        // Release hanya mengonsumsi RM; output WIP/FG lahir dari Production Result.
+        // Release hanya BOOKING: stok fisik belum berkurang, belum ada konsumsi.
+        $this->assertSame(0, $wo->consumptions()->count());
+        $this->assertGreaterThan(0, WorkOrderMaterialBooking::where('work_order_id', $wo->id)->where('status', 'booked')->count());
+        $this->assertEqualsWithDelta(20.0, (float) PartStock::where('part_id', Part::where('part_number', 'CBKG07256C')->value('id'))->sum('qty'), 0.001);
+
+        // Output WIP/FG lahir dari Production Result.
         $fgStock = PartStock::where('part_id', $fg->id)->where('qty', '>', 0)->sum('qty');
         $this->assertEqualsWithDelta(0.0, (float) $fgStock, 0.001);
 
@@ -110,8 +115,12 @@ class WorkOrderHttpTest extends TestCase
         $wo->refresh();
         $this->assertSame('in_progress', $wo->status);
 
-        // Shortage dilaporkan, RM habis terpakai, FG belum terposting.
-        $this->assertDatabaseHas('work_order_consumptions', ['work_order_id' => $wo->id]);
+        // Shortage dilaporkan; RM yang tersedia sudah di-book (belum dikonsumsi).
+        $booked = (float) WorkOrderMaterialBooking::where('work_order_id', $wo->id)
+            ->where('status', 'booked')->sum('qty');
+        $this->assertGreaterThan(0.0, $booked);
+        $this->assertSame(0, $wo->consumptions()->count());
+
         $available = PartStock::where('part_id', $fg->id)->where('qty', '>', 0)->sum('qty');
         $this->assertEqualsWithDelta(0.0, (float) $available, 0.001);
     }

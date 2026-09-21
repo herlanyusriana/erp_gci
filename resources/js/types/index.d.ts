@@ -315,6 +315,8 @@ export interface PartStock {
     qty_unit: string | null;
     price: number | null;
     remarks: string | null;
+    booked_qty?: number;
+    avail_qty?: number;
     part?: (Pick<Part, 'id' | 'part_number' | 'part_name'> & { part_type?: PartType | null }) | null;
     receive?: (Pick<IncomingReceive, 'id' | 'invoice_no'> & {
         arrival_item?: (Pick<IncomingArrivalItem, 'id' | 'arrival_id'> & {

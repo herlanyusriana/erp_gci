@@ -248,12 +248,17 @@ class WorkOrderAllocationTest extends TestCase
         $wo->refresh();
         $this->assertSame('in_progress', $wo->status);
 
-        // Konsumsi tercatat dari kedua substitute, bukan dari main material.
-        $this->assertDatabaseHas('work_order_consumptions', ['work_order_item_id' => $item->id, 'part_id' => $subA]);
-        $this->assertDatabaseHas('work_order_consumptions', ['work_order_item_id' => $item->id, 'part_id' => $subB]);
-        $this->assertDatabaseMissing('work_order_consumptions', ['work_order_item_id' => $item->id, 'part_id' => $item->child_part_id]);
+        // Booking tercatat dari kedua substitute, bukan dari main material.
+        $this->assertDatabaseHas('work_order_material_bookings', ['work_order_item_id' => $item->id, 'part_id' => $subA, 'status' => 'booked']);
+        $this->assertDatabaseHas('work_order_material_bookings', ['work_order_item_id' => $item->id, 'part_id' => $subB, 'status' => 'booked']);
+        $this->assertDatabaseMissing('work_order_material_bookings', ['work_order_item_id' => $item->id, 'part_id' => $item->child_part_id]);
 
-        // Release hanya mengonsumsi RM; FG belum diposting (menunggu Production Result).
+        // Release hanya BOOKING: stok fisik kedua substitute belum berkurang.
+        $this->assertSame(0, $wo->consumptions()->count());
+        $this->assertEqualsWithDelta(6.0, (float) PartStock::where('part_id', $subA)->sum('qty'), 0.001);
+        $this->assertEqualsWithDelta(5.0, (float) PartStock::where('part_id', $subB)->sum('qty'), 0.001);
+
+        // FG belum diposting (menunggu Production Result).
         $fgStock = PartStock::where('part_id', $wo->part_id)->where('qty', '>', 0)->sum('qty');
         $this->assertEqualsWithDelta(0.0, (float) $fgStock, 0.001);
     }

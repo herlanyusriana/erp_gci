@@ -9,7 +9,6 @@ use App\Models\Part;
 use App\Models\PartSubstitute;
 use App\Models\ProductionPlan;
 use App\Models\WorkOrder;
-use App\Models\WorkOrderConsumption;
 use App\Models\WorkOrderItem;
 use App\Support\UomCatalog;
 use Illuminate\Support\Carbon;
@@ -307,6 +306,7 @@ class WoService
 
         // Material yang DI-ISSUE saat release: hanya RM (child bukan WIP internal).
         // WIP dikonsumsi nanti saat step-nya dilaporkan lewat Production Result.
+        // RM di-BOOKING saat release; stok fisik baru berkurang saat Production Result.
         $sources = [];
         foreach ($items as $it) {
             $planned = [];
@@ -397,8 +397,8 @@ class WoService
                 $need = (float) $it->qty_required;
                 $target = round($need * $ratio, 4);
 
-                // CONSUME tiap sumber (RM) sesuai porsi alokasinya, FIFO per part.
-                $taken = 0.0;
+                // BOOKING tiap sumber (RM) sesuai porsi alokasinya, FIFO per part.
+                // Stok fisik TIDAK dikurangi di sini — baru saat Production Result.
                 $plannedTotal = array_sum($sources[$it->id] ?? []);
                 if ($target > 0 && $plannedTotal > 0) {
                     $scale = $target / $plannedTotal;
@@ -409,21 +409,9 @@ class WoService
                             continue;
                         }
 
-                        $alloc = $this->stockService->consumeFifoByUom($partId, $takeFromPart, $it->uom_rm);
-                        foreach ($alloc as $a) {
-                            $taken += (float) $a['take_qty'];
-                            WorkOrderConsumption::create([
-                                'work_order_id' => $workOrder->id,
-                                'work_order_item_id' => $it->id,
-                                'part_stock_id' => $a['part_stock_id'],
-                                'part_id' => $partId,
-                                'qty' => (float) $a['take_qty'],
-                                'uom' => $a['uom'],
-                            ]);
-                        }
+                        $this->stockService->bookFifoByUom($partId, $takeFromPart, $it->uom_rm, $workOrder->id, $it->id, $actorId);
                     }
                 }
-                $it->update(['qty_consumed' => $taken]);
             }
 
             $workOrder->update([
@@ -591,9 +579,10 @@ class WoService
                 $taken = 0.0;
 
                 if (! $isInternal) {
-                    // Leaf: konsumsi tag yang di-scan (spesifik).
+                    // Leaf: BOOKING tag yang di-scan (spesifik). Stok fisik tetap;
+                    // pengurangan terjadi saat Production Result.
                     foreach ($scansByItem[$it->id] ?? [] as $scan) {
-                        $alloc = $this->stockService->consumeFromTag($scan['tag'], $scan['part_id'], $scan['qty']);
+                        $alloc = $this->stockService->bookFromTag($scan['tag'], $scan['part_id'], $scan['qty'], $workOrder->id, $it->id, $actorId);
                         if ($alloc === null) {
                             throw ValidationException::withMessages([
                                 'items' => __('Tag :tag tidak ditemukan atau stok tidak cukup.', ['tag' => $scan['tag']]),
@@ -606,14 +595,6 @@ class WoService
                         }
 
                         $taken += (float) $alloc['take_qty'];
-                        WorkOrderConsumption::create([
-                            'work_order_id' => $workOrder->id,
-                            'work_order_item_id' => $it->id,
-                            'part_stock_id' => $alloc['part_stock_id'],
-                            'part_id' => $scan['part_id'] ?? $it->child_part_id,
-                            'qty' => (float) $alloc['take_qty'],
-                            'uom' => $alloc['uom'],
-                        ]);
                         MaterialIssueItem::create([
                             'material_issue_id' => $issue->id,
                             'work_order_item_id' => $it->id,
@@ -640,8 +621,6 @@ class WoService
                         ];
                     }
                 }
-
-                $it->update(['qty_consumed' => $taken]);
             }
 
             $workOrder->update([
@@ -698,6 +677,10 @@ class WoService
     public function cancel(WorkOrder $workOrder, ?int $actorId = null): WorkOrder
     {
         abort_if($workOrder->status === 'completed', 422, __('WO completed tidak bisa dibatalkan.'));
+
+        // Lepas booking material supaya stok bisa dipakai WO lain lagi.
+        $this->stockService->releaseBookings($workOrder->id, null, $actorId);
+
         $workOrder->update(['status' => 'cancelled', 'updated_by' => $actorId]);
 
         return $workOrder->fresh();

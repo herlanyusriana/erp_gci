@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\PartStock;
+use App\Models\WorkOrderMaterialBooking;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
@@ -30,6 +31,22 @@ class PartStockController extends Controller
             ->orderBy('tag')
             ->paginate(15)
             ->withQueryString();
+
+        // Qty yang sedang di-book WO (belum terpakai) per baris stok.
+        $bookedByStock = WorkOrderMaterialBooking::query()
+            ->whereIn('part_stock_id', $stocks->pluck('id'))
+            ->where('status', WorkOrderMaterialBooking::STATUS_BOOKED)
+            ->groupBy('part_stock_id')
+            ->selectRaw('part_stock_id, SUM(qty) AS total')
+            ->pluck('total', 'part_stock_id');
+
+        $stocks->getCollection()->transform(function (PartStock $stock) use ($bookedByStock) {
+            $booked = (float) ($bookedByStock[$stock->id] ?? 0);
+            $stock->setAttribute('booked_qty', round($booked, 4));
+            $stock->setAttribute('avail_qty', round(max(0.0, (float) $stock->qty - $booked), 4));
+
+            return $stock;
+        });
 
         return Inertia::render('Incoming/Stock/Index', [
             'stocks' => $stocks,

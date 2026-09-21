@@ -140,11 +140,16 @@ class MaterialIssueApiTest extends TestCase
         $issue = MaterialIssue::where('idempotency_key', 'test-release-1')->firstOrFail();
         $this->assertGreaterThan(0, $issue->items()->count());
 
-        // Stok tag terpakai habis.
+        // Release hanya BOOKING: stok tag belum berkurang, hanya dikunci.
         $firstTag = $scans[0]['scans'][0]['tag'];
-        $this->assertSame(0.0, (float) PartStock::where('tag', $firstTag)->sum('qty'));
+        $this->assertGreaterThan(0.0, (float) PartStock::where('tag', $firstTag)->sum('qty'));
+        $this->assertDatabaseHas('work_order_material_bookings', [
+            'work_order_id' => $wo->id,
+            'tag' => $firstTag,
+            'status' => 'booked',
+        ]);
 
-        // Release hanya mengonsumsi RM; output FG lahir dari Production Result.
+        // Output FG lahir dari Production Result.
         $fgStock = PartStock::where('part_id', $wo->part_id)->where('qty', '>', 0)->sum('qty');
         $this->assertEqualsWithDelta(0.0, (float) $fgStock, 0.001);
     }

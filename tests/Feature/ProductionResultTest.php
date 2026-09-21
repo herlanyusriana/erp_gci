@@ -6,6 +6,7 @@ use App\Models\Part;
 use App\Models\PartStock;
 use App\Models\User;
 use App\Models\WorkOrder;
+use App\Models\WorkOrderMaterialBooking;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfInterceptor;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -119,6 +120,38 @@ class ProductionResultTest extends TestCase
 
         // Complete tanpa kekurangan.
         $this->post(route('work-orders.complete', $wo))->assertSessionHas('success');
+    }
+
+    public function test_release_books_stock_and_result_consumes_it(): void
+    {
+        $wo = $this->releasedWorkOrder();
+        $rmId = (int) Part::where('part_number', 'CBKG07256C')->value('id');
+
+        // Setelah release: stok fisik utuh, hanya di-book, belum ada konsumsi.
+        $this->assertEqualsWithDelta(20.0, (float) PartStock::where('part_id', $rmId)->sum('qty'), 0.001);
+        $this->assertGreaterThan(0.0, (float) WorkOrderMaterialBooking::where('work_order_id', $wo->id)->where('status', 'booked')->sum('qty'));
+        $this->assertSame(0, $wo->consumptions()->count());
+
+        // Laporkan step pertama → booking RM dikonsumsi, stok fisik baru turun.
+        $first = $this->stepIds($wo)->first()['parent_part_id'];
+
+        $this->post(route('work-orders.results.store', $wo), [
+            'parent_part_id' => $first,
+            'qty_good' => 10,
+        ])->assertSessionHasNoErrors();
+
+        $this->assertLessThan(20.0, (float) PartStock::where('part_id', $rmId)->sum('qty'));
+        $this->assertGreaterThan(0, $wo->consumptions()->count());
+        $this->assertSame(
+            0.0,
+            (float) WorkOrderMaterialBooking::where('work_order_id', $wo->id)
+                ->where('part_id', $rmId)->where('status', 'booked')->sum('qty'),
+        );
+        $this->assertDatabaseHas('work_order_material_bookings', [
+            'work_order_id' => $wo->id,
+            'part_id' => $rmId,
+            'status' => 'consumed',
+        ]);
     }
 
     public function test_report_rejects_over_production(): void

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Machine;
 use App\Models\Part;
 use App\Models\ProductionPlanItem;
 use App\Models\User;
@@ -173,6 +174,29 @@ class ProductionPlanTest extends TestCase
         $rows = ProductionPlanItem::where('work_order_id', $wo->id)->get();
         $this->assertSame($expected, $rows->count());
         $this->assertTrue($rows->every(fn ($r) => $r->target_d === null));
+    }
+
+    public function test_subcon_machine_rows_are_hidden_from_plan_board(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->post(route('work-orders.release', $wo))->assertRedirect();
+
+        $plan = ProductionPlanItem::where('work_order_id', $wo->id)->firstOrFail()->plan;
+        $subcon = Machine::query()->whereRaw("UPPER(machine_code) = 'SUBCON'")->firstOrFail();
+
+        ProductionPlanItem::create([
+            'production_plan_id' => $plan->id,
+            'machine_id' => $subcon->id,
+            'work_order_id' => $wo->id,
+            'fg_part_id' => $wo->part_id,
+            'sequence' => 99,
+        ]);
+
+        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('items', fn ($list) => collect($list)->pluck('machine_id')->every(fn ($id) => $id !== $subcon->id))
+                ->where('machines', fn ($list) => collect($list)->pluck('id')->every(fn ($id) => $id !== $subcon->id)));
     }
 
     public function test_attach_rejects_work_order_already_in_a_plan(): void

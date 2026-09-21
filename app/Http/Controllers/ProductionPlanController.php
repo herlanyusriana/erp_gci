@@ -26,10 +26,14 @@ class ProductionPlanController extends Controller
 
         $date = $request->input('date') ?: now()->toDateString();
 
+        // Subcon bukan mesin internal → tidak boleh muncul di papan produksi.
+        $subconMachineIds = $this->subconMachineIds();
+
         $plan = ProductionPlan::query()->whereDate('plan_date', $date)->first();
 
         $items = $plan
             ? $plan->items()
+                ->whereNotIn('machine_id', $subconMachineIds)
                 ->with([
                     'machine:id,machine_code,machine_name',
                     'workOrder:id,wo_no,part_id,qty,status',
@@ -46,6 +50,7 @@ class ProductionPlanController extends Controller
 
         $machines = Machine::query()
             ->where('is_active', true)
+            ->whereNotIn('id', $subconMachineIds)
             ->orderBy('machine_name')
             ->get(['id', 'machine_code', 'machine_name']);
 
@@ -78,6 +83,20 @@ class ProductionPlanController extends Controller
             'wipParts' => $wipParts,
             'unplannedWorkOrders' => $unplannedWorkOrders,
         ]);
+    }
+
+    /**
+     * ID mesin Subcon — papan Production Plan hanya untuk mesin internal.
+     *
+     * @return list<int>
+     */
+    private function subconMachineIds(): array
+    {
+        return Machine::query()
+            ->whereRaw("UPPER(COALESCE(machine_code, '')) = 'SUBCON' OR LOWER(COALESCE(machine_name, '')) LIKE '%subcon%'")
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
     }
 
     public function store(Request $request): RedirectResponse

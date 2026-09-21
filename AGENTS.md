@@ -199,7 +199,9 @@ Catatan penting:
   `input_part_id` (material masuk) → `wip_part_id` (hasil keluar) dan
   `target_d` **dikosongkan** supaya qty WO dibagi manual ke D/D1/D2 (kolom "Sisa
   Jumlah WO" mulai dari qty WO). `WoService::populatePlanItems` mengisi baris;
-  tabel Alur Produksi di WO Show memakai pengelompokan yang sama.
+  tabel Alur Produksi di WO Show memakai pengelompokan yang sama. **Subcon tidak
+  masuk papan**: step ber-`source` SUBCON dilewati, dan baris/mesin Subcon
+  disembunyikan dari papan & opsi mesin.
 - **Issue out to production** (mobile "Material Tracker" → Outgoing): release WO
   lewat scan label. Endpoint `GET /api/work-orders`, `GET /api/work-orders/{wo}/
   release-context` (kebutuhan + rekomendasi tag FIFO), `POST /api/stock-tags/

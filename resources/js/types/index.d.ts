@@ -62,6 +62,11 @@ export interface Supplier {
     id: number;
     supplier_code: string;
     supplier_name: string;
+    address?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    contact_person?: string | null;
+    bank_account?: string | null;
     signature_path?: string | null;
     signature_url?: string | null;
     is_active: boolean;
@@ -310,6 +315,13 @@ export interface PartStock {
     price: number | null;
     remarks: string | null;
     part?: (Pick<Part, 'id' | 'part_number' | 'part_name'> & { part_type?: PartType | null }) | null;
+    receive?: (Pick<IncomingReceive, 'id' | 'invoice_no'> & {
+        arrival_item?: (Pick<IncomingArrivalItem, 'id' | 'arrival_id'> & {
+            arrival?: (Pick<IncomingArrival, 'id'> & {
+                supplier?: Pick<Supplier, 'id' | 'supplier_name'> | null;
+            }) | null;
+        }) | null;
+    }) | null;
 }
 
 export interface WorkOrderMachine {

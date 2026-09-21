@@ -5,13 +5,15 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Storage;
 
 class Supplier extends Model
 {
     use SoftDeletes;
 
     protected $fillable = [
-        'supplier_code', 'supplier_name', 'signature_path', 'is_active', 'created_by', 'updated_by',
+        'supplier_code', 'supplier_name', 'address', 'phone', 'email', 'contact_person',
+        'bank_account', 'signature_path', 'is_active', 'created_by', 'updated_by',
     ];
 
     protected $casts = [
@@ -25,7 +27,7 @@ class Supplier extends Model
      */
     public function getSignatureUrlAttribute(): ?string
     {
-        return $this->signature_path ? \Illuminate\Support\Facades\Storage::disk('public')->url($this->signature_path) : null;
+        return $this->signature_path ? Storage::disk('public')->url($this->signature_path) : null;
     }
 
     public function partSubstitutes(): BelongsTo

@@ -7,6 +7,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -38,6 +39,11 @@ class SupplierController extends Controller
         $data = $request->validate([
             'supplier_code' => ['required', 'string', 'max:80', 'unique:suppliers,supplier_code'],
             'supplier_name' => ['required', 'string', 'max:255'],
+            'address' => ['nullable', 'string', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:60'],
+            'email' => ['nullable', 'email', 'max:120'],
+            'contact_person' => ['nullable', 'string', 'max:120'],
+            'bank_account' => ['nullable', 'string', 'max:255'],
             'signature' => ['nullable', 'image', 'max:1024'],
             'is_active' => ['sometimes', 'boolean'],
         ]);
@@ -56,6 +62,11 @@ class SupplierController extends Controller
         $data = $request->validate([
             'supplier_code' => ['required', 'string', 'max:80', "unique:suppliers,supplier_code,{$supplier->id}"],
             'supplier_name' => ['required', 'string', 'max:255'],
+            'address' => ['nullable', 'string', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:60'],
+            'email' => ['nullable', 'email', 'max:120'],
+            'contact_person' => ['nullable', 'string', 'max:120'],
+            'bank_account' => ['nullable', 'string', 'max:255'],
             'signature' => ['nullable', 'image', 'max:1024'],
             'is_active' => ['sometimes', 'boolean'],
         ]);
@@ -85,7 +96,7 @@ class SupplierController extends Controller
         }
 
         $file = $request->file('signature');
-        $name = 'sig-' . \Illuminate\Support\Str::random(20) . '.' . $file->getClientOriginalExtension();
+        $name = 'sig-'.Str::random(20).'.'.$file->getClientOriginalExtension();
 
         return $file->storePubliclyAs('suppliers', $name, 'public');
     }

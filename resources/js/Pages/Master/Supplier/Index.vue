@@ -30,6 +30,11 @@ function doSearch() {
 const form = useForm({
     supplier_code: '',
     supplier_name: '',
+    address: '',
+    phone: '',
+    email: '',
+    contact_person: '',
+    bank_account: '',
     signature: null as File | null,
     is_active: true,
 });
@@ -49,6 +54,11 @@ function openEdit(s: Supplier) {
     form.clearErrors();
     form.supplier_code = s.supplier_code;
     form.supplier_name = s.supplier_name;
+    form.address = s.address ?? '';
+    form.phone = s.phone ?? '';
+    form.email = s.email ?? '';
+    form.contact_person = s.contact_person ?? '';
+    form.bank_account = s.bank_account ?? '';
     form.signature = null;
     form.is_active = s.is_active;
     showForm.value = true;
@@ -106,6 +116,7 @@ function remove(s: Supplier) {
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                         <th class="px-4 py-3">{{ t('master.code') }}</th>
                         <th class="px-4 py-3">{{ t('master.name') }}</th>
+                        <th class="px-4 py-3">{{ t('master.address') }}</th>
                         <th class="px-4 py-3">{{ t('master.status') }}</th>
                         <th class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
                     </tr>
@@ -113,7 +124,13 @@ function remove(s: Supplier) {
                 <tbody class="divide-y divide-borderline">
                     <tr v-for="s in suppliers.data" :key="s.id" class="hover:bg-primary-light/40">
                         <td class="px-4 py-3 font-medium text-ink-primary">{{ s.supplier_code }}</td>
-                        <td class="px-4 py-3 text-ink-primary">{{ s.supplier_name }}</td>
+                        <td class="px-4 py-3 text-ink-primary">
+                            <div>{{ s.supplier_name }}</div>
+                            <div v-if="s.phone || s.contact_person" class="text-xs text-ink-secondary">
+                                {{ [s.contact_person, s.phone].filter(Boolean).join(' · ') }}
+                            </div>
+                        </td>
+                        <td class="px-4 py-3 text-ink-secondary">{{ s.address ?? '—' }}</td>
                         <td class="px-4 py-3">
                             <span :class="s.is_active ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'" class="rounded-md px-2 py-0.5 text-xs font-semibold">{{ s.is_active ? t('master.active') : t('master.inactive') }}</span>
                         </td>
@@ -125,7 +142,7 @@ function remove(s: Supplier) {
                         </td>
                     </tr>
                     <tr v-if="suppliers.data.length === 0">
-                        <td colspan="4" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.supplierEmpty') }}</td>
+                        <td colspan="5" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.supplierEmpty') }}</td>
                     </tr>
                 </tbody>
             </table>
@@ -147,6 +164,33 @@ function remove(s: Supplier) {
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.name') }}</label>
                         <input v-model="form.supplier_name" type="text" :placeholder="t('master.supplierName')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.supplier_name" class="mt-1" />
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <label class="text-xs font-semibold text-ink-secondary">{{ t('master.address') }}</label>
+                    <input v-model="form.address" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                    <InputError :message="form.errors.address" class="mt-1" />
+                </div>
+                <div class="mt-4 grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('master.contactPerson') }}</label>
+                        <input v-model="form.contact_person" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <InputError :message="form.errors.contact_person" class="mt-1" />
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('master.phone') }}</label>
+                        <input v-model="form.phone" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <InputError :message="form.errors.phone" class="mt-1" />
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('master.email') }}</label>
+                        <input v-model="form.email" type="email" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <InputError :message="form.errors.email" class="mt-1" />
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('master.bankAccount') }}</label>
+                        <input v-model="form.bank_account" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <InputError :message="form.errors.bank_account" class="mt-1" />
                     </div>
                 </div>
                 <div class="mt-4">

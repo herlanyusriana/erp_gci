@@ -9,6 +9,7 @@ use App\Http\Controllers\MachineController;
 use App\Http\Controllers\MachineCycleTimeController;
 use App\Http\Controllers\MaterialIssueController;
 use App\Http\Controllers\PartController;
+use App\Http\Controllers\PartPriceController;
 use App\Http\Controllers\PartStockController;
 use App\Http\Controllers\PartSubstituteController;
 use App\Http\Controllers\ProcessController;
@@ -69,6 +70,7 @@ Route::middleware(['auth'])->group(function () {
     Route::resource('uoms', UomController::class)->except(['show']);
     Route::resource('substitutes', PartSubstituteController::class)->except(['show']);
     Route::resource('cycle-times', MachineCycleTimeController::class)->except(['show']);
+    Route::resource('prices', PartPriceController::class)->except(['show']);
     Route::resource('boms', BomController::class)->only(['index', 'show']);
 
     // Incoming module

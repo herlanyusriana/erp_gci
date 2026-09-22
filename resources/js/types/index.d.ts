@@ -308,6 +308,18 @@ export interface IncomingReceive {
     arrival_item?: IncomingArrivalItem;
 }
 
+export interface PartPrice {
+    id: number;
+    supplier_id: number;
+    part_id: number;
+    price: number;
+    currency: string;
+    valid_from: string;
+    is_active: boolean;
+    supplier?: Pick<Supplier, 'id' | 'supplier_code' | 'supplier_name'> | null;
+    part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
+}
+
 export interface MachineCycleTime {
     id: number;
     machine_id: number;

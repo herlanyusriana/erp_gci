@@ -14,6 +14,7 @@ const items = [
     { href: '/substitutes', title: 'master.substituteTitle', subtitle: 'master.launcherSubstituteSubtitle' },
     { href: '/machines', title: 'master.machine', subtitle: 'master.machineTitle' },
     { href: '/cycle-times', title: 'master.cycleTimeTitle', subtitle: 'master.launcherCycleTimeSubtitle' },
+    { href: '/prices', title: 'master.priceMaster', subtitle: 'master.launcherPriceSubtitle' },
     { href: '/processes', title: 'master.process', subtitle: 'master.processTitle' },
     { href: '/uoms', title: 'master.uom', subtitle: 'master.unitOfMeasure' },
 ];

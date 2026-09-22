@@ -403,7 +403,7 @@ function submitEdit() {
                 </div>
             </div>
             <div class="overflow-x-auto">
-                <table class="w-full min-w-[1240px] table-fixed text-sm">
+                <table class="w-full min-w-[1240px] border-separate border-spacing-0 text-sm">
                     <colgroup>
                         <col class="w-36" />
                         <col class="w-24" />

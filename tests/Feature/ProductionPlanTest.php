@@ -203,6 +203,8 @@ class ProductionPlanTest extends TestCase
 
     public function test_plan_machines_follow_master_sequence(): void
     {
+        // Netralkan urutan hasil seeding dulu supaya tidak bentrok nilai.
+        Machine::query()->update(['sequence' => null]);
         Machine::where('machine_name', 'AUTO CAULKING')->update(['sequence' => 1]);
         Machine::where('machine_name', 'TPL KUKIL')->update(['sequence' => 2]);
 

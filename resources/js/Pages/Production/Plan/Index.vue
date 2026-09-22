@@ -363,14 +363,14 @@ function submitEdit() {
             <div class="flex items-center gap-2">
                 <button
                     type="button"
-                    class="inline-flex items-center gap-1.5 rounded-md border border-borderline bg-surface px-4 py-2 text-sm font-semibold text-ink-primary transition hover:bg-background"
+                    class="inline-flex items-center gap-1.5 rounded-md border border-borderline bg-surface px-4 py-2 text-sm font-semibold text-ink-primary transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                     @click="showHistory = true"
                 >
                     {{ t('production.planHistory') }}
                 </button>
                 <button
                     type="button"
-                    class="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover"
+                    class="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                     @click="openCreate()"
                 >
                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
@@ -421,7 +421,7 @@ function submitEdit() {
                 </h2>
                 <button
                     type="button"
-                    class="rounded-md border border-warning px-3 py-1.5 text-xs font-semibold text-warning transition hover:bg-warning/10"
+                    class="rounded-md border border-warning px-3 py-1.5 text-xs font-semibold text-warning transition hover:bg-warning/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                     @click="openAttach()"
                 >
                     {{ t('production.attachWo') }}
@@ -433,7 +433,7 @@ function submitEdit() {
                     v-for="wo in unplannedWorkOrders"
                     :key="wo.id"
                     type="button"
-                    class="rounded-lg border border-borderline bg-surface px-3 py-2 text-left text-xs transition hover:border-warning"
+                    class="rounded-lg border border-borderline bg-surface px-3 py-2 text-left text-xs transition hover:border-warning focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                     @click="openAttach(wo)"
                 >
                     <span class="block font-semibold text-ink-primary">{{ wo.wo_no }}</span>
@@ -505,7 +505,7 @@ function submitEdit() {
                                         type="button"
                                         :title="t('production.newWo')"
                                         :aria-label="t('production.newWo')"
-                                        class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-secondary transition hover:bg-primary-light hover:text-primary"
+                                        class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-secondary transition hover:bg-primary-light hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                                         @click="openCreate()"
                                     >
                                         <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
@@ -537,7 +537,7 @@ function submitEdit() {
                                                 :title="t('production.moveUp')"
                                                 :aria-label="t('production.moveUp')"
                                                 :disabled="index === 0"
-                                                class="flex h-3.5 w-3.5 items-center justify-center rounded text-ink-secondary transition hover:bg-background hover:text-primary disabled:opacity-30"
+                                                class="flex h-3.5 w-3.5 items-center justify-center rounded text-ink-secondary transition hover:bg-background hover:text-primary disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                                                 @click="move(group.rows, index, -1)"
                                             >
                                                 <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" /></svg>
@@ -547,7 +547,7 @@ function submitEdit() {
                                                 :title="t('production.moveDown')"
                                                 :aria-label="t('production.moveDown')"
                                                 :disabled="index === group.rows.length - 1"
-                                                class="flex h-3.5 w-3.5 items-center justify-center rounded text-ink-secondary transition hover:bg-background hover:text-primary disabled:opacity-30"
+                                                class="flex h-3.5 w-3.5 items-center justify-center rounded text-ink-secondary transition hover:bg-background hover:text-primary disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                                                 @click="move(group.rows, index, 1)"
                                             >
                                                 <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
@@ -600,7 +600,7 @@ function submitEdit() {
                                             :href="route('work-orders.show', row.work_order.id)"
                                             :title="t('production.viewWo')"
                                             :aria-label="t('production.viewWo')"
-                                            class="flex h-8 w-8 items-center justify-center rounded-lg text-info transition hover:bg-info/10"
+                                            class="flex h-8 w-8 items-center justify-center rounded-lg text-info transition hover:bg-info/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                                         >
                                             <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                                         </a>
@@ -608,7 +608,7 @@ function submitEdit() {
                                             type="button"
                                             :title="t('production.editPlan')"
                                             :aria-label="t('production.editPlan')"
-                                            class="flex h-8 w-8 items-center justify-center rounded-lg text-primary transition hover:bg-primary-light"
+                                            class="flex h-8 w-8 items-center justify-center rounded-lg text-primary transition hover:bg-primary-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                                             @click="openEdit(row)"
                                         >
                                             <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg>
@@ -617,7 +617,7 @@ function submitEdit() {
                                             type="button"
                                             :title="t('production.addBelow')"
                                             :aria-label="t('production.addBelow')"
-                                            class="flex h-8 w-8 items-center justify-center rounded-lg text-ink-secondary transition hover:bg-background"
+                                            class="flex h-8 w-8 items-center justify-center rounded-lg text-ink-secondary transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                                             @click="openCreate()"
                                         >
                                             <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
@@ -626,7 +626,7 @@ function submitEdit() {
                                             type="button"
                                             :title="t('production.detach')"
                                             :aria-label="t('production.detach')"
-                                            class="flex h-8 w-8 items-center justify-center rounded-lg text-danger transition hover:bg-danger/10"
+                                            class="flex h-8 w-8 items-center justify-center rounded-lg text-danger transition hover:bg-danger/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                                             @click="detach(row)"
                                         >
                                             <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
@@ -652,7 +652,7 @@ function submitEdit() {
                         <h3 class="text-lg font-bold text-ink-primary">{{ t('production.planHistory') }}</h3>
                         <p class="mt-1 text-sm text-ink-secondary">{{ t('production.historyForDate', { date: fmtDate(props.date) }) }}</p>
                     </div>
-                    <button type="button" class="text-sm text-ink-secondary hover:text-ink-primary" @click="showHistory = false">{{ t('production.cancel') }}</button>
+                    <button type="button" class="text-sm text-ink-secondary hover:text-ink-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface" @click="showHistory = false">{{ t('production.cancel') }}</button>
                 </div>
                 <div v-if="histories.length" class="max-h-[60vh] space-y-3 overflow-y-auto pr-1">
                     <div v-for="history in histories" :key="history.id" class="rounded-lg border border-borderline bg-background p-3">
@@ -688,8 +688,8 @@ function submitEdit() {
                 <p class="rounded-lg border border-borderline bg-background px-3 py-2 text-xs text-ink-secondary">{{ t('production.autoPlanHint') }}</p>
 
                 <div class="flex items-center justify-end gap-3 border-t border-borderline pt-4">
-                    <button type="button" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-secondary transition hover:bg-background" @click="showCreate = false">{{ t('production.cancel') }}</button>
-                    <button type="submit" :disabled="createForm.processing" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60">
+                    <button type="button" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-secondary transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface" @click="showCreate = false">{{ t('production.cancel') }}</button>
+                    <button type="submit" :disabled="createForm.processing" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
                         {{ createForm.processing ? t('production.saving') : t('production.saveWo') }}
                     </button>
                 </div>
@@ -741,8 +741,8 @@ function submitEdit() {
                 </div>
 
                 <div class="flex items-center justify-end gap-3 border-t border-borderline pt-4">
-                    <button type="button" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-secondary transition hover:bg-background" @click="showEdit = false">{{ t('production.cancel') }}</button>
-                    <button type="submit" :disabled="editForm.processing" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60">
+                    <button type="button" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-secondary transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface" @click="showEdit = false">{{ t('production.cancel') }}</button>
+                    <button type="submit" :disabled="editForm.processing" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
                         {{ editForm.processing ? t('production.saving') : t('production.save') }}
                     </button>
                 </div>
@@ -777,8 +777,8 @@ function submitEdit() {
                 <p class="rounded-lg border border-borderline bg-background px-3 py-2 text-xs text-ink-secondary">{{ t('production.autoPlanHint') }}</p>
 
                 <div class="flex items-center justify-end gap-3 border-t border-borderline pt-4">
-                    <button type="button" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-secondary transition hover:bg-background" @click="showAttach = false">{{ t('production.cancel') }}</button>
-                    <button type="submit" :disabled="attachForm.processing" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60">
+                    <button type="button" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-secondary transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface" @click="showAttach = false">{{ t('production.cancel') }}</button>
+                    <button type="submit" :disabled="attachForm.processing" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
                         {{ attachForm.processing ? t('production.saving') : t('production.attachWo') }}
                     </button>
                 </div>

@@ -176,7 +176,7 @@ function submit() {
                 <div>
                     <div class="mb-2 flex items-center justify-between gap-3">
                         <label class="block text-sm font-medium text-ink-primary">{{ t('production.materialAllocation') }}</label>
-                        <button type="button" @click="addRow" class="inline-flex items-center gap-1.5 rounded-md border border-primary px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary-light">
+                        <button type="button" @click="addRow" class="inline-flex items-center gap-1.5 rounded-md border border-primary px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
                             <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
                             {{ t('production.addAllocation') }}
                         </button>
@@ -202,7 +202,7 @@ function submit() {
                                             :disabled="row.part_id === ''"
                                             :aria-expanded="row.showTags === true"
                                             :title="t('production.showTags')"
-                                            class="shrink-0 rounded-lg border border-borderline px-3 py-2 text-ink-secondary transition hover:bg-background disabled:opacity-40"
+                                            class="shrink-0 rounded-lg border border-borderline px-3 py-2 text-ink-secondary transition hover:bg-background disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                                             @click="toggleTags(row)"
                                         >
                                             <svg class="h-4 w-4 transition-transform" :class="row.showTags ? 'rotate-90' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="m9 5 7 7-7 7" /></svg>
@@ -214,10 +214,10 @@ function submit() {
                                     <input :aria-label="t('production.allocQty')" v-model="row.qty" type="number" step="0.0001" min="0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                                 </div>
                                 <div class="flex items-end gap-2 sm:col-span-2">
-                                    <button type="button" @click="fillRemaining(row)" :disabled="remaining <= 0" class="flex-1 rounded-md border border-borderline px-2 py-2 text-xs font-medium text-ink-secondary transition hover:bg-background disabled:opacity-40">
+                                    <button type="button" @click="fillRemaining(row)" :disabled="remaining <= 0" class="flex-1 rounded-md border border-borderline px-2 py-2 text-xs font-medium text-ink-secondary transition hover:bg-background disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
                                         {{ t('production.fillRemaining') }}
                                     </button>
-                                    <button type="button" @click="removeRow(index)" :disabled="form.allocations.length <= 1" class="rounded-md border border-borderline px-3 py-2 text-sm text-danger transition hover:bg-danger/10 disabled:opacity-40" :aria-label="t('production.delete')">✕</button>
+                                    <button type="button" @click="removeRow(index)" :disabled="form.allocations.length <= 1" class="rounded-md border border-borderline px-3 py-2 text-sm text-danger transition hover:bg-danger/10 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface" :aria-label="t('production.delete')">✕</button>
                                 </div>
                             </div>
 
@@ -298,8 +298,8 @@ function submit() {
                 </div>
 
                 <div class="flex items-center justify-end gap-3 border-t border-borderline pt-4">
-                    <a :href="route('work-orders.show', workOrder.id)" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-secondary transition hover:bg-background">{{ t('production.cancel') }}</a>
-                    <button type="submit" :disabled="form.processing || overAllocated" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60">
+                    <a :href="route('work-orders.show', workOrder.id)" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-secondary transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">{{ t('production.cancel') }}</a>
+                    <button type="submit" :disabled="form.processing || overAllocated" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
                         {{ form.processing ? t('production.saving') : t('production.save') }}
                     </button>
                 </div>

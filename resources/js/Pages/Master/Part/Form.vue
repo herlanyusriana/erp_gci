@@ -90,7 +90,7 @@ function partTypeLabel(partType: PartType | null): string {
                         :class="typeCode === partType.code
                             ? 'border-primary bg-primary text-white'
                             : 'border-borderline bg-surface text-ink-secondary hover:border-primary hover:text-primary'"
-                        class="rounded-lg border px-3 py-2 text-sm font-semibold transition"
+                        class="rounded-lg border px-3 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                         @click="pickType(partType)"
                     >
                         {{ partTypeLabel(partType) }}
@@ -185,8 +185,8 @@ function partTypeLabel(partType: PartType | null): string {
 
             <!-- Action bar -->
             <div class="flex items-center justify-end gap-3 border-t border-borderline pt-4">
-                <Link :href="route('parts.index')" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-primary transition hover:bg-background">{{ t('master.cancel') }}</Link>
-                <button type="submit" :disabled="form.processing" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60">
+                <Link :href="route('parts.index')" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-primary transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">{{ t('master.cancel') }}</Link>
+                <button type="submit" :disabled="form.processing" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
                     {{ form.processing ? t('master.saving') : t('master.save') }}
                 </button>
             </div>

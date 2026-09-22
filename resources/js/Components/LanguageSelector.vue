@@ -79,7 +79,7 @@ async function changeLanguage(code: SupportedLocale) {
                         type="button"
                         role="menuitemradio"
                         :aria-checked="l.code === locale"
-                        class="flex w-full items-center gap-2.5 px-3 py-2 text-start text-sm text-ink-primary transition hover:bg-primary-light"
+                        class="flex w-full items-center gap-2.5 px-3 py-2 text-start text-sm text-ink-primary transition hover:bg-primary-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                         @click="changeLanguage(l.code)"
                     >
                         <svg class="h-3.5 w-5 shrink-0 rounded-[2px] shadow-sm" viewBox="0 0 20 14" aria-hidden="true">

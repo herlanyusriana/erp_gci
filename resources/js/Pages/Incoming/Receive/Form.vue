@@ -121,7 +121,7 @@ function submit() {
                     <h2 class="text-base font-semibold text-ink-primary">{{ t('incoming.tags') }}</h2>
                     <div class="flex items-center gap-3">
                         <span class="text-sm tabular-nums text-ink-secondary">{{ t('incoming.totalInput') }} <span class="font-semibold text-ink-primary">{{ totalInput() }}</span></span>
-                        <button type="button" @click="addRow" class="inline-flex items-center gap-1.5 rounded-md border border-primary px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-primary-light">
+                        <button type="button" @click="addRow" class="inline-flex items-center gap-1.5 rounded-md border border-primary px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-primary-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
                             <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
                             {{ t('incoming.addTag') }}
                         </button>
@@ -156,7 +156,7 @@ function submit() {
                             </select>
                         </div>
                         <div class="flex items-end sm:col-span-3">
-                            <button type="button" @click="removeRow(i)" :disabled="rows.length <= 1" class="rounded-lg border border-borderline px-3 py-2 text-sm text-danger transition hover:bg-danger/10 disabled:opacity-40" :aria-label="t('incoming.delete')">✕</button>
+                            <button type="button" @click="removeRow(i)" :disabled="rows.length <= 1" class="rounded-lg border border-borderline px-3 py-2 text-sm text-danger transition hover:bg-danger/10 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface" :aria-label="t('incoming.delete')">✕</button>
                         </div>
                     </div>
                     <div v-if="weightBasis" class="mt-3 grid gap-3 sm:grid-cols-12">
@@ -174,7 +174,7 @@ function submit() {
 
             <div class="flex items-center justify-end gap-3">
                 <BackButton :href="backHref()">{{ t('incoming.cancel') }}</BackButton>
-                <button type="submit" :disabled="form.processing" class="rounded-md bg-primary px-5 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60">
+                <button type="submit" :disabled="form.processing" class="rounded-md bg-primary px-5 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
                     {{ form.processing ? t('incoming.saving') : t('incoming.saveReceive') }}
                 </button>
             </div>

@@ -39,9 +39,9 @@ defineProps<{
                 </p>
             </div>
             <div class="flex gap-2">
-                <a :href="route('local-pos.export-detail', arrival.id)" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-primary transition hover:bg-background">{{ t('incoming.exportExcel') }}</a>
-                <Link :href="route('local-pos.edit', arrival.id)" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover">{{ t('incoming.edit') }}</Link>
-                <Link :href="route('receive.index')" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-primary transition hover:bg-background">{{ t('incoming.receive') }}</Link>
+                <a :href="route('local-pos.export-detail', arrival.id)" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-primary transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">{{ t('incoming.exportExcel') }}</a>
+                <Link :href="route('local-pos.edit', arrival.id)" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">{{ t('incoming.edit') }}</Link>
+                <Link :href="route('receive.index')" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-primary transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">{{ t('incoming.receive') }}</Link>
             </div>
         </div>
 

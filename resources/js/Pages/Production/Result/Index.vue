@@ -55,7 +55,7 @@ const fmt = (n: number | null | undefined) => n == null ? '—' : Number(n).toLo
                 <tbody class="divide-y divide-borderline">
                     <tr v-for="wo in workOrders.data" :key="wo.id" class="hover:bg-primary-light/40">
                         <td class="px-4 py-3">
-                            <Link :href="route('work-orders.show', wo.id)" class="font-semibold text-ink-primary hover:text-primary">{{ wo.wo_no }}</Link>
+                            <Link :href="route('work-orders.show', wo.id)" class="font-semibold text-ink-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">{{ wo.wo_no }}</Link>
                         </td>
                         <td class="px-4 py-3">
                             <div class="font-medium text-ink-primary">{{ wo.part?.part_number ?? '—' }}</div>
@@ -71,7 +71,7 @@ const fmt = (n: number | null | undefined) => n == null ? '—' : Number(n).toLo
                         </td>
                         <td class="px-4 py-3">
                             <div class="flex justify-end">
-                                <Link :href="route('production-results.create', wo.id)" class="inline-flex items-center gap-1.5 rounded-md border border-primary px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary-light">
+                                <Link :href="route('production-results.create', wo.id)" class="inline-flex items-center gap-1.5 rounded-md border border-primary px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
                                     <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
                                     {{ t('production.report') }}
                                 </Link>

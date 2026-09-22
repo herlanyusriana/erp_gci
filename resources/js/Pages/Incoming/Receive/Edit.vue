@@ -61,7 +61,7 @@ function submit() {
         <h1 class="mb-4 text-2xl font-bold tracking-tight text-ink-primary">{{ t('incoming.editReceive', { number: receive.id }) }}</h1>
         <p class="mb-6 flex flex-wrap items-center justify-between gap-3 text-sm text-ink-secondary">
             <span>{{ arrivalItem.part?.part_number ?? '—' }} · {{ receive.tag }}</span>
-            <a :href="route('receive.label', receive.id)" target="_blank" rel="noopener" class="rounded-md bg-primary px-4 py-2 text-xs font-semibold text-white transition hover:bg-primary-hover">{{ t('incoming.printLabel') }}</a>
+            <a :href="route('receive.label', receive.id)" target="_blank" rel="noopener" class="rounded-md bg-primary px-4 py-2 text-xs font-semibold text-white transition hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">{{ t('incoming.printLabel') }}</a>
         </p>
 
         <form @submit.prevent="submit" class="max-w-2xl space-y-4 rounded-xl border border-borderline bg-surface p-5">
@@ -108,7 +108,7 @@ function submit() {
 
             <div class="flex items-center justify-end gap-3 pt-2">
                 <BackButton :href="route('incoming-arrivals.show', arrivalItem.arrival_id)">{{ t('incoming.cancel') }}</BackButton>
-                <button type="submit" :disabled="form.processing" class="rounded-md bg-primary px-5 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60">
+                <button type="submit" :disabled="form.processing" class="rounded-md bg-primary px-5 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
                     {{ form.processing ? t('incoming.saving') : t('incoming.save') }}
                 </button>
             </div>

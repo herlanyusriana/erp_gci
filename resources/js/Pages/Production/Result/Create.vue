@@ -116,7 +116,7 @@ function remove(row: ResultRow) {
                                 {{ fmt(Math.max(0, s.target_qty - s.produced_qty)) }}
                             </td>
                             <td class="px-3 py-2.5 text-right">
-                                <button type="button" class="rounded-md border border-primary px-3 py-1 text-xs font-semibold text-primary transition hover:bg-primary-light" @click="pick(s)">
+                                <button type="button" class="rounded-md border border-primary px-3 py-1 text-xs font-semibold text-primary transition hover:bg-primary-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface" @click="pick(s)">
                                     {{ t('production.report') }}
                                 </button>
                             </td>
@@ -165,7 +165,7 @@ function remove(row: ResultRow) {
                     <input :aria-label="t('production.notes')" v-model="form.notes" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                 </div>
                 <div class="flex items-end sm:col-span-2">
-                    <button type="submit" :disabled="form.processing" class="w-full rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60">
+                    <button type="submit" :disabled="form.processing" class="w-full rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
                         {{ form.processing ? t('production.saving') : t('production.save') }}
                     </button>
                 </div>
@@ -202,7 +202,7 @@ function remove(row: ResultRow) {
                             <td class="px-3 py-2.5 text-right tabular-nums text-danger">{{ fmt(r.qty_reject) }}</td>
                             <td class="px-3 py-2.5 text-ink-secondary">{{ r.reporter?.name ?? '—' }}</td>
                             <td class="px-3 py-2.5 text-right">
-                                <button type="button" class="rounded-md border border-danger/30 px-3 py-1 text-xs font-semibold text-danger transition hover:bg-danger/10" @click="remove(r)">
+                                <button type="button" class="rounded-md border border-danger/30 px-3 py-1 text-xs font-semibold text-danger transition hover:bg-danger/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface" @click="remove(r)">
                                     {{ t('production.delete') }}
                                 </button>
                             </td>

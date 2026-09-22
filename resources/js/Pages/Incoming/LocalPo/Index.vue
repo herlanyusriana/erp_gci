@@ -52,8 +52,8 @@ function remove(id: number, no: string | null) {
                 <p class="mt-1 text-sm text-ink-secondary">{{ t('incoming.localDescription') }}</p>
             </div>
             <div class="flex gap-2">
-                <a :href="route('local-pos.export')" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-primary transition hover:bg-background">{{ t('incoming.exportExcel') }}</a>
-                <Link :href="route('local-pos.create')" class="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover">
+                <a :href="route('local-pos.export')" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-primary transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">{{ t('incoming.exportExcel') }}</a>
+                <Link :href="route('local-pos.create')" class="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
                     {{ t('incoming.add') }}
                 </Link>
@@ -84,7 +84,7 @@ function remove(id: number, no: string | null) {
                 <tbody class="divide-y divide-borderline">
                     <tr v-for="po in localPos.data" :key="po.id" class="hover:bg-primary-light/40">
                         <td class="px-4 py-3 font-medium text-ink-primary">
-                            <Link :href="route('local-pos.show', po.id)" class="hover:text-primary">{{ po.po_no ?? '—' }}</Link>
+                            <Link :href="route('local-pos.show', po.id)" class="hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">{{ po.po_no ?? '—' }}</Link>
                             <div class="text-xs text-ink-secondary">
                                 {{ po.invoice_no ? `${t('incoming.invoiceNo')}: ${po.invoice_no} · ` : '' }}{{ po.arrival_no }}
                             </div>

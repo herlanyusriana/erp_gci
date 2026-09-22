@@ -27,7 +27,7 @@ watch(
     <div class="min-h-screen bg-background">
         <a
             href="#main-content"
-            class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[60] focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white"
+            class="sr-only focus-visible:not-sr-only focus-visible:absolute focus-visible:left-4 focus-visible:top-4 focus-visible:z-[60] focus-visible:rounded-md focus-visible:bg-primary focus-visible:px-4 focus-visible:py-2 focus-visible:text-sm focus-visible:font-semibold focus-visible:text-white"
         >
             {{ t('common.skipToContent') }}
         </a>
@@ -50,7 +50,7 @@ watch(
                     <LanguageSelector />
                     <Link
                         :href="route('launcher')"
-                        class="hidden rounded-md px-3 py-2 text-sm font-medium text-ink-secondary transition hover:bg-primary-light hover:text-primary sm:block"
+                        class="hidden rounded-md px-3 py-2 text-sm font-medium text-ink-secondary transition hover:bg-primary-light hover:text-primary sm:block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                     >
                         {{ t('common.launcher') }}
                     </Link>

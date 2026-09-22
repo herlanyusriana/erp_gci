@@ -53,7 +53,7 @@ function doSearch() {
                 <tbody class="divide-y divide-borderline">
                     <tr v-for="it in issues.data" :key="it.id" class="hover:bg-primary-light/40">
                         <td class="px-4 py-3">
-                            <Link :href="route('material-issues.show', it.id)" class="font-medium text-primary underline-offset-2 hover:underline">
+                            <Link :href="route('material-issues.show', it.id)" class="font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
                                 {{ it.issue_no }}
                             </Link>
                         </td>

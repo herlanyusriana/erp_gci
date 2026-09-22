@@ -56,7 +56,7 @@ const fmtDate = (value: string | null | undefined) => {
                 <p class="mt-1 text-sm text-ink-secondary">{{ t('production.woIndexDescription') }}</p>
             </div>
             <div>
-                <Link :href="route('work-orders.create')" class="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover">
+                <Link :href="route('work-orders.create')" class="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
                     {{ t('production.newWo') }}
                 </Link>
             </div>

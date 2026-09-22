@@ -43,7 +43,7 @@ function remove(a: IncomingArrival) {
             </div>
             <Link
                 :href="route('incoming-arrivals.create')"
-                class="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover"
+                class="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
             >
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
                 {{ t('incoming.add') }}
@@ -76,7 +76,7 @@ function remove(a: IncomingArrival) {
                 <tbody class="divide-y divide-borderline">
                     <tr v-for="a in arrivals.data" :key="a.id" class="hover:bg-primary-light/40">
                         <td class="px-4 py-3">
-                            <Link :href="route('incoming-arrivals.show', a.id)" class="font-medium text-primary hover:underline">{{ a.arrival_no }}</Link>
+                            <Link :href="route('incoming-arrivals.show', a.id)" class="font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">{{ a.arrival_no }}</Link>
                         </td>
                         <td class="px-4 py-3 text-ink-primary">{{ a.invoice_no ?? '—' }}</td>
                         <td class="px-4 py-3 text-ink-primary">{{ a.supplier?.supplier_name ?? '—' }}</td>

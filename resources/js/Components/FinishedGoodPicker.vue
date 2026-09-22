@@ -80,7 +80,7 @@ defineExpose({ syncFromSelected, clear });
         <button
             v-if="selected"
             type="button"
-            class="absolute inset-y-0 right-2 my-auto h-7 rounded px-2 text-xs text-ink-secondary hover:bg-background"
+            class="absolute inset-y-0 right-2 my-auto h-7 rounded px-2 text-xs text-ink-secondary hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
             @click="clear"
         >
             {{ t('production.change') }}
@@ -90,7 +90,7 @@ defineExpose({ syncFromSelected, clear });
                 v-for="p in filtered"
                 :key="p.id"
                 type="button"
-                class="block w-full px-3 py-2 text-left text-sm hover:bg-primary-light"
+                class="block w-full px-3 py-2 text-left text-sm hover:bg-primary-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                 @mousedown.prevent="select(p)"
             >
                 <span class="font-medium text-ink-primary">{{ p.part_number }}</span>

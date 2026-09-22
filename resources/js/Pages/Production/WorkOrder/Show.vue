@@ -98,23 +98,23 @@ function doDestroy() {
 
             <div class="flex flex-wrap items-center gap-2">
                 <a v-if="workOrder.status === 'in_progress' && can.complete" :href="route('production-results.create', workOrder.id)"
-                    class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover">
+                    class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
                     {{ t('production.results') }}
                 </a>
                 <button v-if="workOrder.status === 'planned' && can.release" @click="doRelease" :disabled="releaseForm.processing"
-                    class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60">
+                    class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
                     {{ releaseForm.processing ? t('production.releasing') : t('production.release') }}
                 </button>
                 <button v-if="workOrder.status === 'in_progress' && can.complete" @click="doComplete" :disabled="completeForm.processing"
-                    class="rounded-md bg-success px-4 py-2 text-sm font-semibold text-white transition hover:bg-success/90 disabled:opacity-60">
+                    class="rounded-md bg-success px-4 py-2 text-sm font-semibold text-white transition hover:bg-success/90 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
                     {{ completeForm.processing ? '…' : t('production.complete') }}
                 </button>
                 <button v-if="['planned', 'in_progress'].includes(workOrder.status) && can.cancel" @click="doCancel" :disabled="cancelForm.processing"
-                    class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-secondary transition hover:bg-background">
+                    class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-secondary transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
                     {{ t('production.cancel') }}
                 </button>
                 <button v-if="can.delete" @click="doDestroy" :disabled="deleteForm.processing"
-                    class="rounded-md border border-danger/30 px-4 py-2 text-sm font-medium text-danger transition hover:bg-danger/10">
+                    class="rounded-md border border-danger/30 px-4 py-2 text-sm font-medium text-danger transition hover:bg-danger/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
                     {{ t('production.delete') }}
                 </button>
             </div>
@@ -195,7 +195,7 @@ function doDestroy() {
                                     :href="route('work-orders.items.edit', [workOrder.id, head(g).id])"
                                     :title="t('production.editRouting')"
                                     :aria-label="t('production.editRouting')"
-                                    class="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-secondary transition hover:bg-primary-light hover:text-primary"
+                                    class="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-secondary transition hover:bg-primary-light hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
                                         <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />

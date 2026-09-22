@@ -17,7 +17,7 @@ defineProps<{
                 :key="i"
                 :href="link.url ?? '#'"
                 :class="[
-                    'relative inline-flex items-center rounded-md border px-4 py-2 text-sm font-medium',
+                    'relative inline-flex items-center rounded-md border px-4 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1',
                     link.active
                         ? 'border-primary bg-primary text-white'
                         : link.url
@@ -42,7 +42,7 @@ defineProps<{
                     :key="i"
                     :href="link.url ?? '#'"
                     :class="[
-                        'inline-flex min-w-[2.25rem] items-center justify-center rounded-md border px-3 py-2 text-sm font-medium transition',
+                        'inline-flex min-w-[2.25rem] items-center justify-center rounded-md border px-3 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1',
                         link.active
                             ? 'border-primary bg-primary text-white'
                             : link.url

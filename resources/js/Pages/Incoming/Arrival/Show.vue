@@ -56,11 +56,11 @@ function removeItem(id: number) {
                 </p>
             </div>
             <div class="flex gap-2">
-                <a :href="route('incoming-arrivals.invoice', arrival.id)" target="_blank" rel="noopener" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover">{{ t('incoming.printInvoice') }}</a>
-                <a :href="route('incoming-arrivals.export', arrival.id)" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-primary transition hover:bg-background">{{ t('incoming.exportExcel') }}</a>
-                <a :href="route('incoming-arrivals.pdf', arrival.id)" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-primary transition hover:bg-background">{{ t('incoming.invoicePdf') }}</a>
-                <Link :href="route('incoming-arrivals.edit', arrival.id)" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-primary transition hover:bg-background">{{ t('incoming.edit') }}</Link>
-                <Link :href="route('receive.index')" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-primary transition hover:bg-background">{{ t('incoming.receive') }}</Link>
+                <a :href="route('incoming-arrivals.invoice', arrival.id)" target="_blank" rel="noopener" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">{{ t('incoming.printInvoice') }}</a>
+                <a :href="route('incoming-arrivals.export', arrival.id)" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-primary transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">{{ t('incoming.exportExcel') }}</a>
+                <a :href="route('incoming-arrivals.pdf', arrival.id)" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-primary transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">{{ t('incoming.invoicePdf') }}</a>
+                <Link :href="route('incoming-arrivals.edit', arrival.id)" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-primary transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">{{ t('incoming.edit') }}</Link>
+                <Link :href="route('receive.index')" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-primary transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">{{ t('incoming.receive') }}</Link>
             </div>
         </div>
 
@@ -148,7 +148,7 @@ function removeItem(id: number) {
                         <td class="px-4 py-3 text-ink-primary">{{ r.receive.ata_date ?? '—' }}</td>
                         <td class="px-4 py-3">
                             <div class="flex justify-end gap-1.5">
-                                <a :href="route('receive.label', r.receive.id)" target="_blank" rel="noopener" class="rounded-md border border-borderline px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary-light">{{ t('incoming.label') }}</a>
+                                <a :href="route('receive.label', r.receive.id)" target="_blank" rel="noopener" class="rounded-md border border-borderline px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">{{ t('incoming.label') }}</a>
                                 <ActionButton :href="route('receive.edit', r.receive.id)" :label="t('incoming.edit')" variant="edit" />
                             </div>
                         </td>

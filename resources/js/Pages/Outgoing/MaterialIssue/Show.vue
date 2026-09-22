@@ -25,7 +25,7 @@ const totalQty = () => (props.issue.items ?? []).reduce((sum, it) => sum + Numbe
                     {{ issue.work_order?.wo_no ?? '—' }} · {{ issue.work_order?.part?.part_number ?? '' }} {{ issue.work_order?.part?.part_name ?? '' }}
                 </p>
             </div>
-            <a :href="route('material-issues.print', issue.id)" target="_blank" rel="noopener" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover">
+            <a :href="route('material-issues.print', issue.id)" target="_blank" rel="noopener" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
                 {{ t('outgoing.print') }}
             </a>
         </div>

@@ -100,43 +100,61 @@ const filteredItems = computed(() => {
 });
 
 // ── Inline targets (mockup: isi manual di baris) ──────────
-const targetDrafts = reactive<Record<number, { d: string; d1: string; d2: string; saving: boolean }>>({});
+const targetDrafts = reactive<Record<number, { d: string; d1: string; d2: string }>>({});
+
+const asText = (v: number | null | undefined) => (v == null ? '' : String(v));
 
 function draftFor(it: ProductionPlanItem) {
     if (!targetDrafts[it.id]) {
-        targetDrafts[it.id] = {
-            d: it.target_d != null ? String(it.target_d) : '',
-            d1: it.target_d1 != null ? String(it.target_d1) : '',
-            d2: it.target_d2 != null ? String(it.target_d2) : '',
-            saving: false,
-        };
+        targetDrafts[it.id] = { d: asText(it.target_d), d1: asText(it.target_d1), d2: asText(it.target_d2) };
     }
     return targetDrafts[it.id];
 }
 
+// Setelah server merespons, draft disamakan dengan nilai tersimpan.
 watch(() => props.items, (list) => {
     for (const it of list) {
         const draft = targetDrafts[it.id];
-        if (draft && !draft.saving) {
-            draft.d = it.target_d != null ? String(it.target_d) : '';
-            draft.d1 = it.target_d1 != null ? String(it.target_d1) : '';
-            draft.d2 = it.target_d2 != null ? String(it.target_d2) : '';
-        }
+        if (!draft) continue;
+        draft.d = asText(it.target_d);
+        draft.d1 = asText(it.target_d1);
+        draft.d2 = asText(it.target_d2);
     }
 });
 
-function saveTargets(it: ProductionPlanItem) {
-    const draft = draftFor(it);
-    draft.saving = true;
-    router.patch(route('production-plans.items.update', it.id), {
-        machine_id: it.machine_id,
-        wip_part_id: it.wip_part_id,
-        target_d: draft.d,
-        target_d1: draft.d1,
-        target_d2: draft.d2,
+/** Baris yang targetnya berbeda dari nilai tersimpan. */
+const dirtyRows = computed(() => props.items.filter((it) => {
+    const draft = targetDrafts[it.id];
+    if (!draft) return false;
+
+    return draft.d !== asText(it.target_d)
+        || draft.d1 !== asText(it.target_d1)
+        || draft.d2 !== asText(it.target_d2);
+}));
+
+const savingTargets = ref(false);
+
+/** Simpan semua target yang berubah dalam SATU request. */
+function saveAllTargets() {
+    if (dirtyRows.value.length === 0) return;
+
+    savingTargets.value = true;
+
+    router.patch(route('production-plans.targets'), {
+        items: dirtyRows.value.map((it) => {
+            const draft = draftFor(it);
+
+            return {
+                id: it.id,
+                target_d: draft.d === '' ? null : Number(draft.d),
+                target_d1: draft.d1 === '' ? null : Number(draft.d1),
+                target_d2: draft.d2 === '' ? null : Number(draft.d2),
+            };
+        }),
     }, {
         preserveScroll: true,
-        onFinish: () => { draft.saving = false; },
+        preserveState: true,
+        onFinish: () => { savingTargets.value = false; },
     });
 }
 
@@ -367,9 +385,22 @@ function submitEdit() {
 
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
             <div class="flex flex-wrap items-center justify-between gap-2 border-b border-borderline px-4 py-3">
-                <h2 class="text-sm font-semibold text-ink-primary">{{ t('production.boardTitle') }}</h2>
-                <span v-if="items.length === 0" class="text-xs text-ink-secondary">{{ t('production.planEmptyHint') }}</span>
-                <span v-else class="text-xs text-ink-secondary">{{ t('production.planHelp') }}</span>
+                <div class="flex flex-wrap items-center gap-2">
+                    <h2 class="text-sm font-semibold text-ink-primary">{{ t('production.boardTitle') }}</h2>
+                    <span v-if="items.length === 0" class="text-xs text-ink-secondary">{{ t('production.planEmptyHint') }}</span>
+                    <span v-else class="text-xs text-ink-secondary">{{ t('production.planHelp') }}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span v-if="dirtyRows.length" class="text-xs font-medium text-warning">{{ t('production.dirtyRows', { n: dirtyRows.length }) }}</span>
+                    <button
+                        type="button"
+                        :disabled="dirtyRows.length === 0 || savingTargets"
+                        class="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-primary-hover disabled:opacity-40"
+                        @click="saveAllTargets()"
+                    >
+                        {{ savingTargets ? t('production.saving') : t('production.saveTargets') }}
+                    </button>
+                </div>
             </div>
             <div class="overflow-x-auto">
                 <table class="w-full min-w-[1240px] table-fixed text-sm">
@@ -504,7 +535,6 @@ function submitEdit() {
                                             :aria-label="t('production.dQty') + ' ' + row.fg_part?.part_number"
                                             class="w-full rounded-md border px-2 py-1.5 text-right text-sm tabular-nums text-ink-primary focus:border-primary focus:ring-primary"
                                             :class="draftFor(row)[key] !== '' ? 'border-primary/50 bg-primary-light/40' : 'border-borderline bg-background'"
-                                            @change="saveTargets(row)"
                                         />
                                     </td>
                                 </template>

@@ -103,6 +103,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('production-plans', [ProductionPlanController::class, 'store'])->name('production-plans.store');
     Route::post('production-plans/items/reorder', [ProductionPlanController::class, 'reorder'])->name('production-plans.items.reorder');
     Route::post('production-plans/attach', [ProductionPlanController::class, 'attachWorkOrder'])->name('production-plans.attach');
+    Route::patch('production-plans/targets', [ProductionPlanController::class, 'updateTargets'])->name('production-plans.targets');
     Route::patch('production-plans/items/{item}', [ProductionPlanController::class, 'update'])->name('production-plans.items.update');
     Route::delete('production-plans/items/{item}', [ProductionPlanController::class, 'detach'])->name('production-plans.items.detach');
 

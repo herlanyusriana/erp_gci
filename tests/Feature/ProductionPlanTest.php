@@ -99,6 +99,49 @@ class ProductionPlanTest extends TestCase
                 ->where('unplannedWorkOrders', fn ($list) => ! collect($list)->pluck('id')->contains($wo->id)));
     }
 
+    public function test_update_targets_saves_d_d1_d2(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->post(route('work-orders.release', $wo))->assertRedirect();
+
+        $row = ProductionPlanItem::where('work_order_id', $wo->id)->firstOrFail();
+
+        $this->patch(route('production-plans.items.update', $row), [
+            'machine_id' => $row->machine_id,
+            'wip_part_id' => $row->wip_part_id,
+            'target_d' => 100,
+            'target_d1' => 50,
+            'target_d2' => 25,
+        ])->assertRedirect();
+
+        $row->refresh();
+        $this->assertSame(100.0, (float) $row->target_d);
+        $this->assertSame(50.0, (float) $row->target_d1);
+        $this->assertSame(25.0, (float) $row->target_d2);
+    }
+
+    public function test_bulk_update_targets_saves_many_rows(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->post(route('work-orders.release', $wo))->assertRedirect();
+
+        $rows = ProductionPlanItem::where('work_order_id', $wo->id)->orderBy('id')->take(2)->get();
+        $this->assertCount(2, $rows);
+
+        $this->patch(route('production-plans.targets'), [
+            'items' => [
+                ['id' => $rows[0]->id, 'target_d' => 10, 'target_d1' => 5, 'target_d2' => null],
+                ['id' => $rows[1]->id, 'target_d' => 7],
+            ],
+        ])->assertRedirect();
+
+        $first = $rows[0]->fresh();
+        $this->assertSame(10.0, (float) $first->target_d);
+        $this->assertSame(5.0, (float) $first->target_d1);
+        $this->assertNull($first->target_d2);
+        $this->assertSame(7.0, (float) $rows[1]->fresh()->target_d);
+    }
+
     public function test_plan_rows_follow_routing_order(): void
     {
         $wo = $this->createWorkOrder();

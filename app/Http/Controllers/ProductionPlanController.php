@@ -224,6 +224,40 @@ class ProductionPlanController extends Controller
             ->route('production-plans.index', ['date' => $item->plan?->plan_date?->toDateString()])->with('success', __('Baris Production Plan diperbarui.'));
     }
 
+    /**
+     * Simpan target D / D+1 / D+2 banyak baris sekaligus (satu request).
+     */
+    public function updateTargets(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.id' => ['required', 'integer', 'exists:production_plan_items,id'],
+            'items.*.target_d' => ['nullable', 'numeric', 'min:0'],
+            'items.*.target_d1' => ['nullable', 'numeric', 'min:0'],
+            'items.*.target_d2' => ['nullable', 'numeric', 'min:0'],
+        ]);
+
+        DB::transaction(function () use ($data, $request) {
+            foreach ($data['items'] as $row) {
+                $item = ProductionPlanItem::query()->with('plan')->find((int) $row['id']);
+                if ($item === null) {
+                    continue;
+                }
+
+                Gate::authorize('update', $item->plan);
+
+                $item->update([
+                    'target_d' => $row['target_d'] ?? null,
+                    'target_d1' => $row['target_d1'] ?? null,
+                    'target_d2' => $row['target_d2'] ?? null,
+                    'updated_by' => $request->user()?->id,
+                ]);
+            }
+        });
+
+        return back()->with('success', __('Target Production Plan disimpan.'));
+    }
+
     public function reorder(Request $request): RedirectResponse
     {
         Gate::authorize('reorder', ProductionPlan::class);

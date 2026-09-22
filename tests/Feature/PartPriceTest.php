@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Part;
 use App\Models\PartPrice;
+use App\Models\PartSubstitute;
 use App\Models\Supplier;
 use App\Models\User;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
@@ -20,6 +21,12 @@ class PartPriceTest extends TestCase
         parent::setUp();
         $this->withoutMiddleware(ValidateCsrfToken::class);
         $this->actingAs(User::where('email', 'admin@geumcheon.local')->firstOrFail());
+
+        PartSubstitute::firstOrCreate([
+            'part_id' => Part::where('part_number', '4000W4A003A')->value('id'),
+            'substitute_part_id' => $this->part()->id,
+            'supplier_id' => $this->supplier()->id,
+        ], ['is_active' => true]);
     }
 
     private function supplier(): Supplier
@@ -75,6 +82,25 @@ class PartPriceTest extends TestCase
 
         $this->post(route('prices.store'), $this->payload(['price' => 13000]))
             ->assertSessionHasErrors('supplier_id');
+    }
+
+    public function test_store_rejects_part_not_mapped_to_supplier(): void
+    {
+        $supplier = Supplier::create([
+            'supplier_code' => 'SUP-PRICE-GUARD',
+            'supplier_name' => 'Price Guard Supplier',
+            'is_active' => true,
+        ]);
+
+        $this->post(route('prices.store'), $this->payload([
+            'supplier_id' => $supplier->id,
+            'valid_from' => '2026-09-15',
+        ]))->assertSessionHasErrors('part_id');
+
+        $this->assertDatabaseMissing('part_prices', [
+            'supplier_id' => $supplier->id,
+            'part_id' => $this->part()->id,
+        ]);
     }
 
     public function test_same_supplier_and_part_with_other_date_is_allowed(): void

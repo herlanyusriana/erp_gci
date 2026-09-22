@@ -101,7 +101,7 @@ class PartPriceController extends Controller
                         ->where('valid_from', (string) $request->input('valid_from')))
                     ->ignore($ignore?->id),
             ],
-            'part_id' => ['required', 'integer', 'exists:parts,id'],
+            'part_id' => ['required', 'integer', 'exists:parts,id', Rule::exists('part_substitutes', 'substitute_part_id')->where(fn ($q) => $q->where('supplier_id', (int) $request->input('supplier_id'))->where('is_active', true))],
             'price' => ['required', 'numeric', 'min:0'],
             'currency' => ['required', 'string', 'max:10'],
             'valid_from' => ['required', 'date'],

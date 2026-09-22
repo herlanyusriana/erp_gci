@@ -78,4 +78,27 @@ class PurchaseOrderSupplierPartTest extends TestCase
                     return $row !== null && (float) $row['price'] === 12500.0 && $row['currency'] === 'USD';
                 }));
     }
+
+    public function test_store_rejects_part_not_mapped_to_supplier(): void
+    {
+        $supplier = Supplier::create([
+            'supplier_code' => 'SUP-PO-GUARD',
+            'supplier_name' => 'PO Guard Supplier',
+            'is_active' => true,
+        ]);
+        $part = Part::where('part_number', 'CBKG07256C')->firstOrFail();
+
+        $this->post(route('purchase-orders.store'), [
+            'po_no' => 'PO-GUARD-001',
+            'supplier_id' => $supplier->id,
+            'status' => 'draft',
+            'items' => [[
+                'part_id' => $part->id,
+                'qty' => 1,
+                'unit' => 'PCS',
+            ]],
+        ])->assertSessionHasErrors('items.0.part_id');
+
+        $this->assertDatabaseMissing('purchase_orders', ['po_no' => 'PO-GUARD-001']);
+    }
 }

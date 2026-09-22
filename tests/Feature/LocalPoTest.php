@@ -6,6 +6,7 @@ use App\Models\IncomingArrival;
 use App\Models\IncomingArrivalItem;
 use App\Models\Part;
 use App\Models\PartStock;
+use App\Models\PartSubstitute;
 use App\Models\Supplier;
 use App\Models\User;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
@@ -21,6 +22,12 @@ class LocalPoTest extends TestCase
         parent::setUp();
         $this->withoutMiddleware(ValidateCsrfToken::class);
         $this->actingAs(User::where('email', 'admin@geumcheon.local')->firstOrFail());
+
+        PartSubstitute::firstOrCreate([
+            'part_id' => Part::where('part_number', '4000W4A003A')->value('id'),
+            'substitute_part_id' => Part::where('part_number', 'CBKG07256C')->value('id'),
+            'supplier_id' => Supplier::query()->value('id'),
+        ], ['is_active' => true]);
     }
 
     private function payload(array $overrides = []): array
@@ -78,6 +85,24 @@ class LocalPoTest extends TestCase
         unset($payload['items'][0]['weight_nett']);
 
         $this->post(route('local-pos.store'), $payload)->assertSessionHasErrors('items.0.weight_nett');
+    }
+
+    public function test_local_po_rejects_part_not_mapped_to_supplier(): void
+    {
+        $supplier = Supplier::create([
+            'supplier_code' => 'SUP-LPO-GUARD',
+            'supplier_name' => 'Local PO Guard Supplier',
+            'is_active' => true,
+        ]);
+        $payload = $this->payload([
+            'po_no' => 'LPO-GUARD-001',
+            'supplier_id' => $supplier->id,
+        ]);
+
+        $this->post(route('local-pos.store'), $payload)
+            ->assertSessionHasErrors('items.0.part_id');
+
+        $this->assertDatabaseMissing('incoming_arrivals', ['po_no' => 'LPO-GUARD-001']);
     }
 
     public function test_local_receive_is_weight_based_and_posts_stock_in_material_unit(): void

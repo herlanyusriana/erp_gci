@@ -15,6 +15,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -97,7 +98,7 @@ class PurchaseOrderController extends Controller
             'notes' => ['nullable', 'string'],
             'status' => ['required', 'in:draft,confirmed,cancelled'],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.part_id' => ['required', 'exists:parts,id', PartTypeRule::notFg()],
+            'items.*.part_id' => ['required', 'exists:parts,id', PartTypeRule::notFg(), Rule::exists('part_substitutes', 'substitute_part_id')->where(fn ($q) => $q->where('supplier_id', (int) $request->input('supplier_id'))->where('is_active', true))],
             'items.*.qty' => ['required', 'numeric', 'min:0'],
             'items.*.unit' => ['nullable', 'string', 'max:20', UomCode::optional()],
             'items.*.price' => ['nullable', 'numeric', 'min:0'],
@@ -142,7 +143,7 @@ class PurchaseOrderController extends Controller
             'notes' => ['nullable', 'string'],
             'status' => ['required', 'in:draft,confirmed,cancelled'],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.part_id' => ['required', 'exists:parts,id', PartTypeRule::notFg()],
+            'items.*.part_id' => ['required', 'exists:parts,id', PartTypeRule::notFg(), Rule::exists('part_substitutes', 'substitute_part_id')->where(fn ($q) => $q->where('supplier_id', (int) $request->input('supplier_id'))->where('is_active', true))],
             'items.*.qty' => ['required', 'numeric', 'min:0'],
             'items.*.unit' => ['nullable', 'string', 'max:20', UomCode::optional()],
             'items.*.price' => ['nullable', 'numeric', 'min:0'],

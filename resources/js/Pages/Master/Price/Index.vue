@@ -14,11 +14,14 @@ const { t, locale } = useI18n();
 
 const page = usePage<PageProps>();
 
+interface SupplierPart { supplier_id: number; part_id: number; part_number: string | null; part_name: string | null; }
+
 const props = defineProps<{
     prices: Paginated<PartPrice>;
     filters: { search?: string; supplier_id?: string };
     suppliers: Array<Pick<Supplier, 'id' | 'supplier_code' | 'supplier_name'>>;
     parts: Array<Pick<Part, 'id' | 'part_number' | 'part_name'>>;
+    supplierParts: SupplierPart[];
 }>();
 
 const search = ref(props.filters.search ?? '');
@@ -57,6 +60,36 @@ const form = useForm({
     valid_from: today(),
     is_active: true,
 });
+
+/** Part yang boleh dipilih: hanya part supplier terpilih (strict). */
+const partOptions = computed(() => {
+    const supplierId = Number(form.supplier_id);
+    const map = new Map<number, { id: number; part_number: string; part_name: string }>();
+
+    if (supplierId) {
+        for (const sp of props.supplierParts) {
+            if (sp.supplier_id === supplierId && !map.has(sp.part_id)) {
+                const p = props.parts.find((x) => x.id === sp.part_id);
+                if (p) map.set(sp.part_id, p);
+            }
+        }
+    }
+
+    // Part yang sedang diedit tetap tampil walau di luar daftar supplier.
+    if (editing.value) {
+        const id = Number(form.part_id);
+        if (id && !map.has(id)) {
+            const p = props.parts.find((x) => x.id === id);
+            if (p) map.set(id, p);
+        }
+    }
+
+    return [...map.values()].sort((a, b) => a.part_number.localeCompare(b.part_number));
+});
+
+function onSupplierChange() {
+    form.part_id = '';
+}
 
 function openCreate() {
     editing.value = null;
@@ -171,7 +204,7 @@ const fmtDate = (value: string | null | undefined) => {
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.supplier') }}</label>
-                        <select v-model="form.supplier_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                        <select v-model="form.supplier_id" @change="onSupplierChange" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                             <option value="">—</option>
                             <option v-for="s in suppliers" :key="s.id" :value="String(s.id)">{{ s.supplier_name }}</option>
                         </select>
@@ -179,10 +212,11 @@ const fmtDate = (value: string | null | undefined) => {
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.part') }}</label>
-                        <select v-model="form.part_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                        <select v-model="form.part_id" :disabled="!form.supplier_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary disabled:bg-background disabled:text-ink-secondary">
                             <option value="">{{ t('master.selectPart') }}</option>
-                            <option v-for="p in parts" :key="p.id" :value="String(p.id)">{{ p.part_number }} · {{ p.part_name }}</option>
+                            <option v-for="p in partOptions" :key="p.id" :value="String(p.id)">{{ p.part_number }} · {{ p.part_name }}</option>
                         </select>
+                        <p v-if="form.supplier_id && partOptions.length === 0" class="mt-1 text-xs text-warning">{{ t('master.supplierNoParts') }}</p>
                         <InputError :message="form.errors.part_id" class="mt-1" />
                     </div>
                     <div>

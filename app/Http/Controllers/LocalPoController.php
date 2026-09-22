@@ -6,6 +6,7 @@ use App\Exports\ArrivalDetailExport;
 use App\Exports\LocalPoExport;
 use App\Models\IncomingArrival;
 use App\Models\Part;
+use App\Models\PartSubstitute;
 use App\Models\Supplier;
 use App\Rules\PartTypeRule;
 use App\Rules\UomCode;
@@ -79,6 +80,7 @@ class LocalPoController extends Controller
                 ->where('is_active', true)
                 ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))
                 ->orderBy('part_number')->get(),
+            'supplierParts' => PartSubstitute::supplierParts(),
             'uomCodes' => UomCatalog::codes(),
             'packingUnits' => UomCatalog::packingUnits(),
             'defaultUom' => UomCatalog::defaultCode(),
@@ -196,6 +198,7 @@ class LocalPoController extends Controller
                 ->where('is_active', true)
                 ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))
                 ->orderBy('part_number')->get(),
+            'supplierParts' => PartSubstitute::supplierParts(),
             'uomCodes' => UomCatalog::codes(),
             'packingUnits' => UomCatalog::packingUnits(),
             'defaultUom' => UomCatalog::defaultCode(),

@@ -52,7 +52,7 @@ class PurchaseOrderController extends Controller
                 ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))
                 ->orderBy('part_number')->get(),
             'uomCodes' => UomCatalog::codes(),
-            'supplierParts' => $this->supplierParts(),
+            'supplierParts' => PartSubstitute::supplierParts(),
             'activePrices' => $this->activePrices(),
         ]);
     }
@@ -82,7 +82,7 @@ class PurchaseOrderController extends Controller
                 ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))
                 ->orderBy('part_number')->get(),
             'uomCodes' => UomCatalog::codes(),
-            'supplierParts' => $this->supplierParts(),
+            'supplierParts' => PartSubstitute::supplierParts(),
             'activePrices' => $this->activePrices(),
         ]);
     }
@@ -181,31 +181,6 @@ class PurchaseOrderController extends Controller
         $purchaseOrder->delete();
 
         return redirect()->route('purchase-orders.index')->with('success', __('Purchase order deleted.'));
-    }
-
-    /**
-     * Part yang dipasok tiap supplier — diambil dari substitute aktif
-     * (`part_substitutes.supplier_id`), sumber tunggal part↔supplier.
-     *
-     * @return list<array{supplier_id:int, part_id:int, part_number:string|null, part_name:string|null, uom:string|null}>
-     */
-    private function supplierParts(): array
-    {
-        return PartSubstitute::query()
-            ->where('is_active', true)
-            ->whereNotNull('supplier_id')
-            ->with(['substitutePart:id,part_number,part_name,uom_id', 'substitutePart.uom:id,code'])
-            ->get()
-            ->map(fn (PartSubstitute $s) => [
-                'supplier_id' => (int) $s->supplier_id,
-                'part_id' => (int) $s->substitute_part_id,
-                'part_number' => $s->substitutePart?->part_number,
-                'part_name' => $s->substitutePart?->part_name,
-                'uom' => $s->substitutePart?->uom?->code,
-            ])
-            ->unique(fn (array $r) => $r['supplier_id'].'|'.$r['part_id'])
-            ->values()
-            ->all();
     }
 
     /**

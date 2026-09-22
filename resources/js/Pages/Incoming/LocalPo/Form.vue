@@ -25,10 +25,13 @@ interface ItemRow {
     notes: string;
 }
 
+interface SupplierPart { supplier_id: number; part_id: number; part_number: string | null; part_name: string | null; }
+
 const props = defineProps<{
     arrival?: IncomingArrival | null;
     suppliers: SupplierOpt[];
     parts: PartOpt[];
+    supplierParts: SupplierPart[];
     uomCodes: string[];
     packingUnits: string[];
     defaultUom?: string;
@@ -68,6 +71,39 @@ const form = useForm({
     notes: props.arrival?.notes ?? '',
     items: [] as any[],
 });
+
+/** Part yang boleh dipilih: hanya part supplier terpilih (strict). */
+const partOptions = computed(() => {
+    const supplierId = Number(form.supplier_id);
+    const map = new Map<number, PartOpt>();
+
+    if (supplierId) {
+        for (const sp of props.supplierParts) {
+            if (sp.supplier_id === supplierId && !map.has(sp.part_id)) {
+                const p = props.parts.find((x) => x.id === sp.part_id);
+                if (p) map.set(sp.part_id, p);
+            }
+        }
+    }
+
+    // Part yang sudah terpilih di baris (mis. data lama) tetap tampil.
+    for (const r of rows.value) {
+        const id = Number(r.part_id);
+        if (id && !map.has(id)) {
+            const p = props.parts.find((x) => x.id === id);
+            if (p) map.set(id, p);
+        }
+    }
+
+    return [...map.values()].sort((a, b) => a.part_number.localeCompare(b.part_number));
+});
+
+/** Ganti supplier → daftar part berubah, jadi baris dikosongkan. */
+function onSupplierChange() {
+    for (const r of rows.value) {
+        r.part_id = '';
+    }
+}
 
 function addRow() {
     rows.value.push({ id: null, part_id: '', size: '', qty_goods: '', unit_goods: defaultUomCode.value, qty_bundle: '', unit_bundle: '', weight_nett: '', weight_gross: '', price: '', notes: '' });
@@ -135,7 +171,7 @@ function submit() {
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.supplier') }}</label>
-                        <select v-model="form.supplier_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                        <select v-model="form.supplier_id" @change="onSupplierChange" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                             <option value="">{{ t('incoming.chooseSupplier') }}</option>
                             <option v-for="s in suppliers" :key="s.id" :value="s.id">{{ s.supplier_code ? `${s.supplier_code} — ` : '' }}{{ s.supplier_name }}</option>
                         </select>
@@ -169,10 +205,11 @@ function submit() {
                     <div class="grid gap-3 sm:grid-cols-12">
                         <div class="sm:col-span-4">
                             <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.part') }}</label>
-                            <select v-model="r.part_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                            <select v-model="r.part_id" :disabled="!form.supplier_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary disabled:bg-background disabled:text-ink-secondary">
                                 <option value="">{{ t('incoming.choosePart') }}</option>
-                                <option v-for="p in parts" :key="p.id" :value="p.id">{{ p.part_number }} · {{ p.part_name }}</option>
+                                <option v-for="p in partOptions" :key="p.id" :value="p.id">{{ p.part_number }} · {{ p.part_name }}</option>
                             </select>
+                            <p v-if="form.supplier_id && partOptions.length === 0" class="mt-1 text-xs text-warning">{{ t('incoming.supplierNoParts') }}</p>
                         </div>
                         <div class="sm:col-span-2">
                             <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.size') }}</label>

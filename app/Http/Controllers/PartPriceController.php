@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Part;
 use App\Models\PartPrice;
+use App\Models\PartSubstitute;
 use App\Models\Supplier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -46,6 +47,7 @@ class PartPriceController extends Controller
                 ->where('is_active', true)
                 ->orderBy('part_number')
                 ->get(['id', 'part_number', 'part_name']),
+            'supplierParts' => PartSubstitute::supplierParts(),
         ]);
     }
 

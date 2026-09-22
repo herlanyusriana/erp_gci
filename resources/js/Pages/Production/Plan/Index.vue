@@ -189,55 +189,6 @@ function move(rows: ProductionPlanItem[], index: number, dir: number) {
     }, { preserveScroll: true });
 }
 
-// ── Bagi qty WO ke D / D+1 / D+2 ──────────────────────────
-const showSplit = ref(false);
-const splitRow = ref<ProductionPlanItem | null>(null);
-const split = reactive({ d: '', d1: '', d2: '' });
-
-function openSplit(row: ProductionPlanItem) {
-    splitRow.value = row;
-    const draft = draftFor(row);
-    split.d = draft.d;
-    split.d1 = draft.d1;
-    split.d2 = draft.d2;
-    showSplit.value = true;
-}
-
-const splitWoQty = computed(() => Number(splitRow.value?.work_order?.qty ?? 0));
-const splitTotal = computed(() => Number(split.d || 0) + Number(split.d1 || 0) + Number(split.d2 || 0));
-const splitRemaining = computed(() => Number((splitWoQty.value - splitTotal.value).toFixed(4)));
-
-function splitEvenly() {
-    const qty = splitWoQty.value;
-    if (qty <= 0) return;
-    const third = Math.round((qty / 3) * 10000) / 10000;
-    split.d = String(third);
-    split.d1 = String(third);
-    split.d2 = String(Math.round((qty - third * 2) * 10000) / 10000);
-}
-
-function splitFillRemaining() {
-    if (splitRemaining.value <= 0) return;
-    split.d = String(Number((Number(split.d || 0) + splitRemaining.value).toFixed(4)));
-}
-
-function clearSplit() {
-    split.d = '';
-    split.d1 = '';
-    split.d2 = '';
-}
-
-function submitSplit() {
-    const row = splitRow.value;
-    if (row === null) return;
-    const draft = draftFor(row);
-    draft.d = split.d;
-    draft.d1 = split.d1;
-    draft.d2 = split.d2;
-    showSplit.value = false;
-    saveTargets(row);
-}
-
 function detach(item: ProductionPlanItem) {
     const label = item.work_order?.wo_no ?? t('production.thisRow');
     if (confirm(t('production.detachConfirm', { name: label }))) {
@@ -446,14 +397,8 @@ function submitEdit() {
                             <th class="px-3 py-2.5">{{ t('production.outputPart') }}</th>
                             <th class="px-3 py-2.5 text-right">{{ t('production.estimatedTime') }}</th>
                             <th class="px-3 py-2.5 text-right">{{ t('production.availableQty') }}</th>
-                            <th colspan="3" class="border-l border-borderline px-2 py-2.5 text-center text-primary">{{ t('production.targetGroup') }}</th>
+                            <th v-for="(label, key) in dayCols" :key="key" class="border-l border-borderline px-2 py-2.5 text-center">{{ label }}</th>
                             <th class="px-3 py-2.5 text-right">{{ t('production.actions') }}</th>
-                        </tr>
-                        <tr class="border-b border-borderline text-center text-[11px] font-medium uppercase tracking-wide text-ink-secondary">
-                            <th class="sticky left-0 z-30 border-r border-borderline bg-background"></th>
-                            <th v-for="n in 7" :key="n"></th>
-                            <th v-for="(label, key) in dayCols" :key="key" class="border-l border-borderline px-2 py-1.5">{{ label }}</th>
-                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -585,12 +530,12 @@ function submitEdit() {
                                         </button>
                                         <button
                                             type="button"
-                                            :title="t('production.splitTarget')"
-                                            :aria-label="t('production.splitTarget')"
-                                            class="flex h-8 w-8 items-center justify-center rounded-lg text-ink-secondary transition hover:bg-primary-light hover:text-primary"
-                                            @click="openSplit(row)"
+                                            :title="t('production.addBelow')"
+                                            :aria-label="t('production.addBelow')"
+                                            class="flex h-8 w-8 items-center justify-center rounded-lg text-ink-secondary transition hover:bg-background"
+                                            @click="openCreate()"
                                         >
-                                            <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" /></svg>
+                                            <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
                                         </button>
                                         <button
                                             type="button"
@@ -613,56 +558,6 @@ function submitEdit() {
             </div>
 
         </div>
-
-        <!-- Modal: bagi qty WO ke D / D+1 / D+2 -->
-        <Modal :show="showSplit" max-width="md" @close="showSplit = false">
-            <div class="p-6">
-                <h3 class="text-lg font-bold text-ink-primary">{{ t('production.splitTitle') }}</h3>
-                <p class="mt-1 text-sm text-ink-secondary">
-                    {{ splitRow?.work_order?.wo_no ?? '—' }} · {{ splitRow?.fg_part?.part_number ?? splitRow?.fg_part?.part_name ?? '' }}
-                </p>
-
-                <div class="mt-4 grid grid-cols-3 gap-3">
-                    <div class="rounded-lg border border-borderline bg-background p-2 text-center">
-                        <div class="text-[11px] font-semibold uppercase tracking-wide text-ink-secondary">{{ t('production.woQty') }}</div>
-                        <div class="mt-0.5 font-semibold tabular-nums text-ink-primary">{{ fmt(splitWoQty) }}</div>
-                    </div>
-                    <div class="rounded-lg border border-borderline bg-background p-2 text-center">
-                        <div class="text-[11px] font-semibold uppercase tracking-wide text-ink-secondary">{{ t('production.splitPlanned') }}</div>
-                        <div class="mt-0.5 font-semibold tabular-nums text-ink-primary">{{ fmt(splitTotal) }}</div>
-                    </div>
-                    <div class="rounded-lg border p-2 text-center" :class="splitRemaining < 0 ? 'border-danger/40 bg-danger/5' : 'border-borderline bg-background'">
-                        <div class="text-[11px] font-semibold uppercase tracking-wide text-ink-secondary">{{ t('production.splitRemaining') }}</div>
-                        <div class="mt-0.5 font-semibold tabular-nums" :class="splitRemaining < 0 ? 'text-danger' : (splitRemaining === 0 ? 'text-success' : 'text-ink-primary')">{{ fmt(splitRemaining) }}</div>
-                    </div>
-                </div>
-
-                <div class="mt-4 grid grid-cols-3 gap-3">
-                    <div v-for="key in dayKeys" :key="key">
-                        <label class="text-xs font-semibold text-ink-secondary">{{ dayCols[key] }}</label>
-                        <input
-                            v-model="split[key]"
-                            type="number"
-                            step="any"
-                            min="0"
-                            inputmode="decimal"
-                            class="mt-1 w-full rounded-lg border border-borderline bg-background px-3 py-2 text-right text-sm tabular-nums text-ink-primary focus:border-primary focus:ring-primary"
-                        />
-                    </div>
-                </div>
-
-                <div class="mt-3 flex flex-wrap gap-2">
-                    <button type="button" class="rounded-md border border-borderline px-3 py-1.5 text-xs font-medium text-ink-secondary transition hover:bg-background" @click="splitEvenly()">{{ t('production.splitEvenly') }}</button>
-                    <button type="button" :disabled="splitRemaining <= 0" class="rounded-md border border-borderline px-3 py-1.5 text-xs font-medium text-ink-secondary transition hover:bg-background disabled:opacity-40" @click="splitFillRemaining()">{{ t('production.splitFillD') }}</button>
-                    <button type="button" class="rounded-md border border-borderline px-3 py-1.5 text-xs font-medium text-ink-secondary transition hover:bg-background" @click="clearSplit()">{{ t('production.clear') }}</button>
-                </div>
-
-                <div class="mt-5 flex items-center justify-end gap-3 border-t border-borderline pt-4">
-                    <button type="button" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-primary hover:bg-background" @click="showSplit = false">{{ t('production.cancel') }}</button>
-                    <button type="button" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover" @click="submitSplit()">{{ t('production.apply') }}</button>
-                </div>
-            </div>
-        </Modal>
 
         <!-- Modal: WO Baru -->
         <Modal :show="showCreate" max-width="lg" @close="showCreate = false">

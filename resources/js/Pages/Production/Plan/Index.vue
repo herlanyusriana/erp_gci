@@ -12,6 +12,15 @@ import type { Machine, Part, ProductionPlan, ProductionPlanItem } from '@/types'
 
 type MachineOpt = Pick<Machine, 'id' | 'machine_code' | 'machine_name'>;
 type PartOpt = Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'>;
+type PlanHistory = {
+    id: number;
+    production_plan_item_id: number | null;
+    event: 'work_order_added' | 'targets_updated' | 'item_updated' | 'sequence_updated' | 'item_detached';
+    before: Record<string, number | null> | null;
+    after: Record<string, number | string | null> | null;
+    created_at: string;
+    user: { id: number; name: string } | null;
+};
 
 const { t, locale } = useI18n();
 
@@ -22,6 +31,7 @@ const props = defineProps<{
     machines: MachineOpt[];
     fgParts: PartOpt[];
     wipParts: Array<Pick<Part, 'id' | 'part_number' | 'part_name'>>;
+    histories: PlanHistory[];
     unplannedWorkOrders: Array<{
         id: number;
         wo_no: string;
@@ -73,6 +83,31 @@ const dayLabels = computed(() => ({
 }));
 
 const fmt = (n: number | null | undefined) => n == null ? '—' : Number(n).toLocaleString(locale.value, { maximumFractionDigits: 2 });
+
+const showHistory = ref(false);
+
+function fmtDateTime(value: string): string {
+    return new Date(value).toLocaleString(locale.value, { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+function historyEventLabel(event: PlanHistory['event']): string {
+    return t(`production.historyEvents.${event}`);
+}
+
+function historyDetail(history: PlanHistory): string {
+    if (history.event === 'targets_updated') {
+        const before = history.before ?? {};
+        const after = history.after ?? {};
+        const labels: Record<string, string> = { target_d: 'D', target_d1: 'D+1', target_d2: 'D+2' };
+        return ['target_d', 'target_d1', 'target_d2']
+            .filter((key) => before[key] !== after[key])
+            .map((key) => `${labels[key]}: ${fmt(before[key] as number | null)} → ${fmt(after[key] as number | null)}`)
+            .join(' · ');
+    }
+    if (history.event === 'work_order_added') return String(history.after?.wo_no ?? '—');
+    if (history.event === 'sequence_updated') return `${fmt(history.before?.sequence as number | null)} → ${fmt(history.after?.sequence as number | null)}`;
+    return '';
+}
 
 /** Detik → durasi ringkas (jam/menit/detik). */
 const fmtDuration = (seconds: number | null | undefined) => {
@@ -321,14 +356,23 @@ function submitEdit() {
                     {{ t('production.planDateDescription', { date: fmtDate(date), d: dayLabels.d, d1: dayLabels.d1, d2: dayLabels.d2 }) }}
                 </p>
             </div>
-            <button
-                type="button"
-                class="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover"
-                @click="openCreate()"
-            >
-                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                {{ t('production.newWo') }}
-            </button>
+            <div class="flex items-center gap-2">
+                <button
+                    type="button"
+                    class="inline-flex items-center gap-1.5 rounded-md border border-borderline bg-surface px-4 py-2 text-sm font-semibold text-ink-primary transition hover:bg-background"
+                    @click="showHistory = true"
+                >
+                    {{ t('production.planHistory') }}
+                </button>
+                <button
+                    type="button"
+                    class="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover"
+                    @click="openCreate()"
+                >
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                    {{ t('production.newWo') }}
+                </button>
+            </div>
         </div>
 
         <!-- Toolbar: filter + ringkasan papan -->
@@ -595,6 +639,30 @@ function submitEdit() {
             </div>
 
         </div>
+
+        <!-- Modal: History -->
+        <Modal :show="showHistory" max-width="2xl" @close="showHistory = false">
+            <div class="p-6">
+                <div class="mb-4 flex items-start justify-between gap-4">
+                    <div>
+                        <h3 class="text-lg font-bold text-ink-primary">{{ t('production.planHistory') }}</h3>
+                        <p class="mt-1 text-sm text-ink-secondary">{{ t('production.historyForDate', { date: fmtDate(props.date) }) }}</p>
+                    </div>
+                    <button type="button" class="text-sm text-ink-secondary hover:text-ink-primary" @click="showHistory = false">{{ t('production.cancel') }}</button>
+                </div>
+                <div v-if="histories.length" class="max-h-[60vh] space-y-3 overflow-y-auto pr-1">
+                    <div v-for="history in histories" :key="history.id" class="rounded-lg border border-borderline bg-background p-3">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <span class="font-semibold text-ink-primary">{{ historyEventLabel(history.event) }}</span>
+                            <span class="text-xs text-ink-secondary">{{ fmtDateTime(history.created_at) }}</span>
+                        </div>
+                        <p v-if="historyDetail(history)" class="mt-1 text-sm text-ink-secondary">{{ historyDetail(history) }}</p>
+                        <p class="mt-1 text-xs text-ink-secondary">{{ history.user?.name ?? t('production.unknownUser') }}</p>
+                    </div>
+                </div>
+                <p v-else class="rounded-lg border border-dashed border-borderline p-6 text-center text-sm text-ink-secondary">{{ t('production.noPlanHistory') }}</p>
+            </div>
+        </Modal>
 
         <!-- Modal: WO Baru -->
         <Modal :show="showCreate" max-width="lg" @close="showCreate = false">

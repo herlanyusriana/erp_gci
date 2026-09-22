@@ -17,4 +17,9 @@ class ProductionPlan extends Model
     {
         return $this->hasMany(ProductionPlanItem::class);
     }
+
+    public function histories(): HasMany
+    {
+        return $this->hasMany(ProductionPlanHistory::class);
+    }
 }

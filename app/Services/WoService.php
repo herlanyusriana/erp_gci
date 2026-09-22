@@ -8,6 +8,7 @@ use App\Models\MaterialIssueItem;
 use App\Models\Part;
 use App\Models\PartSubstitute;
 use App\Models\ProductionPlan;
+use App\Models\ProductionPlanHistory;
 use App\Models\WorkOrder;
 use App\Models\WorkOrderItem;
 use App\Support\UomCatalog;
@@ -173,6 +174,13 @@ class WoService
 
             $created++;
         }
+
+        ProductionPlanHistory::create([
+            'production_plan_id' => $plan->id,
+            'event' => 'work_order_added',
+            'after' => ['work_order_id' => $workOrder->id, 'wo_no' => $workOrder->wo_no, 'rows' => $created],
+            'user_id' => $actorId,
+        ]);
 
         return $created;
     }

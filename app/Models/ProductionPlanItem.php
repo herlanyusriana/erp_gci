@@ -61,9 +61,12 @@ class ProductionPlanItem extends Model
 
     public function getAvailQtyAttribute(): float
     {
-        $woQty = (float) ($this->workOrder?->qty ?? 0);
-        $allocated = (float) $this->target_d + (float) $this->target_d1 + (float) $this->target_d2;
+        if (array_key_exists('remaining_qty', $this->attributes)) {
+            return round((float) $this->attributes['remaining_qty'], 4);
+        }
 
-        return round($woQty - $allocated, 4);
+        $woQty = (float) ($this->workOrder?->qty ?? 0);
+
+        return round($woQty, 4);
     }
 }

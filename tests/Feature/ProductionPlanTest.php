@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Machine;
 use App\Models\Part;
 use App\Models\ProductionPlanItem;
+use App\Models\ProductionResult;
 use App\Models\User;
 use App\Models\WorkOrder;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
@@ -142,6 +143,28 @@ class ProductionPlanTest extends TestCase
         $this->assertSame(7.0, (float) $rows[1]->fresh()->target_d);
     }
 
+    public function test_target_change_is_recorded_in_plan_history(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->post(route('work-orders.release', $wo))->assertRedirect();
+        $row = ProductionPlanItem::where('work_order_id', $wo->id)->firstOrFail();
+
+        $this->patch(route('production-plans.targets'), [
+            'items' => [['id' => $row->id, 'target_d' => 8, 'target_d1' => 4, 'target_d2' => null]],
+        ])->assertRedirect();
+
+        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('histories', fn ($histories) => collect($histories)->contains(
+                    fn ($history) => $history['event'] === 'targets_updated'
+                        && $history['production_plan_item_id'] === $row->id
+                        && $history['before']['target_d'] === null
+                        && (float) $history['after']['target_d'] === 8.0
+                        && $history['user']['id'] === auth()->id(),
+                )));
+    }
+
     public function test_plan_rows_follow_routing_order(): void
     {
         $wo = $this->createWorkOrder();
@@ -167,24 +190,37 @@ class ProductionPlanTest extends TestCase
         $this->assertSame($sorted, $seqs);
     }
 
-    public function test_plan_row_starts_with_wo_qty_as_remaining(): void
+    public function test_plan_remaining_qty_uses_results_up_to_board_date_not_targets(): void
     {
         $wo = $this->createWorkOrder();
         $this->post(route('work-orders.release', $wo))->assertRedirect();
 
-        $rows = ProductionPlanItem::where('work_order_id', $wo->id)->get();
-        $this->assertNotEmpty($rows);
+        $row = ProductionPlanItem::where('work_order_id', $wo->id)->firstOrFail();
+        $boardDate = now()->subDay()->toDateString();
+        $row->plan->update(['plan_date' => $boardDate]);
 
-        foreach ($rows as $row) {
-            // target_d sengaja kosong → qty WO dibagi manual ke D/D1/D2.
-            $this->assertNull($row->target_d);
-            $this->assertEqualsWithDelta((float) $wo->qty, (float) $row->avail_qty, 0.001);
-        }
+        ProductionResult::create([
+            'work_order_id' => $wo->id,
+            'parent_part_id' => $row->wip_part_id,
+            'result_date' => $boardDate,
+            'qty_good' => 3,
+        ]);
+        ProductionResult::create([
+            'work_order_id' => $wo->id,
+            'parent_part_id' => $row->wip_part_id,
+            'result_date' => now()->toDateString(),
+            'qty_good' => 2,
+        ]);
 
-        $first = $rows->first();
-        $first->update(['target_d' => 4]);
+        // Target adalah rencana, bukan realisasi; tidak boleh mengurangi sisa WO.
+        $row->update(['target_d' => 4]);
 
-        $this->assertEqualsWithDelta((float) $wo->qty - 4, (float) $first->fresh()->avail_qty, 0.001);
+        $this->get(route('production-plans.index', ['date' => $boardDate]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('items', fn ($items) => (float) collect($items)
+                    ->firstWhere('id', $row->id)['avail_qty'] === 7.0));
+
     }
 
     public function test_same_machine_steps_merge_into_one_row_with_input_and_output(): void

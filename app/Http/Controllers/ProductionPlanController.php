@@ -6,7 +6,9 @@ use App\Models\Machine;
 use App\Models\MachineCycleTime;
 use App\Models\Part;
 use App\Models\ProductionPlan;
+use App\Models\ProductionPlanHistory;
 use App\Models\ProductionPlanItem;
+use App\Models\ProductionResult;
 use App\Models\WorkOrder;
 use App\Services\WoService;
 use Illuminate\Http\RedirectResponse;
@@ -50,6 +52,24 @@ class ProductionPlanController extends Controller
                 ->orderBy('id')
                 ->get()
             : collect();
+
+        // Sisa WO adalah kuantitas yang belum direalisasikan, bukan target harian
+        // yang masih berupa rencana. Result setelah tanggal papan tidak ikut
+        // mengurangi sisa saat melihat papan tanggal lampau.
+        $producedByStep = ProductionResult::query()
+            ->whereDate('result_date', '<=', $date)
+            ->whereIn('work_order_id', $items->pluck('work_order_id')->filter()->unique())
+            ->whereIn('parent_part_id', $items->pluck('wip_part_id')->filter()->unique())
+            ->selectRaw('work_order_id, parent_part_id, SUM(qty_good) as qty_good')
+            ->groupBy('work_order_id', 'parent_part_id')
+            ->get()
+            ->keyBy(fn (ProductionResult $result) => $result->work_order_id.'|'.$result->parent_part_id);
+
+        $items->each(function (ProductionPlanItem $item) use ($producedByStep) {
+            $key = ($item->work_order_id ?? 0).'|'.($item->wip_part_id ?? 0);
+            $produced = (float) ($producedByStep->get($key)?->qty_good ?? 0);
+            $item->setAttribute('remaining_qty', max(0, (float) ($item->workOrder?->qty ?? 0) - $produced));
+        });
 
         // Estimasi waktu: qty WO × cycle time (mesin × part hasil baris itu).
         $cycleTimes = MachineCycleTime::query()
@@ -98,6 +118,14 @@ class ProductionPlanController extends Controller
             ->orderBy('part_number')
             ->get(['id', 'part_number', 'part_name']);
 
+        $histories = $plan
+            ? $plan->histories()
+                ->with('user:id,name')
+                ->latest('id')
+                ->limit(100)
+                ->get()
+            : collect();
+
         return Inertia::render('Production/Plan/Index', [
             'date' => $date,
             'plan' => $plan ? $plan->only(['id', 'plan_date', 'notes']) : null,
@@ -105,6 +133,7 @@ class ProductionPlanController extends Controller
             'machines' => $machines,
             'fgParts' => $fgParts,
             'wipParts' => $wipParts,
+            'histories' => $histories,
             'unplannedWorkOrders' => $unplannedWorkOrders,
         ]);
     }
@@ -211,6 +240,7 @@ class ProductionPlanController extends Controller
             'target_d2' => ['nullable', 'numeric', 'min:0'],
         ]);
 
+        $before = $this->itemSnapshot($item);
         $item->update([
             'machine_id' => $data['machine_id'],
             'wip_part_id' => $data['wip_part_id'] ?? null,
@@ -219,6 +249,7 @@ class ProductionPlanController extends Controller
             'target_d2' => $data['target_d2'] ?? null,
             'updated_by' => auth()->id(),
         ]);
+        $this->recordHistory($item, 'item_updated', $before, $this->itemSnapshot($item));
 
         return redirect()
             ->route('production-plans.index', ['date' => $item->plan?->plan_date?->toDateString()])->with('success', __('Baris Production Plan diperbarui.'));
@@ -246,12 +277,14 @@ class ProductionPlanController extends Controller
 
                 Gate::authorize('update', $item->plan);
 
+                $before = $this->targetSnapshot($item);
                 $item->update([
                     'target_d' => $row['target_d'] ?? null,
                     'target_d1' => $row['target_d1'] ?? null,
                     'target_d2' => $row['target_d2'] ?? null,
                     'updated_by' => $request->user()?->id,
                 ]);
+                $this->recordHistory($item, 'targets_updated', $before, $this->targetSnapshot($item), $request->user()?->id);
             }
         });
 
@@ -270,10 +303,14 @@ class ProductionPlanController extends Controller
 
         DB::transaction(function () use ($data) {
             foreach ($data['items'] as $row) {
-                ProductionPlanItem::query()->whereKey($row['id'])->update([
+                $item = ProductionPlanItem::query()->with('plan')->findOrFail((int) $row['id']);
+                Gate::authorize('update', $item->plan);
+                $before = ['sequence' => $item->sequence];
+                $item->update([
                     'sequence' => $row['sequence'],
                     'updated_by' => auth()->id(),
                 ]);
+                $this->recordHistory($item, 'sequence_updated', $before, ['sequence' => $item->sequence]);
             }
         });
 
@@ -287,6 +324,8 @@ class ProductionPlanController extends Controller
         $planDate = $item->plan?->plan_date?->toDateString();
         $woNo = $item->workOrder?->wo_no;
 
+        $this->recordHistory($item, 'item_detached', $this->itemSnapshot($item), null);
+
         $item->delete();
 
         $message = $woNo
@@ -295,5 +334,37 @@ class ProductionPlanController extends Controller
 
         return redirect()
             ->route('production-plans.index', ['date' => $planDate])->with('success', $message);
+    }
+
+    /** @return array{machine_id:int|null,wip_part_id:int|null,target_d:float|null,target_d1:float|null,target_d2:float|null} */
+    private function itemSnapshot(ProductionPlanItem $item): array
+    {
+        return [
+            'machine_id' => $item->machine_id,
+            'wip_part_id' => $item->wip_part_id,
+            ...$this->targetSnapshot($item),
+        ];
+    }
+
+    /** @return array{target_d:float|null,target_d1:float|null,target_d2:float|null} */
+    private function targetSnapshot(ProductionPlanItem $item): array
+    {
+        return [
+            'target_d' => $item->target_d,
+            'target_d1' => $item->target_d1,
+            'target_d2' => $item->target_d2,
+        ];
+    }
+
+    private function recordHistory(ProductionPlanItem $item, string $event, ?array $before, ?array $after, ?int $userId = null): void
+    {
+        ProductionPlanHistory::create([
+            'production_plan_id' => $item->production_plan_id,
+            'production_plan_item_id' => $item->id,
+            'event' => $event,
+            'before' => $before,
+            'after' => $after,
+            'user_id' => $userId ?? auth()->id(),
+        ]);
     }
 }

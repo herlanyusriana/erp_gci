@@ -441,6 +441,8 @@ export interface WorkOrder {
     remarks: string | null;
     created_at?: string;
     items_count?: number;
+    results_count?: number;
+    fg_produced?: number;
     part?: (Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> & {
         part_type?: PartType | null;
         uom?: Uom | null;

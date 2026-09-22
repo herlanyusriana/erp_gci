@@ -11,6 +11,7 @@ use Illuminate\Foundation\Http\Middleware\ValidateCsrfInterceptor;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Collection;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 class ProductionResultTest extends TestCase
@@ -65,6 +66,17 @@ class ProductionResultTest extends TestCase
             ->values();
     }
 
+    public function test_results_index_lists_running_work_orders(): void
+    {
+        $wo = $this->releasedWorkOrder();
+
+        $this->get(route('production-results.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Production/Result/Index')
+                ->where('workOrders.data', fn ($list) => collect($list)->pluck('id')->contains($wo->id)));
+    }
+
     public function test_report_step_posts_wip_output(): void
     {
         $wo = $this->releasedWorkOrder();
@@ -73,7 +85,7 @@ class ProductionResultTest extends TestCase
         // Step pertama: WIP1 ← RM (tidak konsumsi WIP).
         $first = $steps->first()['parent_part_id'];
 
-        $this->post(route('work-orders.results.store', $wo), [
+        $this->post(route('production-results.store', $wo), [
             'parent_part_id' => $first,
             'qty_good' => 10,
         ])->assertRedirect();
@@ -97,7 +109,7 @@ class ProductionResultTest extends TestCase
         // Step kedua butuh WIP1 yang belum diproduksi.
         $second = $steps[1]['parent_part_id'];
 
-        $this->post(route('work-orders.results.store', $wo), [
+        $this->post(route('production-results.store', $wo), [
             'parent_part_id' => $second,
             'qty_good' => 5,
         ])->assertSessionHasErrors('qty_good');
@@ -109,7 +121,7 @@ class ProductionResultTest extends TestCase
         $steps = $this->stepIds($wo);
 
         foreach ($steps as $row) {
-            $this->post(route('work-orders.results.store', $wo), [
+            $this->post(route('production-results.store', $wo), [
                 'parent_part_id' => $row['parent_part_id'],
                 'qty_good' => 10,
             ])->assertSessionHasNoErrors();
@@ -135,7 +147,7 @@ class ProductionResultTest extends TestCase
         // Laporkan step pertama → booking RM dikonsumsi, stok fisik baru turun.
         $first = $this->stepIds($wo)->first()['parent_part_id'];
 
-        $this->post(route('work-orders.results.store', $wo), [
+        $this->post(route('production-results.store', $wo), [
             'parent_part_id' => $first,
             'qty_good' => 10,
         ])->assertSessionHasNoErrors();
@@ -163,7 +175,7 @@ class ProductionResultTest extends TestCase
         $unitNeed = (float) $firstStep['step']->child_qty;
         $stockBefore = (float) PartStock::where('part_id', $rmId)->sum('qty');
 
-        $this->post(route('work-orders.results.store', $wo), [
+        $this->post(route('production-results.store', $wo), [
             'parent_part_id' => $first,
             'qty_good' => 9,
             'qty_reject' => 1,
@@ -186,12 +198,12 @@ class ProductionResultTest extends TestCase
         $wo = $this->releasedWorkOrder();
         $first = $this->stepIds($wo)->first()['parent_part_id'];
 
-        $this->post(route('work-orders.results.store', $wo), [
+        $this->post(route('production-results.store', $wo), [
             'parent_part_id' => $first,
             'qty_good' => 10,
         ])->assertSessionHasNoErrors();
 
-        $this->post(route('work-orders.results.store', $wo), [
+        $this->post(route('production-results.store', $wo), [
             'parent_part_id' => $first,
             'qty_good' => 1,
         ])->assertSessionHasErrors('qty_good');

@@ -97,7 +97,7 @@ function doDestroy() {
             </div>
 
             <div class="flex flex-wrap items-center gap-2">
-                <a v-if="workOrder.status === 'in_progress' && can.complete" :href="route('work-orders.results.create', workOrder.id)"
+                <a v-if="workOrder.status === 'in_progress' && can.complete" :href="route('production-results.create', workOrder.id)"
                     class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover">
                     {{ t('production.results') }}
                 </a>

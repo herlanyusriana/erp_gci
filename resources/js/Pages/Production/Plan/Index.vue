@@ -121,9 +121,9 @@ const fmtDuration = (seconds: number | null | undefined) => {
     const hours = Math.floor(total / 3600);
     const minutes = Math.floor((total % 3600) / 60);
     const secs = Math.round(total % 60);
-    if (hours > 0) return `${hours} ${t('master.hourShort')} ${minutes} ${t('master.minuteShort')}`;
-    if (minutes > 0) return `${minutes} ${t('master.minuteShort')} ${secs} ${t('master.secondShort')}`;
-    return `${secs} ${t('master.secondShort')}`;
+    if (hours > 0) return minutes > 0 ? `${hours} ${t('production.hours')} ${minutes} ${t('production.minutes')}` : `${hours} ${t('production.hours')}`;
+    if (minutes > 0) return secs > 0 ? `${minutes} ${t('production.minutes')} ${secs} ${t('production.seconds')}` : `${minutes} ${t('production.minutes')}`;
+    return `${secs} ${t('production.seconds')}`;
 };
 
 const filteredItems = computed(() => {

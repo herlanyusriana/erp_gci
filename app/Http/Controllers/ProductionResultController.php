@@ -20,6 +20,46 @@ class ProductionResultController extends Controller
         protected WoService $woService,
     ) {}
 
+    /**
+     * Menu Hasil Produksi: daftar WO yang sedang berjalan & bisa dilaporkan.
+     */
+    public function index(Request $request): Response
+    {
+        Gate::authorize('viewAny', WorkOrder::class);
+
+        $workOrders = WorkOrder::query()
+            ->with('part:id,part_number,part_name')
+            ->where('status', 'in_progress')
+            ->withCount('results')
+            ->when($request->input('search'), fn ($q, $search) => $q->where(fn ($w) => $w
+                ->where('wo_no', 'ilike', "%{$search}%")
+                ->orWhereHas('part', fn ($p) => $p
+                    ->where('part_number', 'ilike', "%{$search}%")
+                    ->orWhere('part_name', 'ilike', "%{$search}%"))))
+            ->orderByDesc('released_at')
+            ->paginate(15)
+            ->withQueryString();
+
+        // Output FG per WO (parent = part FG WO itu).
+        $fgProduced = ProductionResult::query()
+            ->whereIn('work_order_id', $workOrders->pluck('id'))
+            ->whereIn('parent_part_id', $workOrders->pluck('part_id'))
+            ->groupBy('work_order_id')
+            ->selectRaw('work_order_id, SUM(qty_good) AS total')
+            ->pluck('total', 'work_order_id');
+
+        $workOrders->getCollection()->transform(function (WorkOrder $wo) use ($fgProduced) {
+            $wo->setAttribute('fg_produced', round((float) ($fgProduced[$wo->id] ?? 0), 4));
+
+            return $wo;
+        });
+
+        return Inertia::render('Production/Result/Index', [
+            'workOrders' => $workOrders,
+            'filters' => $request->only('search'),
+        ]);
+    }
+
     public function create(WorkOrder $workOrder): Response
     {
         Gate::authorize('update', $workOrder);
@@ -60,7 +100,7 @@ class ProductionResultController extends Controller
         $this->resultService->report($workOrder, (int) $data['parent_part_id'], $data, (int) auth()->id());
 
         return redirect()
-            ->route('work-orders.results.create', $workOrder)
+            ->route('production-results.create', $workOrder)
             ->with('success', __('Hasil produksi tersimpan.'));
     }
 
@@ -75,7 +115,7 @@ class ProductionResultController extends Controller
         $result->delete();
 
         return redirect()
-            ->route('work-orders.results.create', $workOrder)
+            ->route('production-results.create', $workOrder)
             ->with('success', __('Hasil produksi dihapus.'));
     }
 

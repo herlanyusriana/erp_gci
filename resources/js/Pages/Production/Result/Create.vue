@@ -75,7 +75,7 @@ function remove(row: ResultRow) {
 <template>
     <AppLayout>
         <Head :title="t('production.resultsFor', { number: workOrder.wo_no })" />
-        <BackButton :href="route('work-orders.show', workOrder.id)" class="mb-4" />
+        <BackButton :href="route('production-results.index')" class="mb-4" />
 
         <div class="mb-6">
             <h1 class="text-2xl font-bold tracking-tight text-ink-primary">{{ t('production.results') }}</h1>

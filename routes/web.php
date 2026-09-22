@@ -115,9 +115,11 @@ Route::middleware(['auth'])->group(function () {
     Route::get('work-orders/{workOrder}/items/{item}/edit', [WorkOrderController::class, 'editItem'])->name('work-orders.items.edit');
     Route::patch('work-orders/{workOrder}/items/{item}', [WorkOrderController::class, 'updateItem'])->name('work-orders.items.update');
     Route::post('work-orders/{workOrder}/release', [WorkOrderController::class, 'release'])->name('work-orders.release');
-    Route::get('work-orders/{workOrder}/results', [ProductionResultController::class, 'create'])->name('work-orders.results.create');
-    Route::post('work-orders/{workOrder}/results', [ProductionResultController::class, 'store'])->name('work-orders.results.store');
-    Route::delete('work-orders/{workOrder}/results/{result}', [ProductionResultController::class, 'destroy'])->name('work-orders.results.destroy');
+    // Hasil Produksi (menu sendiri di module Production)
+    Route::get('production-results', [ProductionResultController::class, 'index'])->name('production-results.index');
+    Route::get('production-results/{workOrder}', [ProductionResultController::class, 'create'])->name('production-results.create');
+    Route::post('production-results/{workOrder}', [ProductionResultController::class, 'store'])->name('production-results.store');
+    Route::delete('production-results/{workOrder}/results/{result}', [ProductionResultController::class, 'destroy'])->name('production-results.destroy');
     Route::post('work-orders/{workOrder}/complete', [WorkOrderController::class, 'complete'])->name('work-orders.complete');
     Route::post('work-orders/{workOrder}/cancel', [WorkOrderController::class, 'cancel'])->name('work-orders.cancel');
     Route::delete('work-orders/{workOrder}', [WorkOrderController::class, 'destroy'])->name('work-orders.destroy');

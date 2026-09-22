@@ -124,6 +124,13 @@ class MasterDataSeeder extends Seeder
             )->id;
         }
 
+        // Urutan tampil di papan Production Plan (daftar master produksi).
+        foreach (Machine::DISPLAY_SEQUENCE as $name => $sequence) {
+            if (isset($machineIds[$name])) {
+                Machine::whereKey($machineIds[$name])->update(['sequence' => $sequence]);
+            }
+        }
+
         // Machine ↔ Process mapping
         foreach ($data['machine_process'] as $mp) {
             if (! isset($machineIds[$mp['machine_name']], $processIds[$mp['process_name']])) {

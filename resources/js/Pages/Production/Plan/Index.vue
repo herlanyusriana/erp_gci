@@ -410,7 +410,7 @@ function submitEdit() {
                 </div>
             </div>
             <div class="overflow-x-auto">
-                <table class="w-full min-w-[1240px] border-separate border-spacing-0 text-sm">
+                <table class="w-full min-w-[1440px] table-fixed border-separate border-spacing-0 text-sm">
                     <colgroup>
                         <col class="w-36" />
                         <col class="w-24" />
@@ -420,10 +420,10 @@ function submitEdit() {
                         <col class="w-40" />
                         <col class="w-24" />
                         <col class="w-24" />
-                        <col class="w-20" />
-                        <col class="w-20" />
-                        <col class="w-20" />
-                        <col class="w-28" />
+                        <col class="w-24" />
+                        <col class="w-24" />
+                        <col class="w-24" />
+                        <col class="w-44" />
                     </colgroup>
                     <thead class="sticky top-0 z-10 bg-background">
                         <tr class="border-b border-borderline text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">

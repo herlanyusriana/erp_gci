@@ -398,7 +398,7 @@ function submitEdit() {
                             <th class="px-3 py-2.5 text-right">{{ t('production.estimatedTime') }}</th>
                             <th class="px-3 py-2.5 text-right">{{ t('production.availableQty') }}</th>
                             <th v-for="(label, key) in dayCols" :key="key" class="border-l border-borderline px-2 py-2.5 text-center">{{ label }}</th>
-                            <th class="px-3 py-2.5 text-right">{{ t('production.actions') }}</th>
+                            <th class="sticky right-0 z-30 border-l border-borderline bg-background px-3 py-2.5 text-right">{{ t('production.actions') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -414,7 +414,7 @@ function submitEdit() {
                                 <td class="px-3 py-2.5 text-xs text-ink-secondary">—</td>
                                 <td colspan="5" class="px-3 py-2.5 text-xs text-ink-secondary">{{ t('production.noMachineWo') }}</td>
                                 <td colspan="3" class="border-l border-borderline px-2 py-2.5 text-center text-xs text-ink-secondary">—</td>
-                                <td class="px-3 py-2.5 text-right">
+                                <td class="sticky right-0 z-10 border-l border-borderline bg-surface px-3 py-2.5 text-right group-hover:bg-primary-light">
                                     <button
                                         type="button"
                                         :title="t('production.newWo')"
@@ -508,7 +508,7 @@ function submitEdit() {
                                         />
                                     </td>
                                 </template>
-                                <td class="px-3 py-2.5">
+                                <td class="sticky right-0 z-10 border-l border-borderline bg-surface px-3 py-2.5 group-hover:bg-primary-light">
                                     <div class="flex justify-end gap-1">
                                         <a
                                             v-if="row.work_order"

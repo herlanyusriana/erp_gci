@@ -530,23 +530,21 @@ function submitEdit() {
                                         {{ fmt(row.avail_qty) }}
                                     </span>
                                 </td>
-                                <template>
-                                    <td v-for="(key, idx) in dayKeys" :key="idx" class="border-l border-borderline px-2 py-1.5">
-                                        <input
-                                            v-model="draftFor(row)[key]"
-                                            type="number"
-                                            step="any"
-                                            min="0"
-                                            inputmode="decimal"
-                                            :placeholder="idx === 0 && row.avail_qty > 0 ? fmt(row.avail_qty) : '…'"
-                                            :aria-label="t('production.dQty') + ' ' + row.fg_part?.part_number"
-                                            :disabled="savingTargets"
-                                            class="min-w-[4.5rem] w-full rounded-md border px-2 py-1.5 text-right text-sm tabular-nums text-ink-primary placeholder:text-ink-secondary/70 focus:border-primary focus:ring-primary disabled:cursor-wait disabled:opacity-60"
-                                            :class="draftFor(row)[key] !== '' ? 'border-primary/50 bg-primary-light/40' : 'border-borderline bg-background'"
-                                            @input="queueTargetSave"
-                                        />
-                                    </td>
-                                </template>
+                                <td v-for="(key, idx) in dayKeys" :key="key" class="border-l border-borderline px-2 py-1.5">
+                                    <input
+                                        v-model="draftFor(row)[key]"
+                                        type="number"
+                                        step="any"
+                                        min="0"
+                                        inputmode="decimal"
+                                        :placeholder="idx === 0 && row.avail_qty > 0 ? fmt(row.avail_qty) : '…'"
+                                        :aria-label="t('production.dQty') + ' ' + row.fg_part?.part_number"
+                                        :disabled="savingTargets"
+                                        class="min-w-[4.5rem] w-full rounded-md border px-2 py-1.5 text-right text-sm tabular-nums text-ink-primary placeholder:text-ink-secondary/70 focus:border-primary focus:ring-primary disabled:cursor-wait disabled:opacity-60"
+                                        :class="draftFor(row)[key] !== '' ? 'border-primary/50 bg-primary-light/40' : 'border-borderline bg-background'"
+                                        @input="queueTargetSave"
+                                    />
+                                </td>
                                 <td class="border-l border-borderline bg-surface px-3 py-2.5 group-hover:bg-primary-light">
                                     <div class="flex justify-end gap-1">
                                         <a

@@ -188,7 +188,7 @@ function submit() {
                                 <div class="sm:col-span-7">
                                     <label class="text-xs font-semibold text-ink-secondary">{{ t('production.material') }}</label>
                                     <div class="mt-1 flex gap-2">
-                                        <select v-model="row.part_id" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                                        <select :aria-label="t('production.material')" v-model="row.part_id" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                                             <option value="">{{ t('production.searchMaterial') }}</option>
                                             <optgroup v-if="optionsWithStock.length" :label="t('production.withStock')">
                                                 <option v-for="o in optionsWithStock" :key="o.id" :value="o.id">{{ optionLabel(o) }}</option>
@@ -211,7 +211,7 @@ function submit() {
                                 </div>
                                 <div class="sm:col-span-3">
                                     <label class="text-xs font-semibold text-ink-secondary">{{ t('production.allocQty') }}</label>
-                                    <input v-model="row.qty" type="number" step="0.0001" min="0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                                    <input :aria-label="t('production.allocQty')" v-model="row.qty" type="number" step="0.0001" min="0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                                 </div>
                                 <div class="flex items-end gap-2 sm:col-span-2">
                                     <button type="button" @click="fillRemaining(row)" :disabled="remaining <= 0" class="flex-1 rounded-md border border-borderline px-2 py-2 text-xs font-medium text-ink-secondary transition hover:bg-background disabled:opacity-40">
@@ -247,12 +247,12 @@ function submit() {
                                     <table class="min-w-full divide-y divide-borderline text-xs">
                                         <thead class="bg-surface">
                                             <tr class="text-left font-semibold uppercase tracking-wide text-ink-secondary">
-                                                <th class="px-3 py-2">{{ t('production.material') }}</th>
-                                                <th class="px-3 py-2">{{ t('production.tag') }}</th>
-                                                <th class="px-3 py-2 text-right">{{ t('production.qty') }}</th>
-                                                <th class="px-3 py-2">{{ t('production.invoice') }}</th>
-                                                <th class="px-3 py-2">{{ t('production.supplier') }}</th>
-                                                <th class="px-3 py-2">{{ t('production.receivedAt') }}</th>
+                                                <th scope="col" class="px-3 py-2">{{ t('production.material') }}</th>
+                                                <th scope="col" class="px-3 py-2">{{ t('production.tag') }}</th>
+                                                <th scope="col" class="px-3 py-2 text-right">{{ t('production.qty') }}</th>
+                                                <th scope="col" class="px-3 py-2">{{ t('production.invoice') }}</th>
+                                                <th scope="col" class="px-3 py-2">{{ t('production.supplier') }}</th>
+                                                <th scope="col" class="px-3 py-2">{{ t('production.receivedAt') }}</th>
                                             </tr>
                                         </thead>
                                         <tbody class="divide-y divide-borderline">
@@ -290,7 +290,7 @@ function submit() {
                 <!-- Machine -->
                 <div>
                     <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.machine') }}</label>
-                    <select v-model="form.machine_id" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                    <select :aria-label="t('production.machine')" v-model="form.machine_id" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                         <option value="">{{ t('production.selectMachine') }}</option>
                         <option v-for="m in machines" :key="m.id" :value="m.id">{{ m.machine_code }} · {{ m.machine_name }}</option>
                     </select>

@@ -53,10 +53,10 @@ const totalQty = () => (props.issue.items ?? []).reduce((sum, it) => sum + Numbe
             <table class="min-w-full divide-y divide-borderline text-sm">
                 <thead class="bg-background">
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th class="px-4 py-3">{{ t('outgoing.part') }}</th>
-                        <th class="px-4 py-3">{{ t('outgoing.tag') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('outgoing.qty') }}</th>
-                        <th class="px-4 py-3">{{ t('outgoing.unit') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('outgoing.part') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('outgoing.tag') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('outgoing.qty') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('outgoing.unit') }}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-borderline">

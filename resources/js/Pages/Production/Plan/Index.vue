@@ -383,7 +383,7 @@ function submitEdit() {
         <div class="mb-4 flex flex-wrap items-end gap-3 rounded-xl border border-borderline bg-surface p-3">
             <div class="min-w-56 flex-1">
                 <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('production.search') }}</label>
-                <input
+                <input :aria-label="t('production.search')"
                     v-model="search"
                     type="search"
                     :placeholder="t('production.searchPlan')"
@@ -392,7 +392,7 @@ function submitEdit() {
             </div>
             <div>
                 <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('production.startDate') }}</label>
-                <input
+                <input :aria-label="t('production.startDate')"
                     v-model="date"
                     type="date"
                     class="rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
@@ -475,16 +475,16 @@ function submitEdit() {
                     </colgroup>
                     <thead class="sticky top-0 z-10 bg-background">
                         <tr class="border-b border-borderline text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                            <th class="sticky left-0 z-30 border-r border-borderline bg-background px-3 py-2.5">{{ t('production.machine') }}</th>
-                            <th class="px-3 py-2.5">{{ t('production.modelPart') }}</th>
-                            <th class="px-3 py-2.5">{{ t('production.sequence') }}</th>
-                            <th class="px-3 py-2.5">{{ t('production.fgPart') }}</th>
-                            <th class="px-3 py-2.5">{{ t('production.inputPart') }}</th>
-                            <th class="px-3 py-2.5">{{ t('production.outputPart') }}</th>
-                            <th class="px-3 py-2.5 text-right">{{ t('production.estimatedTime') }}</th>
-                            <th class="px-3 py-2.5 text-right">{{ t('production.availableQty') }}</th>
-                            <th v-for="(label, key) in dayCols" :key="key" class="border-l border-borderline px-2 py-2.5 text-center">{{ label }}</th>
-                            <th class="border-l border-borderline bg-background px-3 py-2.5 text-right">{{ t('production.actions') }}</th>
+                            <th scope="col" class="sticky left-0 z-30 border-r border-borderline bg-background px-3 py-2.5">{{ t('production.machine') }}</th>
+                            <th scope="col" class="px-3 py-2.5">{{ t('production.modelPart') }}</th>
+                            <th scope="col" class="px-3 py-2.5">{{ t('production.sequence') }}</th>
+                            <th scope="col" class="px-3 py-2.5">{{ t('production.fgPart') }}</th>
+                            <th scope="col" class="px-3 py-2.5">{{ t('production.inputPart') }}</th>
+                            <th scope="col" class="px-3 py-2.5">{{ t('production.outputPart') }}</th>
+                            <th scope="col" class="px-3 py-2.5 text-right">{{ t('production.estimatedTime') }}</th>
+                            <th scope="col" class="px-3 py-2.5 text-right">{{ t('production.availableQty') }}</th>
+                            <th scope="col" v-for="(label, key) in dayCols" :key="key" class="border-l border-borderline px-2 py-2.5 text-center">{{ label }}</th>
+                            <th scope="col" class="border-l border-borderline bg-background px-3 py-2.5 text-right">{{ t('production.actions') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -681,7 +681,7 @@ function submitEdit() {
 
                 <div>
                     <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.woQty') }}</label>
-                    <input v-model="createForm.qty" type="number" step="any" min="0.0001" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                    <input :aria-label="t('production.woQty')" v-model="createForm.qty" type="number" step="any" min="0.0001" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     <InputError :message="createForm.errors.qty" class="mt-1" />
                 </div>
 
@@ -706,7 +706,7 @@ function submitEdit() {
 
                 <div>
                     <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.machine') }}</label>
-                    <select v-model="editForm.machine_id" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                    <select :aria-label="t('production.machine')" v-model="editForm.machine_id" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                         <option value="">{{ t('production.selectMachine') }}</option>
                         <option v-for="m in machines" :key="m.id" :value="m.id">{{ m.machine_name }}</option>
                     </select>
@@ -715,7 +715,7 @@ function submitEdit() {
 
                 <div>
                     <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.wipPart') }}</label>
-                    <select v-model="editForm.wip_part_id" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                    <select :aria-label="t('production.wipPart')" v-model="editForm.wip_part_id" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                         <option value="">{{ t('production.useBom') }}</option>
                         <option v-for="w in wipParts" :key="w.id" :value="w.id">{{ w.part_number }} · {{ w.part_name }}</option>
                     </select>
@@ -725,17 +725,17 @@ function submitEdit() {
                 <div class="grid gap-4 sm:grid-cols-3">
                     <div>
                         <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.dQty') }}</label>
-                        <input v-model="editForm.target_d" type="number" step="any" min="0" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('production.dQty')" v-model="editForm.target_d" type="number" step="any" min="0" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="editForm.errors.target_d" class="mt-1" />
                     </div>
                     <div>
                         <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.d1Qty') }}</label>
-                        <input v-model="editForm.target_d1" type="number" step="any" min="0" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('production.d1Qty')" v-model="editForm.target_d1" type="number" step="any" min="0" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="editForm.errors.target_d1" class="mt-1" />
                     </div>
                     <div>
                         <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.d2Qty') }}</label>
-                        <input v-model="editForm.target_d2" type="number" step="any" min="0" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('production.d2Qty')" v-model="editForm.target_d2" type="number" step="any" min="0" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="editForm.errors.target_d2" class="mt-1" />
                     </div>
                 </div>
@@ -759,7 +759,7 @@ function submitEdit() {
 
                 <div>
                     <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.workOrder') }}</label>
-                    <select v-model="attachForm.work_order_id" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                    <select :aria-label="t('production.workOrder')" v-model="attachForm.work_order_id" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                         <option value="">{{ t('production.selectWo') }}</option>
                         <option v-for="wo in unplannedWorkOrders" :key="wo.id" :value="wo.id">
                             {{ wo.wo_no }} · {{ wo.part?.part_number ?? '—' }} · {{ fmt(wo.qty) }}
@@ -770,7 +770,7 @@ function submitEdit() {
 
                 <div>
                     <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.startDate') }}</label>
-                    <input v-model="attachForm.plan_date" type="date" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                    <input :aria-label="t('production.startDate')" v-model="attachForm.plan_date" type="date" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     <InputError :message="attachForm.errors.plan_date" class="mt-1" />
                 </div>
 

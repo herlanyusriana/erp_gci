@@ -25,6 +25,12 @@ watch(
 
 <template>
     <div class="min-h-screen bg-background">
+        <a
+            href="#main-content"
+            class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[60] focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white"
+        >
+            {{ t('common.skipToContent') }}
+        </a>
         <!-- Topbar (spec 0.7) -->
         <nav class="border-b border-borderline bg-surface">
             <div class="flex min-h-16 flex-wrap items-center justify-between gap-2 px-4 py-2 sm:px-6 lg:px-8">
@@ -74,7 +80,7 @@ watch(
         <!-- Flash toast -->
         <div v-if="flashVisible && (($page.props as any).flash?.success || ($page.props as any).flash?.error)" class="fixed left-4 right-4 top-24 z-50 sm:left-auto sm:right-6 sm:max-w-lg" role="status">
             <div
-                :class="($page.props as any).flash?.success ? 'border-success/30 bg-success/10 text-success' : 'border-danger/30 bg-danger/10 text-danger'"
+                :class="($page.props as any).flash?.success ? 'border-success/30 bg-success/10 text-success-ink' : 'border-danger/30 bg-danger/10 text-danger'"
                 class="rounded-lg border px-4 py-3 text-sm font-medium shadow-lg"
             >
                 {{ ($page.props as any).flash?.success ?? ($page.props as any).flash?.error }}
@@ -82,7 +88,7 @@ watch(
         </div>
 
         <!-- Page content -->
-        <main class="w-full px-4 py-8 sm:px-6 lg:px-8">
+        <main id="main-content" class="w-full px-4 py-8 sm:px-6 lg:px-8">
             <slot />
         </main>
     </div>

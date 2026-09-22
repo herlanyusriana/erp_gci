@@ -9,6 +9,7 @@ import Pagination from '@/Components/Pagination.vue';
 import Modal from '@/Components/Modal.vue';
 import InputError from '@/Components/InputError.vue';
 import type { Uom, Paginated } from '@/types';
+import StatusBadge from '@/Components/StatusBadge.vue';
 
 const { t } = useI18n();
 
@@ -64,16 +65,16 @@ function remove(u: Uom) {
             </button>
         </div>
 
-        <input v-model="search" @input="doSearch" type="search" :placeholder="t('master.uomSearch')" class="mb-4 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
+        <input v-model="search" @input="doSearch" type="search" :placeholder="t('master.uomSearch')" :aria-label="t('master.uomSearch')" class="mb-4 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
 
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
             <table class="min-w-full divide-y divide-borderline text-sm">
                 <thead class="bg-background">
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th class="px-4 py-3">{{ t('master.code') }}</th>
-                        <th class="px-4 py-3">{{ t('master.name') }}</th>
-                        <th class="px-4 py-3">{{ t('master.status') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.code') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.name') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.status') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-borderline">
@@ -81,7 +82,7 @@ function remove(u: Uom) {
                         <td class="px-4 py-3 font-medium text-ink-primary">{{ u.code }}</td>
                         <td class="px-4 py-3 text-ink-primary">{{ u.name ?? '—' }}</td>
                         <td class="px-4 py-3">
-                            <span :class="u.is_active ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'" class="rounded-md px-2 py-0.5 text-xs font-semibold">{{ u.is_active ? t('master.active') : t('master.inactive') }}</span>
+                            <StatusBadge :tone="u.is_active ? 'success' : 'warning'">{{ u.is_active ? t('master.active') : t('master.inactive') }}</StatusBadge>
                         </td>
                         <td class="px-4 py-3">
                             <div class="flex justify-end gap-1.5">
@@ -105,12 +106,12 @@ function remove(u: Uom) {
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.code') }}</label>
-                        <input v-model="form.code" type="text" placeholder="PCS" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('master.code')" v-model="form.code" type="text" placeholder="PCS" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.code" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.name') }}</label>
-                        <input v-model="form.name" type="text" :placeholder="t('master.pieces')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('master.name')" v-model="form.name" type="text" :placeholder="t('master.pieces')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.name" class="mt-1" />
                     </div>
                 </div>

@@ -3,10 +3,11 @@ export type Tone = 'info' | 'warning' | 'success' | 'danger' | 'neutral' | 'prim
 /** Kelas badge: latar lembut + teks tegas, seluruhnya dari token tema. */
 export const toneClasses: Record<Tone, string> = {
     info: 'bg-info/10 text-info',
-    warning: 'bg-warning/10 text-warning',
-    success: 'bg-success/10 text-success',
+    // `*-ink` = varian lebih gelap agar teks kecil di atas tint 10% tetap >= 4.5:1 (WCAG AA).
+    warning: 'bg-warning/10 text-warning-ink',
+    success: 'bg-success/10 text-success-ink',
     danger: 'bg-danger/10 text-danger',
-    neutral: 'bg-ink-secondary/10 text-ink-secondary',
+    neutral: 'bg-ink-secondary/10 text-ink-primary',
     primary: 'bg-primary-light text-primary',
 };
 

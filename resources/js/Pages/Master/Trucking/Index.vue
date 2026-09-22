@@ -9,6 +9,7 @@ import Pagination from '@/Components/Pagination.vue';
 import Modal from '@/Components/Modal.vue';
 import InputError from '@/Components/InputError.vue';
 import type { TruckingCompany, Paginated } from '@/types';
+import StatusBadge from '@/Components/StatusBadge.vue';
 
 const { t } = useI18n();
 
@@ -97,19 +98,19 @@ function remove(company: TruckingCompany) {
         </div>
 
         <!-- Search -->
-        <input v-model="search" @input="doSearch" type="search" :placeholder="t('master.truckingSearch')" class="mb-4 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
+        <input v-model="search" @input="doSearch" type="search" :placeholder="t('master.truckingSearch')" :aria-label="t('master.truckingSearch')" class="mb-4 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
 
         <!-- Table -->
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
             <table class="min-w-full divide-y divide-borderline text-sm">
                 <thead class="bg-background">
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th class="px-4 py-3">{{ t('master.code') }}</th>
-                        <th class="px-4 py-3">{{ t('master.name') }}</th>
-                        <th class="px-4 py-3">{{ t('master.contact') }}</th>
-                        <th class="px-4 py-3">{{ t('master.phone') }}</th>
-                        <th class="px-4 py-3">{{ t('master.status') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.code') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.name') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.contact') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.phone') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.status') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-borderline">
@@ -119,7 +120,7 @@ function remove(company: TruckingCompany) {
                         <td class="px-4 py-3 text-ink-primary">{{ company.contact_person ?? '—' }}</td>
                         <td class="px-4 py-3 text-ink-primary">{{ company.phone ?? '—' }}</td>
                         <td class="px-4 py-3">
-                            <span :class="company.is_active ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'" class="rounded-md px-2 py-0.5 text-xs font-semibold">{{ company.is_active ? t('master.active') : t('master.inactive') }}</span>
+                            <StatusBadge :tone="company.is_active ? 'success' : 'warning'">{{ company.is_active ? t('master.active') : t('master.inactive') }}</StatusBadge>
                         </td>
                         <td class="px-4 py-3">
                             <div class="flex justify-end gap-1.5">
@@ -144,32 +145,32 @@ function remove(company: TruckingCompany) {
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.code') }}</label>
-                        <input v-model="form.company_code" type="text" placeholder="TRK-001" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('master.code')" v-model="form.company_code" type="text" placeholder="TRK-001" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.company_code" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.name') }}</label>
-                        <input v-model="form.company_name" type="text" :placeholder="t('master.companyName')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('master.name')" v-model="form.company_name" type="text" :placeholder="t('master.companyName')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.company_name" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.contactPerson') }}</label>
-                        <input v-model="form.contact_person" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('master.contactPerson')" v-model="form.contact_person" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.contact_person" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.phone') }}</label>
-                        <input v-model="form.phone" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('master.phone')" v-model="form.phone" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.phone" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.email') }}</label>
-                        <input v-model="form.email" type="email" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('master.email')" v-model="form.email" type="email" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.email" class="mt-1" />
                     </div>
                     <div class="sm:col-span-2">
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.address') }}</label>
-                        <textarea v-model="form.address" rows="2" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"></textarea>
+                        <textarea :aria-label="t('master.address')" v-model="form.address" rows="2" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"></textarea>
                         <InputError :message="form.errors.address" class="mt-1" />
                     </div>
                     <div class="flex items-center">

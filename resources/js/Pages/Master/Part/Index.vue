@@ -7,6 +7,7 @@ import BackButton from '@/Components/BackButton.vue';
 import ActionButton from '@/Components/ActionButton.vue';
 import Pagination from '@/Components/Pagination.vue';
 import type { Part, PartType, Paginated, PageProps } from '@/types';
+import StatusBadge from '@/Components/StatusBadge.vue';
 
 const { t } = useI18n();
 
@@ -95,8 +96,8 @@ function partTypeLabel(partType: PartType | null): string {
 
         <!-- Filters -->
         <div class="mb-4 flex flex-wrap gap-3">
-            <input v-model="search" type="search" :placeholder="t('master.partSearch')" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary placeholder-ink-secondary focus:border-primary focus:ring-primary sm:w-72" />
-            <select v-model="type" class="rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+            <input v-model="search" type="search" :placeholder="t('master.partSearch')" :aria-label="t('master.partSearch')" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary placeholder-ink-secondary focus:border-primary focus:ring-primary sm:w-72" />
+            <select :aria-label="t('master.allTypes')" v-model="type" class="rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                 <option value="">{{ t('master.allTypes') }}</option>
                 <option v-for="partType in partTypes" :key="partType.id" :value="partType.code">{{ partTypeLabel(partType) }}</option>
             </select>
@@ -107,16 +108,16 @@ function partTypeLabel(partType: PartType | null): string {
             <table class="min-w-full divide-y divide-borderline text-sm">
                 <thead class="bg-background">
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th class="px-4 py-3">{{ t('master.partNumber') }}</th>
-                        <th class="px-4 py-3">{{ t('master.name') }}</th>
-                        <th class="px-4 py-3">{{ t('master.hsCode') }}</th>
-                        <th class="px-4 py-3">{{ t('master.type') }}</th>
-                        <th class="px-4 py-3">{{ t('master.model') }}</th>
-                        <th class="px-4 py-3">{{ t('master.uom') }}</th>
-                        <th class="px-4 py-3">{{ t('master.size') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('master.netWeight') }}</th>
-                        <th class="px-4 py-3">{{ t('master.status') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.partNumber') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.name') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.hsCode') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.type') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.model') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.uom') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.size') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('master.netWeight') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.status') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-borderline">
@@ -132,9 +133,7 @@ function partTypeLabel(partType: PartType | null): string {
                         <td class="px-4 py-3 text-ink-secondary">{{ p.size ?? '—' }}</td>
                         <td class="px-4 py-3 text-right tabular-nums text-ink-secondary">{{ p.nett_weight ?? '—' }}</td>
                         <td class="px-4 py-3">
-                            <span :class="p.is_active ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'" class="rounded-md px-2 py-0.5 text-xs font-semibold">
-                                {{ p.is_active ? t('master.active') : t('master.inactive') }}
-                            </span>
+                            <StatusBadge :tone="p.is_active ? 'success' : 'warning'">{{ p.is_active ? t('master.active') : t('master.inactive') }}</StatusBadge>
                         </td>
                         <td class="px-4 py-3">
                             <div class="flex justify-end gap-1.5">

@@ -9,6 +9,7 @@ import Pagination from '@/Components/Pagination.vue';
 import Modal from '@/Components/Modal.vue';
 import InputError from '@/Components/InputError.vue';
 import type { Machine, Paginated } from '@/types';
+import StatusBadge from '@/Components/StatusBadge.vue';
 
 const { t } = useI18n();
 
@@ -65,17 +66,17 @@ function remove(m: Machine) {
             </button>
         </div>
 
-        <input v-model="search" @input="doSearch" type="search" :placeholder="t('master.machineSearch')" class="mb-4 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
+        <input v-model="search" @input="doSearch" type="search" :placeholder="t('master.machineSearch')" :aria-label="t('master.machineSearch')" class="mb-4 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
 
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
             <table class="min-w-full divide-y divide-borderline text-sm">
                 <thead class="bg-background">
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th class="w-20 px-4 py-3">{{ t('master.sequenceLabel') }}</th>
-                        <th class="px-4 py-3">{{ t('master.code') }}</th>
-                        <th class="px-4 py-3">{{ t('master.name') }}</th>
-                        <th class="px-4 py-3">{{ t('master.status') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
+                        <th scope="col" class="w-20 px-4 py-3">{{ t('master.sequenceLabel') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.code') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.name') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.status') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-borderline">
@@ -84,7 +85,7 @@ function remove(m: Machine) {
                         <td class="px-4 py-3 font-medium text-ink-primary">{{ m.machine_code }}</td>
                         <td class="px-4 py-3 text-ink-primary">{{ m.machine_name }}</td>
                         <td class="px-4 py-3">
-                            <span :class="m.is_active ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'" class="rounded-md px-2 py-0.5 text-xs font-semibold">{{ m.is_active ? t('master.active') : t('master.inactive') }}</span>
+                            <StatusBadge :tone="m.is_active ? 'success' : 'warning'">{{ m.is_active ? t('master.active') : t('master.inactive') }}</StatusBadge>
                         </td>
                         <td class="px-4 py-3">
                             <div class="flex justify-end gap-1.5">
@@ -109,17 +110,17 @@ function remove(m: Machine) {
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.code') }}</label>
-                        <input v-model="form.machine_code" type="text" :placeholder="t('master.machineCode')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('master.code')" v-model="form.machine_code" type="text" :placeholder="t('master.machineCode')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.machine_code" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.name') }}</label>
-                        <input v-model="form.machine_name" type="text" :placeholder="t('master.machineName')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('master.name')" v-model="form.machine_name" type="text" :placeholder="t('master.machineName')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.machine_name" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.sequenceLabel') }}</label>
-                        <input v-model="form.sequence" type="number" min="0" step="1" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('master.sequenceLabel')" v-model="form.sequence" type="number" min="0" step="1" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <p class="mt-1 text-xs text-ink-secondary">{{ t('master.sequenceHelp') }}</p>
                         <InputError :message="form.errors.sequence" class="mt-1" />
                     </div>

@@ -57,17 +57,17 @@ function sourceLabel(source: string | null): string {
                 <table class="min-w-full divide-y divide-borderline text-sm">
                     <thead class="bg-background">
                         <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                            <th class="px-3 py-3">{{ t('master.sequence') }}</th>
-                            <th class="px-3 py-3">{{ t('master.process') }}</th>
-                            <th class="px-3 py-3">{{ t('master.machine') }}</th>
-                            <th class="px-3 py-3">{{ t('master.parent') }}</th>
-                            <th class="px-3 py-3 text-right">{{ t('master.parentQty') }}</th>
-                            <th class="px-3 py-3">{{ t('master.child') }}</th>
-                            <th class="px-3 py-3">{{ t('master.size') }}</th>
-                            <th class="px-3 py-3 text-right">{{ t('master.childQty') }}</th>
-                            <th class="px-3 py-3">{{ t('master.uom') }}</th>
-                            <th class="px-3 py-3">{{ t('master.special') }}</th>
-                            <th class="px-3 py-3">{{ t('master.source') }}</th>
+                            <th scope="col" class="px-3 py-3">{{ t('master.sequence') }}</th>
+                            <th scope="col" class="px-3 py-3">{{ t('master.process') }}</th>
+                            <th scope="col" class="px-3 py-3">{{ t('master.machine') }}</th>
+                            <th scope="col" class="px-3 py-3">{{ t('master.parent') }}</th>
+                            <th scope="col" class="px-3 py-3 text-right">{{ t('master.parentQty') }}</th>
+                            <th scope="col" class="px-3 py-3">{{ t('master.child') }}</th>
+                            <th scope="col" class="px-3 py-3">{{ t('master.size') }}</th>
+                            <th scope="col" class="px-3 py-3 text-right">{{ t('master.childQty') }}</th>
+                            <th scope="col" class="px-3 py-3">{{ t('master.uom') }}</th>
+                            <th scope="col" class="px-3 py-3">{{ t('master.special') }}</th>
+                            <th scope="col" class="px-3 py-3">{{ t('master.source') }}</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-borderline">

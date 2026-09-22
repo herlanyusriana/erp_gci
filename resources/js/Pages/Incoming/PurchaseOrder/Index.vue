@@ -49,18 +49,18 @@ function remove(po: PurchaseOrder) {
             </Link>
         </div>
 
-        <input v-model="search" @input="doSearch" type="search" :placeholder="t('incoming.searchPo')" class="mb-4 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
+        <input v-model="search" @input="doSearch" type="search" :placeholder="t('incoming.searchPo')" :aria-label="t('incoming.searchPo')" class="mb-4 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
 
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
             <table class="min-w-full divide-y divide-borderline text-sm">
                 <thead class="bg-background">
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th class="px-4 py-3">{{ t('incoming.poNo') }}</th>
-                        <th class="px-4 py-3">{{ t('incoming.supplier') }}</th>
-                        <th class="px-4 py-3">{{ t('incoming.items') }}</th>
-                        <th class="px-4 py-3">{{ t('incoming.expected') }}</th>
-                        <th class="px-4 py-3">{{ t('incoming.status') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('incoming.actions') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('incoming.poNo') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('incoming.supplier') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('incoming.items') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('incoming.expected') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('incoming.status') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.actions') }}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-borderline">

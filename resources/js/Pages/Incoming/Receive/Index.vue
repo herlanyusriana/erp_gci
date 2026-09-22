@@ -26,12 +26,12 @@ defineProps<{
             <table class="min-w-full divide-y divide-borderline text-sm">
                 <thead class="bg-background">
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th class="px-4 py-3">{{ t('incoming.arrivalNo') }}</th>
-                        <th class="px-4 py-3">{{ t('incoming.invoice') }}</th>
-                        <th class="px-4 py-3">{{ t('incoming.supplier') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('incoming.remainingQty') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('incoming.pendingItems') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('incoming.actions') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('incoming.arrivalNo') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('incoming.invoice') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('incoming.supplier') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.remainingQty') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.pendingItems') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.actions') }}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-borderline">

@@ -9,6 +9,7 @@ import Modal from '@/Components/Modal.vue';
 import InputError from '@/Components/InputError.vue';
 import { useI18n } from 'vue-i18n';
 import type { ManagedUser, Role, Paginated, PageProps } from '@/types';
+import StatusBadge from '@/Components/StatusBadge.vue';
 
 const { t } = useI18n();
 
@@ -99,17 +100,17 @@ function remove(u: ManagedUser) {
         </div>
 
         <!-- Search -->
-        <input v-model="search" @input="doSearch" type="search" :placeholder="t('account.searchUsers')" class="mb-4 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
+        <input v-model="search" @input="doSearch" type="search" :placeholder="t('account.searchUsers')" :aria-label="t('account.searchUsers')" class="mb-4 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
 
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
             <table class="min-w-full divide-y divide-borderline text-sm">
                 <thead class="bg-background">
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th class="px-4 py-3">{{ t('account.name') }}</th>
-                        <th class="px-4 py-3">{{ t('account.email') }}</th>
-                        <th class="px-4 py-3">{{ t('account.roles') }}</th>
-                        <th class="px-4 py-3">{{ t('account.status') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('account.actions') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('account.name') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('account.email') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('account.roles') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('account.status') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('account.actions') }}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-borderline">
@@ -123,9 +124,7 @@ function remove(u: ManagedUser) {
                             </div>
                         </td>
                         <td class="px-4 py-3">
-                            <span :class="u.deleted_at ? 'bg-warning/10 text-warning' : u.is_active ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'" class="rounded-md px-2 py-0.5 text-xs font-semibold">
-                                {{ u.deleted_at ? t('account.deactivated') : u.is_active ? t('account.active') : t('account.inactive') }}
-                            </span>
+                            <StatusBadge :tone="u.deleted_at ? 'warning' : (u.is_active ? 'success' : 'warning')">{{ u.deleted_at ? t('account.deactivated') : u.is_active ? t('account.active') : t('account.inactive') }}</StatusBadge>
                         </td>
                         <td class="px-4 py-3">
                             <div class="flex justify-end gap-1.5">
@@ -150,27 +149,27 @@ function remove(u: ManagedUser) {
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('account.name') }}</label>
-                        <input v-model="form.name" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('account.name')" v-model="form.name" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.name" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('account.email') }}</label>
-                        <input v-model="form.email" type="email" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('account.email')" v-model="form.email" type="email" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.email" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ editing ? t('account.optionalPassword') : t('account.password') }}</label>
-                        <input v-model="form.password" type="password" autocomplete="new-password" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="editing ? t('account.optionalPassword') : t('account.password')" v-model="form.password" type="password" autocomplete="new-password" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.password" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('account.confirmPassword') }}</label>
-                        <input v-model="form.password_confirmation" type="password" autocomplete="new-password" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('account.confirmPassword')" v-model="form.password_confirmation" type="password" autocomplete="new-password" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.password_confirmation" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('account.status') }}</label>
-                        <select v-model="form.is_active" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                        <select :aria-label="t('account.status')" v-model="form.is_active" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                             <option :value="true">{{ t('account.active') }}</option>
                             <option :value="false">{{ t('account.inactive') }}</option>
                         </select>

@@ -63,8 +63,8 @@ const fmtDate = (value: string | null | undefined) => {
         </div>
 
         <div class="mb-4 flex flex-wrap gap-3">
-            <input v-model="search" @input="applyFilter" type="search" :placeholder="t('production.searchWo')" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary placeholder-ink-secondary focus:border-primary focus:ring-primary sm:w-72" />
-            <select v-model="status" @change="applyFilter" class="rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+            <input v-model="search" @input="applyFilter" type="search" :placeholder="t('production.searchWo')" :aria-label="t('production.searchWo')" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary placeholder-ink-secondary focus:border-primary focus:ring-primary sm:w-72" />
+            <select :aria-label="t('production.allStatuses')" v-model="status" @change="applyFilter" class="rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                 <option value="">{{ t('production.allStatuses') }}</option>
                 <option v-for="s in statuses" :key="s" :value="s">{{ statusLabel(s) }}</option>
             </select>
@@ -74,11 +74,11 @@ const fmtDate = (value: string | null | undefined) => {
             <table class="min-w-full divide-y divide-borderline text-sm">
                 <thead class="bg-background">
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th class="px-4 py-3">{{ t('production.woNo') }}</th>
-                        <th class="px-4 py-3">{{ t('production.fg') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('production.qty') }}</th>
-                        <th class="px-4 py-3">{{ t('production.status') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('production.actions') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('production.woNo') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('production.fg') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('production.qty') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('production.status') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('production.actions') }}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-borderline">

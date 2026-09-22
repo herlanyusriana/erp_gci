@@ -72,6 +72,7 @@ defineExpose({ syncFromSelected, clear });
             type="text"
             autocomplete="off"
             :placeholder="placeholder ?? t('production.searchFg')"
+            :aria-label="placeholder ?? t('production.searchFg')"
             class="w-full rounded-lg border-borderline bg-background px-3 py-2 pr-20 text-sm text-ink-primary focus:border-primary focus:ring-primary"
             @focus="open = true"
             @input="onInput"

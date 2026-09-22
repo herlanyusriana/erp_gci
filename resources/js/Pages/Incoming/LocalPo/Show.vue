@@ -73,14 +73,14 @@ defineProps<{
             <table class="min-w-full divide-y divide-borderline text-sm">
                 <thead class="bg-background">
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th class="px-4 py-3">{{ t('incoming.part') }}</th>
-                        <th class="px-4 py-3">{{ t('incoming.size') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('incoming.qty') }}</th>
-                        <th class="px-4 py-3">{{ t('incoming.unit') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('incoming.price') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('incoming.received') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('incoming.remaining') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('incoming.actions') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('incoming.part') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('incoming.size') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.qty') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('incoming.unit') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.price') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.received') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.remaining') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.actions') }}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-borderline">

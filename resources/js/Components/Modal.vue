@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 
 const props = withDefaults(
     defineProps<{
@@ -26,6 +26,21 @@ watch(
             showSlot.value = true;
 
             dialog.value?.showModal();
+
+            // Nama aksesibel dialog: ambil heading pertama di dalam modal.
+            // `<dialog>.showModal()` sudah menyediakan role="dialog", aria-modal,
+            // focus trap, dan Escape native — yang kurang hanya namanya.
+            nextTick(() => {
+                const el = dialog.value as HTMLDialogElement | undefined;
+                const heading = el?.querySelector<HTMLElement>('h1, h2, h3, [data-modal-title]');
+                if (!el || !heading) {
+                    return;
+                }
+                if (!heading.id) {
+                    heading.id = `modal-title-${Math.random().toString(36).slice(2, 9)}`;
+                }
+                el.setAttribute('aria-labelledby', heading.id);
+            });
         } else {
             document.body.style.overflow = '';
 
@@ -44,13 +59,13 @@ const close = () => {
 };
 
 const closeOnEscape = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') {
-        e.preventDefault();
-
-        if (props.show) {
-            close();
-        }
+    // Hanya tangani saat modal tampil — jangan menelan Escape komponen lain.
+    if (e.key !== 'Escape' || !props.show) {
+        return;
     }
+
+    e.preventDefault();
+    close();
 };
 
 onMounted(() => document.addEventListener('keydown', closeOnEscape));

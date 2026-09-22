@@ -36,18 +36,18 @@ function doSearch() {
             <p class="mt-1 text-sm text-ink-secondary">{{ t('outgoing.materialIssueTile') }}</p>
         </div>
 
-        <input v-model="search" @input="doSearch" type="search" :placeholder="t('outgoing.search')" class="mb-4 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
+        <input v-model="search" @input="doSearch" type="search" :placeholder="t('outgoing.search')" :aria-label="t('outgoing.search')" class="mb-4 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
 
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
             <table class="min-w-full divide-y divide-borderline text-sm">
                 <thead class="bg-background">
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th class="px-4 py-3">{{ t('outgoing.issueNo') }}</th>
-                        <th class="px-4 py-3">{{ t('outgoing.issueDate') }}</th>
-                        <th class="px-4 py-3">{{ t('outgoing.workOrder') }}</th>
-                        <th class="px-4 py-3">{{ t('outgoing.receivedBy') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('outgoing.items') }}</th>
-                        <th class="px-4 py-3">{{ t('outgoing.status') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('outgoing.issueNo') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('outgoing.issueDate') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('outgoing.workOrder') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('outgoing.receivedBy') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('outgoing.items') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('outgoing.status') }}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-borderline">

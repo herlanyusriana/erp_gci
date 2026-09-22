@@ -30,7 +30,10 @@ export default {
                     secondary: '#64748B',
                 },
                 success: '#15803D',
+                // Teks badge di atas tint 10% (kontras AA >= 4.5 di atas bg-*/10)
+                'success-ink': '#166534',
                 warning: '#B45309',
+                'warning-ink': '#92400E',
                 danger: '#B91C1C',
                 info: '#0369A1',
             },

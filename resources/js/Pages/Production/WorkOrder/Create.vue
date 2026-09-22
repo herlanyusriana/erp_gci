@@ -55,19 +55,19 @@ function submit() {
 
                 <div>
                     <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.qtyPcs') }}</label>
-                    <input v-model="form.qty" type="number" step="any" min="0.0001" required class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                    <input :aria-label="t('production.qtyPcs')" v-model="form.qty" type="number" step="any" min="0.0001" required class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     <div v-if="form.errors.qty" class="mt-1 text-xs text-danger">{{ form.errors.qty }}</div>
                 </div>
 
                 <div>
                     <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.plannedDate') }}</label>
-                    <input v-model="form.planned_date" type="date" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                    <input :aria-label="t('production.plannedDate')" v-model="form.planned_date" type="date" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     <div v-if="form.errors.planned_date" class="mt-1 text-xs text-danger">{{ form.errors.planned_date }}</div>
                 </div>
 
                 <div>
                     <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.remarks') }}</label>
-                    <textarea v-model="form.remarks" rows="3" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"></textarea>
+                    <textarea :aria-label="t('production.remarks')" v-model="form.remarks" rows="3" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"></textarea>
                     <div v-if="form.errors.remarks" class="mt-1 text-xs text-danger">{{ form.errors.remarks }}</div>
                 </div>
 

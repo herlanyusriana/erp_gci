@@ -147,17 +147,17 @@ function doDestroy() {
                 <table class="min-w-full divide-y divide-borderline text-sm">
                     <thead class="bg-background">
                         <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                            <th class="px-3 py-3">{{ t('production.sequence') }}</th>
-                            <th class="px-3 py-3">{{ t('production.process') }}</th>
-                            <th class="px-3 py-3">{{ t('production.machine') }}</th>
-                            <th class="px-3 py-3">{{ t('production.materialSubstitute') }}</th>
-                            <th class="px-3 py-3">{{ t('production.parent') }}</th>
-                            <th class="px-3 py-3 text-right">{{ t('production.childQty') }}</th>
-                            <th class="px-3 py-3">{{ t('production.uom') }}</th>
-                            <th class="px-3 py-3">{{ t('production.source') }}</th>
-                            <th class="px-3 py-3 text-right">{{ t('production.required') }}</th>
-                            <th class="px-3 py-3 text-right">{{ t('production.consumed') }}</th>
-                            <th class="px-3 py-3 text-center">{{ t('production.actions') }}</th>
+                            <th scope="col" class="px-3 py-3">{{ t('production.sequence') }}</th>
+                            <th scope="col" class="px-3 py-3">{{ t('production.process') }}</th>
+                            <th scope="col" class="px-3 py-3">{{ t('production.machine') }}</th>
+                            <th scope="col" class="px-3 py-3">{{ t('production.materialSubstitute') }}</th>
+                            <th scope="col" class="px-3 py-3">{{ t('production.parent') }}</th>
+                            <th scope="col" class="px-3 py-3 text-right">{{ t('production.childQty') }}</th>
+                            <th scope="col" class="px-3 py-3">{{ t('production.uom') }}</th>
+                            <th scope="col" class="px-3 py-3">{{ t('production.source') }}</th>
+                            <th scope="col" class="px-3 py-3 text-right">{{ t('production.required') }}</th>
+                            <th scope="col" class="px-3 py-3 text-right">{{ t('production.consumed') }}</th>
+                            <th scope="col" class="px-3 py-3 text-center">{{ t('production.actions') }}</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-borderline">

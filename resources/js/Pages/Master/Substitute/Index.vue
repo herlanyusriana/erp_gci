@@ -96,8 +96,8 @@ function remove(s: PartSubstitute) {
 
         <!-- Filters -->
         <div class="mb-4 flex flex-col gap-3 sm:flex-row">
-            <input v-model="search" type="search" :placeholder="t('master.substituteSearch')" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
-            <select v-model="supplierId" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-64">
+            <input v-model="search" type="search" :placeholder="t('master.substituteSearch')" :aria-label="t('master.substituteSearch')" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
+            <select :aria-label="t('master.allSuppliers')" v-model="supplierId" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-64">
                 <option value="">{{ t('master.allSuppliers') }}</option>
                 <option v-for="s in suppliers" :key="s.id" :value="String(s.id)">{{ s.supplier_name }}</option>
             </select>
@@ -107,11 +107,11 @@ function remove(s: PartSubstitute) {
             <table class="min-w-full divide-y divide-borderline text-sm">
                 <thead class="bg-background">
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th class="px-4 py-3">{{ t('master.materialPart') }}</th>
-                        <th class="px-4 py-3">{{ t('master.substitutePart') }}</th>
-                        <th class="px-4 py-3">{{ t('master.supplier') }}</th>
-                        <th class="px-4 py-3">{{ t('master.groupSource') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.materialPart') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.substitutePart') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.supplier') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.groupSource') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-borderline">
@@ -152,7 +152,7 @@ function remove(s: PartSubstitute) {
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.materialPart') }}</label>
-                        <select v-model="form.part_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                        <select :aria-label="t('master.materialPart')" v-model="form.part_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                             <option value="">{{ t('master.selectPart') }}</option>
                             <option v-for="p in parts" :key="p.id" :value="String(p.id)">{{ p.part_number }} · {{ p.part_name }}</option>
                         </select>
@@ -160,7 +160,7 @@ function remove(s: PartSubstitute) {
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.substitutePart') }}</label>
-                        <select v-model="form.substitute_part_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                        <select :aria-label="t('master.substitutePart')" v-model="form.substitute_part_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                             <option value="">{{ t('master.selectPart') }}</option>
                             <option v-for="p in parts" :key="p.id" :value="String(p.id)">{{ p.part_number }} · {{ p.part_name }}</option>
                         </select>
@@ -168,7 +168,7 @@ function remove(s: PartSubstitute) {
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.supplier') }}</label>
-                        <select v-model="form.supplier_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                        <select :aria-label="t('master.supplier')" v-model="form.supplier_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                             <option value="">—</option>
                             <option v-for="s in suppliers" :key="s.id" :value="String(s.id)">{{ s.supplier_name }}</option>
                         </select>
@@ -176,17 +176,17 @@ function remove(s: PartSubstitute) {
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.materialGroup') }}</label>
-                        <input v-model="form.material_group" type="text" :placeholder="t('master.materialGroupExample')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('master.materialGroup')" v-model="form.material_group" type="text" :placeholder="t('master.materialGroupExample')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.material_group" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.source') }}</label>
-                        <input v-model="form.source" type="text" :placeholder="t('master.sourceExample')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('master.source')" v-model="form.source" type="text" :placeholder="t('master.sourceExample')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.source" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.status') }}</label>
-                        <select v-model="form.is_active" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                        <select :aria-label="t('master.status')" v-model="form.is_active" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                             <option :value="true">{{ t('master.active') }}</option>
                             <option :value="false">{{ t('master.inactive') }}</option>
                         </select>

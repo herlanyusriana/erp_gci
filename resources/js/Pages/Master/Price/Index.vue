@@ -9,6 +9,7 @@ import Pagination from '@/Components/Pagination.vue';
 import Modal from '@/Components/Modal.vue';
 import InputError from '@/Components/InputError.vue';
 import type { PartPrice, Part, Supplier, Paginated, PageProps } from '@/types';
+import StatusBadge from '@/Components/StatusBadge.vue';
 
 const { t, locale } = useI18n();
 
@@ -148,8 +149,8 @@ const fmtDate = (value: string | null | undefined) => {
         </div>
 
         <div class="mb-4 flex flex-col gap-3 sm:flex-row">
-            <input v-model="search" type="search" :placeholder="t('master.priceSearch')" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
-            <select v-model="supplierId" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-64">
+            <input v-model="search" type="search" :placeholder="t('master.priceSearch')" :aria-label="t('master.priceSearch')" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
+            <select :aria-label="t('master.allSuppliers')" v-model="supplierId" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-64">
                 <option value="">{{ t('master.allSuppliers') }}</option>
                 <option v-for="s in suppliers" :key="s.id" :value="String(s.id)">{{ s.supplier_name }}</option>
             </select>
@@ -159,12 +160,12 @@ const fmtDate = (value: string | null | undefined) => {
             <table class="min-w-full divide-y divide-borderline text-sm">
                 <thead class="bg-background">
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th class="px-4 py-3">{{ t('master.supplier') }}</th>
-                        <th class="px-4 py-3">{{ t('master.part') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('master.price') }}</th>
-                        <th class="px-4 py-3">{{ t('master.validFrom') }}</th>
-                        <th class="px-4 py-3">{{ t('master.status') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.supplier') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.part') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('master.price') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.validFrom') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.status') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-borderline">
@@ -180,7 +181,7 @@ const fmtDate = (value: string | null | undefined) => {
                         <td class="px-4 py-3 text-right tabular-nums font-semibold text-ink-primary">{{ fmtMoney(p.price, p.currency) }}</td>
                         <td class="px-4 py-3 text-ink-secondary">{{ fmtDate(p.valid_from) }}</td>
                         <td class="px-4 py-3">
-                            <span :class="p.is_active ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'" class="rounded-md px-2 py-0.5 text-xs font-semibold">{{ p.is_active ? t('master.active') : t('master.inactive') }}</span>
+                            <StatusBadge :tone="p.is_active ? 'success' : 'warning'">{{ p.is_active ? t('master.active') : t('master.inactive') }}</StatusBadge>
                         </td>
                         <td class="px-4 py-3">
                             <div class="flex justify-end gap-1.5">
@@ -204,7 +205,7 @@ const fmtDate = (value: string | null | undefined) => {
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.supplier') }}</label>
-                        <select v-model="form.supplier_id" @change="onSupplierChange" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                        <select :aria-label="t('master.supplier')" v-model="form.supplier_id" @change="onSupplierChange" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                             <option value="">—</option>
                             <option v-for="s in suppliers" :key="s.id" :value="String(s.id)">{{ s.supplier_name }}</option>
                         </select>
@@ -212,7 +213,7 @@ const fmtDate = (value: string | null | undefined) => {
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.part') }}</label>
-                        <select v-model="form.part_id" :disabled="!form.supplier_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary disabled:bg-background disabled:text-ink-secondary">
+                        <select :aria-label="t('master.part')" v-model="form.part_id" :disabled="!form.supplier_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary disabled:bg-background disabled:text-ink-secondary">
                             <option value="">{{ t('master.selectPart') }}</option>
                             <option v-for="p in partOptions" :key="p.id" :value="String(p.id)">{{ p.part_number }} · {{ p.part_name }}</option>
                         </select>
@@ -221,22 +222,22 @@ const fmtDate = (value: string | null | undefined) => {
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.price') }}</label>
-                        <input v-model="form.price" type="number" step="0.0001" min="0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('master.price')" v-model="form.price" type="number" step="0.0001" min="0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.price" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.currency') }}</label>
-                        <input v-model="form.currency" type="text" maxlength="10" placeholder="IDR" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('master.currency')" v-model="form.currency" type="text" maxlength="10" placeholder="IDR" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.currency" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.validFrom') }}</label>
-                        <input v-model="form.valid_from" type="date" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('master.validFrom')" v-model="form.valid_from" type="date" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.valid_from" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.status') }}</label>
-                        <select v-model="form.is_active" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                        <select :aria-label="t('master.status')" v-model="form.is_active" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                             <option :value="true">{{ t('master.active') }}</option>
                             <option :value="false">{{ t('master.inactive') }}</option>
                         </select>

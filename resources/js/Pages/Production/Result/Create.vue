@@ -91,14 +91,14 @@ function remove(row: ResultRow) {
                 <table class="min-w-full divide-y divide-borderline text-sm">
                     <thead class="bg-background">
                         <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                            <th class="px-3 py-3">{{ t('production.sequence') }}</th>
-                            <th class="px-3 py-3">{{ t('production.parent') }}</th>
-                            <th class="px-3 py-3">{{ t('production.process') }}</th>
-                            <th class="px-3 py-3">{{ t('production.machine') }}</th>
-                            <th class="px-3 py-3 text-right">{{ t('production.target') }}</th>
-                            <th class="px-3 py-3 text-right">{{ t('production.produced') }}</th>
-                            <th class="px-3 py-3 text-right">{{ t('production.remain') }}</th>
-                            <th class="px-3 py-3 text-right">{{ t('production.actions') }}</th>
+                            <th scope="col" class="px-3 py-3">{{ t('production.sequence') }}</th>
+                            <th scope="col" class="px-3 py-3">{{ t('production.parent') }}</th>
+                            <th scope="col" class="px-3 py-3">{{ t('production.process') }}</th>
+                            <th scope="col" class="px-3 py-3">{{ t('production.machine') }}</th>
+                            <th scope="col" class="px-3 py-3 text-right">{{ t('production.target') }}</th>
+                            <th scope="col" class="px-3 py-3 text-right">{{ t('production.produced') }}</th>
+                            <th scope="col" class="px-3 py-3 text-right">{{ t('production.remain') }}</th>
+                            <th scope="col" class="px-3 py-3 text-right">{{ t('production.actions') }}</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-borderline">
@@ -135,7 +135,7 @@ function remove(row: ResultRow) {
             <div class="grid gap-4 sm:grid-cols-12">
                 <div class="sm:col-span-4">
                     <label class="text-xs font-semibold text-ink-secondary">{{ t('production.step') }}</label>
-                    <select v-model="form.parent_part_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                    <select :aria-label="t('production.step')" v-model="form.parent_part_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                         <option value="">{{ t('production.selectStep') }}</option>
                         <option v-for="s in steps" :key="s.parent_part_id" :value="s.parent_part_id">
                             {{ s.sequence }} · {{ s.part_number }} — {{ s.process ?? '-' }}
@@ -145,24 +145,24 @@ function remove(row: ResultRow) {
                 </div>
                 <div class="sm:col-span-2">
                     <label class="text-xs font-semibold text-ink-secondary">{{ t('production.qtyGood') }}</label>
-                    <input v-model="form.qty_good" type="number" step="any" min="0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                    <input :aria-label="t('production.qtyGood')" v-model="form.qty_good" type="number" step="any" min="0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     <InputError :message="form.errors.qty_good" class="mt-1" />
                 </div>
                 <div class="sm:col-span-2">
                     <label class="text-xs font-semibold text-ink-secondary">{{ t('production.qtyReject') }}</label>
-                    <input v-model="form.qty_reject" type="number" step="any" min="0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                    <input :aria-label="t('production.qtyReject')" v-model="form.qty_reject" type="number" step="any" min="0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                 </div>
                 <div class="sm:col-span-2">
                     <label class="text-xs font-semibold text-ink-secondary">{{ t('production.resultDate') }}</label>
-                    <input v-model="form.result_date" type="date" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                    <input :aria-label="t('production.resultDate')" v-model="form.result_date" type="date" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                 </div>
                 <div class="sm:col-span-2">
                     <label class="text-xs font-semibold text-ink-secondary">{{ t('production.shift') }}</label>
-                    <input v-model="form.shift" type="text" :placeholder="t('production.shiftPlaceholder')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                    <input :aria-label="t('production.shift')" v-model="form.shift" type="text" :placeholder="t('production.shiftPlaceholder')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                 </div>
                 <div class="sm:col-span-10">
                     <label class="text-xs font-semibold text-ink-secondary">{{ t('production.notes') }}</label>
-                    <input v-model="form.notes" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                    <input :aria-label="t('production.notes')" v-model="form.notes" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                 </div>
                 <div class="flex items-end sm:col-span-2">
                     <button type="submit" :disabled="form.processing" class="w-full rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60">
@@ -179,14 +179,14 @@ function remove(row: ResultRow) {
                 <table class="min-w-full divide-y divide-borderline text-sm">
                     <thead class="bg-background">
                         <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                            <th class="px-3 py-3">{{ t('production.resultDate') }}</th>
-                            <th class="px-3 py-3">{{ t('production.parent') }}</th>
-                            <th class="px-3 py-3">{{ t('production.process') }}</th>
-                            <th class="px-3 py-3">{{ t('production.machine') }}</th>
-                            <th class="px-3 py-3 text-right">{{ t('production.qtyGood') }}</th>
-                            <th class="px-3 py-3 text-right">{{ t('production.qtyReject') }}</th>
-                            <th class="px-3 py-3">{{ t('production.reportedBy') }}</th>
-                            <th class="px-3 py-3 text-right">{{ t('production.actions') }}</th>
+                            <th scope="col" class="px-3 py-3">{{ t('production.resultDate') }}</th>
+                            <th scope="col" class="px-3 py-3">{{ t('production.parent') }}</th>
+                            <th scope="col" class="px-3 py-3">{{ t('production.process') }}</th>
+                            <th scope="col" class="px-3 py-3">{{ t('production.machine') }}</th>
+                            <th scope="col" class="px-3 py-3 text-right">{{ t('production.qtyGood') }}</th>
+                            <th scope="col" class="px-3 py-3 text-right">{{ t('production.qtyReject') }}</th>
+                            <th scope="col" class="px-3 py-3">{{ t('production.reportedBy') }}</th>
+                            <th scope="col" class="px-3 py-3 text-right">{{ t('production.actions') }}</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-borderline">

@@ -9,6 +9,7 @@ import Pagination from '@/Components/Pagination.vue';
 import Modal from '@/Components/Modal.vue';
 import InputError from '@/Components/InputError.vue';
 import type { MachineCycleTime, Machine, Part, Paginated, PageProps } from '@/types';
+import StatusBadge from '@/Components/StatusBadge.vue';
 
 const { t, locale } = useI18n();
 
@@ -109,17 +110,17 @@ const fmtNumber = (n: number | null | undefined, decimals = 2) =>
             </button>
         </div>
 
-        <input v-model="search" type="search" :placeholder="t('master.cycleTimeSearch')" class="mb-4 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
+        <input v-model="search" type="search" :placeholder="t('master.cycleTimeSearch')" :aria-label="t('master.cycleTimeSearch')" class="mb-4 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
 
         <div class="overflow-x-auto rounded-xl border border-borderline bg-surface">
             <table class="min-w-full divide-y divide-borderline text-sm">
                 <thead class="bg-background">
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th class="px-4 py-3">{{ t('master.machine') }}</th>
-                        <th class="px-4 py-3">{{ t('master.part') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('master.cycleTimeSeconds') }}</th>
-                        <th class="px-4 py-3">{{ t('master.status') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.machine') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.part') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('master.cycleTimeSeconds') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.status') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-borderline">
@@ -137,7 +138,7 @@ const fmtNumber = (n: number | null | undefined, decimals = 2) =>
                             <div class="text-xs text-ink-secondary">{{ t('master.secondsPerPiece') }}</div>
                         </td>
                         <td class="px-4 py-3">
-                            <span :class="c.is_active ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'" class="rounded-md px-2 py-0.5 text-xs font-semibold">{{ c.is_active ? t('master.active') : t('master.inactive') }}</span>
+                            <StatusBadge :tone="c.is_active ? 'success' : 'warning'">{{ c.is_active ? t('master.active') : t('master.inactive') }}</StatusBadge>
                         </td>
                         <td class="px-4 py-3">
                             <div class="flex justify-end gap-1.5">
@@ -161,7 +162,7 @@ const fmtNumber = (n: number | null | undefined, decimals = 2) =>
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.machine') }}</label>
-                        <select v-model="form.machine_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                        <select :aria-label="t('master.machine')" v-model="form.machine_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                             <option value="">{{ t('master.selectMachine') }}</option>
                             <option v-for="m in machines" :key="m.id" :value="String(m.id)">{{ m.machine_name }}</option>
                         </select>
@@ -169,7 +170,7 @@ const fmtNumber = (n: number | null | undefined, decimals = 2) =>
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.part') }}</label>
-                        <select v-model="form.part_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                        <select :aria-label="t('master.part')" v-model="form.part_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                             <option value="">{{ t('master.selectPart') }}</option>
                             <option v-for="p in parts" :key="p.id" :value="String(p.id)">{{ p.part_number }} · {{ p.part_name }}</option>
                         </select>
@@ -177,13 +178,13 @@ const fmtNumber = (n: number | null | undefined, decimals = 2) =>
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.cycleTimeSeconds') }}</label>
-                        <input v-model="form.cycle_time_seconds" type="number" step="0.0001" min="0.0001" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('master.cycleTimeSeconds')" v-model="form.cycle_time_seconds" type="number" step="0.0001" min="0.0001" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <p class="mt-1 text-xs text-ink-secondary">{{ t('master.cycleTimeHelp') }}</p>
                         <InputError :message="form.errors.cycle_time_seconds" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.status') }}</label>
-                        <select v-model="form.is_active" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                        <select :aria-label="t('master.status')" v-model="form.is_active" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                             <option :value="true">{{ t('master.active') }}</option>
                             <option :value="false">{{ t('master.inactive') }}</option>
                         </select>

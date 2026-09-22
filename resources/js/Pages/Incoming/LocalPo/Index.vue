@@ -61,8 +61,8 @@ function remove(id: number, no: string | null) {
         </div>
 
         <div class="mb-4 flex flex-wrap gap-3">
-            <input v-model="search" @input="doSearch" type="search" :placeholder="t('incoming.searchLocal')" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
-            <select v-model="supplierId" @change="doSearch" class="rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+            <input v-model="search" @input="doSearch" type="search" :placeholder="t('incoming.searchLocal')" :aria-label="t('incoming.searchLocal')" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
+            <select :aria-label="t('incoming.allSuppliers')" v-model="supplierId" @change="doSearch" class="rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                 <option value="">{{ t('incoming.allSuppliers') }}</option>
                 <option v-for="s in suppliers" :key="s.id" :value="s.id">{{ s.supplier_code ? `${s.supplier_code} — ` : '' }}{{ s.supplier_name }}</option>
             </select>
@@ -72,13 +72,13 @@ function remove(id: number, no: string | null) {
             <table class="min-w-full divide-y divide-borderline text-sm">
                 <thead class="bg-background">
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th class="px-4 py-3">{{ t('incoming.poArrival') }}</th>
-                        <th class="px-4 py-3">{{ t('incoming.poDate') }}</th>
-                        <th class="px-4 py-3">{{ t('incoming.supplier') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('incoming.items') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('incoming.remaining') }}</th>
-                        <th class="px-4 py-3">{{ t('incoming.status') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('incoming.actions') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('incoming.poArrival') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('incoming.poDate') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('incoming.supplier') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.items') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.remaining') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('incoming.status') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.actions') }}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-borderline">

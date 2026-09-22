@@ -89,13 +89,13 @@ function removeItem(id: number) {
             <table class="min-w-full divide-y divide-borderline text-sm">
                 <thead class="bg-background">
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th class="px-4 py-3">{{ t('incoming.part') }}</th>
-                        <th class="px-4 py-3">{{ t('incoming.groupSize') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('incoming.qtyGoods') }}</th>
-                        <th class="px-4 py-3">{{ t('incoming.unit') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('incoming.receivedUnit', { unit: weightUnit }) }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('incoming.remainingUnit', { unit: weightUnit }) }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('incoming.actions') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('incoming.part') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('incoming.groupSize') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.qtyGoods') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('incoming.unit') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.receivedUnit', { unit: weightUnit }) }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.remainingUnit', { unit: weightUnit }) }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.actions') }}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-borderline">
@@ -128,12 +128,12 @@ function removeItem(id: number) {
             <table class="min-w-full divide-y divide-borderline text-sm">
                 <thead class="bg-background">
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th class="px-4 py-3">{{ t('incoming.part') }}</th>
-                        <th class="px-4 py-3">{{ t('incoming.tag') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('incoming.qty') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('incoming.netUnit', { unit: weightUnit }) }}</th>
-                        <th class="px-4 py-3">{{ t('incoming.date') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('incoming.actions') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('incoming.part') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('incoming.tag') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.qty') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.netUnit', { unit: weightUnit }) }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('incoming.date') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.actions') }}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-borderline">
@@ -166,10 +166,10 @@ function removeItem(id: number) {
             <table class="min-w-full divide-y divide-borderline text-sm">
                 <thead class="bg-background">
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th class="px-4 py-3">{{ t('incoming.containerNo') }}</th>
-                        <th class="px-4 py-3">{{ t('incoming.seal') }}</th>
-                        <th class="px-4 py-3">{{ t('incoming.size') }}</th>
-                        <th class="px-4 py-3">{{ t('incoming.inspection') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('incoming.containerNo') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('incoming.seal') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('incoming.size') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('incoming.inspection') }}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-borderline">
@@ -178,8 +178,8 @@ function removeItem(id: number) {
                         <td class="px-4 py-3 text-ink-primary">{{ c.seal_code ?? '—' }}</td>
                         <td class="px-4 py-3 text-ink-primary">{{ c.size ?? '—' }}</td>
                         <td class="px-4 py-3">
-                            <span v-if="c.inspection" :class="c.inspection.status === 'ok' ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'" class="rounded-md px-2 py-0.5 text-xs font-semibold uppercase">{{ t('incoming.status_' + c.inspection.status) }}</span>
-                            <span v-else class="rounded-md bg-warning/10 px-2 py-0.5 text-xs font-semibold text-warning">{{ t('incoming.notInspected') }}</span>
+                            <StatusBadge v-if="c.inspection" :tone="c.inspection.status === 'ok' ? 'success' : 'danger'" uppercase>{{ t('incoming.status_' + c.inspection.status) }}</StatusBadge>
+                            <StatusBadge v-else tone="warning">{{ t('incoming.notInspected') }}</StatusBadge>
                         </td>
                     </tr>
                     <tr v-if="!arrival.containers?.length">

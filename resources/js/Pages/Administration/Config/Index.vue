@@ -9,6 +9,8 @@ import Modal from '@/Components/Modal.vue';
 import InputError from '@/Components/InputError.vue';
 import { useI18n } from 'vue-i18n';
 import type { ConfigMaster, Paginated, PageProps } from '@/types';
+import StatusBadge from '@/Components/StatusBadge.vue';
+import type { Tone } from '@/utils/tone';
 
 const { t } = useI18n();
 
@@ -71,20 +73,14 @@ function submit() {
     if (editing.value) form.put(route('config.update', editing.value.id), { onSuccess: closeForm });
     else form.post(route('config.store'), { onSuccess: closeForm });
 }
+/** Tone badge per tipe data config (dipakai StatusBadge). */
+const badgeTone = (dt: string): Tone =>
+    (({ boolean: 'info', integer: 'success', float: 'success', decimal: 'success', json: 'warning' }) as Record<string, Tone>)[dt] ?? 'primary';
+
 function remove(c: ConfigMaster) {
     if (confirm(t('account.deleteConfigConfirm', { name: `${c.group}.${c.key}` }))) router.delete(route('config.destroy', c.id));
 }
 
-const badgeClass = (dt: string) => {
-    const map: Record<string, string> = {
-        boolean: 'bg-info/10 text-info',
-        integer: 'bg-success/10 text-success',
-        float: 'bg-success/10 text-success',
-        decimal: 'bg-success/10 text-success',
-        json: 'bg-warning/10 text-warning',
-    };
-    return map[dt] ?? 'bg-primary-light text-primary';
-};
 </script>
 
 <template>
@@ -104,23 +100,23 @@ const badgeClass = (dt: string) => {
 
         <!-- Filters -->
         <div class="mb-4 flex flex-col gap-3 sm:flex-row">
-            <select v-model="group" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-48">
+            <select :aria-label="t('account.allGroups')" v-model="group" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-48">
                 <option value="">{{ t('account.allGroups') }}</option>
                 <option v-for="g in groups" :key="g" :value="g">{{ g }}</option>
             </select>
-            <input v-model="search" type="search" :placeholder="t('account.searchConfig')" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
+            <input v-model="search" type="search" :placeholder="t('account.searchConfig')" :aria-label="t('account.searchConfig')" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
         </div>
 
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
             <table class="min-w-full divide-y divide-borderline text-sm">
                 <thead class="bg-background">
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th class="px-4 py-3">{{ t('account.group') }}</th>
-                        <th class="px-4 py-3">{{ t('account.key') }}</th>
-                        <th class="px-4 py-3">{{ t('account.value') }}</th>
-                        <th class="px-4 py-3">{{ t('account.type') }}</th>
-                        <th class="px-4 py-3">{{ t('account.status') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('account.actions') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('account.group') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('account.key') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('account.value') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('account.type') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('account.status') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('account.actions') }}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-borderline">
@@ -128,9 +124,9 @@ const badgeClass = (dt: string) => {
                         <td class="px-4 py-3 font-medium text-ink-primary">{{ c.group }}</td>
                         <td class="px-4 py-3 text-ink-primary">{{ c.key }}</td>
                         <td class="px-4 py-3 max-w-[16rem] truncate text-ink-primary">{{ c.value ?? '—' }}</td>
-                        <td class="px-4 py-3"><span :class="badgeClass(c.data_type)" class="rounded-md px-2 py-0.5 text-xs font-semibold">{{ t(`account.dataTypes.${c.data_type}`) }}</span></td>
+                        <td class="px-4 py-3"><StatusBadge :tone="badgeTone(c.data_type)">{{ t(`account.dataTypes.${c.data_type}`) }}</StatusBadge></td>
                         <td class="px-4 py-3">
-                            <span :class="c.is_active ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'" class="rounded-md px-2 py-0.5 text-xs font-semibold">{{ c.is_active ? t('account.active') : t('account.inactive') }}</span>
+                            <StatusBadge :tone="c.is_active ? 'success' : 'warning'">{{ c.is_active ? t('account.active') : t('account.inactive') }}</StatusBadge>
                         </td>
                         <td class="px-4 py-3">
                             <div class="flex justify-end gap-1.5">
@@ -155,33 +151,33 @@ const badgeClass = (dt: string) => {
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('account.group') }}</label>
-                        <input v-model="form.group" type="text" placeholder="SYSTEM" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('account.group')" v-model="form.group" type="text" placeholder="SYSTEM" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.group" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('account.key') }}</label>
-                        <input v-model="form.key" type="text" placeholder="company_name" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('account.key')" v-model="form.key" type="text" placeholder="company_name" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.key" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('account.value') }}</label>
-                        <input v-model="form.value" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('account.value')" v-model="form.value" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.value" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('account.dataType') }}</label>
-                        <select v-model="form.data_type" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                        <select :aria-label="t('account.dataType')" v-model="form.data_type" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                             <option v-for="dt in dataTypes" :key="dt" :value="dt">{{ t(`account.dataTypes.${dt}`) }}</option>
                         </select>
                         <InputError :message="form.errors.data_type" class="mt-1" />
                     </div>
                     <div class="sm:col-span-2">
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('account.description') }}</label>
-                        <input v-model="form.description" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('account.description')" v-model="form.description" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('account.status') }}</label>
-                        <select v-model="form.is_active" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                        <select :aria-label="t('account.status')" v-model="form.is_active" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                             <option :value="true">{{ t('account.active') }}</option>
                             <option :value="false">{{ t('account.inactive') }}</option>
                         </select>

@@ -9,6 +9,7 @@ import Pagination from '@/Components/Pagination.vue';
 import Modal from '@/Components/Modal.vue';
 import InputError from '@/Components/InputError.vue';
 import type { Supplier, Paginated } from '@/types';
+import StatusBadge from '@/Components/StatusBadge.vue';
 
 const { t } = useI18n();
 
@@ -107,18 +108,18 @@ function remove(s: Supplier) {
         </div>
 
         <!-- Search -->
-        <input v-model="search" @input="doSearch" type="search" :placeholder="t('master.supplierSearch')" class="mb-4 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
+        <input v-model="search" @input="doSearch" type="search" :placeholder="t('master.supplierSearch')" :aria-label="t('master.supplierSearch')" class="mb-4 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
 
         <!-- Table -->
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
             <table class="min-w-full divide-y divide-borderline text-sm">
                 <thead class="bg-background">
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th class="px-4 py-3">{{ t('master.code') }}</th>
-                        <th class="px-4 py-3">{{ t('master.name') }}</th>
-                        <th class="px-4 py-3">{{ t('master.address') }}</th>
-                        <th class="px-4 py-3">{{ t('master.status') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.code') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.name') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.address') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.status') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-borderline">
@@ -132,7 +133,7 @@ function remove(s: Supplier) {
                         </td>
                         <td class="px-4 py-3 text-ink-secondary">{{ s.address ?? '—' }}</td>
                         <td class="px-4 py-3">
-                            <span :class="s.is_active ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'" class="rounded-md px-2 py-0.5 text-xs font-semibold">{{ s.is_active ? t('master.active') : t('master.inactive') }}</span>
+                            <StatusBadge :tone="s.is_active ? 'success' : 'warning'">{{ s.is_active ? t('master.active') : t('master.inactive') }}</StatusBadge>
                         </td>
                         <td class="px-4 py-3">
                             <div class="flex justify-end gap-1.5">
@@ -157,45 +158,45 @@ function remove(s: Supplier) {
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.code') }}</label>
-                        <input v-model="form.supplier_code" type="text" placeholder="SUP-001" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('master.code')" v-model="form.supplier_code" type="text" placeholder="SUP-001" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.supplier_code" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.name') }}</label>
-                        <input v-model="form.supplier_name" type="text" :placeholder="t('master.supplierName')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('master.name')" v-model="form.supplier_name" type="text" :placeholder="t('master.supplierName')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.supplier_name" class="mt-1" />
                     </div>
                 </div>
                 <div class="mt-4">
                     <label class="text-xs font-semibold text-ink-secondary">{{ t('master.address') }}</label>
-                    <input v-model="form.address" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                    <input :aria-label="t('master.address')" v-model="form.address" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     <InputError :message="form.errors.address" class="mt-1" />
                 </div>
                 <div class="mt-4 grid gap-4 sm:grid-cols-2">
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.contactPerson') }}</label>
-                        <input v-model="form.contact_person" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('master.contactPerson')" v-model="form.contact_person" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.contact_person" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.phone') }}</label>
-                        <input v-model="form.phone" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('master.phone')" v-model="form.phone" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.phone" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.email') }}</label>
-                        <input v-model="form.email" type="email" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('master.email')" v-model="form.email" type="email" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.email" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.bankAccount') }}</label>
-                        <input v-model="form.bank_account" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('master.bankAccount')" v-model="form.bank_account" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.bank_account" class="mt-1" />
                     </div>
                 </div>
                 <div class="mt-4">
                     <label class="text-xs font-semibold text-ink-secondary">{{ t('master.signatureImage') }}</label>
-                    <input
+                    <input :aria-label="t('master.signatureImage')"
                         type="file"
                         accept="image/*"
                         @input="form.signature = ($event.target as HTMLInputElement).files?.[0] ?? null"

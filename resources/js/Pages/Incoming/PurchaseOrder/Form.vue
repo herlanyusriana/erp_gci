@@ -153,12 +153,12 @@ function submit() {
                 <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.poNo') }}</label>
-                        <input v-model="form.po_no" type="text" placeholder="PO-2026-001" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('incoming.poNo')" v-model="form.po_no" type="text" placeholder="PO-2026-001" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.po_no" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.supplier') }}</label>
-                        <select v-model="form.supplier_id" @change="onSupplierChange" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                        <select :aria-label="t('incoming.supplier')" v-model="form.supplier_id" @change="onSupplierChange" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                             <option value="">{{ t('incoming.chooseSupplier') }}</option>
                             <option v-for="s in suppliers" :key="s.id" :value="s.id">{{ s.supplier_code }} · {{ s.supplier_name }}</option>
                         </select>
@@ -166,7 +166,7 @@ function submit() {
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.status') }}</label>
-                        <select v-model="form.status" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                        <select :aria-label="t('incoming.status')" v-model="form.status" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                             <option value="draft">{{ t('incoming.status_draft') }}</option>
                             <option value="confirmed">{{ t('incoming.status_confirmed') }}</option>
                             <option value="cancelled">{{ t('incoming.status_cancelled') }}</option>
@@ -174,15 +174,15 @@ function submit() {
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.poDate') }}</label>
-                        <input v-model="form.po_date" type="date" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('incoming.poDate')" v-model="form.po_date" type="date" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.expectedDate') }}</label>
-                        <input v-model="form.expected_date" type="date" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('incoming.expectedDate')" v-model="form.expected_date" type="date" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     </div>
                     <div class="sm:col-span-2 lg:col-span-1">
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.notes') }}</label>
-                        <input v-model="form.notes" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('incoming.notes')" v-model="form.notes" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     </div>
                 </div>
             </div>
@@ -200,7 +200,7 @@ function submit() {
                 <div v-for="(r, i) in rows" :key="i" class="grid gap-3 border-t border-borderline py-3 sm:grid-cols-12">
                     <div class="sm:col-span-4">
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.part') }}</label>
-                        <select v-model="r.part_id" :disabled="!form.supplier_id" @change="onPartChange(r)" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary disabled:bg-background disabled:text-ink-secondary">
+                        <select :aria-label="t('incoming.part')" v-model="r.part_id" :disabled="!form.supplier_id" @change="onPartChange(r)" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary disabled:bg-background disabled:text-ink-secondary">
                             <option value="">{{ t('incoming.choosePart') }}</option>
                             <option v-for="p in partOptions" :key="p.id" :value="p.id">{{ p.part_number }} · {{ p.part_name }}</option>
                         </select>
@@ -208,18 +208,18 @@ function submit() {
                     </div>
                     <div class="sm:col-span-2">
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.qty') }}</label>
-                        <input v-model="r.qty" type="number" step="0.0001" min="0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('incoming.qty')" v-model="r.qty" type="number" step="0.0001" min="0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     </div>
                     <div class="sm:col-span-2">
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.unit') }}</label>
-                        <select v-model="r.unit" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                        <select :aria-label="t('incoming.unit')" v-model="r.unit" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                             <option value="">—</option>
                             <option v-for="code in uomCodes" :key="code" :value="code">{{ code }}</option>
                         </select>
                     </div>
                     <div class="sm:col-span-2">
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.price') }}</label>
-                        <input v-model="r.price" type="number" step="0.0001" min="0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input :aria-label="t('incoming.price')" v-model="r.price" type="number" step="0.0001" min="0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <p v-if="priceFor(r.part_id)" class="mt-1 text-xs text-ink-secondary">{{ t('incoming.priceFromMaster', { currency: priceFor(r.part_id)?.currency }) }}</p>
                     </div>
                     <div class="flex items-end sm:col-span-2">

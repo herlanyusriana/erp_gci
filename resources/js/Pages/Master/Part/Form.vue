@@ -96,7 +96,7 @@ function partTypeLabel(partType: PartType | null): string {
                         {{ partTypeLabel(partType) }}
                     </button>
                 </div>
-                <select v-else v-model="form.part_type_id" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                <select :aria-label="t('master.selectType')" v-else v-model="form.part_type_id" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                     <option value="">{{ t('master.selectType') }}</option>
                     <option v-for="partType in partTypes" :key="partType.id" :value="partType.id">{{ partType.code }} — {{ partTypeLabel(partType) }}</option>
                 </select>
@@ -179,7 +179,7 @@ function partTypeLabel(partType: PartType | null): string {
 
             <section class="space-y-4">
                 <h2 class="text-sm font-semibold uppercase tracking-wide text-ink-secondary">{{ t('master.remarks') }}</h2>
-                <textarea v-model="form.remarks" rows="3" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                <textarea v-model="form.remarks" :aria-label="t('master.remarks')" rows="3" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                 <InputError :message="form.errors.remarks" class="mt-1" />
             </section>
 

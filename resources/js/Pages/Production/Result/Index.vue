@@ -37,19 +37,19 @@ const fmt = (n: number | null | undefined) => n == null ? '—' : Number(n).toLo
             </div>
         </div>
 
-        <input v-model="search" @input="doSearch" type="search" :placeholder="t('production.searchWo')" class="mb-4 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
+        <input v-model="search" @input="doSearch" type="search" :placeholder="t('production.searchWo')" :aria-label="t('production.searchWo')" class="mb-4 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
 
         <div class="overflow-x-auto rounded-xl border border-borderline bg-surface">
             <table class="min-w-full divide-y divide-borderline text-sm">
                 <thead class="bg-background">
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th class="px-4 py-3">{{ t('production.woNo') }}</th>
-                        <th class="px-4 py-3">{{ t('production.fg') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('production.woQty') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('production.fgProduced') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('production.item') }}</th>
-                        <th class="px-4 py-3">{{ t('production.status') }}</th>
-                        <th class="px-4 py-3 text-right">{{ t('production.actions') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('production.woNo') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('production.fg') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('production.woQty') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('production.fgProduced') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('production.item') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('production.status') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('production.actions') }}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-borderline">

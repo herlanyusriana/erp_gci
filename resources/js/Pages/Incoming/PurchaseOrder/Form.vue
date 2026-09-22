@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
@@ -17,11 +17,28 @@ interface ItemRow {
     notes: string;
 }
 
+interface SupplierPart {
+    supplier_id: number;
+    part_id: number;
+    part_number: string | null;
+    part_name: string | null;
+    uom: string | null;
+}
+
+interface ActivePrice {
+    supplier_id: number;
+    part_id: number;
+    price: number;
+    currency: string;
+}
+
 const props = defineProps<{
     purchaseOrder: PurchaseOrder | null;
     suppliers: Array<Pick<Supplier, 'id' | 'supplier_code' | 'supplier_name'>>;
     parts: Array<Pick<Part, 'id' | 'part_number' | 'part_name'>>;
     uomCodes: string[];
+    supplierParts: SupplierPart[];
+    activePrices: ActivePrice[];
 }>();
 
 const blankItem = (): ItemRow => ({ part_id: '', qty: '', unit: '', price: '', notes: '' });
@@ -45,6 +62,57 @@ const form = useForm({
     status: props.purchaseOrder?.status ?? 'draft',
     items: [] as any[],
 });
+
+/** Part yang boleh dipilih: hanya part supplier terpilih (strict). */
+const partOptions = computed(() => {
+    const supplierId = Number(form.supplier_id);
+    const map = new Map<number, { id: number; part_number: string | null; part_name: string | null }>();
+
+    if (supplierId) {
+        for (const sp of props.supplierParts) {
+            if (sp.supplier_id === supplierId && !map.has(sp.part_id)) {
+                map.set(sp.part_id, { id: sp.part_id, part_number: sp.part_number, part_name: sp.part_name });
+            }
+        }
+    }
+
+    // Part yang sudah terpilih di baris (mis. data lama) tetap ditampilkan.
+    for (const r of rows.value) {
+        const id = Number(r.part_id);
+        if (id && !map.has(id)) {
+            const p = props.parts.find((x) => x.id === id);
+            if (p) map.set(id, { id: p.id, part_number: p.part_number, part_name: p.part_name });
+        }
+    }
+
+    return [...map.values()].sort((a, b) => String(a.part_number).localeCompare(String(b.part_number)));
+});
+
+/** Harga aktif (price master) untuk supplier + part baris ini. */
+function priceFor(partId: number | '') {
+    const supplierId = Number(form.supplier_id);
+    const id = Number(partId);
+    if (!supplierId || !id) return null;
+
+    return props.activePrices.find((p) => p.supplier_id === supplierId && p.part_id === id) ?? null;
+}
+
+/** Ganti supplier → daftar part berubah, jadi baris dikosongkan. */
+function onSupplierChange() {
+    for (const r of rows.value) {
+        r.part_id = '';
+        r.price = '';
+    }
+}
+
+/** Pilih part → isi satuan (bila kosong) & harga dari price master. */
+function onPartChange(r: ItemRow) {
+    const sp = props.supplierParts.find((s) => s.supplier_id === Number(form.supplier_id) && s.part_id === Number(r.part_id));
+    if (sp?.uom && r.unit === '') r.unit = sp.uom;
+
+    const price = priceFor(r.part_id);
+    if (price) r.price = price.price;
+}
 
 function addRow() {
     rows.value.push(blankItem());
@@ -90,7 +158,7 @@ function submit() {
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.supplier') }}</label>
-                        <select v-model="form.supplier_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                        <select v-model="form.supplier_id" @change="onSupplierChange" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                             <option value="">{{ t('incoming.chooseSupplier') }}</option>
                             <option v-for="s in suppliers" :key="s.id" :value="s.id">{{ s.supplier_code }} · {{ s.supplier_name }}</option>
                         </select>
@@ -132,10 +200,11 @@ function submit() {
                 <div v-for="(r, i) in rows" :key="i" class="grid gap-3 border-t border-borderline py-3 sm:grid-cols-12">
                     <div class="sm:col-span-4">
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.part') }}</label>
-                        <select v-model="r.part_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                        <select v-model="r.part_id" :disabled="!form.supplier_id" @change="onPartChange(r)" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary disabled:bg-background disabled:text-ink-secondary">
                             <option value="">{{ t('incoming.choosePart') }}</option>
-                            <option v-for="p in parts" :key="p.id" :value="p.id">{{ p.part_number }} · {{ p.part_name }}</option>
+                            <option v-for="p in partOptions" :key="p.id" :value="p.id">{{ p.part_number }} · {{ p.part_name }}</option>
                         </select>
+                        <p v-if="form.supplier_id && partOptions.length === 0" class="mt-1 text-xs text-warning">{{ t('incoming.supplierNoParts') }}</p>
                     </div>
                     <div class="sm:col-span-2">
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.qty') }}</label>
@@ -151,6 +220,7 @@ function submit() {
                     <div class="sm:col-span-2">
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.price') }}</label>
                         <input v-model="r.price" type="number" step="0.0001" min="0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <p v-if="priceFor(r.part_id)" class="mt-1 text-xs text-ink-secondary">{{ t('incoming.priceFromMaster', { currency: priceFor(r.part_id)?.currency }) }}</p>
                     </div>
                     <div class="flex items-end sm:col-span-2">
                         <button type="button" @click="removeRow(i)" :disabled="rows.length <= 1" class="rounded-lg border border-borderline px-3 py-2 text-sm text-danger transition hover:bg-danger/10 disabled:opacity-40">{{ t('incoming.delete') }}</button>

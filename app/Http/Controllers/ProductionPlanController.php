@@ -42,7 +42,7 @@ class ProductionPlanController extends Controller
                     'process:id,process_name',
                     'workOrder:id,wo_no,part_id,qty,status',
                     'workOrder.part:id,part_number,part_name',
-                    'fgPart:id,part_number,part_name',
+                    'fgPart:id,part_number,part_name,model',
                     'inputPart:id,part_number,part_name',
                     'wipPart:id,part_number,part_name',
                 ])

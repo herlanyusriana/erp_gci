@@ -320,6 +320,30 @@ class ReceiveMaterialService
     }
 
     /**
+     * Qty yang sedang di-book (status booked) per BARIS stok.
+     *
+     * @param  iterable<int>  $stockIds
+     * @return array<int, float> part_stock_id => qty booked
+     */
+    public function bookedQtyByStock(iterable $stockIds): array
+    {
+        $ids = collect($stockIds)->map(fn ($id) => (int) $id)->filter()->unique()->values();
+
+        if ($ids->isEmpty()) {
+            return [];
+        }
+
+        return WorkOrderMaterialBooking::query()
+            ->whereIn('part_stock_id', $ids)
+            ->where('status', WorkOrderMaterialBooking::STATUS_BOOKED)
+            ->groupBy('part_stock_id')
+            ->selectRaw('part_stock_id, SUM(qty) AS total')
+            ->pluck('total', 'part_stock_id')
+            ->map(fn ($v) => (float) $v)
+            ->all();
+    }
+
+    /**
      * Total stok FIFO aktif untuk sebuah part, opsional difilter per UOM.
      * UOM dicocokkan case-insensitive; bila null, semua UOM dijumlahkan.
      * Qty yang sudah di-book WO lain dikurangi (belum bisa dipakai).
@@ -472,18 +496,23 @@ class ReceiveMaterialService
         ?float $qty,
         int $workOrderId,
         int $workOrderItemId,
-        ?int $actorId = null
+        ?int $actorId = null,
+        ?string $uom = null
     ): ?array {
         $tag = trim($tag);
         if ($tag === '') {
             return null;
         }
 
-        return DB::transaction(function () use ($tag, $partId, $qty, $workOrderId, $workOrderItemId, $actorId) {
+        $normalized = UomCatalog::normalize($uom);
+
+        return DB::transaction(function () use ($tag, $partId, $qty, $workOrderId, $workOrderItemId, $actorId, $normalized) {
             $stock = PartStock::query()
                 ->whereRaw('LOWER(COALESCE(tag, \'\')) = ?', [mb_strtolower($tag)])
                 ->where('qty', '>', 0)
                 ->when($partId !== null, fn ($q) => $q->where('part_id', $partId))
+                ->when($normalized !== null, fn ($q) => $q
+                    ->whereRaw('UPPER(COALESCE(qty_unit, \'\')) = ?', [$normalized]))
                 ->orderByRaw('received_at ASC NULLS LAST')
                 ->orderBy('id')
                 ->lockForUpdate()
@@ -529,6 +558,7 @@ class ReceiveMaterialService
                 'part_stock_id' => $stock->id,
                 'tag' => $stock->tag,
                 'take_qty' => $take,
+                'available_before' => $bookable,
                 'remaining_stock_after' => $bookable - $take,
                 'uom' => (string) ($stock->qty_unit ?? ''),
                 'price' => $stock->price !== null ? (float) $stock->price : null,

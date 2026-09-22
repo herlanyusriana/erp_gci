@@ -84,6 +84,10 @@ const dayLabels = computed(() => ({
 
 const fmt = (n: number | null | undefined) => n == null ? '—' : Number(n).toLocaleString(locale.value, { maximumFractionDigits: 2 });
 
+function processNames(rows: ProductionPlanItem[]): string {
+    return [...new Set(rows.map((row) => row.process?.process_name).filter(Boolean))].join(' · ');
+}
+
 const showHistory = ref(false);
 
 function fmtDateTime(value: string): string {
@@ -472,7 +476,7 @@ function submitEdit() {
                     <thead class="sticky top-0 z-10 bg-background">
                         <tr class="border-b border-borderline text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                             <th class="sticky left-0 z-30 border-r border-borderline bg-background px-3 py-2.5">{{ t('production.machine') }}</th>
-                            <th class="px-3 py-2.5">{{ t('production.process') }}</th>
+                            <th class="px-3 py-2.5">{{ t('production.modelPart') }}</th>
                             <th class="px-3 py-2.5">{{ t('production.sequence') }}</th>
                             <th class="px-3 py-2.5">{{ t('production.fgPart') }}</th>
                             <th class="px-3 py-2.5">{{ t('production.inputPart') }}</th>
@@ -489,7 +493,7 @@ function submitEdit() {
                                 <td class="sticky left-0 z-10 border-r border-borderline bg-surface px-3 py-2.5 align-top group-hover:bg-primary-light">
                                     <div class="flex flex-col items-start gap-1">
                                         <span class="font-semibold leading-tight text-ink-primary">{{ group.machine?.machine_name ?? t('production.noMachine') }}</span>
-                                        <span v-if="group.machine" class="text-[11px] uppercase tracking-wide text-ink-secondary">{{ group.machine.machine_code }}</span>
+                                        <span v-if="processNames(group.rows)" class="text-[11px] tracking-wide text-ink-secondary">{{ processNames(group.rows) }}</span>
                                     </div>
                                 </td>
                                 <td class="px-3 py-2.5 text-xs text-ink-secondary">—</td>
@@ -517,12 +521,12 @@ function submitEdit() {
                                 <td v-if="index === 0" class="sticky left-0 z-10 border-r border-borderline bg-surface px-3 py-2.5 align-top group-hover:bg-primary-light" :rowspan="group.rows.length">
                                     <div class="flex flex-col items-start gap-1">
                                         <span class="font-semibold leading-tight text-ink-primary">{{ group.machine?.machine_name ?? t('production.noMachine') }}</span>
-                                        <span v-if="group.machine" class="text-[11px] uppercase tracking-wide text-ink-secondary">{{ group.machine.machine_code }}</span>
+                                        <span v-if="processNames(group.rows)" class="text-[11px] tracking-wide text-ink-secondary">{{ processNames(group.rows) }}</span>
                                         <span class="mt-0.5 inline-flex rounded-md bg-background px-1.5 py-0.5 text-[11px] font-medium text-ink-secondary">{{ t('production.rowsCount', { n: group.rows.length }) }}</span>
                                     </div>
                                 </td>
                                 <td class="px-3 py-2.5">
-                                    <span class="text-ink-primary">{{ row.process?.process_name ?? '—' }}</span>
+                                    <span class="text-ink-primary">{{ row.fg_part?.model ?? '—' }}</span>
                                 </td>
                                 <td class="px-3 py-2.5">
                                     <div class="flex items-center gap-1.5">

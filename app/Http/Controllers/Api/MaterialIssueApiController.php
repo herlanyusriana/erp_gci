@@ -8,6 +8,7 @@ use App\Models\Part;
 use App\Models\PartStock;
 use App\Models\WorkOrder;
 use App\Services\ProductionResultService;
+use App\Services\ReceiveMaterialService;
 use App\Services\WoService;
 use App\Support\UomCatalog;
 use Illuminate\Http\JsonResponse;
@@ -23,6 +24,7 @@ class MaterialIssueApiController extends Controller
     public function __construct(
         private WoService $woService,
         private ProductionResultService $resultService,
+        private ReceiveMaterialService $stockService,
     ) {}
 
     public function workOrders(Request $request): JsonResponse
@@ -113,6 +115,9 @@ class MaterialIssueApiController extends Controller
             ->get(['id', 'part_id', 'tag', 'qty', 'qty_unit', 'received_at'])
             ->groupBy('part_id');
 
+        // Stok tersedia per baris = qty − booking aktif (jangan tawarkan yang sudah dikunci).
+        $bookedByStock = $this->stockService->bookedQtyByStock($stocksByPart->flatten()->pluck('id'));
+
         $rows = [];
         foreach ($leafItems as $it) {
             $allowedIds = $allowedByItem[$it->id];
@@ -129,14 +134,21 @@ class MaterialIssueApiController extends Controller
             $recommended = collect($allowedIds)
                 ->flatMap(fn ($id) => $stocksByPart->get($id, collect()))
                 ->filter(fn ($s) => $uom === null || UomCatalog::normalize((string) $s->qty_unit) === $uom)
-                ->map(fn ($s) => [
-                    'tag' => $s->tag,
-                    'part_id' => (int) $s->part_id,
-                    'part_number' => $parts[$s->part_id]->part_number ?? null,
-                    'qty' => (float) $s->qty,
-                    'uom' => UomCatalog::normalize((string) $s->qty_unit),
-                    'received_at' => $s->received_at?->toIso8601String(),
-                ])
+                ->map(function ($s) use ($bookedByStock) {
+                    $booked = (float) ($bookedByStock[$s->id] ?? 0);
+
+                    return [
+                        'tag' => $s->tag,
+                        'part_id' => (int) $s->part_id,
+                        'part_number' => $parts[$s->part_id]->part_number ?? null,
+                        'stock_qty' => (float) $s->qty,
+                        'qty' => max(0.0, (float) $s->qty - $booked),
+                        'booked' => $booked,
+                        'uom' => UomCatalog::normalize((string) $s->qty_unit),
+                        'received_at' => $s->received_at?->toIso8601String(),
+                    ];
+                })
+                ->filter(fn (array $t) => $t['qty'] > 1e-9)
                 ->values();
 
             $rows[] = [
@@ -196,6 +208,14 @@ class MaterialIssueApiController extends Controller
             ->orderBy('id')
             ->first();
 
+        // Tag yang stoknya habis ter-book WO lain dianggap tidak tersedia.
+        if ($stock !== null) {
+            $booked = (float) ($this->stockService->bookedQtyByStock([$stock->id])[$stock->id] ?? 0);
+            if ((float) $stock->qty - $booked <= 1e-9) {
+                $stock = null;
+            }
+        }
+
         if ($stock === null) {
             return response()->json([
                 'ok' => false,
@@ -214,6 +234,7 @@ class MaterialIssueApiController extends Controller
                 'part_number' => $part?->part_number,
                 'part_name' => $part?->part_name,
                 'qty' => (float) $stock->qty,
+                'booked' => (float) ($this->stockService->bookedQtyByStock([$stock->id])[$stock->id] ?? 0),
                 'uom' => UomCatalog::normalize((string) $stock->qty_unit),
                 'price' => $stock->price !== null ? (float) $stock->price : null,
                 'invoice' => $receive?->invoice_no,

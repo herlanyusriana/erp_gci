@@ -39,6 +39,7 @@ class ProductionResultService
 
         $qtyGood = (float) ($data['qty_good'] ?? 0);
         $qtyReject = (float) ($data['qty_reject'] ?? 0);
+        $qtyProcessed = $qtyGood + $qtyReject;
 
         if ($qtyGood <= 0) {
             throw ValidationException::withMessages(['qty_good' => __('Qty good harus lebih dari 0.')]);
@@ -68,7 +69,9 @@ class ProductionResultService
             if ($childId === null) {
                 continue;
             }
-            $need = (float) $row->child_qty * $qtyGood;
+            // Good dan NG sama-sama sudah melewati proses sehingga keduanya
+            // mengonsumsi material/WIP. Hanya good yang menjadi output stok.
+            $need = (float) $row->child_qty * $qtyProcessed;
             if ($need <= 0) {
                 continue;
             }
@@ -90,7 +93,7 @@ class ProductionResultService
             }
         }
 
-        return DB::transaction(function () use ($workOrder, $rows, $parentPartId, $qtyGood, $qtyReject, $data, $actorId) {
+        return DB::transaction(function () use ($workOrder, $rows, $parentPartId, $qtyGood, $qtyReject, $qtyProcessed, $data, $actorId) {
             $reportedAt = isset($data['result_date']) && $data['result_date']
                 ? Carbon::parse($data['result_date'])
                 : now();
@@ -102,7 +105,7 @@ class ProductionResultService
                 if ($childId === null) {
                     continue;
                 }
-                $need = (float) $row->child_qty * $qtyGood;
+                $need = (float) $row->child_qty * $qtyProcessed;
                 if ($need <= 0) {
                     continue;
                 }
@@ -124,7 +127,9 @@ class ProductionResultService
 
             // Posting output parent (WIP atau FG).
             $first = $rows->first();
-            $uom = UomCatalog::normalize((string) $first->parent_uom) ?? UomCatalog::PIECE;
+            $uom = $parentPartId === (int) $workOrder->part_id
+                ? UomCatalog::PIECE
+                : (UomCatalog::normalize((string) $first->parent_uom) ?? UomCatalog::PIECE);
             $tag = $workOrder->wo_no.'#'.($first->parentPart?->part_number ?? $parentPartId);
             $this->stockService->postProductionStock($parentPartId, $tag, $qtyGood, $uom, $reportedAt);
 

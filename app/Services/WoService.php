@@ -611,7 +611,7 @@ class WoService
                     // Leaf: BOOKING tag yang di-scan (spesifik). Stok fisik tetap;
                     // pengurangan terjadi saat Production Result.
                     foreach ($scansByItem[$it->id] ?? [] as $scan) {
-                        $alloc = $this->stockService->bookFromTag($scan['tag'], $scan['part_id'], $scan['qty'], $workOrder->id, $it->id, $actorId);
+                        $alloc = $this->stockService->bookFromTag($scan['tag'], $scan['part_id'], $scan['qty'], $workOrder->id, $it->id, $actorId, $it->uom_rm);
                         if ($alloc === null) {
                             throw ValidationException::withMessages([
                                 'items' => __('Tag :tag tidak ditemukan atau stok tidak cukup.', ['tag' => $scan['tag']]),

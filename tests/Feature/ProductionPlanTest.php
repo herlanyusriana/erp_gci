@@ -190,6 +190,20 @@ class ProductionPlanTest extends TestCase
         $this->assertSame($sorted, $seqs);
     }
 
+    public function test_plan_items_include_the_fg_part_model_for_the_board(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->post(route('work-orders.release', $wo))->assertRedirect();
+
+        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('items', fn ($items) => collect($items)->contains(
+                    fn ($item) => $item['work_order_id'] === $wo->id
+                        && array_key_exists('model', $item['fg_part']),
+                )));
+    }
+
     public function test_plan_remaining_qty_uses_results_up_to_board_date_not_targets(): void
     {
         $wo = $this->createWorkOrder();

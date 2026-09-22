@@ -154,6 +154,33 @@ class ProductionResultTest extends TestCase
         ]);
     }
 
+    public function test_reject_qty_consumes_input_material_while_only_good_qty_is_output(): void
+    {
+        $wo = $this->releasedWorkOrder();
+        $rmId = (int) Part::where('part_number', 'CBKG07256C')->value('id');
+        $firstStep = $this->stepIds($wo)->first();
+        $first = $firstStep['parent_part_id'];
+        $unitNeed = (float) $firstStep['step']->child_qty;
+        $stockBefore = (float) PartStock::where('part_id', $rmId)->sum('qty');
+
+        $this->post(route('work-orders.results.store', $wo), [
+            'parent_part_id' => $first,
+            'qty_good' => 9,
+            'qty_reject' => 1,
+        ])->assertSessionHasNoErrors();
+
+        // 9 good + 1 NG sama-sama telah memakai 10 unit material yang dibooking.
+        $this->assertEqualsWithDelta($stockBefore - (10 * $unitNeed), (float) PartStock::where('part_id', $rmId)->sum('qty'), 0.001);
+        $this->assertSame(
+            0.0,
+            (float) WorkOrderMaterialBooking::where('work_order_id', $wo->id)
+                ->where('part_id', $rmId)->where('status', 'booked')->sum('qty'),
+        );
+
+        // Hanya hasil good yang diposting sebagai output; WO masih menyisakan 1 good unit.
+        $this->assertEqualsWithDelta(9.0, (float) PartStock::where('part_id', $first)->sum('qty'), 0.001);
+    }
+
     public function test_report_rejects_over_production(): void
     {
         $wo = $this->releasedWorkOrder();

@@ -476,7 +476,7 @@ export interface ProductionPlanItem {
     work_order?: Pick<WorkOrder, 'id' | 'wo_no' | 'part_id' | 'qty' | 'status'> & {
         part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
     } | null;
-    fg_part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
+    fg_part?: Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> | null;
     input_part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
     wip_part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
 }

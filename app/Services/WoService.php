@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Events\MaterialIssuePosted;
 use App\Models\Bom;
 use App\Models\MaterialIssue;
 use App\Models\MaterialIssueItem;
@@ -663,6 +664,8 @@ class WoService
 
             return $issue;
         });
+
+        event(new MaterialIssuePosted(MaterialIssuePosted::payloadFromIssue($issue)));
 
         return [$workOrder->fresh(['items', 'part']), $shortages, $issue];
     }

@@ -9,7 +9,7 @@ class MaterialIssuePolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->hasAnyPermission(['stock.view', 'incoming.view', 'receive.view', 'work_order.view']);
+        return $user->hasPermission('stock.issue');
     }
 
     public function view(User $user, MaterialIssue $materialIssue): bool

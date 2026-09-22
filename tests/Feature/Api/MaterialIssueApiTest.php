@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Api;
 
+use App\Events\MaterialIssuePosted;
 use App\Models\IncomingArrival;
 use App\Models\IncomingArrivalItem;
 use App\Models\IncomingReceive;
@@ -10,8 +11,11 @@ use App\Models\Part;
 use App\Models\PartStock;
 use App\Models\User;
 use App\Models\WorkOrder;
+use Illuminate\Broadcasting\BroadcastEvent;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class MaterialIssueApiTest extends TestCase
@@ -154,8 +158,53 @@ class MaterialIssueApiTest extends TestCase
         $this->assertEqualsWithDelta(0.0, (float) $fgStock, 0.001);
     }
 
+    public function test_release_dispatches_one_safe_issue_event_after_commit(): void
+    {
+        Event::fake();
+
+        $wo = $this->createWorkOrder();
+        $this->actingAsApi();
+        $scans = $this->seedStockAndBuildScans($wo);
+
+        $this->postJson("/api/work-orders/{$wo->id}/release", [
+            'idempotency_key' => 'test-event-1',
+            'received_by' => 'Operator',
+            'items' => $scans,
+        ])->assertOk();
+
+        Event::assertDispatched(MaterialIssuePosted::class, function (MaterialIssuePosted $event): bool {
+            return $event->payload['status'] === 'posted'
+                && $event->payload['item_count'] > 0
+                && $event->payload['tag_count'] > 0
+                && $event->payload['received_by'] === 'Operator'
+                && isset($event->payload['qty_by_uom']);
+        });
+        Event::assertDispatchedTimes(MaterialIssuePosted::class, 1);
+    }
+
+    public function test_release_queues_one_broadcast_after_commit(): void
+    {
+        Queue::fake();
+
+        $wo = $this->createWorkOrder();
+        $this->actingAsApi();
+        $scans = $this->seedStockAndBuildScans($wo);
+
+        $this->postJson("/api/work-orders/{$wo->id}/release", [
+            'idempotency_key' => 'test-broadcast-1',
+            'items' => $scans,
+        ])->assertOk();
+
+        Queue::assertPushed(BroadcastEvent::class, function (BroadcastEvent $job): bool {
+            return $job->event instanceof MaterialIssuePosted
+                && $job->event->broadcastAs() === 'material-issue.posted';
+        });
+    }
+
     public function test_release_is_idempotent(): void
     {
+        Event::fake();
+
         $wo = $this->createWorkOrder();
         $this->actingAsApi();
         $scans = $this->seedStockAndBuildScans($wo);
@@ -167,6 +216,7 @@ class MaterialIssueApiTest extends TestCase
 
         $this->assertSame($first, $second, 'Retry dengan idempotency_key sama harus mengembalikan issue yang sama.');
         $this->assertSame(1, MaterialIssue::where('idempotency_key', 'test-idem-1')->count());
+        Event::assertDispatchedTimes(MaterialIssuePosted::class, 1);
     }
 
     public function test_release_rejects_unrelated_tag(): void
@@ -186,6 +236,26 @@ class MaterialIssueApiTest extends TestCase
         ])->assertStatus(422);
 
         $this->assertSame('planned', $wo->fresh()->status);
+    }
+
+    public function test_release_rollback_does_not_dispatch_issue_event(): void
+    {
+        Event::fake();
+
+        $wo = $this->createWorkOrder();
+        $this->actingAsApi();
+        $scans = $this->seedStockAndBuildScans($wo);
+        $tag = $scans[0]['scans'][0]['tag'];
+        PartStock::where('tag', $tag)->update(['qty' => 0]);
+
+        $this->postJson("/api/work-orders/{$wo->id}/release", [
+            'idempotency_key' => 'test-rollback-event-1',
+            'items' => $scans,
+        ])->assertStatus(422);
+
+        Event::assertNotDispatched(MaterialIssuePosted::class);
+        $this->assertSame('planned', $wo->fresh()->status);
+        $this->assertDatabaseMissing('material_issues', ['idempotency_key' => 'test-rollback-event-1']);
     }
 
     public function test_release_rejects_over_scan(): void

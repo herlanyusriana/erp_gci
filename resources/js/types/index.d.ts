@@ -419,6 +419,7 @@ export interface MaterialIssue {
     issue_no: string;
     work_order_id: number;
     issue_date: string;
+    created_at?: string;
     issued_by: number | null;
     received_by: string | null;
     status: string;
@@ -427,6 +428,28 @@ export interface MaterialIssue {
     work_order?: (Pick<WorkOrder, 'id' | 'wo_no' | 'part_id'> & { part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null }) | null;
     issuer?: Pick<User, 'id' | 'name'> | null;
     items?: MaterialIssueItem[];
+}
+
+export interface MaterialIssueSummary {
+    issue_count: number;
+    work_order_count: number;
+    tag_count: number;
+    qty_by_uom: Array<{ uom: string; qty: number }>;
+}
+
+export interface MaterialIssuePostedEvent {
+    issue_id: number;
+    issue_no: string;
+    work_order_id: number;
+    work_order_no: string | null;
+    operator_id: number | null;
+    operator_name: string | null;
+    received_by: string | null;
+    status: string;
+    issue_date: string;
+    item_count: number;
+    tag_count: number;
+    qty_by_uom: Record<string, number>;
 }
 
 export interface WorkOrder {

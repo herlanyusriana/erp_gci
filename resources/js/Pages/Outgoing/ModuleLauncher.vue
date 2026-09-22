@@ -8,7 +8,7 @@ import LauncherTile from '@/Components/LauncherTile.vue';
 const { t } = useI18n();
 
 const items = [
-    { href: '/material-issues', title: 'outgoing.materialIssue', subtitle: 'outgoing.materialIssueTile' },
+    { href: route('material-issues.index'), title: 'outgoing.monitoringIssueOut', subtitle: 'outgoing.monitoringIssueOutTile' },
 ];
 </script>
 

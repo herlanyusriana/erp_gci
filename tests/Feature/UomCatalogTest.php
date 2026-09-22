@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Part;
+use App\Models\PartSubstitute;
 use App\Models\Supplier;
 use App\Models\User;
 use App\Support\UomCatalog;
@@ -78,8 +79,14 @@ class UomCatalogTest extends TestCase
     {
         $this->actingAs(User::where('email', 'admin@geumcheon.local')->firstOrFail());
 
-        $supplier = Supplier::firstOrFail();
-        $part = Part::whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))->firstOrFail();
+        // Part harus dipasok supplier ini (aturan strict part-per-supplier).
+        $mapping = PartSubstitute::query()
+            ->where('is_active', true)
+            ->whereNotNull('supplier_id')
+            ->firstOrFail();
+
+        $supplier = Supplier::findOrFail($mapping->supplier_id);
+        $part = Part::findOrFail($mapping->substitute_part_id);
 
         $response = $this->post(route('local-pos.store'), [
             'po_no' => 'LPO-UOM-TEST-2',

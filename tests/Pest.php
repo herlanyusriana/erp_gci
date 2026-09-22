@@ -1,6 +1,6 @@
 <?php
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
 /*
@@ -14,8 +14,11 @@ use Tests\TestCase;
 |
 */
 
+// Repo ini mengandalkan data seeder (BOM, part, supplier, UOM), jadi suite
+// Feature memakai DatabaseTransactions (rollback per test) — bukan RefreshDatabase
+// yang menghapus + migrate ulang DB di tengah batch dan mematikan data seeder.
 pest()->extend(TestCase::class)
-    ->use(RefreshDatabase::class)
+    ->use(DatabaseTransactions::class)
     ->in('Feature');
 
 /*

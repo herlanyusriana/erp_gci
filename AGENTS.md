@@ -129,24 +129,19 @@ Catatan penting:
 - Konfigurasi di `phpunit.xml` masih memakai PostgreSQL (DB sqlite di-comment).
   Karena itu test berjalan terhadap database Postgres, **bukan** in-memory —
   dan saat ini menunjuk ke database `erp_gci` yang sama dengan development.
-- **Konflik strategi:** `tests/Pest.php` memasang `RefreshDatabase` ke seluruh
-  suite `Feature` (menghapus + migrate ulang DB, **tanpa** seed), sementara
-  `WorkOrderHttpTest`, `WorkOrderAllocationTest`, `MaterialIssueApiTest`,
-  `MaterialIssueWebTest`, `ProductionPlanTest`, `ProductionResultTest`,
-  `RolePermissionTest`, `MachineLabelTest`, `PartTypeGuardTest`, dan
-  `UomCatalogTest` memakai `DatabaseTransactions` dan mengandalkan data seeder
+- **Strategi test (sudah diseragamkan):** `tests/Pest.php` memasang
+  `DatabaseTransactions` untuk seluruh suite `Feature` (bukan lagi
+  `RefreshDatabase`). Alasannya: repo mengandalkan data seeder
   (`admin@geumcheon.local`, part `AAN30056405`, `CBKG07256C`, `4000W4A003A`,
-  `PINCB01`, `5040JA3071C`).
-- Akibatnya: menjalankan salah satu test `RefreshDatabase` **menghapus** data
-  seeder, lalu test berbasis seeder berikutnya gagal (`actingAs(null)` /
-  TypeError). Test berbasis seeder lulus bila dijalankan sendiri setelah
-  `migrate --seed`.
-- Menjalankan `migrate --seed` sebelum suite **tidak** memperbaiki ini; suite
-  menghapusnya sendiri. Perbaikannya harus di level strategi test (pisahkan
-  grup / pakai factory / `.env.testing` DB terpisah).
-- Test yang tidak boleh dianggap regresi: kegagalan `ProfileTest` (hapus akun)
-  karena `User` memakai `SoftDeletes` sedangkan test Breeze mengharap hard
-  delete.
+  `PINCB01`, `5040JA3071C`) dan `RefreshDatabase` menghapus data itu di tengah
+  batch sehingga test berbasis seeder gagal.
+- Jalankan suite dengan DB ter-seed: `php artisan migrate:fresh --seed --force`
+  lalu `vendor/bin/pest` (semua file sekaligus) — sekarang hijau.
+- Catatan: `ProfileTest` (hapus akun) mengharap **soft delete**, sesuai
+  `User` yang memakai `SoftDeletes`.
+- Aturan domain yang dikunci test: **part pada PO / Local PO wajib terdaftar
+  sebagai substitute aktif milik supplier terpilih** (`part_substitutes`) —
+  divalidasi di server, bukan hanya di dropdown.
 
 ## Catatan domain
 

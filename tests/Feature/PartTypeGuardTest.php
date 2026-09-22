@@ -51,8 +51,15 @@ class PartTypeGuardTest extends TestCase
     public function test_purchase_order_rejects_fg_part(): void
     {
         $fg = $this->makePart('FG');
-        $material = $this->makePart('MATERIAL');
-        $supplier = Supplier::create(['supplier_code' => 'SUP-'.uniqid(), 'supplier_name' => 'Guard Supplier', 'is_active' => true]);
+
+        // Part material yang memang dipasok supplier (dari seeder).
+        $mapping = PartSubstitute::query()
+            ->where('is_active', true)
+            ->whereNotNull('supplier_id')
+            ->firstOrFail();
+
+        $supplier = Supplier::findOrFail($mapping->supplier_id);
+        $material = Part::findOrFail($mapping->substitute_part_id);
 
         $this->post(route('purchase-orders.store'), [
             'po_no' => 'PO-GUARD-'.uniqid(),
@@ -74,8 +81,16 @@ class PartTypeGuardTest extends TestCase
     public function test_local_po_rejects_fg_part(): void
     {
         $fg = $this->makePart('FG');
-        $material = $this->makePart('MATERIAL');
-        $supplier = Supplier::create(['supplier_code' => 'SUP-'.uniqid(), 'supplier_name' => 'Local Guard Supplier', 'is_active' => true]);
+
+        // Part material yang memang dipasok supplier (dari seeder) — aturan strict
+        // part-per-supplier memakai `part_substitutes`.
+        $mapping = PartSubstitute::query()
+            ->where('is_active', true)
+            ->whereNotNull('supplier_id')
+            ->firstOrFail();
+
+        $supplier = Supplier::findOrFail($mapping->supplier_id);
+        $material = Part::findOrFail($mapping->substitute_part_id);
 
         $payload = fn ($partId) => [
             'po_no' => 'LPO-GUARD-'.uniqid(),

@@ -1,125 +1,145 @@
-# Implementation Plan: Monitoring Issue Out to Production APK
+# Implementation Plan: Sembunyikan Baris WO yang Sudah Tuntas di Production Plan
 
 ## Overview
 
-Upgrade the existing Material Issue page into a read-only operational monitor
-for Issue Out to Production transactions created by the APK. The work adds
-WIB-aware summaries and filters, consistent authorization, a post-commit
-broadcast event, private WebSocket delivery through Reverb/Echo, a discoverable
-Outgoing launcher tile, and VPS setup documentation. The existing detail and
-print flows remain the only transaction actions.
+Papan Production Plan saat ini menampilkan semua baris WO, termasuk yang sudah
+tuntas diproduksi (sisa 0). Operator jadi merasa harus "clear WO" dulu, padahal
+tidak ada aksi itu di sistem. Perubahan ini menyaring papan agar hanya memuat
+baris WO yang masih bersisa, sehingga WO lama yang tuntas hilang otomatis dan
+WO baru bisa dikerjakan tanpa langkah manual.
+
+PRD: `docs/prd/hide-completed-wo-rows.md`
 
 ## Architecture Decisions
 
-- Extend `material-issues.index`; do not create a second monitoring data source.
-- Use `issue_date` in `Asia/Jakarta` for business-day filters and summaries;
-  use `created_at` only for newest-first live ordering.
-- Keep quantities grouped by UOM; never calculate a cross-UOM grand total.
-- Broadcast a dedicated Issue Out event only after the release transaction has
-  committed. Idempotent API retries must not publish duplicate business events.
-- Use an authenticated private channel authorized by the same Issue Out
-  permission contract as the web page.
-- Add Reverb/Echo infrastructure without changing the APK contract.
-- Keep the dashboard read-only: detail and print only, no cancel, correction,
-  or delete action.
-- Keep all user-facing copy in the existing id/en/ko catalogs and use existing
-  theme tokens/components.
-
-## Dependency Graph
-
-```text
-Broadcasting dependencies and configuration
-        |
-        +--> Channel authorization and Issue Out permission contract
-        |          |
-        |          +--> Post-commit Issue Out event
-        |                         |
-        |                         +--> Echo subscription and reconnect state
-        |
-        +--> Monitoring query, filters, and summary
-                       |
-                       +--> Dashboard UI and live row updates
-                                      |
-                                      +--> Browser/VPS verification
-```
+- **Satu titik perubahan utama:** `ProductionPlanController::index()`. Tidak ada
+  perubahan skema database.
+- **"Closed" derived, bukan status tersimpan.** Baris dianggap tuntas ketika
+  `remaining_qty` = 0. Alasan: Production Result dapat dihapus
+  (`production-results.destroy`); nilai turunan otomatis memunculkan kembali
+  baris, sedangkan status tersimpan akan tertinggal salah.
+- **Satuan "closed" = baris papan** (pasangan `work_order_id` + `wip_part_id`),
+  bukan WO global. Satu WO boleh tuntas di satu mesin dan masih bersisa di
+  mesin lain.
+- **Rumus sisa tidak diubah:** `max(0, qty WO − Σ qty_good untuk pasangan itu,
+  result_date ≤ tanggal papan)`. Penyaringan memakai nilai yang sudah dihitung.
+- **Panel "aktif di tanggal lain" diselaraskan:** WO yang seluruh baris internalnya
+  tuntas tidak lagi ditampilkan; hasil setelah tanggal papan dan baris Subcon
+  tidak ikut mengurangi atau mempertahankan beban papan.
+- **WO `planned` dan `cancelled` tidak dihitung**; `in_progress` dan `completed`
+  yang masih bersisa tetap tampil. Alur release tidak disentuh.
+- **Status WO tidak diubah** oleh penyaringan ini.
 
 ## Task List
 
-### Phase 1: Foundation
+### Phase 1: Perilaku Inti
 
-- [ ] Task 1: Add and configure Reverb/Echo broadcasting foundation
-- [ ] Task 2: Establish consistent monitoring permission and launcher discovery
-- [ ] Task 3: Implement WIB-aware monitoring query, filters, and summaries
+- [x] Task 1: Sembunyikan baris papan yang sisanya 0
+- [x] Task 2: Selaraskan panel "aktif di tanggal lain"
 
-### Checkpoint: Foundation
+### Checkpoint: Perilaku Inti
 
-- [ ] Focused authorization and query tests pass
-- [ ] Composer/npm configuration is valid
-- [ ] Existing Material Issue detail and print behavior remains unchanged
-- [ ] Human reviews the event payload and permission boundary before live UI work
+- [x] Semua test `ProductionPlanTest` lulus
+- [x] Perilaku diverifikasi lewat HTTP (Inertia props), bukan asumsi
 
-### Phase 2: Real-time backend path
+### Phase 2: Verifikasi
 
-- [ ] Task 4: Publish a post-commit Issue Out event from APK release
-- [ ] Task 5: Add event/channel authorization and backend regression coverage
+- [x] Task 3: Verifikasi menyeluruh (suite penuh + Pint + build)
 
-### Checkpoint: Backend real-time path
+### Checkpoint: Selesai
 
-- [ ] A successful APK release creates exactly one broadcastable event
-- [ ] An idempotent retry does not create a duplicate event
-- [ ] Unauthorized users cannot subscribe to the private channel
-- [ ] Existing API Issue Out tests remain green
-
-### Phase 3: Dashboard experience
-
-- [ ] Task 6: Build the monitoring dashboard summary, filters, and table
-- [ ] Task 7: Connect Echo live updates, status, reconnect, highlight, and toast
-- [ ] Task 8: Add complete i18n/types and launcher/detail/print integration coverage
-
-### Checkpoint: Product flow
-
-- [ ] A new APK Issue Out appears without a full-page reload
-- [ ] Matching active filters update the row and summary; non-matching events do not
-- [ ] Detail and print links work and no mutation action is exposed
-- [ ] Browser verification covers connected, reconnecting, and disconnected states
-
-### Phase 4: Operations and release verification
-
-- [ ] Task 9: Document local and VPS Reverb operation
-- [ ] Task 10: Run full quality verification and review the implementation
-
-### Checkpoint: Complete
-
-- [ ] All PRD success criteria are verified
-- [ ] `vendor/bin/pint --dirty --format agent` passes
-- [ ] `npm run build` passes
-- [ ] Focused and full test suites pass
-- [ ] VPS runbook is complete and contains no secrets
-- [ ] Ready for `code-review-and-quality`
-
-## Parallelization Opportunities
-
-- Tasks 2 and 3 can run in parallel after Task 1, but Task 3 must define the
-  dashboard payload before Task 6 starts.
-- Task 9 can be drafted in parallel with Task 8 after the Reverb configuration
-  shape is settled, then finalized after Task 10's verification.
-- Tasks 4 and 5 are sequential because tests depend on the event contract.
-- Tasks 6 and 7 are sequential at the implementation boundary because Task 7
-  consumes the UI state and event payload established by Task 6.
+- [x] Seluruh Success Criteria PRD terpenuhi
+- [x] Siap direview
 
 ## Risks and Mitigations
 
 | Risk | Impact | Mitigation |
-|---|---|---|
-| Reverb/Echo package APIs differ from assumptions | High | Confirm installed Laravel 12/Reverb versions and official docs before implementation; prove a local handshake early. |
-| Existing `MaterialIssuePolicy` permits broader permissions than `stock.issue` | High | Define one explicit monitoring permission contract, test allowed and denied roles, and avoid silently widening access. |
-| Summary totals disagree with paginated rows | High | Use a separate filtered aggregate query over the same filter scope and test multiple UOMs. |
-| Event fires before transaction commit | High | Use after-commit broadcasting and test rollback/no-event behavior. |
-| Live event duplicates on reconnect or idempotent retry | High | Use issue id as client deduplication key and preserve server idempotency behavior. |
-| Browser remains stale after WebSocket disconnect | Medium | Show connection state, reconnect automatically, and retain a manual refresh action. |
-| VPS reverse proxy or TLS misconfiguration | High | Include a concrete systemd/process, proxy, firewall, environment, and health-check runbook; verify with a real browser. |
-| Existing frontend i18n catalog becomes unbalanced | Medium | Update all three locale catalogs and run the repository i18n check through `npm run build`. |
+|------|--------|------------|
+| Baris sah ikut tersembunyi karena relasi WO ter-soft-delete | Sedang | Disengaja: baris yatim memang tidak punya arti operasional. Dicatat di PRD. |
+| Ringkasan papan (jumlah mesin/WO) jadi tidak konsisten | Rendah | Ringkasan dihitung dari daftar baris, jadi otomatis ikut. Diverifikasi di test. |
+| Hasil produksi dihapus membuat baris tidak kembali | Tinggi | Derived, bukan status tersimpan. Test khusus: hapus result -> baris muncul lagi. |
+| Sisa pecahan sangat kecil dianggap belum tuntas | Rendah | Dicatat sebagai Open Question di PRD; belum perlu toleransi sekarang. |
 
 ## Open Questions
 
-None. Product decisions are approved in `docs/prd/monitoring-issue-out.md`.
+- Ambang toleransi nol (mis. `> 1e-9`) bila muncul sisa pecahan akibat
+  pembulatan. Belum diperlukan.
+- Penanda "closed" tersimpan bila nanti diminta (perubahan skema, perlu
+  persetujuan terpisah). PRD memilih derived.
+
+## Task List Detail
+
+### Task 1: Sembunyikan baris papan yang sisanya 0
+
+**Description:** Setelah `remaining_qty` dihitung per baris di
+`ProductionPlanController::index()`, saring `$items` agar hanya memuat baris
+dengan sisa lebih dari 0. Ringkasan papan dan kolom estimasi otomatis mengikuti
+karena dihitung dari daftar yang sama.
+
+**Acceptance criteria:**
+- [ ] Baris WO dengan sisa 0 tidak muncul di prop `items`.
+- [ ] WO lama yang masih bersisa tetap tampil di mesinnya.
+- [ ] Pada satu WO dengan beberapa baris mesin, hanya baris belum tuntas yang tampil.
+- [ ] Menghapus Production Result memunculkan kembali barisnya.
+- [ ] Ringkasan papan mencerminkan baris yang tersisa.
+
+**Verification:**
+- [ ] Tests pass: `php artisan test --compact tests/Feature/ProductionPlanTest.php`
+- [ ] Build succeeds: `npm run build`
+- [ ] Manual check: buka papan pada WO yang sudah tuntas, barisnya tidak tampil
+
+**Dependencies:** None
+
+**Files likely touched:**
+- `app/Http/Controllers/ProductionPlanController.php`
+- `tests/Feature/ProductionPlanTest.php`
+
+**Estimated scope:** Small: 1-2 files plus tests
+
+### Task 2: Selaraskan panel "aktif di tanggal lain"
+
+**Description:** Panel `offBoardWorkOrders` saat ini memuat WO aktif yang
+barisnya ada di tanggal lain. Setelah Task 1, WO yang seluruh barisnya tuntas
+tidak lagi relevan, jadi harus dikeluarkan dari panel ini agar konsisten.
+
+**Acceptance criteria:**
+- [ ] WO yang seluruh barisnya tuntas tidak muncul di `offBoardWorkOrders`.
+- [ ] WO yang masih bersisa di tanggal lain tetap muncul beserta tanggal papannya.
+- [ ] WO `planned` tetap tidak dihitung.
+
+**Verification:**
+- [ ] Tests pass: `php artisan test --compact tests/Feature/ProductionPlanTest.php`
+- [ ] Build succeeds: `npm run build`
+- [ ] Manual check: WO tuntas di semua mesin tidak tampil di panel biru
+
+**Dependencies:** Task 1
+
+**Files likely touched:**
+- `app/Http/Controllers/ProductionPlanController.php`
+- `tests/Feature/ProductionPlanTest.php`
+
+**Estimated scope:** Small: 1 file plus tests
+
+### Task 3: Verifikasi menyeluruh
+
+**Description:** Jalankan quality gate penuh, periksa diff, dan pastikan tidak
+ada regresi pada papan maupun alur produksi lain.
+
+**Acceptance criteria:**
+- [ ] Suite penuh lulus.
+- [ ] Pint lulus pada file yang berubah.
+- [ ] `npm run build` lulus.
+- [ ] Tidak ada test lama yang dihapus atau dilemahkan.
+
+**Verification:**
+- [ ] Tests pass: `php artisan test --compact`
+- [ ] Build succeeds: `npm run build`
+- [ ] Lint: `vendor/bin/pint --dirty --format agent`
+- [ ] Manual check: papan Production Plan dibuka dan perilaku sesuai PRD
+
+**Dependencies:** Task 1, Task 2
+
+**Files likely touched:**
+- Tidak ada file baru (verifikasi saja)
+
+**Estimated scope:** Small: verification-only

@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<title>Alur End-to-End Issue Out to Production</title>
+<style>
+  @page { size: A4; margin: 16mm 14mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "DejaVu Sans", Arial, Helvetica, sans-serif;
+    font-size: 10pt; line-height: 1.5; color: #1f2937; margin: 0;
+  }
+  h1 { font-size: 20pt; margin: 0 0 2mm; color: #0f172a; }
+  h2 {
+    font-size: 13pt; margin: 8mm 0 3mm; color: #0f172a;
+    border-bottom: 1.5px solid #cbd5e1; padding-bottom: 1.5mm;
+  }
+  h3 { font-size: 11pt; margin: 5mm 0 2mm; color: #1e293b; }
+  p { margin: 0 0 2.5mm; }
+  .meta { color: #64748b; font-size: 9pt; margin-bottom: 6mm; }
+  .lead {
+    background: #f1f5f9; border-left: 3px solid #334155;
+    padding: 3mm 4mm; margin: 0 0 6mm; border-radius: 2px;
+  }
+  table { width: 100%; border-collapse: collapse; margin: 0 0 4mm; font-size: 9pt; }
+  th, td { border: 1px solid #cbd5e1; padding: 1.8mm 2.5mm; text-align: left; vertical-align: top; }
+  th { background: #e2e8f0; font-weight: 600; color: #0f172a; }
+  td code, p code, li code { font-family: "DejaVu Sans Mono", monospace; font-size: 8.5pt; }
+  code {
+    font-family: "DejaVu Sans Mono", monospace; font-size: 8.5pt;
+    background: #f1f5f9; padding: 0.3mm 1mm; border-radius: 2px; color: #0f172a;
+  }
+  pre {
+    font-family: "DejaVu Sans Mono", monospace; font-size: 8pt; line-height: 1.45;
+    background: #0f172a; color: #e2e8f0; padding: 3mm 4mm;
+    border-radius: 3px; margin: 0 0 4mm; white-space: pre; overflow-x: auto;
+  }
+  ul, ol { margin: 0 0 3mm; padding-left: 5mm; }
+  li { margin-bottom: 1mm; }
+  .flow {
+    border: 1px solid #cbd5e1; border-radius: 3px; padding: 3mm 4mm;
+    margin: 0 0 4mm; background: #fafafa;
+  }
+  .flow-title {
+    font-weight: 700; font-size: 9.5pt; color: #0f172a;
+    text-transform: uppercase; letter-spacing: .3px; margin-bottom: 1.5mm;
+  }
+  .flow pre { background: transparent; color: #1f2937; padding: 0; margin: 0; }
+  .note {
+    border: 1px solid #fcd34d; background: #fffbeb; border-left: 3px solid #f59e0b;
+    padding: 2.5mm 3.5mm; border-radius: 2px; margin: 0 0 4mm; font-size: 9pt;
+  }
+  .ok {
+    border: 1px solid #86efac; background: #f0fdf4; border-left: 3px solid #22c55e;
+    padding: 2.5mm 3.5mm; border-radius: 2px; margin: 0 0 4mm; font-size: 9pt;
+  }
+  .avoid-break { break-inside: avoid; page-break-inside: avoid; }
+  .tag { font-family: "DejaVu Sans Mono", monospace; font-size: 8pt; color: #475569; }
+  footer { margin-top: 8mm; border-top: 1px solid #cbd5e1; padding-top: 2mm; color: #64748b; font-size: 8pt; }
+</style>
+</head>
+<body>
+
+<h1>Alur End-to-End: Issue Out to Production</h1>
+<div class="meta">
+  ERP Geum Cheon (GCI) &middot; APK Material Tracker &rarr; Laravel API &rarr; Dashboard Web<br />
+  Dokumen teknis &middot; dibuat dari implementasi aktual pada repository
+</div>
+
+<div class="lead">
+  <strong>Tujuan dokumen:</strong> menjelaskan perjalanan satu transaksi pengeluaran
+  material (issue out) mulai dari operator memindai label di APK, diproses backend
+  secara atomik dan idempoten, sampai muncul real-time di halaman monitoring web.
+</div>
+
+<h2>1. Gambaran Alur</h2>
+
+<div class="flow avoid-break">
+<div class="flow-title">Garis besar</div>
+<pre>APK (Material Tracker)          Laravel (erp_gci)                 Web (monitoring)
+──────────────────────          ─────────────────                ────────────────
+login ──────────────────────►   POST /api/auth/login
+  token ke secure storage       (Sanctum + X-Device-Name)
+                                ▼
+list WO planned ────────────►   GET  /api/work-orders
+                                ▼
+pilih WO ───────────────────►   GET  /api/work-orders/{wo}/release-context
+  kebutuhan + allowed part      (butuh permission stock.issue)
+  + rekomendasi tag FIFO        ▼
+scan QR tag ────────────────►   POST /api/stock-tags/resolve  (stock.issue)
+  validasi lokal                ▼
+submit release ─────────────►   POST /api/work-orders/{wo}/release
+                                  Gate 'issue' + idempotency_key (wajib)
+                                  WoService::releaseWithScans()
+                                  DB::transaction:
+                                    material_issues
+                                    work_order_material_bookings (booked)
+                                    material_issue_items (tag/invoice/supplier/qty/price)
+                                    WO -> in_progress
+                                    WO masuk Production Plan
+                                  ── COMMIT ──
+                                  event(MaterialIssuePosted)
+                                     │ ShouldDispatchAfterCommit
+                                     │ ShouldBroadcast (connection=database)
+                                     ▼
+                                  tabel jobs ──► queue:work ──► Reverb
+                                                                   │
+                                          Nginx /app (WSS) ◄───────┘
+                                                ▼
+                                              Echo private channel
+                                              'issue-out-monitoring'
+                                                ▼
+                                              /material-issues
+                                              baris baru + summary + toast</pre>
+</div>
+
+<h2>2. Sisi APK (Flutter)</h2>
+
+<table class="avoid-break">
+  <thead>
+    <tr><th style="width:32%">Langkah</th><th style="width:36%">File</th><th>Endpoint</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Login</td><td><code>repositories/auth_repository.dart</code></td><td><code>POST /api/auth/login</code></td></tr>
+    <tr><td>Simpan token</td><td><code>core/storage/token_store.dart</code></td><td><code>flutter_secure_storage</code></td></tr>
+    <tr><td>Daftar WO</td><td><code>repositories/issue_repository.dart</code></td><td><code>GET /api/work-orders?status=planned</code></td></tr>
+    <tr><td>Konteks release</td><td><code>issue_repository.dart</code></td><td><code>GET /api/work-orders/{id}/release-context</code></td></tr>
+    <tr><td>Resolve tag</td><td><code>issue_repository.dart</code></td><td><code>POST /api/stock-tags/resolve</code></td></tr>
+    <tr><td>Validasi + scan</td><td><code>providers/issue_provider.dart</code></td><td>lokal (lihat di bawah)</td></tr>
+    <tr><td>Submit release</td><td><code>issue_repository.dart</code></td><td><code>POST /api/work-orders/{id}/release</code></td></tr>
+  </tbody>
+</table>
+
+<h3>2.1 Validasi lokal sebelum kirim</h3>
+<p>Di <code>IssueNotifier.addScan()</code>, tag ditolak lebih awal agar tidak membebani server:</p>
+<ul>
+  <li>tag sudah pernah di-scan &rarr; <code>alreadyScanned</code></li>
+  <li>part tidak dibutuhkan WO ini &rarr; <code>tagNotNeeded</code></li>
+  <li>satuan tag &ne; satuan item (<code>uom_rm</code>) &rarr; <code>tagWrongUom</code></li>
+  <li>sisa kebutuhan 0 atau qty &gt; sisa &rarr; <code>overRequired</code></li>
+</ul>
+
+<h3>2.2 Idempotency di sisi klien</h3>
+<p>
+  <code>_idempotencyKey = Uuid().v4()</code> dibuat per sesi WO dan di-reset saat
+  <code>load()</code> dan <code>reset()</code>. Retry jaringan dengan key yang sama
+  <strong>tidak</strong> menghasilkan dokumen issue baru.
+</p>
+
+<h2>3. Sisi Backend (Laravel)</h2>
+
+<h3>3.1 Otorisasi</h3>
+<p>
+  <code>Gate::authorize('issue', $workOrder)</code> memakai
+  <code>WorkOrderPolicy::issue</code>: lolos bila user memiliki
+  <code>stock.issue</code> <em>atau</em> <code>work_order.update</code> <em>atau</em>
+  <code>production.update</code>.
+</p>
+
+<h3>3.2 Idempotency</h3>
+<p>
+  <code>WoService::releaseWithScans()</code> memeriksa <code>idempotency_key</code>.
+  Bila sudah ada, fungsi langsung mengembalikan issue lama tanpa membuat booking baru.
+</p>
+
+<h3>3.3 Transaksi atomik</h3>
+<p>Seluruh proses dibungkus <code>DB::transaction</code>:</p>
+<table class="avoid-break">
+  <thead><tr><th style="width:34%">Tabel</th><th>Isi</th></tr></thead>
+  <tbody>
+    <tr><td><code>material_issues</code></td><td>issue_no, issue_date, issued_by, received_by, status=posted, idempotency_key</td></tr>
+    <tr><td><code>work_order_material_bookings</code></td><td>status=booked &mdash; <strong>hanya booking</strong>, stok fisik belum berkurang</td></tr>
+    <tr><td><code>material_issue_items</code></td><td>tag, invoice, supplier, qty, uom, price (per tag yang di-scan)</td></tr>
+    <tr><td><code>work_orders</code></td><td>status &rarr; in_progress, released_at diisi</td></tr>
+    <tr><td><code>production_plan_items</code></td><td>WO masuk papan Production Plan</td></tr>
+  </tbody>
+</table>
+<p>Kekurangan material dicatat sebagai <code>shortages</code> dan menurunkan output secara proporsional.</p>
+
+<h3>3.4 Semantik stok (penting)</h3>
+<div class="note avoid-break">
+  <strong>Release = booking, bukan pengurangan stok.</strong><br />
+  <code>part_stocks.qty</code> <em>tidak</em> berubah saat release. Yang berubah hanya ketersediaan:
+  <pre style="margin:2mm 0 0;background:#fff;color:#1f2937;padding:0">tersedia = part_stocks.qty − Σ booking(status = booked)</pre>
+  Stok baru berkurang saat <strong>Production Result</strong> (dicatat di
+  <code>work_order_consumptions</code>). Halaman Stock menampilkan kolom <em>Di-book</em> dan <em>Tersedia</em>.
+</div>
+
+<h3>3.5 Event setelah commit</h3>
+<p>
+  Setelah transaksi sukses, <code>event(new MaterialIssuePosted(...))</code> dijalankan.
+  Event mengimplementasikan <code>ShouldDispatchAfterCommit</code> dan
+  <code>ShouldBroadcast</code> dengan <code>connection = 'database'</code>, sehingga
+  <code>BroadcastEvent</code> masuk ke tabel <code>jobs</code> dan diproses queue worker.
+</p>
+
+<h2>4. Sisi Web (Monitoring)</h2>
+
+<h3>4.1 Halaman monitoring</h3>
+<p>
+  <code>/material-issues</code> (<code>MaterialIssueController::index</code>) dengan permission
+  <code>stock.issue</code>:
+</p>
+<ul>
+  <li>default <strong>hari ini WIB</strong> (<code>Asia/Jakarta</code>), filter tanggal / operator / status / pencarian</li>
+  <li>summary: jumlah issue, WO unik, jumlah tag, qty <strong>per UOM</strong> (tidak dijumlah lintas satuan)</li>
+  <li>tabel + aksi <strong>detail</strong> dan <strong>cetak bon</strong> (read-only, tanpa aksi ubah/hapus)</li>
+</ul>
+
+<h3>4.2 Update real-time</h3>
+<p>Di <code>Outgoing/MaterialIssue/Index.vue</code>:</p>
+<ul>
+  <li><code>useEcho('issue-out-monitoring', '.material-issue.posted', handler)</code></li>
+  <li>event masuk &rarr; baris disisipkan di atas (hanya bila cocok filter aktif), summary diperbarui, baris di-highlight, toast muncul</li>
+  <li>deduplikasi berdasarkan <code>issue_id</code>; tanpa polling</li>
+  <li>status koneksi live ditampilkan (connected / connecting / reconnecting / disconnected / failed)</li>
+</ul>
+
+<h3>4.3 Detail, cetak, dan kanal privat</h3>
+<ul>
+  <li><code>/material-issues/{id}</code> &rarr; <code>show</code></li>
+  <li><code>/material-issues/{id}/print</code> &rarr; <code>resources/views/material-issues/print.blade.php</code></li>
+  <li>Kanal privat <code>issue-out-monitoring</code> (<code>routes/channels.php</code>) hanya untuk user dengan <code>stock.issue</code></li>
+</ul>
+
+<h2>5. Prasyarat agar Real-time Berjalan</h2>
+<ol>
+  <li><code>php artisan queue:work</code> &mdash; <strong>wajib</strong>; tanpa ini event menumpuk di tabel <code>jobs</code></li>
+  <li><code>php artisan reverb:start</code></li>
+  <li>Nginx <code>location /app</code> (tanpa trailing slash) + header <code>Upgrade</code> / <code>Connection</code></li>
+  <li><code>BROADCAST_CONNECTION=reverb</code></li>
+</ol>
+<div class="ok avoid-break">
+  <strong>Desain penting:</strong> release dari APK <em>tidak</em> bergantung pada Reverb.
+  Bila queue worker atau Reverb mati, transaksi APK tetap sukses (HTTP 200); hanya
+  dashboard web yang tidak ter-update sampai worker/Reverb hidup kembali.
+</div>
+
+<h2>6. Batasan dan Perilaku yang Perlu Diingat</h2>
+<ul>
+  <li><strong>Release = booking</strong>, bukan pengurangan stok. Stok berkurang saat Production Result.</li>
+  <li><strong>Idempotency wajib.</strong> APK yang tidak mengirim <code>idempotency_key</code> ditolak <code>422</code>.</li>
+  <li><strong>Resolve tag butuh <code>stock.issue</code>.</strong> Tanpa permission tersebut, akses ditolak <code>403</code>.</li>
+  <li><strong>Payload event dibatasi</strong> pada data aman (issue_no, WO, operator, jumlah item/tag, qty per UOM) &mdash; tidak memuat harga, invoice, atau supplier.</li>
+  <li>Papan Production Plan difilter per tanggal; WO aktif di tanggal lain ditampilkan di panel terpisah.</li>
+</ul>
+
+<h2>7. Cara Verifikasi di Lokal</h2>
+<pre>php artisan serve
+php artisan queue:work
+php artisan reverb:start
+npm run dev</pre>
+<p>
+  Lalu lakukan release WO dari APK (atau ekuivalen curl), dan buka
+  <code>/material-issues</code> memakai user dengan permission <code>stock.issue</code>.
+</p>
+
+<footer>
+  ERP Geum Cheon &middot; Alur End-to-End Issue Out to Production &middot;
+  disusun dari implementasi repository (bukan rencana).
+</footer>
+
+</body>
+</html>

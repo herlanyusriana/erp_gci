@@ -54,7 +54,7 @@ commit file `.env`.
 
 ## VPS topology
 
-- Nginx menerima HTTPS pada `example.invalid`.
+- Nginx menerima HTTPS pada `erp.example.com`.
 - Laravel HTTP berjalan pada `127.0.0.1:8000`.
 - Reverb bind ke `127.0.0.1:8080`; port 8080 tidak dibuka ke internet.
 - Queue worker memproses `BroadcastEvent` dari database.
@@ -62,6 +62,40 @@ commit file `.env`.
 
 Setiap environment harus memiliki `REVERB_APP_ID`, `REVERB_APP_KEY`, dan
 `REVERB_APP_SECRET` sendiri. Nilai di bawah hanya placeholder.
+
+### Environment production (`.env` di VPS)
+
+```dotenv
+APP_ENV=production
+APP_DEBUG=false
+BROADCAST_CONNECTION=reverb
+QUEUE_CONNECTION=database
+
+# Reverb bind ke loopback; hanya Nginx yang boleh menghubunginya.
+REVERB_SERVER_HOST=127.0.0.1
+REVERB_SERVER_PORT=8080
+
+# Host publik: dipakai browser (WSS) DAN server saat mem-publish event.
+REVERB_HOST=erp.example.com
+REVERB_PORT=443
+REVERB_SCHEME=https
+
+# Nilai di bawah WAJIB diganti per-environment. Jangan commit nilai asli.
+REVERB_APP_ID=<ganti>
+REVERB_APP_KEY=<ganti>
+REVERB_APP_SECRET=<ganti>
+
+VITE_REVERB_APP_KEY="${REVERB_APP_KEY}"
+VITE_REVERB_HOST="${REVERB_HOST}"
+VITE_REVERB_PORT="${REVERB_PORT}"
+VITE_REVERB_SCHEME="${REVERB_SCHEME}"
+```
+
+`REVERB_SERVER_HOST=127.0.0.1` berbeda dari contoh lokal (`0.0.0.0`) supaya
+port 8080 tidak pernah terbuka ke internet.
+
+`VITE_REVERB_*` ikut ter-bundle saat `npm run build`, jadi build frontend harus
+dijalankan di environment dengan nilai tersebut (bukan memakai nilai lokal).
 
 ## Nginx WebSocket upgrade
 
@@ -76,10 +110,10 @@ map $http_upgrade $connection_upgrade {
 
 server {
     listen 443 ssl http2;
-    server_name example.invalid;
+    server_name erp.example.com;
 
-    ssl_certificate     /etc/letsencrypt/live/example.invalid/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/example.invalid/privkey.pem;
+    ssl_certificate     /etc/letsencrypt/live/erp.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/erp.example.com/privkey.pem;
 
     location / {
         proxy_pass http://127.0.0.1:8000;
@@ -88,17 +122,25 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     }
 
-    location /app/ {
+    location /app {
         proxy_pass http://127.0.0.1:8080;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
-        proxy_read_timeout 60s;
-        proxy_send_timeout 60s;
+        # Koneksi WebSocket berumur panjang; jangan putus karena idle pendek.
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
     }
 }
 ```
+
+> **Penting — pakai `location /app`, bukan `location /app/`.**
+> Reverb melayani dua path: client WebSocket `GET /app/{appKey}` dan publish
+> server-side `POST /apps/{appId}/events`. Prefix `/app/` (dengan garis miring)
+> **tidak** cocok dengan `/apps/...`, sehingga event dari server gagal terkirim
+> dan dashboard tidak pernah update. Prefix `/app` (tanpa garis miring)
+> mencakup keduanya.
 
 Sesuaikan `REVERB_HOST`, `REVERB_PORT`, dan `REVERB_SCHEME=https` dengan host
 publik. Uji konfigurasi sebelum reload:
@@ -172,11 +214,39 @@ sudo journalctl -u erp-gci-worker -f
 tail -f storage/logs/laravel.log
 ```
 
-- `curl -fsS https://example.invalid/up` harus berhasil.
+- `curl -fsS https://erp.example.com/up` harus berhasil.
+- Pastikan Reverb benar-benar mendengarkan (bukan connection refused):
+
+```bash
+curl -i http://127.0.0.1:8080/app/       # harus balas HTTP (400/426), bukan refused
+sudo ss -ltnp | grep 8080                # harus bind 127.0.0.1:8080
+```
+
+- Pastikan kedua path Reverb terjangkau lewat Nginx (WS client dan publish server):
+
+```bash
+curl -i https://erp.example.com/app/            # client WS endpoint
+curl -i -X POST https://erp.example.com/apps/1/events   # publish endpoint (401/400 = terjangkau)
+```
+
 - Pastikan queue tidak menumpuk pada tabel `jobs` dan event broadcast tidak
   terus gagal.
 - Dari browser berizin `stock.issue`, kanal private `issue-out-monitoring`
   harus berhasil di-authorize; user tanpa permission harus ditolak.
+
+### Kenapa dashboard tidak update (urutan cek)
+
+Broadcast dikirim lewat queue (`MaterialIssuePosted` memakai koneksi
+`database`), jadi **queue worker wajib hidup**. Kalau live tidak jalan, cek
+berurutan:
+
+1. `php artisan queue:work` berjalan? Kalau mati, event menumpuk di `jobs`.
+2. `BROADCAST_CONNECTION=reverb` pada environment aktif (bukan `log`/`null`)?
+3. `php artisan reverb:start` hidup dan bind ke `127.0.0.1:8080`?
+4. Nginx memakai `location /app` (bukan `/app/`) dan `Upgrade`/`Connection`
+   header ter-set?
+5. TLS valid dan browser memakai `wss://` (tidak ada mixed content)?
+6. Setelah `config:cache`, restart Reverb dan worker agar env baru terbaca.
 
 ## Restart dan rollback aman
 

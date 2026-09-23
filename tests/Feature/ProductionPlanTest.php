@@ -237,6 +237,180 @@ class ProductionPlanTest extends TestCase
 
     }
 
+    public function test_fully_produced_row_is_hidden_from_board(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->post(route('work-orders.release', $wo))->assertRedirect();
+
+        $row = ProductionPlanItem::where('work_order_id', $wo->id)->firstOrFail();
+
+        ProductionResult::create([
+            'work_order_id' => $wo->id,
+            'parent_part_id' => $row->wip_part_id,
+            'result_date' => now()->toDateString(),
+            'qty_good' => $wo->qty,
+        ]);
+
+        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('items', fn ($list) => ! collect($list)->pluck('id')->contains($row->id)));
+
+        $this->assertSame('in_progress', $wo->fresh()->status);
+    }
+
+    public function test_partially_produced_wo_shows_only_unfinished_rows(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->post(route('work-orders.release', $wo))->assertRedirect();
+
+        $rows = ProductionPlanItem::where('work_order_id', $wo->id)->orderBy('id')->get();
+        $this->assertGreaterThan(1, $rows->count());
+
+        $closed = $rows->first();
+        $stillOpen = $rows->firstWhere('wip_part_id', '!=', $closed->wip_part_id);
+        $this->assertNotNull($stillOpen, 'Butuh dua baris dengan part hasil berbeda.');
+
+        ProductionResult::create([
+            'work_order_id' => $wo->id,
+            'parent_part_id' => $closed->wip_part_id,
+            'result_date' => now()->toDateString(),
+            'qty_good' => $wo->qty,
+        ]);
+
+        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('items', function ($list) use ($closed, $stillOpen) {
+                    $ids = collect($list)->pluck('id');
+
+                    return ! $ids->contains($closed->id) && $ids->contains($stillOpen->id);
+                }));
+    }
+
+    public function test_deleting_production_result_restores_board_row(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->post(route('work-orders.release', $wo))->assertRedirect();
+
+        $row = ProductionPlanItem::where('work_order_id', $wo->id)->firstOrFail();
+
+        $result = ProductionResult::create([
+            'work_order_id' => $wo->id,
+            'parent_part_id' => $row->wip_part_id,
+            'result_date' => now()->toDateString(),
+            'qty_good' => $wo->qty,
+        ]);
+
+        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('items', fn ($list) => ! collect($list)->pluck('id')->contains($row->id)));
+
+        $result->delete();
+
+        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('items', fn ($list) => collect($list)->pluck('id')->contains($row->id)));
+    }
+
+    public function test_fully_produced_wo_is_not_listed_off_board(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->post(route('work-orders.release', $wo))->assertRedirect();
+
+        $otherDate = now()->subDay()->toDateString();
+        foreach (ProductionPlanItem::where('work_order_id', $wo->id)->get() as $row) {
+            $row->plan->update(['plan_date' => $otherDate]);
+            ProductionResult::create([
+                'work_order_id' => $wo->id,
+                'parent_part_id' => $row->wip_part_id,
+                'result_date' => now()->toDateString(),
+                'qty_good' => $wo->qty,
+            ]);
+        }
+
+        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('offBoardWorkOrders', fn ($list) => ! collect($list)->pluck('id')->contains($wo->id)));
+    }
+
+    public function test_off_board_remaining_quantity_ignores_results_after_board_date(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->post(route('work-orders.release', $wo))->assertRedirect();
+
+        $boardDate = now()->subDay()->toDateString();
+        $planDate = now()->subDays(2)->toDateString();
+        $rows = ProductionPlanItem::where('work_order_id', $wo->id)->get();
+        $rows->firstOrFail()->plan->update(['plan_date' => $planDate]);
+
+        foreach ($rows as $row) {
+            ProductionResult::create([
+                'work_order_id' => $wo->id,
+                'parent_part_id' => $row->wip_part_id,
+                'result_date' => now()->toDateString(),
+                'qty_good' => $wo->qty,
+            ]);
+        }
+
+        $this->get(route('production-plans.index', ['date' => $boardDate]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('offBoardWorkOrders', fn ($list) => collect($list)->pluck('id')->contains($wo->id)));
+    }
+
+    public function test_planned_work_order_is_not_listed_on_or_off_board(): void
+    {
+        $wo = $this->createWorkOrder();
+
+        $this->post(route('production-plans.attach'), [
+            'work_order_id' => $wo->id,
+            'plan_date' => now()->toDateString(),
+        ])->assertRedirect();
+
+        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('items', fn ($list) => ! collect($list)->pluck('work_order_id')->contains($wo->id)));
+
+        ProductionPlanItem::where('work_order_id', $wo->id)
+            ->firstOrFail()
+            ->plan
+            ->update(['plan_date' => now()->subDay()->toDateString()]);
+
+        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('offBoardWorkOrders', fn ($list) => ! collect($list)->pluck('id')->contains($wo->id)));
+    }
+
+    public function test_completed_work_order_with_remaining_quantity_stays_on_board(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->post(route('work-orders.release', $wo))->assertRedirect();
+        $wo->update(['status' => 'completed']);
+
+        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('items', fn ($list) => collect($list)->pluck('work_order_id')->contains($wo->id)));
+    }
+
+    public function test_cancelled_work_order_is_not_listed_on_board(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->post(route('work-orders.release', $wo))->assertRedirect();
+        $wo->update(['status' => 'cancelled']);
+
+        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('items', fn ($list) => ! collect($list)->pluck('work_order_id')->contains($wo->id)));
+    }
+
     public function test_same_machine_steps_merge_into_one_row_with_input_and_output(): void
     {
         $wo = $this->createWorkOrder('AGU30018303');
@@ -388,6 +562,39 @@ class ProductionPlanTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->where('items', fn ($list) => collect($list)->pluck('machine_id')->every(fn ($id) => $id !== $subcon->id))
                 ->where('machines', fn ($list) => collect($list)->pluck('id')->every(fn ($id) => $id !== $subcon->id)));
+    }
+
+    public function test_subcon_rows_do_not_keep_completed_work_order_in_off_board_panel(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->post(route('work-orders.release', $wo))->assertRedirect();
+
+        $rows = ProductionPlanItem::where('work_order_id', $wo->id)->get();
+        $plan = $rows->firstOrFail()->plan;
+        $plan->update(['plan_date' => now()->subDay()->toDateString()]);
+
+        foreach ($rows as $row) {
+            ProductionResult::create([
+                'work_order_id' => $wo->id,
+                'parent_part_id' => $row->wip_part_id,
+                'result_date' => now()->toDateString(),
+                'qty_good' => $wo->qty,
+            ]);
+        }
+
+        $subcon = Machine::query()->whereRaw("UPPER(machine_code) = 'SUBCON'")->firstOrFail();
+        ProductionPlanItem::create([
+            'production_plan_id' => $plan->id,
+            'machine_id' => $subcon->id,
+            'work_order_id' => $wo->id,
+            'fg_part_id' => $wo->part_id,
+            'sequence' => 99,
+        ]);
+
+        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('offBoardWorkOrders', fn ($list) => ! collect($list)->pluck('id')->contains($wo->id)));
     }
 
     public function test_attach_rejects_work_order_already_in_a_plan(): void

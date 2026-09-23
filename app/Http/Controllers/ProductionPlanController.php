@@ -71,6 +71,11 @@ class ProductionPlanController extends Controller
             $item->setAttribute('remaining_qty', max(0, (float) ($item->workOrder?->qty ?? 0) - $produced));
         });
 
+        $items = $items
+            ->filter(fn (ProductionPlanItem $item) => in_array($item->workOrder?->status, ['in_progress', 'completed'], true)
+                && (float) $item->remaining_qty > 0)
+            ->values();
+
         // Estimasi waktu: qty WO × cycle time (mesin × part hasil baris itu).
         $cycleTimes = MachineCycleTime::query()
             ->where('is_active', true)
@@ -109,12 +114,41 @@ class ProductionPlanController extends Controller
         // WO aktif yang barisnya ada di papan TANGGAL LAIN → papan difilter satu
         // tanggal, jadi tanpa panel ini WO tersebut tidak terlihat di mana pun.
         $offBoardWorkOrders = WorkOrder::query()
-            ->with(['part:id,part_number,part_name', 'planItems.plan:id,plan_date'])
-            ->whereIn('status', ['planned', 'in_progress'])
-            ->whereHas('planItems')
-            ->whereDoesntHave('planItems.plan', fn ($query) => $query->whereDate('plan_date', $date))
+            ->with([
+                'part:id,part_number,part_name',
+                'planItems' => fn ($query) => $query
+                    ->whereNotIn('machine_id', $subconMachineIds)
+                    ->with('plan:id,plan_date'),
+            ])
+            ->whereIn('status', ['in_progress', 'completed'])
+            ->whereHas('planItems', fn ($query) => $query->whereNotIn('machine_id', $subconMachineIds))
+            ->whereDoesntHave('planItems', fn ($query) => $query
+                ->whereNotIn('machine_id', $subconMachineIds)
+                ->whereHas('plan', fn ($planQuery) => $planQuery->whereDate('plan_date', $date)))
             ->orderByDesc('id')
-            ->get(['id', 'wo_no', 'part_id', 'qty', 'status', 'planned_date'])
+            ->get(['id', 'wo_no', 'part_id', 'qty', 'status', 'planned_date']);
+
+        $offBoardProduced = ProductionResult::query()
+            ->whereDate('result_date', '<=', $date)
+            ->whereIn('work_order_id', $offBoardWorkOrders->pluck('id'))
+            ->whereIn('parent_part_id', $offBoardWorkOrders->flatMap->planItems->pluck('wip_part_id')->filter()->unique()->values())
+            ->selectRaw('work_order_id, parent_part_id, SUM(qty_good) as qty_good')
+            ->groupBy('work_order_id', 'parent_part_id')
+            ->get()
+            ->keyBy(fn (ProductionResult $result) => $result->work_order_id.'|'.$result->parent_part_id);
+
+        $offBoardWorkOrders = $offBoardWorkOrders
+            ->filter(function (WorkOrder $workOrder) use ($offBoardProduced): bool {
+                foreach ($workOrder->planItems as $planItem) {
+                    $produced = (float) ($offBoardProduced->get($workOrder->id.'|'.$planItem->wip_part_id)?->qty_good ?? 0);
+                    if (max(0, (float) $workOrder->qty - $produced) > 0) {
+                        return true;
+                    }
+                }
+
+                return false;
+            })
+            ->values()
             ->map(function (WorkOrder $workOrder): WorkOrder {
                 $workOrder->setAttribute('plan_dates', $workOrder->planItems
                     ->pluck('plan.plan_date')

@@ -189,16 +189,12 @@ const dirtyRows = computed(() => props.items.filter((it) => {
 
 const savingTargets = ref(false);
 const targetSaveStatus = ref<'idle' | 'saving' | 'saved' | 'error'>('idle');
-let targetSaveTimer: ReturnType<typeof setTimeout> | undefined;
 
-function queueTargetSave() {
-    if (targetSaveTimer) clearTimeout(targetSaveTimer);
-
-    targetSaveStatus.value = 'idle';
-    targetSaveTimer = setTimeout(saveAllTargets, 700);
-}
-
-/** Simpan semua target yang berubah dalam SATU request. */
+/**
+ * Simpan semua target yang berubah dalam SATU request.
+ * Dipicu tombol "Simpan" — tidak ada auto-save, jadi perubahan baru
+ * tersimpan ke server setelah user menekan tombol.
+ */
 function saveAllTargets() {
     if (dirtyRows.value.length === 0) return;
 
@@ -500,15 +496,25 @@ function submitEdit() {
                     <span v-else-if="targetSaveStatus === 'saved'" class="text-xs font-medium text-success">{{ t('production.targetsSaved') }}</span>
                     <span v-else-if="targetSaveStatus === 'error'" class="text-xs font-medium text-danger">{{ t('production.targetsSaveFailed') }}</span>
                     <span v-else-if="dirtyRows.length" class="text-xs font-medium text-warning">{{ t('production.dirtyRows', { n: dirtyRows.length }) }}</span>
+                    <button
+                        type="button"
+                        class="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                        :disabled="savingTargets || dirtyRows.length === 0"
+                        :title="t('production.save')"
+                        @click="saveAllTargets()"
+                    >
+                        <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                        {{ t('production.save') }}
+                    </button>
                 </div>
             </div>
             <div class="overflow-x-auto">
                 <table class="w-full min-w-[1440px] table-fixed border-separate border-spacing-0 text-sm">
                     <colgroup>
                         <col class="w-36" />
-                        <col class="w-24" />
                         <col class="w-12" />
                         <col class="w-44" />
+                        <col class="w-24" />
                         <col class="w-40" />
                         <col class="w-40" />
                         <col class="w-24" />
@@ -521,9 +527,9 @@ function submitEdit() {
                     <thead class="sticky top-0 z-10 bg-background">
                         <tr class="border-b border-borderline text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                             <th scope="col" class="sticky left-0 z-30 border-r border-borderline bg-background px-3 py-2.5">{{ t('production.machine') }}</th>
-                            <th scope="col" class="px-3 py-2.5">{{ t('production.modelPart') }}</th>
                             <th scope="col" class="px-3 py-2.5">{{ t('production.sequence') }}</th>
                             <th scope="col" class="px-3 py-2.5">{{ t('production.fgPart') }}</th>
+                            <th scope="col" class="px-3 py-2.5">{{ t('production.modelPart') }}</th>
                             <th scope="col" class="px-3 py-2.5">{{ t('production.inputPart') }}</th>
                             <th scope="col" class="px-3 py-2.5">{{ t('production.outputPart') }}</th>
                             <th scope="col" class="px-3 py-2.5 text-right">{{ t('production.estimatedTime') }}</th>
@@ -542,8 +548,7 @@ function submitEdit() {
                                     </div>
                                 </td>
                                 <td class="px-3 py-2.5 text-xs text-ink-secondary">—</td>
-                                <td class="px-3 py-2.5 text-xs text-ink-secondary">—</td>
-                                <td colspan="5" class="px-3 py-2.5 text-xs text-ink-secondary">{{ t('production.noMachineWo') }}</td>
+                                <td colspan="6" class="px-3 py-2.5 text-xs text-ink-secondary">{{ t('production.noMachineWo') }}</td>
                                 <td colspan="3" class="border-l border-borderline px-2 py-2.5 text-center text-xs text-ink-secondary">—</td>
                                 <td class="border-l border-borderline bg-surface px-3 py-2.5 text-right group-hover:bg-primary-light">
                                     <button
@@ -569,9 +574,6 @@ function submitEdit() {
                                         <span v-if="processNames(group.rows)" class="text-[11px] tracking-wide text-ink-secondary">{{ processNames(group.rows) }}</span>
                                         <span class="mt-0.5 inline-flex rounded-md bg-background px-1.5 py-0.5 text-[11px] font-medium text-ink-secondary">{{ t('production.rowsCount', { n: group.rows.length }) }}</span>
                                     </div>
-                                </td>
-                                <td class="px-3 py-2.5">
-                                    <span class="text-ink-primary">{{ row.fg_part?.model ?? '—' }}</span>
                                 </td>
                                 <td class="px-3 py-2.5">
                                     <div class="flex items-center gap-1.5">
@@ -605,6 +607,9 @@ function submitEdit() {
                                     <div class="truncate text-xs text-ink-secondary">{{ row.fg_part?.part_name ?? row.work_order?.part?.part_name ?? '' }}</div>
                                 </td>
                                 <td class="px-3 py-2.5">
+                                    <span class="text-ink-primary">{{ row.fg_part?.model ?? '—' }}</span>
+                                </td>
+                                <td class="px-3 py-2.5">
                                     <div class="text-ink-primary">{{ row.input_part?.part_number ?? '—' }}</div>
                                     <div class="truncate text-xs text-ink-secondary">{{ row.input_part?.part_name ?? '' }}</div>
                                 </td>
@@ -635,7 +640,6 @@ function submitEdit() {
                                         :disabled="savingTargets"
                                         class="min-w-[4.5rem] w-full rounded-md border px-2 py-1.5 text-right text-sm tabular-nums text-ink-primary placeholder:text-ink-secondary/70 focus:border-primary focus:ring-primary disabled:cursor-wait disabled:opacity-60"
                                         :class="draftFor(row)[key] !== '' ? 'border-primary/50 bg-primary-light/40' : 'border-borderline bg-background'"
-                                        @input="queueTargetSave"
                                     />
                                 </td>
                                 <td class="border-l border-borderline bg-surface px-3 py-2.5 group-hover:bg-primary-light">

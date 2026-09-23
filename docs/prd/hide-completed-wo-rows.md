@@ -62,9 +62,9 @@ lain yang masih bersisa di mesin yang sama tetap tampil normal.
 
 ## Technical Decisions
 
-- **Titik perubahan tunggal.** Penyaringan dilakukan di
-  `ProductionPlanController::index()`, tepat setelah `remaining_qty` dihitung
-  per baris. Tidak ada perubahan skema database.
+- **Titik perubahan tunggal.** `ProductionPlanController::index()` memilih
+  alokasi sampai tanggal papan dan status WO yang relevan, lalu menyaring
+  `remaining_qty` per baris. Tidak ada perubahan skema database.
 - **"Closed" bersifat derived, bukan status tersimpan.** Baris dianggap tuntas
   ketika `remaining_qty` = 0. Tidak ada kolom status baru. Alasan: Production
   Result dapat dihapus melalui `DELETE production-results/{workOrder}/results/{result}`;
@@ -77,17 +77,21 @@ lain yang masih bersisa di mesin yang sama tetap tampil normal.
   yang tuntas yang disembunyikan.
 - **Rumus sisa tidak berubah:** `max(0, qty WO − Σ Production Result qty_good
   untuk pasangan itu, dibatasi result_date ≤ tanggal papan)`.
+- **Alokasi Production Plan menentukan visibilitas.** `work_orders.planned_date`
+  hanya informasi tanggal WO dan tidak dipakai untuk memilih baris papan.
+  Saat membuka tanggal D, papan memuat alokasi dengan `production_plans.plan_date
+  ≤ D` yang masih bersisa. Alokasi lama tidak dipindah atau diduplikasi.
 - **WO `planned` tetap tidak dihitung** dan tidak masuk papan. WO masuk papan
   saat release (perilaku yang sudah berlaku), sehingga penyaringan ini tidak
   menyentuh alur release.
 - **Status WO tidak diubah.** Baris yang tuntas tidak mengubah status WO menjadi
   `completed`; penutupan WO tetap keputusan planner.
-- **Panel "aktif di tanggal lain" diselaraskan.** WO yang seluruh barisnya
-  sudah tuntas tidak lagi ditampilkan pada `offBoardWorkOrders`, agar panel itu
-  konsisten berisi pekerjaan yang masih menunggu.
-- **Baris yatim ikut teratasi.** WO yang di-soft-delete membuat relasi
-  `workOrder` menjadi NULL sehingga sisa dihitung 0; baris seperti itu ikut
-  tersembunyi tanpa logika tambahan.
+- **Panel "aktif di tanggal lain" diselaraskan.** Carry-over tanggal lama tampil
+  langsung di papan. `offBoardWorkOrders` hanya memuat alokasi setelah tanggal
+  papan terpilih dan tidak menduplikasi WO yang sudah tampil.
+- **Baris yatim ikut teratasi.** Query hanya memuat item yang masih memiliki
+  relasi `workOrder`, sehingga baris milik WO yang di-soft-delete tidak masuk
+  papan.
 - **Ringkasan papan ikut menyesuaikan sendiri.** Jumlah mesin dan WO pada
   ringkasan dihitung dari daftar baris, sehingga otomatis mengikuti penyaringan.
 - **Urutan kolom dan target D/D+1/D+2 tetap per WO.** Tidak ada perubahan pada
@@ -121,7 +125,10 @@ Test yang ditambahkan:
   menampilkan baris yang belum tuntas.
 - Menghapus Production Result memunculkan kembali barisnya di papan.
 - WO yang seluruh barisnya tuntas tidak muncul di `offBoardWorkOrders`.
-- Hasil produksi setelah tanggal papan tidak menutup baris historical/off-board.
+- WO dari alokasi tanggal sebelumnya tetap muncul langsung di papan sampai tuntas.
+- Hasil produksi setelah tanggal papan tidak menutup baris carry-over historical.
+- Alokasi masa depan tidak muncul sebelum tanggal alokasinya.
+- `work_orders.planned_date` tidak mengontrol visibilitas papan.
 - Baris Subcon tidak dihitung sebagai beban internal pada `offBoardWorkOrders`.
 - WO `planned`/`cancelled` tidak tampil; WO `completed` yang masih bersisa tetap tampil.
 
@@ -129,7 +136,7 @@ Regresi yang harus tetap lulus: `test_release_enters_wo_into_plan_board`,
 `test_plan_remaining_qty_uses_results_up_to_board_date_not_targets`,
 `test_plan_rows_follow_routing_order`,
 `test_subcon_machine_rows_are_hidden_from_plan_board`,
-`test_active_wo_on_another_date_is_surfaced_off_board`.
+`test_unfinished_work_order_from_previous_plan_date_carries_over_to_selected_board`.
 
 Karena perhitungan ada di controller dan tidak ada logika murni terpisah,
 cakupan lewat feature test sudah memadai; unit test terpisah tidak diperlukan.
@@ -162,6 +169,9 @@ cakupan lewat feature test sudah memadai; unit test terpisah tidak diperlukan.
 
 - [x] Baris WO dengan sisa 0 tidak muncul lagi di prop `items` papan Production Plan.
 - [x] WO lama yang masih bersisa tetap tampil di mesinnya, berdampingan dengan WO baru.
+- [x] Alokasi Production Plan tanggal sebelumnya dibawa ke papan tanggal terpilih sampai tuntas.
+- [x] Alokasi Production Plan masa depan tidak muncul lebih awal.
+- [x] `work_orders.planned_date` tidak memengaruhi visibilitas papan.
 - [x] Pada satu WO dengan beberapa baris mesin, hanya baris yang belum tuntas yang tampil.
 - [x] Menghapus Production Result memunculkan kembali baris yang bersangkutan di papan.
 - [x] WO yang seluruh barisnya tuntas tidak muncul di panel "aktif di tanggal lain".

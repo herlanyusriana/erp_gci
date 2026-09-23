@@ -34,24 +34,24 @@ class ProductionPlanController extends Controller
 
         $plan = ProductionPlan::query()->whereDate('plan_date', $date)->first();
 
-        $items = $plan
-            ? $plan->items()
-                ->whereNotIn('machine_id', $subconMachineIds)
-                ->with([
-                    'machine:id,machine_code,machine_name',
-                    'process:id,process_name',
-                    'workOrder:id,wo_no,part_id,qty,status',
-                    'workOrder.part:id,part_number,part_name',
-                    'fgPart:id,part_number,part_name,model',
-                    'inputPart:id,part_number,part_name',
-                    'wipPart:id,part_number,part_name',
-                ])
-                ->orderByRaw('step_sequence ASC NULLS LAST')
-                ->orderBy('machine_id')
-                ->orderBy('sequence')
-                ->orderBy('id')
-                ->get()
-            : collect();
+        $items = ProductionPlanItem::query()
+            ->whereHas('plan', fn ($query) => $query->whereDate('plan_date', '<=', $date))
+            ->whereHas('workOrder', fn ($query) => $query->whereIn('status', ['in_progress', 'completed']))
+            ->whereNotIn('machine_id', $subconMachineIds)
+            ->with([
+                'machine:id,machine_code,machine_name',
+                'process:id,process_name',
+                'workOrder:id,wo_no,part_id,qty,status',
+                'workOrder.part:id,part_number,part_name',
+                'fgPart:id,part_number,part_name,model',
+                'inputPart:id,part_number,part_name',
+                'wipPart:id,part_number,part_name',
+            ])
+            ->orderByRaw('step_sequence ASC NULLS LAST')
+            ->orderBy('machine_id')
+            ->orderBy('sequence')
+            ->orderBy('id')
+            ->get();
 
         // Sisa WO adalah kuantitas yang belum direalisasikan, bukan target harian
         // yang masih berupa rencana. Result setelah tanggal papan tidak ikut
@@ -111,20 +111,20 @@ class ProductionPlanController extends Controller
             ->orderByDesc('id')
             ->get(['id', 'wo_no', 'part_id', 'qty', 'status', 'planned_date']);
 
-        // WO aktif yang barisnya ada di papan TANGGAL LAIN → papan difilter satu
-        // tanggal, jadi tanpa panel ini WO tersebut tidak terlihat di mana pun.
+        // WO aktif yang baru dialokasikan setelah tanggal papan terpilih.
         $offBoardWorkOrders = WorkOrder::query()
             ->with([
                 'part:id,part_number,part_name',
                 'planItems' => fn ($query) => $query
                     ->whereNotIn('machine_id', $subconMachineIds)
+                    ->whereHas('plan', fn ($planQuery) => $planQuery->whereDate('plan_date', '>', $date))
                     ->with('plan:id,plan_date'),
             ])
             ->whereIn('status', ['in_progress', 'completed'])
-            ->whereHas('planItems', fn ($query) => $query->whereNotIn('machine_id', $subconMachineIds))
-            ->whereDoesntHave('planItems', fn ($query) => $query
+            ->whereNotIn('id', $items->pluck('work_order_id')->filter()->unique())
+            ->whereHas('planItems', fn ($query) => $query
                 ->whereNotIn('machine_id', $subconMachineIds)
-                ->whereHas('plan', fn ($planQuery) => $planQuery->whereDate('plan_date', $date)))
+                ->whereHas('plan', fn ($planQuery) => $planQuery->whereDate('plan_date', '>', $date)))
             ->orderByDesc('id')
             ->get(['id', 'wo_no', 'part_id', 'qty', 'status', 'planned_date']);
 

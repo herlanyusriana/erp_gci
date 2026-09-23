@@ -32,11 +32,12 @@ dengan sisa lebih dari 0. Ringkasan papan dan kolom estimasi otomatis mengikuti.
 ## Task 2: Selaraskan panel "aktif di tanggal lain"
 
 **Description:** Keluarkan WO yang seluruh barisnya sudah tuntas dari
-`offBoardWorkOrders`, agar panel hanya berisi pekerjaan yang masih menunggu.
+`offBoardWorkOrders`, agar panel hanya berisi alokasi masa depan yang belum
+tampil di papan.
 
 **Acceptance criteria:**
 - [x] WO yang seluruh barisnya tuntas tidak muncul di `offBoardWorkOrders`.
-- [x] WO yang masih bersisa di tanggal lain tetap muncul beserta tanggal papannya.
+- [x] Alokasi masa depan tetap muncul beserta tanggal papannya.
 - [x] WO `planned` tetap tidak dihitung.
 
 **Verification:**
@@ -57,7 +58,7 @@ dengan sisa lebih dari 0. Ringkasan papan dan kolom estimasi otomatis mengikuti.
 **Description:** Jalankan quality gate penuh dan pastikan tidak ada regresi.
 
 **Acceptance criteria:**
-- [x] Suite penuh lulus.
+- [x] Suite penuh lulus setelah perubahan carry-over.
 - [x] Pint lulus pada file yang berubah.
 - [x] `npm run build` lulus.
 - [x] Tidak ada test lama yang dihapus atau dilemahkan.
@@ -72,7 +73,19 @@ dengan sisa lebih dari 0. Ringkasan papan dan kolom estimasi otomatis mengikuti.
 
 **Estimated scope:** Small: verification-only
 
-## Checkpoint: Perilaku Inti (setelah Task 1-2)
+## Task 4: Carry-over alokasi lama yang belum tuntas
+
+**Acceptance criteria:**
+- [x] Alokasi Production Plan dengan `plan_date <= tanggal terpilih` tetap tampil bila masih bersisa.
+- [x] `work_orders.planned_date` tidak memengaruhi visibilitas papan.
+- [x] Alokasi masa depan tidak muncul lebih awal.
+- [x] Carry-over tidak diduplikasi di `offBoardWorkOrders`.
+
+**Verification:**
+- [x] Tests pass: `php artisan test --compact tests/Feature/ProductionPlanTest.php`
+- [x] Full suite, Pint, dan build lulus setelah perubahan.
+
+## Checkpoint: Perilaku Inti (setelah Task 1-2 dan Task 4)
 
 - [x] Semua test `ProductionPlanTest` lulus.
 - [x] Perilaku diverifikasi lewat HTTP (Inertia props), bukan asumsi.
@@ -86,6 +99,6 @@ dengan sisa lebih dari 0. Ringkasan papan dan kolom estimasi otomatis mengikuti.
 
 ## Catatan Verifikasi
 
-- Otomatis: 26 test Production Plan / 304 assertions dan 140 test penuh / 886 assertions lulus.
+- Otomatis: 28 test Production Plan / 334 assertions dan 142 test penuh / 916 assertions lulus.
 - Pint dan build frontend lulus.
 - Verifikasi browser manual pada dua item di atas belum dilakukan pada sesi ini.

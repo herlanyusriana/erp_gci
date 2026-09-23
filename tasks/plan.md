@@ -23,9 +23,11 @@ PRD: `docs/prd/hide-completed-wo-rows.md`
   mesin lain.
 - **Rumus sisa tidak diubah:** `max(0, qty WO − Σ qty_good untuk pasangan itu,
   result_date ≤ tanggal papan)`. Penyaringan memakai nilai yang sudah dihitung.
-- **Panel "aktif di tanggal lain" diselaraskan:** WO yang seluruh baris internalnya
-  tuntas tidak lagi ditampilkan; hasil setelah tanggal papan dan baris Subcon
-  tidak ikut mengurangi atau mempertahankan beban papan.
+- **Alokasi Production Plan menentukan papan:** saat membuka tanggal D, alokasi
+  dengan `production_plans.plan_date ≤ D` tetap tampil sampai tuntas.
+  `work_orders.planned_date` hanya informasi dan tidak mengontrol papan.
+- **Panel "aktif di tanggal lain" diselaraskan:** hanya alokasi masa depan yang
+  belum tampil di papan; carry-over tidak diduplikasi. Baris Subcon tetap diabaikan.
 - **WO `planned` dan `cancelled` tidak dihitung**; `in_progress` dan `completed`
   yang masih bersisa tetap tampil. Alur release tidak disentuh.
 - **Status WO tidak diubah** oleh penyaringan ini.
@@ -36,6 +38,7 @@ PRD: `docs/prd/hide-completed-wo-rows.md`
 
 - [x] Task 1: Sembunyikan baris papan yang sisanya 0
 - [x] Task 2: Selaraskan panel "aktif di tanggal lain"
+- [x] Task 4: Carry-over alokasi lama yang belum tuntas
 
 ### Checkpoint: Perilaku Inti
 
@@ -98,13 +101,13 @@ karena dihitung dari daftar yang sama.
 
 ### Task 2: Selaraskan panel "aktif di tanggal lain"
 
-**Description:** Panel `offBoardWorkOrders` saat ini memuat WO aktif yang
-barisnya ada di tanggal lain. Setelah Task 1, WO yang seluruh barisnya tuntas
-tidak lagi relevan, jadi harus dikeluarkan dari panel ini agar konsisten.
+**Description:** Panel `offBoardWorkOrders` hanya memuat alokasi masa depan.
+Alokasi tanggal sebelumnya yang belum tuntas tampil langsung di papan dan tidak
+boleh diduplikasi di panel.
 
 **Acceptance criteria:**
 - [ ] WO yang seluruh barisnya tuntas tidak muncul di `offBoardWorkOrders`.
-- [ ] WO yang masih bersisa di tanggal lain tetap muncul beserta tanggal papannya.
+- [ ] Alokasi masa depan tetap muncul beserta tanggal papannya.
 - [ ] WO `planned` tetap tidak dihitung.
 
 **Verification:**

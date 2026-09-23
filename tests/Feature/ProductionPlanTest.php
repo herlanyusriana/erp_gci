@@ -320,7 +320,7 @@ class ProductionPlanTest extends TestCase
         $wo = $this->createWorkOrder();
         $this->post(route('work-orders.release', $wo))->assertRedirect();
 
-        $otherDate = now()->subDay()->toDateString();
+        $otherDate = now()->addDay()->toDateString();
         foreach (ProductionPlanItem::where('work_order_id', $wo->id)->get() as $row) {
             $row->plan->update(['plan_date' => $otherDate]);
             ProductionResult::create([
@@ -337,7 +337,7 @@ class ProductionPlanTest extends TestCase
                 ->where('offBoardWorkOrders', fn ($list) => ! collect($list)->pluck('id')->contains($wo->id)));
     }
 
-    public function test_off_board_remaining_quantity_ignores_results_after_board_date(): void
+    public function test_carry_over_remaining_quantity_ignores_results_after_board_date(): void
     {
         $wo = $this->createWorkOrder();
         $this->post(route('work-orders.release', $wo))->assertRedirect();
@@ -359,7 +359,8 @@ class ProductionPlanTest extends TestCase
         $this->get(route('production-plans.index', ['date' => $boardDate]))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->where('offBoardWorkOrders', fn ($list) => collect($list)->pluck('id')->contains($wo->id)));
+                ->where('items', fn ($list) => collect($list)->pluck('work_order_id')->contains($wo->id))
+                ->where('offBoardWorkOrders', fn ($list) => ! collect($list)->pluck('id')->contains($wo->id)));
     }
 
     public function test_planned_work_order_is_not_listed_on_or_off_board(): void
@@ -485,7 +486,7 @@ class ProductionPlanTest extends TestCase
         $this->assertSame($rowsBefore, ProductionPlanItem::where('work_order_id', $wo->id)->count());
     }
 
-    public function test_active_wo_on_another_date_is_surfaced_off_board(): void
+    public function test_unfinished_work_order_from_previous_plan_date_carries_over_to_selected_board(): void
     {
         $wo = $this->createWorkOrder();
         $this->post(route('work-orders.release', $wo))->assertRedirect();
@@ -497,13 +498,41 @@ class ProductionPlanTest extends TestCase
         $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                // Papan hari ini tidak memuat baris WO ini...
+                ->where('items', fn ($list) => collect($list)->pluck('work_order_id')->contains($wo->id))
+                ->where('offBoardWorkOrders', fn ($list) => ! collect($list)->pluck('id')->contains($wo->id)));
+    }
+
+    public function test_future_plan_allocation_does_not_appear_before_its_date(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->post(route('work-orders.release', $wo))->assertRedirect();
+
+        $futureDate = now()->addDay()->toDateString();
+        ProductionPlanItem::where('work_order_id', $wo->id)
+            ->firstOrFail()
+            ->plan
+            ->update(['plan_date' => $futureDate]);
+
+        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
                 ->where('items', fn ($list) => ! collect($list)->pluck('work_order_id')->contains($wo->id))
-                // ...tetapi WO tetap terlihat di panel "tanggal lain".
                 ->where('offBoardWorkOrders', fn ($list) => collect($list)->contains(
                     fn ($item) => $item['id'] === $wo->id
-                        && in_array($otherDate, $item['plan_dates'], true),
+                        && in_array($futureDate, $item['plan_dates'], true),
                 )));
+    }
+
+    public function test_work_order_planned_date_does_not_control_board_visibility(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->post(route('work-orders.release', $wo))->assertRedirect();
+        $wo->update(['planned_date' => now()->addMonth()->toDateString()]);
+
+        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('items', fn ($list) => collect($list)->pluck('work_order_id')->contains($wo->id)));
     }
 
     public function test_attach_reports_wo_without_routable_step_instead_of_false_success(): void
@@ -571,7 +600,7 @@ class ProductionPlanTest extends TestCase
 
         $rows = ProductionPlanItem::where('work_order_id', $wo->id)->get();
         $plan = $rows->firstOrFail()->plan;
-        $plan->update(['plan_date' => now()->subDay()->toDateString()]);
+        $plan->update(['plan_date' => now()->addDay()->toDateString()]);
 
         foreach ($rows as $row) {
             ProductionResult::create([

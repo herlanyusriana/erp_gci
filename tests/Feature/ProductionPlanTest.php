@@ -294,6 +294,61 @@ class ProductionPlanTest extends TestCase
         $this->assertTrue($rows->every(fn ($r) => $r->target_d === null));
     }
 
+    public function test_rebuild_keeps_existing_rows_when_no_routable_step(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->post(route('work-orders.release', $wo))->assertRedirect();
+
+        $rowsBefore = ProductionPlanItem::where('work_order_id', $wo->id)->count();
+        $this->assertGreaterThan(0, $rowsBefore);
+
+        // Hilangkan semua parent part → tidak ada step routing yang bisa dibuat.
+        $wo->items()->update(['parent_part_id' => null]);
+
+        $this->artisan('production-plan:rebuild', ['--wo' => $wo->id])->assertExitCode(0);
+
+        // Baris lama tidak boleh hilang hanya karena rebuild tidak menemukan step.
+        $this->assertSame($rowsBefore, ProductionPlanItem::where('work_order_id', $wo->id)->count());
+    }
+
+    public function test_active_wo_on_another_date_is_surfaced_off_board(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->post(route('work-orders.release', $wo))->assertRedirect();
+
+        $row = ProductionPlanItem::where('work_order_id', $wo->id)->firstOrFail();
+        $otherDate = now()->subDay()->toDateString();
+        $row->plan->update(['plan_date' => $otherDate]);
+
+        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                // Papan hari ini tidak memuat baris WO ini...
+                ->where('items', fn ($list) => ! collect($list)->pluck('work_order_id')->contains($wo->id))
+                // ...tetapi WO tetap terlihat di panel "tanggal lain".
+                ->where('offBoardWorkOrders', fn ($list) => collect($list)->contains(
+                    fn ($item) => $item['id'] === $wo->id
+                        && in_array($otherDate, $item['plan_dates'], true),
+                )));
+    }
+
+    public function test_attach_reports_wo_without_routable_step_instead_of_false_success(): void
+    {
+        $wo = $this->createWorkOrder();
+
+        // Tidak ada parent part → tidak ada step routing yang bisa jadi baris papan.
+        $wo->items()->update(['parent_part_id' => null]);
+
+        $this->post(route('production-plans.attach'), [
+            'work_order_id' => $wo->id,
+            'plan_date' => now()->toDateString(),
+        ])->assertRedirect();
+
+        $this->assertSame(0, ProductionPlanItem::where('work_order_id', $wo->id)->count());
+        $this->assertNotNull(session('error'));
+        $this->assertNull(session('success'));
+    }
+
     public function test_plan_machines_follow_master_sequence(): void
     {
         // Netralkan urutan hasil seeding dulu supaya tidak bentrok nilai.

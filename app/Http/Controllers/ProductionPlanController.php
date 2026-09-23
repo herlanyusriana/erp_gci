@@ -106,6 +106,27 @@ class ProductionPlanController extends Controller
             ->orderByDesc('id')
             ->get(['id', 'wo_no', 'part_id', 'qty', 'status', 'planned_date']);
 
+        // WO aktif yang barisnya ada di papan TANGGAL LAIN → papan difilter satu
+        // tanggal, jadi tanpa panel ini WO tersebut tidak terlihat di mana pun.
+        $offBoardWorkOrders = WorkOrder::query()
+            ->with(['part:id,part_number,part_name', 'planItems.plan:id,plan_date'])
+            ->whereIn('status', ['planned', 'in_progress'])
+            ->whereHas('planItems')
+            ->whereDoesntHave('planItems.plan', fn ($query) => $query->whereDate('plan_date', $date))
+            ->orderByDesc('id')
+            ->get(['id', 'wo_no', 'part_id', 'qty', 'status', 'planned_date'])
+            ->map(function (WorkOrder $workOrder): WorkOrder {
+                $workOrder->setAttribute('plan_dates', $workOrder->planItems
+                    ->pluck('plan.plan_date')
+                    ->filter()
+                    ->map(fn ($planDate) => $planDate->toDateString())
+                    ->unique()
+                    ->sort()
+                    ->values());
+
+                return $workOrder;
+            });
+
         $fgParts = Part::query()
             ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) = ?', ['fg']))
             ->where('is_active', true)
@@ -135,6 +156,7 @@ class ProductionPlanController extends Controller
             'wipParts' => $wipParts,
             'histories' => $histories,
             'unplannedWorkOrders' => $unplannedWorkOrders,
+            'offBoardWorkOrders' => $offBoardWorkOrders,
         ]);
     }
 
@@ -197,7 +219,10 @@ class ProductionPlanController extends Controller
             return $redirect->with('error', __('WO dibuat, tapi ada kekurangan stok: :details', ['details' => implode(' · ', array_slice($warnings, 0, 5)).(count($warnings) > 5 ? ' …' : '')]));
         }
 
-        return $redirect->with('success', __('WO :number dibuat dan masuk ke Production Plan.', ['number' => $workOrder->wo_no]));
+        // WO yang baru dibuat masih `planned`; papan produksi baru memuatnya
+        // setelah di-release. Pesan harus mencerminkan itu supaya WO tidak
+        // dikira "hilang" dari papan.
+        return $redirect->with('success', __('WO :number dibuat. WO masuk papan produksi setelah di-release.', ['number' => $workOrder->wo_no]));
     }
 
     /**
@@ -222,6 +247,14 @@ class ProductionPlanController extends Controller
         }
 
         $this->woService->populatePlanItems($workOrder, $data['plan_date'], (int) auth()->id());
+
+        if (! $workOrder->planItems()->exists()) {
+            // Tidak ada step routing yang bisa jadi baris papan (mis. semua Subcon
+            // atau tanpa parent part). Jangan laporkan sukses palsu.
+            return redirect()
+                ->route('production-plans.index', ['date' => $data['plan_date']])
+                ->with('error', __('WO :number tidak punya step routing yang bisa masuk papan (cek BOM/mesin, termasuk step Subcon).', ['number' => $workOrder->wo_no]));
+        }
 
         return redirect()
             ->route('production-plans.index', ['date' => $data['plan_date']])

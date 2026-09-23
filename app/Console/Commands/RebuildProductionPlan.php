@@ -60,15 +60,34 @@ class RebuildProductionPlan extends Command
                 continue;
             }
 
-            $after = DB::transaction(function () use ($workOrder, $woService, $planDate) {
-                $workOrder->planItems()->delete();
+            try {
+                $after = DB::transaction(function () use ($workOrder, $woService, $planDate) {
+                    $workOrder->planItems()->delete();
 
-                return $woService->populatePlanItems(
-                    $workOrder,
-                    $planDate,
-                    (int) ($workOrder->updated_by ?? $workOrder->created_by ?? 0),
-                );
-            });
+                    $created = $woService->populatePlanItems(
+                        $workOrder,
+                        $planDate,
+                        (int) ($workOrder->updated_by ?? $workOrder->created_by ?? 0),
+                    );
+
+                    // Jangan pernah menyisakan papan kosong: bila tak ada step routing
+                    // yang bisa dibuat, batalkan (rollback) agar baris lama tetap ada.
+                    if ($created === 0) {
+                        throw new \RuntimeException('no-routable-steps');
+                    }
+
+                    return $created;
+                });
+            } catch (\RuntimeException $e) {
+                $this->error(sprintf(
+                    '%s (%s) — dilewati: tidak ada step routing yang bisa dibuat; %d baris lama dipertahankan.',
+                    $workOrder->wo_no,
+                    $workOrder->status,
+                    $before,
+                ));
+
+                continue;
+            }
 
             $this->info(sprintf(
                 '%s (%s) — %d → %d baris pada %s',

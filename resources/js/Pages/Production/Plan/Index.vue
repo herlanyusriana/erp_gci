@@ -41,6 +41,16 @@ const props = defineProps<{
         planned_date: string | null;
         part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
     }>;
+    offBoardWorkOrders: Array<{
+        id: number;
+        wo_no: string;
+        part_id: number;
+        qty: number;
+        status: string;
+        planned_date: string | null;
+        plan_dates: string[];
+        part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
+    }>;
 }>();
 
 const date = ref(props.date);
@@ -48,6 +58,12 @@ const search = ref('');
 
 function applyDate() {
     router.get(route('production-plans.index'), { date: date.value || undefined }, { preserveState: true, replace: true });
+}
+
+/** Lompat ke papan tanggal lain (dari panel WO di luar papan). */
+function jumpToDate(target: string) {
+    date.value = target;
+    applyDate();
 }
 
 function addDays(value: string, days: number): string {
@@ -410,6 +426,35 @@ function submitEdit() {
                     {{ t('production.totalEstimate') }}
                     <span class="font-semibold tabular-nums text-ink-primary">{{ fmtDuration(summary.estimate) }}</span>
                 </span>
+            </div>
+        </div>
+
+        <!-- WO aktif yang barisnya ada di tanggal lain -->
+        <div v-if="offBoardWorkOrders.length" class="mb-4 rounded-xl border border-info/40 bg-info/5 p-4">
+            <h2 class="text-sm font-semibold text-info">
+                {{ t('production.offBoardTitle', { count: offBoardWorkOrders.length }) }}
+            </h2>
+            <p class="mb-3 mt-1 text-xs text-ink-secondary">{{ t('production.offBoardHint') }}</p>
+            <div class="flex flex-wrap gap-2">
+                <div
+                    v-for="wo in offBoardWorkOrders"
+                    :key="wo.id"
+                    class="rounded-lg border border-borderline bg-surface px-3 py-2 text-xs"
+                >
+                    <span class="block font-semibold text-ink-primary">{{ wo.wo_no }}</span>
+                    <span class="block text-ink-secondary">{{ wo.part?.part_number ?? '—' }} · {{ fmt(wo.qty) }} · {{ t(`production.statuses.${wo.status}`) }}</span>
+                    <span class="mt-1 flex flex-wrap gap-1">
+                        <button
+                            v-for="planDate in wo.plan_dates"
+                            :key="planDate"
+                            type="button"
+                            class="rounded-md border border-info/50 px-2 py-0.5 font-medium text-info transition hover:bg-info/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                            @click="jumpToDate(planDate)"
+                        >
+                            {{ fmtDate(planDate) }}
+                        </button>
+                    </span>
+                </div>
             </div>
         </div>
 

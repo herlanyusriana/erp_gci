@@ -490,6 +490,9 @@ export interface ProductionPlanItem {
     input_part_id: number | null;
     wip_part_id: number | null;
     sequence: number;
+    sequence_d: number;
+    sequence_d1: number;
+    sequence_d2: number;
     step_sequence?: number | null;
     target_d: number | null;
     target_d1: number | null;

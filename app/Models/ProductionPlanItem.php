@@ -9,12 +9,15 @@ class ProductionPlanItem extends Model
 {
     protected $fillable = [
         'production_plan_id', 'machine_id', 'process_id', 'work_order_id',
-        'fg_part_id', 'input_part_id', 'wip_part_id', 'sequence', 'step_sequence',
+        'fg_part_id', 'input_part_id', 'wip_part_id', 'sequence', 'sequence_d', 'sequence_d1', 'sequence_d2', 'step_sequence',
         'target_d', 'target_d1', 'target_d2',
         'created_by', 'updated_by',
     ];
 
     protected $casts = [
+        'sequence_d' => 'integer',
+        'sequence_d1' => 'integer',
+        'sequence_d2' => 'integer',
         'target_d' => 'float',
         'target_d1' => 'float',
         'target_d2' => 'float',

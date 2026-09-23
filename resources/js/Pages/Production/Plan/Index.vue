@@ -118,8 +118,15 @@ function historyDetail(history: PlanHistory): string {
     if (history.event === 'targets_updated') {
         const before = history.before ?? {};
         const after = history.after ?? {};
-        const labels: Record<string, string> = { target_d: 'D', target_d1: 'D+1', target_d2: 'D+2' };
-        return ['target_d', 'target_d1', 'target_d2']
+        const labels: Record<string, string> = {
+            target_d: `D ${t('production.qtyShort')}`,
+            target_d1: `D+1 ${t('production.qtyShort')}`,
+            target_d2: `D+2 ${t('production.qtyShort')}`,
+            sequence_d: `D ${t('production.sequenceShort')}`,
+            sequence_d1: `D+1 ${t('production.sequenceShort')}`,
+            sequence_d2: `D+2 ${t('production.sequenceShort')}`,
+        };
+        return Object.keys(labels)
             .filter((key) => before[key] !== after[key])
             .map((key) => `${labels[key]}: ${fmt(before[key] as number | null)} → ${fmt(after[key] as number | null)}`)
             .join(' · ');
@@ -155,13 +162,39 @@ const filteredItems = computed(() => {
 });
 
 // ── Inline targets (mockup: isi manual di baris) ──────────
-const targetDrafts = reactive<Record<number, { d: string; d1: string; d2: string }>>({});
+type DailyDraft = {
+    d: string;
+    d1: string;
+    d2: string;
+    sequence_d: string;
+    sequence_d1: string;
+    sequence_d2: string;
+};
+
+const targetDrafts = reactive<Record<number, DailyDraft>>({});
+const sequenceKeyByDay = {
+    d: 'sequence_d',
+    d1: 'sequence_d1',
+    d2: 'sequence_d2',
+} as const;
+const quantityLabelKeyByDay = {
+    d: 'production.dQty',
+    d1: 'production.d1Qty',
+    d2: 'production.d2Qty',
+} as const;
 
 const asText = (v: number | null | undefined) => (v == null ? '' : String(v));
 
 function draftFor(it: ProductionPlanItem) {
     if (!targetDrafts[it.id]) {
-        targetDrafts[it.id] = { d: asText(it.target_d), d1: asText(it.target_d1), d2: asText(it.target_d2) };
+        targetDrafts[it.id] = {
+            d: asText(it.target_d),
+            d1: asText(it.target_d1),
+            d2: asText(it.target_d2),
+            sequence_d: asText(it.sequence_d),
+            sequence_d1: asText(it.sequence_d1),
+            sequence_d2: asText(it.sequence_d2),
+        };
     }
     return targetDrafts[it.id];
 }
@@ -174,6 +207,9 @@ watch(() => props.items, (list) => {
         draft.d = asText(it.target_d);
         draft.d1 = asText(it.target_d1);
         draft.d2 = asText(it.target_d2);
+        draft.sequence_d = asText(it.sequence_d);
+        draft.sequence_d1 = asText(it.sequence_d1);
+        draft.sequence_d2 = asText(it.sequence_d2);
     }
 });
 
@@ -184,7 +220,10 @@ const dirtyRows = computed(() => props.items.filter((it) => {
 
     return draft.d !== asText(it.target_d)
         || draft.d1 !== asText(it.target_d1)
-        || draft.d2 !== asText(it.target_d2);
+        || draft.d2 !== asText(it.target_d2)
+        || draft.sequence_d !== asText(it.sequence_d)
+        || draft.sequence_d1 !== asText(it.sequence_d1)
+        || draft.sequence_d2 !== asText(it.sequence_d2);
 }));
 
 const savingTargets = ref(false);
@@ -210,6 +249,9 @@ function saveAllTargets() {
                 target_d: draft.d === '' ? null : Number(draft.d),
                 target_d1: draft.d1 === '' ? null : Number(draft.d1),
                 target_d2: draft.d2 === '' ? null : Number(draft.d2),
+                sequence_d: Number(draft.sequence_d),
+                sequence_d1: Number(draft.sequence_d1),
+                sequence_d2: Number(draft.sequence_d2),
             };
         }),
     }, {
@@ -259,16 +301,6 @@ const groups = computed(() => {
 
     return result;
 });
-
-function move(rows: ProductionPlanItem[], index: number, dir: number) {
-    const target = index + dir;
-    if (target < 0 || target >= rows.length) return;
-    const reordered = rows.slice();
-    [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
-    router.post(route('production-plans.items.reorder'), {
-        items: reordered.map((it, i) => ({ id: it.id, sequence: i + 1 })),
-    }, { preserveScroll: true });
-}
 
 function detach(item: ProductionPlanItem) {
     const label = item.work_order?.wo_no ?? t('production.thisRow');
@@ -509,25 +541,23 @@ function submitEdit() {
                 </div>
             </div>
             <div class="overflow-x-auto">
-                <table class="w-full min-w-[1440px] table-fixed border-separate border-spacing-0 text-sm">
+                <table class="w-full min-w-[1536px] table-fixed border-separate border-spacing-0 text-sm">
                     <colgroup>
                         <col class="w-36" />
-                        <col class="w-12" />
                         <col class="w-44" />
                         <col class="w-24" />
                         <col class="w-40" />
                         <col class="w-40" />
                         <col class="w-24" />
                         <col class="w-24" />
-                        <col class="w-24" />
-                        <col class="w-24" />
-                        <col class="w-24" />
+                        <col class="w-36" />
+                        <col class="w-36" />
+                        <col class="w-36" />
                         <col class="w-44" />
                     </colgroup>
                     <thead class="sticky top-0 z-10 bg-background">
                         <tr class="border-b border-borderline text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                             <th scope="col" class="sticky left-0 z-30 border-r border-borderline bg-background px-3 py-2.5">{{ t('production.machine') }}</th>
-                            <th scope="col" class="px-3 py-2.5">{{ t('production.sequence') }}</th>
                             <th scope="col" class="px-3 py-2.5">{{ t('production.fgPart') }}</th>
                             <th scope="col" class="px-3 py-2.5">{{ t('production.modelPart') }}</th>
                             <th scope="col" class="px-3 py-2.5">{{ t('production.inputPart') }}</th>
@@ -547,7 +577,6 @@ function submitEdit() {
                                         <span v-if="processNames(group.rows)" class="text-[11px] tracking-wide text-ink-secondary">{{ processNames(group.rows) }}</span>
                                     </div>
                                 </td>
-                                <td class="px-3 py-2.5 text-xs text-ink-secondary">—</td>
                                 <td colspan="6" class="px-3 py-2.5 text-xs text-ink-secondary">{{ t('production.noMachineWo') }}</td>
                                 <td colspan="3" class="border-l border-borderline px-2 py-2.5 text-center text-xs text-ink-secondary">—</td>
                                 <td class="border-l border-borderline bg-surface px-3 py-2.5 text-right group-hover:bg-primary-light">
@@ -573,33 +602,6 @@ function submitEdit() {
                                         <span class="font-semibold leading-tight text-ink-primary">{{ group.machine?.machine_name ?? t('production.noMachine') }}</span>
                                         <span v-if="processNames(group.rows)" class="text-[11px] tracking-wide text-ink-secondary">{{ processNames(group.rows) }}</span>
                                         <span class="mt-0.5 inline-flex rounded-md bg-background px-1.5 py-0.5 text-[11px] font-medium text-ink-secondary">{{ t('production.rowsCount', { n: group.rows.length }) }}</span>
-                                    </div>
-                                </td>
-                                <td class="px-3 py-2.5">
-                                    <div class="flex items-center gap-1.5">
-                                        <span class="w-4 text-center text-xs tabular-nums text-ink-secondary">{{ index + 1 }}</span>
-                                        <div class="flex flex-col gap-0.5">
-                                            <button
-                                                type="button"
-                                                :title="t('production.moveUp')"
-                                                :aria-label="t('production.moveUp')"
-                                                :disabled="index === 0"
-                                                class="flex h-3.5 w-3.5 items-center justify-center rounded text-ink-secondary transition hover:bg-background hover:text-primary disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
-                                                @click="move(group.rows, index, -1)"
-                                            >
-                                                <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" /></svg>
-                                            </button>
-                                            <button
-                                                type="button"
-                                                :title="t('production.moveDown')"
-                                                :aria-label="t('production.moveDown')"
-                                                :disabled="index === group.rows.length - 1"
-                                                class="flex h-3.5 w-3.5 items-center justify-center rounded text-ink-secondary transition hover:bg-background hover:text-primary disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
-                                                @click="move(group.rows, index, 1)"
-                                            >
-                                                <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
-                                            </button>
-                                        </div>
                                     </div>
                                 </td>
                                 <td class="px-3 py-2.5">
@@ -629,18 +631,36 @@ function submitEdit() {
                                     </span>
                                 </td>
                                 <td v-for="(key, idx) in dayKeys" :key="key" class="border-l border-borderline px-2 py-1.5">
-                                    <input
-                                        v-model="draftFor(row)[key]"
-                                        type="number"
-                                        step="any"
-                                        min="0"
-                                        inputmode="decimal"
-                                        :placeholder="idx === 0 && row.avail_qty > 0 ? fmt(row.avail_qty) : '…'"
-                                        :aria-label="t('production.dQty') + ' ' + row.fg_part?.part_number"
-                                        :disabled="savingTargets"
-                                        class="min-w-[4.5rem] w-full rounded-md border px-2 py-1.5 text-right text-sm tabular-nums text-ink-primary placeholder:text-ink-secondary/70 focus:border-primary focus:ring-primary disabled:cursor-wait disabled:opacity-60"
-                                        :class="draftFor(row)[key] !== '' ? 'border-primary/50 bg-primary-light/40' : 'border-borderline bg-background'"
-                                    />
+                                    <div class="grid gap-1">
+                                        <label class="flex items-center gap-1">
+                                            <span class="w-8 text-[10px] font-medium uppercase text-ink-secondary">{{ t('production.sequenceShort') }}</span>
+                                            <input
+                                                v-model="draftFor(row)[sequenceKeyByDay[key]]"
+                                                type="number"
+                                                step="1"
+                                                min="0"
+                                                inputmode="numeric"
+                                                :aria-label="`${t('production.sequence')} ${dayCols[key]} ${row.fg_part?.part_number ?? ''}`"
+                                                :disabled="savingTargets"
+                                                class="min-w-0 w-full rounded-md border border-borderline bg-background px-2 py-1 text-right text-xs tabular-nums text-ink-primary focus:border-primary focus:ring-primary disabled:cursor-wait disabled:opacity-60"
+                                            />
+                                        </label>
+                                        <label class="flex items-center gap-1">
+                                            <span class="w-8 text-[10px] font-medium uppercase text-ink-secondary">{{ t('production.qtyShort') }}</span>
+                                            <input
+                                                v-model="draftFor(row)[key]"
+                                                type="number"
+                                                step="any"
+                                                min="0"
+                                                inputmode="decimal"
+                                                :placeholder="idx === 0 && row.avail_qty > 0 ? fmt(row.avail_qty) : '…'"
+                                                :aria-label="`${t(quantityLabelKeyByDay[key])} ${row.fg_part?.part_number ?? ''}`"
+                                                :disabled="savingTargets"
+                                                class="min-w-0 w-full rounded-md border px-2 py-1 text-right text-xs tabular-nums text-ink-primary placeholder:text-ink-secondary/70 focus:border-primary focus:ring-primary disabled:cursor-wait disabled:opacity-60"
+                                                :class="draftFor(row)[key] !== '' ? 'border-primary/50 bg-primary-light/40' : 'border-borderline bg-background'"
+                                            />
+                                        </label>
+                                    </div>
                                 </td>
                                 <td class="border-l border-borderline bg-surface px-3 py-2.5 group-hover:bg-primary-light">
                                     <div class="flex justify-end gap-1">

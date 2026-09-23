@@ -322,9 +322,7 @@ class ProductionPlanController extends Controller
             ->route('production-plans.index', ['date' => $item->plan?->plan_date?->toDateString()])->with('success', __('Baris Production Plan diperbarui.'));
     }
 
-    /**
-     * Simpan target D / D+1 / D+2 banyak baris sekaligus (satu request).
-     */
+    /** Simpan target dan sequence D / D+1 / D+2 banyak baris sekaligus. */
     public function updateTargets(Request $request): RedirectResponse
     {
         $data = $request->validate([
@@ -333,6 +331,9 @@ class ProductionPlanController extends Controller
             'items.*.target_d' => ['nullable', 'numeric', 'min:0'],
             'items.*.target_d1' => ['nullable', 'numeric', 'min:0'],
             'items.*.target_d2' => ['nullable', 'numeric', 'min:0'],
+            'items.*.sequence_d' => ['sometimes', 'integer', 'min:0'],
+            'items.*.sequence_d1' => ['sometimes', 'integer', 'min:0'],
+            'items.*.sequence_d2' => ['sometimes', 'integer', 'min:0'],
         ]);
 
         DB::transaction(function () use ($data, $request) {
@@ -349,6 +350,9 @@ class ProductionPlanController extends Controller
                     'target_d' => $row['target_d'] ?? null,
                     'target_d1' => $row['target_d1'] ?? null,
                     'target_d2' => $row['target_d2'] ?? null,
+                    'sequence_d' => $row['sequence_d'] ?? $item->sequence_d,
+                    'sequence_d1' => $row['sequence_d1'] ?? $item->sequence_d1,
+                    'sequence_d2' => $row['sequence_d2'] ?? $item->sequence_d2,
                     'updated_by' => $request->user()?->id,
                 ]);
                 $this->recordHistory($item, 'targets_updated', $before, $this->targetSnapshot($item), $request->user()?->id);
@@ -403,7 +407,7 @@ class ProductionPlanController extends Controller
             ->route('production-plans.index', ['date' => $planDate])->with('success', $message);
     }
 
-    /** @return array{machine_id:int|null,wip_part_id:int|null,target_d:float|null,target_d1:float|null,target_d2:float|null} */
+    /** @return array{machine_id:int|null,wip_part_id:int|null,target_d:float|null,target_d1:float|null,target_d2:float|null,sequence_d:int,sequence_d1:int,sequence_d2:int} */
     private function itemSnapshot(ProductionPlanItem $item): array
     {
         return [
@@ -413,13 +417,16 @@ class ProductionPlanController extends Controller
         ];
     }
 
-    /** @return array{target_d:float|null,target_d1:float|null,target_d2:float|null} */
+    /** @return array{target_d:float|null,target_d1:float|null,target_d2:float|null,sequence_d:int,sequence_d1:int,sequence_d2:int} */
     private function targetSnapshot(ProductionPlanItem $item): array
     {
         return [
             'target_d' => $item->target_d,
             'target_d1' => $item->target_d1,
             'target_d2' => $item->target_d2,
+            'sequence_d' => $item->sequence_d,
+            'sequence_d1' => $item->sequence_d1,
+            'sequence_d2' => $item->sequence_d2,
         ];
     }
 

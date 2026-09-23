@@ -1,148 +1,34 @@
-# Implementation Plan: Sembunyikan Baris WO yang Sudah Tuntas di Production Plan
+# Implementation Plan: Sequence Harian Production Plan
 
-## Overview
-
-Papan Production Plan saat ini menampilkan semua baris WO, termasuk yang sudah
-tuntas diproduksi (sisa 0). Operator jadi merasa harus "clear WO" dulu, padahal
-tidak ada aksi itu di sistem. Perubahan ini menyaring papan agar hanya memuat
-baris WO yang masih bersisa, sehingga WO lama yang tuntas hilang otomatis dan
-WO baru bisa dikerjakan tanpa langkah manual.
-
-PRD: `docs/prd/hide-completed-wo-rows.md`
+PRD: `docs/prd/production-plan-daily-sequences.md`
 
 ## Architecture Decisions
 
-- **Satu titik perubahan utama:** `ProductionPlanController::index()`. Tidak ada
-  perubahan skema database.
-- **"Closed" derived, bukan status tersimpan.** Baris dianggap tuntas ketika
-  `remaining_qty` = 0. Alasan: Production Result dapat dihapus
-  (`production-results.destroy`); nilai turunan otomatis memunculkan kembali
-  baris, sedangkan status tersimpan akan tertinggal salah.
-- **Satuan "closed" = baris papan** (pasangan `work_order_id` + `wip_part_id`),
-  bukan WO global. Satu WO boleh tuntas di satu mesin dan masih bersisa di
-  mesin lain.
-- **Rumus sisa tidak diubah:** `max(0, qty WO − Σ qty_good untuk pasangan itu,
-  result_date ≤ tanggal papan)`. Penyaringan memakai nilai yang sudah dihitung.
-- **Alokasi Production Plan menentukan papan:** saat membuka tanggal D, alokasi
-  dengan `production_plans.plan_date ≤ D` tetap tampil sampai tuntas.
-  `work_orders.planned_date` hanya informasi dan tidak mengontrol papan.
-- **Panel "aktif di tanggal lain" diselaraskan:** hanya alokasi masa depan yang
-  belum tampil di papan; carry-over tidak diduplikasi. Baris Subcon tetap diabaikan.
-- **WO `planned` dan `cancelled` tidak dihitung**; `in_progress` dan `completed`
-  yang masih bersisa tetap tampil. Alur release tidak disentuh.
-- **Status WO tidak diubah** oleh penyaringan ini.
+- Tambahkan tiga kolom integer non-negatif dengan default database `0`.
+- Perluas endpoint bulk target yang sudah ada; tidak membuat endpoint baru.
+- Simpan target dan sequence secara atomik melalui transaksi yang sudah ada.
+- UI memakai satu draft per baris untuk enam nilai harian.
+- Pertahankan urutan visual lama agar tiga sequence independen tidak saling
+  memaksakan urutan tabel.
 
-## Task List
+## Ordered Tasks
 
-### Phase 1: Perilaku Inti
-
-- [x] Task 1: Sembunyikan baris papan yang sisanya 0
-- [x] Task 2: Selaraskan panel "aktif di tanggal lain"
-- [x] Task 4: Carry-over alokasi lama yang belum tuntas
-
-### Checkpoint: Perilaku Inti
-
-- [x] Semua test `ProductionPlanTest` lulus
-- [x] Perilaku diverifikasi lewat HTTP (Inertia props), bukan asumsi
-
-### Phase 2: Verifikasi
-
-- [x] Task 3: Verifikasi menyeluruh (suite penuh + Pint + build)
-
-### Checkpoint: Selesai
-
-- [x] Seluruh Success Criteria PRD terpenuhi
-- [x] Siap direview
+1. Tambahkan feature test untuk default, persistence, dan validasi sequence.
+2. Buat migration, perbarui model, dan perluas validasi/persistence controller.
+3. Tambahkan input sequence per hari dan hapus kontrol reorder lama dari UI.
+4. Jalankan focused test, full suite, Pint, build, dan review diff.
 
 ## Risks and Mitigations
 
-| Risk | Impact | Mitigation |
-|------|--------|------------|
-| Baris sah ikut tersembunyi karena relasi WO ter-soft-delete | Sedang | Disengaja: baris yatim memang tidak punya arti operasional. Dicatat di PRD. |
-| Ringkasan papan (jumlah mesin/WO) jadi tidak konsisten | Rendah | Ringkasan dihitung dari daftar baris, jadi otomatis ikut. Diverifikasi di test. |
-| Hasil produksi dihapus membuat baris tidak kembali | Tinggi | Derived, bukan status tersimpan. Test khusus: hapus result -> baris muncul lagi. |
-| Sisa pecahan sangat kecil dianggap belum tuntas | Rendah | Dicatat sebagai Open Question di PRD; belum perlu toleransi sekarang. |
+| Risk | Mitigation |
+|---|---|
+| Nilai sequence negatif/pecahan masuk | Validasi server `integer|min:0` dan test kegagalan. |
+| Target lama tidak tersimpan | Perluas payload yang sama dan pertahankan test target lama. |
+| Migration pada data existing | Default database `0` mengisi baris lama tanpa backfill terpisah. |
+| UI membingungkan antara sequence dan qty | Label/aria-label berbeda dalam setiap sel hari. |
 
-## Open Questions
+## Verification Checkpoints
 
-- Ambang toleransi nol (mis. `> 1e-9`) bila muncul sisa pecahan akibat
-  pembulatan. Belum diperlukan.
-- Penanda "closed" tersimpan bila nanti diminta (perubahan skema, perlu
-  persetujuan terpisah). PRD memilih derived.
-
-## Task List Detail
-
-### Task 1: Sembunyikan baris papan yang sisanya 0
-
-**Description:** Setelah `remaining_qty` dihitung per baris di
-`ProductionPlanController::index()`, saring `$items` agar hanya memuat baris
-dengan sisa lebih dari 0. Ringkasan papan dan kolom estimasi otomatis mengikuti
-karena dihitung dari daftar yang sama.
-
-**Acceptance criteria:**
-- [ ] Baris WO dengan sisa 0 tidak muncul di prop `items`.
-- [ ] WO lama yang masih bersisa tetap tampil di mesinnya.
-- [ ] Pada satu WO dengan beberapa baris mesin, hanya baris belum tuntas yang tampil.
-- [ ] Menghapus Production Result memunculkan kembali barisnya.
-- [ ] Ringkasan papan mencerminkan baris yang tersisa.
-
-**Verification:**
-- [ ] Tests pass: `php artisan test --compact tests/Feature/ProductionPlanTest.php`
-- [ ] Build succeeds: `npm run build`
-- [ ] Manual check: buka papan pada WO yang sudah tuntas, barisnya tidak tampil
-
-**Dependencies:** None
-
-**Files likely touched:**
-- `app/Http/Controllers/ProductionPlanController.php`
-- `tests/Feature/ProductionPlanTest.php`
-
-**Estimated scope:** Small: 1-2 files plus tests
-
-### Task 2: Selaraskan panel "aktif di tanggal lain"
-
-**Description:** Panel `offBoardWorkOrders` hanya memuat alokasi masa depan.
-Alokasi tanggal sebelumnya yang belum tuntas tampil langsung di papan dan tidak
-boleh diduplikasi di panel.
-
-**Acceptance criteria:**
-- [ ] WO yang seluruh barisnya tuntas tidak muncul di `offBoardWorkOrders`.
-- [ ] Alokasi masa depan tetap muncul beserta tanggal papannya.
-- [ ] WO `planned` tetap tidak dihitung.
-
-**Verification:**
-- [ ] Tests pass: `php artisan test --compact tests/Feature/ProductionPlanTest.php`
-- [ ] Build succeeds: `npm run build`
-- [ ] Manual check: WO tuntas di semua mesin tidak tampil di panel biru
-
-**Dependencies:** Task 1
-
-**Files likely touched:**
-- `app/Http/Controllers/ProductionPlanController.php`
-- `tests/Feature/ProductionPlanTest.php`
-
-**Estimated scope:** Small: 1 file plus tests
-
-### Task 3: Verifikasi menyeluruh
-
-**Description:** Jalankan quality gate penuh, periksa diff, dan pastikan tidak
-ada regresi pada papan maupun alur produksi lain.
-
-**Acceptance criteria:**
-- [ ] Suite penuh lulus.
-- [ ] Pint lulus pada file yang berubah.
-- [ ] `npm run build` lulus.
-- [ ] Tidak ada test lama yang dihapus atau dilemahkan.
-
-**Verification:**
-- [ ] Tests pass: `php artisan test --compact`
-- [ ] Build succeeds: `npm run build`
-- [ ] Lint: `vendor/bin/pint --dirty --format agent`
-- [ ] Manual check: papan Production Plan dibuka dan perilaku sesuai PRD
-
-**Dependencies:** Task 1, Task 2
-
-**Files likely touched:**
-- Tidak ada file baru (verifikasi saja)
-
-**Estimated scope:** Small: verification-only
+- Setelah backend: `php artisan test --compact tests/Feature/ProductionPlanTest.php`
+- Setelah UI: `npm run build`
+- Final: full suite, Pint, build, dan inspeksi diff.

@@ -121,6 +121,18 @@ class ProductionPlanTest extends TestCase
         $this->assertSame(25.0, (float) $row->target_d2);
     }
 
+    public function test_new_plan_items_default_daily_sequences_to_zero(): void
+    {
+        $wo = $this->createWorkOrder();
+
+        $this->post(route('work-orders.release', $wo))->assertRedirect();
+
+        $row = ProductionPlanItem::where('work_order_id', $wo->id)->firstOrFail();
+        $this->assertSame(0, $row->sequence_d);
+        $this->assertSame(0, $row->sequence_d1);
+        $this->assertSame(0, $row->sequence_d2);
+    }
+
     public function test_bulk_update_targets_saves_many_rows(): void
     {
         $wo = $this->createWorkOrder();
@@ -131,8 +143,16 @@ class ProductionPlanTest extends TestCase
 
         $this->patch(route('production-plans.targets'), [
             'items' => [
-                ['id' => $rows[0]->id, 'target_d' => 10, 'target_d1' => 5, 'target_d2' => null],
-                ['id' => $rows[1]->id, 'target_d' => 7],
+                [
+                    'id' => $rows[0]->id,
+                    'target_d' => 10,
+                    'target_d1' => 5,
+                    'target_d2' => null,
+                    'sequence_d' => 3,
+                    'sequence_d1' => 2,
+                    'sequence_d2' => 1,
+                ],
+                ['id' => $rows[1]->id, 'target_d' => 7, 'sequence_d' => 4],
             ],
         ])->assertRedirect();
 
@@ -140,7 +160,44 @@ class ProductionPlanTest extends TestCase
         $this->assertSame(10.0, (float) $first->target_d);
         $this->assertSame(5.0, (float) $first->target_d1);
         $this->assertNull($first->target_d2);
+        $this->assertSame(3, $first->sequence_d);
+        $this->assertSame(2, $first->sequence_d1);
+        $this->assertSame(1, $first->sequence_d2);
         $this->assertSame(7.0, (float) $rows[1]->fresh()->target_d);
+        $this->assertSame(4, $rows[1]->fresh()->sequence_d);
+    }
+
+    public function test_bulk_update_rejects_negative_daily_sequence_without_changing_item(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->post(route('work-orders.release', $wo))->assertRedirect();
+        $row = ProductionPlanItem::where('work_order_id', $wo->id)->firstOrFail();
+
+        $this->patch(route('production-plans.targets'), [
+            'items' => [[
+                'id' => $row->id,
+                'target_d' => 10,
+                'sequence_d' => -1,
+            ]],
+        ])->assertSessionHasErrors('items.0.sequence_d');
+
+        $row->refresh();
+        $this->assertNull($row->target_d);
+        $this->assertSame(0, $row->sequence_d);
+    }
+
+    public function test_bulk_update_rejects_non_integer_daily_sequence(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->post(route('work-orders.release', $wo))->assertRedirect();
+        $row = ProductionPlanItem::where('work_order_id', $wo->id)->firstOrFail();
+
+        $this->patch(route('production-plans.targets'), [
+            'items' => [[
+                'id' => $row->id,
+                'sequence_d1' => 1.5,
+            ]],
+        ])->assertSessionHasErrors('items.0.sequence_d1');
     }
 
     public function test_target_change_is_recorded_in_plan_history(): void
@@ -150,7 +207,13 @@ class ProductionPlanTest extends TestCase
         $row = ProductionPlanItem::where('work_order_id', $wo->id)->firstOrFail();
 
         $this->patch(route('production-plans.targets'), [
-            'items' => [['id' => $row->id, 'target_d' => 8, 'target_d1' => 4, 'target_d2' => null]],
+            'items' => [[
+                'id' => $row->id,
+                'target_d' => 8,
+                'target_d1' => 4,
+                'target_d2' => null,
+                'sequence_d' => 6,
+            ]],
         ])->assertRedirect();
 
         $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
@@ -161,6 +224,7 @@ class ProductionPlanTest extends TestCase
                         && $history['production_plan_item_id'] === $row->id
                         && $history['before']['target_d'] === null
                         && (float) $history['after']['target_d'] === 8.0
+                        && $history['after']['sequence_d'] === 6
                         && $history['user']['id'] === auth()->id(),
                 )));
     }

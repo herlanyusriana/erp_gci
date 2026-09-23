@@ -58,7 +58,10 @@ class MaterialIssueWebTest extends TestCase
             ];
         }
 
-        $this->postJson("/api/work-orders/{$wo->id}/release", ['items' => $scans])->assertOk();
+        $this->postJson("/api/work-orders/{$wo->id}/release", [
+            'idempotency_key' => 'web-issue-'.$wo->id,
+            'items' => $scans,
+        ])->assertOk();
 
         return MaterialIssue::latest('id')->firstOrFail();
     }

@@ -48,9 +48,13 @@ return [
     | considered expired. This will override any values set in the token's
     | "expires_at" attribute, but first-party sessions are not affected.
     |
+    | Default 30 hari: token APK selaras dengan siklus ganti/shift, membatasi
+    | jendela penyalahgunaan bila token perangkat dicuri. Override via env
+    | SANCTUM_EXPIRATION_MINUTES untuk kebijakan per-environment.
+    |
     */
 
-    'expiration' => null,
+    'expiration' => env('SANCTUM_EXPIRATION_MINUTES', 60 * 24 * 30),
 
     /*
     |--------------------------------------------------------------------------

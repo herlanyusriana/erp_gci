@@ -123,6 +123,43 @@ class MaterialIssueApiTest extends TestCase
             ->assertNotFound();
     }
 
+    public function test_resolve_tag_requires_stock_issue_permission(): void
+    {
+        $qc = User::where('email', 'qc@geumcheon.local')->firstOrFail();
+        $this->actingAs($qc, 'sanctum');
+
+        $this->postJson('/api/stock-tags/resolve', ['tag' => 'APA-SAJA'])->assertForbidden();
+    }
+
+    public function test_release_requires_idempotency_key(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->actingAsApi();
+        $scans = $this->seedStockAndBuildScans($wo);
+
+        $this->postJson("/api/work-orders/{$wo->id}/release", [
+            'items' => $scans,
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('idempotency_key');
+
+        $this->assertSame('planned', $wo->fresh()->status);
+    }
+
+    public function test_login_limits_device_name_length(): void
+    {
+        $this->app['auth']->forgetGuards();
+
+        $response = $this->postJson('/api/auth/login', [
+            'email' => $this->admin->email,
+            'password' => 'password',
+        ], ['X-Device-Name' => str_repeat('A', 500)]);
+
+        $response->assertOk();
+        $tokenName = $this->admin->tokens()->latest('id')->firstOrFail()->name;
+        $this->assertLessThanOrEqual(100, mb_strlen($tokenName));
+    }
+
     public function test_release_consumes_scanned_tags_and_posts_output(): void
     {
         $wo = $this->createWorkOrder();
@@ -229,6 +266,7 @@ class MaterialIssueApiTest extends TestCase
         PartStock::create(['part_id' => $outsider->id, 'tag' => 'OUTSIDER', 'qty' => 99, 'qty_unit' => 'PCS', 'received_at' => now()]);
 
         $this->postJson("/api/work-orders/{$wo->id}/release", [
+            'idempotency_key' => 'test-unrelated-1',
             'items' => [[
                 'work_order_item_id' => $items[0]['work_order_item_id'],
                 'scans' => [['tag' => 'OUTSIDER', 'qty' => 1, 'part_id' => $outsider->id]],
@@ -269,6 +307,7 @@ class MaterialIssueApiTest extends TestCase
         PartStock::create(['part_id' => $main['id'], 'tag' => 'BIG', 'qty' => 999, 'qty_unit' => $first['uom'], 'received_at' => now()]);
 
         $this->postJson("/api/work-orders/{$wo->id}/release", [
+            'idempotency_key' => 'test-overscan-1',
             'items' => [[
                 'work_order_item_id' => $first['work_order_item_id'],
                 'scans' => [['tag' => 'BIG', 'qty' => (float) $first['required'] + 1, 'part_id' => (int) $main['id']]],
@@ -316,6 +355,7 @@ class MaterialIssueApiTest extends TestCase
         ]);
 
         $this->postJson("/api/work-orders/{$wo->id}/release", [
+            'idempotency_key' => 'test-invoice-1',
             'items' => [[
                 'work_order_item_id' => $first['work_order_item_id'],
                 'scans' => [['tag' => 'INV-TAG', 'qty' => (float) $first['required'], 'part_id' => (int) $main['id']]],

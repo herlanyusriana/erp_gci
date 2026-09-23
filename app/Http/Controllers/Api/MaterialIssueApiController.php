@@ -195,6 +195,14 @@ class MaterialIssueApiController extends Controller
      */
     public function resolveTag(Request $request): JsonResponse
     {
+        // Resolusi tag mengungkap stok, harga, invoice, dan supplier —
+        // batasi ke pemegang permission issue material.
+        abort_unless(
+            $request->user()?->hasPermission('stock.issue') ?? false,
+            403,
+            __('Tidak berwenang mengakses data stok.'),
+        );
+
         $data = $request->validate([
             'tag' => ['required', 'string', 'max:255'],
             'part_id' => ['nullable', 'integer', 'exists:parts,id'],
@@ -388,7 +396,8 @@ class MaterialIssueApiController extends Controller
         $data = $request->validate([
             'issue_date' => ['nullable', 'date'],
             'received_by' => ['nullable', 'string', 'max:255'],
-            'idempotency_key' => ['nullable', 'string', 'max:80'],
+            // Wajib: mencegah Issue Out ganda saat APK retry setelah jaringan putus.
+            'idempotency_key' => ['required', 'string', 'max:80'],
             'notes' => ['nullable', 'string', 'max:2000'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.work_order_item_id' => ['required', 'integer'],
@@ -404,7 +413,7 @@ class MaterialIssueApiController extends Controller
             [
                 'issue_date' => $data['issue_date'] ?? null,
                 'received_by' => $data['received_by'] ?? null,
-                'idempotency_key' => $data['idempotency_key'] ?? null,
+                'idempotency_key' => $data['idempotency_key'],
                 'notes' => $data['notes'] ?? null,
             ],
             (int) $request->user()->id,

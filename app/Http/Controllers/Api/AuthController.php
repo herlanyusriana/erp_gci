@@ -23,13 +23,20 @@ class AuthController extends Controller
         /** @var User|null $user */
         $user = User::query()->where('email', $email)->first();
 
-        if (!$user || ($user->is_active ?? true) === false || !Hash::check((string) $request->input('password'), (string) $user->password)) {
+        if (! $user || ($user->is_active ?? true) === false || ! Hash::check((string) $request->input('password'), (string) $user->password)) {
             throw ValidationException::withMessages([
                 'email' => [__('Email atau password salah.')],
             ]);
         }
 
         $deviceName = $request->header('X-Device-Name') ?: ($request->userAgent() ?: 'android');
+        // Batasi panjang & buang karakter kontrol agar token name tidak jadi
+        // tempat menyuntik data aneh ke tabel personal_access_tokens.
+        $deviceName = trim(preg_replace('/[^\P{C}]+/u', '', (string) $deviceName) ?? '');
+        if ($deviceName === '') {
+            $deviceName = 'android';
+        }
+        $deviceName = mb_substr($deviceName, 0, 100);
 
         return response()->json([
             'token' => $user->createToken($deviceName)->plainTextToken,

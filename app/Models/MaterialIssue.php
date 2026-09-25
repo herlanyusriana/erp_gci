@@ -10,7 +10,7 @@ class MaterialIssue extends Model
 {
     protected $fillable = [
         'issue_no', 'work_order_id', 'issue_date', 'issued_by', 'received_by',
-        'status', 'idempotency_key', 'notes', 'created_by', 'updated_by',
+        'location_code', 'status', 'idempotency_key', 'notes', 'created_by', 'updated_by',
     ];
 
     protected $casts = [

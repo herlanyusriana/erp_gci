@@ -16,6 +16,7 @@ const props = defineProps<{
     uomCodes: string[];
     packingUnits: string[];
     weightUnit: string;
+    locations: Array<{ code: string; name: string }>;
 }>();
 
 const backHref = () => props.isLocal
@@ -28,6 +29,7 @@ const form = useForm({
     receive_date: props.receive.ata_date?.slice(0, 10) ?? '',
     tag: props.receive.tag ?? '',
     truck_no: props.receive.truck_no ?? '',
+    location_code: props.receive.location_code ?? '',
     qty: props.receive.qty,
     bundle_qty: props.receive.bundle_qty ?? '',
     bundle_unit: props.receive.bundle_unit ?? props.packingUnits[0] ?? 'PALLET',
@@ -79,6 +81,14 @@ function submit() {
                 <div>
                     <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.truckNo') }}</label>
                     <input :aria-label="t('incoming.truckNo')" v-model="form.truck_no" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.location') }}</label>
+                        <select :aria-label="t('incoming.location')" v-model="form.location_code" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                            <option value="">{{ t('incoming.locationNone') }}</option>
+                            <option v-for="loc in locations" :key="loc.code" :value="loc.code">{{ loc.code }} — {{ loc.name }}</option>
+                        </select>
+                        <InputError :message="form.errors.location_code" class="mt-1" />
+                    </div>
                 </div>
                 <div>
                     <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.qty') }}</label>

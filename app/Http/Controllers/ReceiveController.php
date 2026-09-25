@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\IncomingArrival;
 use App\Models\IncomingArrivalItem;
 use App\Models\IncomingReceive;
+use App\Models\Location;
 use App\Rules\UomCode;
 use App\Services\ReceiveMaterialService;
 use App\Support\QrSvg;
@@ -63,6 +64,7 @@ class ReceiveController extends Controller
             'uomCodes' => UomCatalog::codes(),
             'packingUnits' => UomCatalog::packingUnits(),
             'weightUnit' => UomCatalog::WEIGHT,
+            'locations' => $this->activeLocations(),
         ]);
     }
 
@@ -76,6 +78,7 @@ class ReceiveController extends Controller
         $validated = $request->validate([
             'receive_date' => ['required', 'date'],
             'truck_no' => ['nullable', 'string', 'max:50'],
+            'location_code' => $this->locationRule(),
             'tags' => ['required', 'array', 'min:1'],
             'tags.*.tag' => ['required', 'string', 'max:255'],
             'tags.*.qty' => ['required', 'numeric', 'min:0.0001'],
@@ -108,8 +111,9 @@ class ReceiveController extends Controller
         $goodsUnit = UomCatalog::normalize($arrivalItem->unit_goods) ?? UomCatalog::WEIGHT;
         $receiveAt = Carbon::parse($validated['receive_date'])->setTimeFromTimeString(now()->format('H:i:s'));
         $truckNo = trim((string) ($validated['truck_no'] ?? '')) !== '' ? strtoupper(trim((string) $validated['truck_no'])) : null;
+        $locationCode = $this->normalizeLocationCode($validated['location_code'] ?? null);
 
-        DB::transaction(function () use ($validated, $arrivalItem, $goodsUnit, $receiveAt, $truckNo, $weightBasis) {
+        DB::transaction(function () use ($validated, $arrivalItem, $goodsUnit, $receiveAt, $truckNo, $weightBasis, $locationCode) {
             $partId = $this->receiveService->resolvePartId($arrivalItem);
 
             foreach ($validated['tags'] as $tagData) {
@@ -137,6 +141,7 @@ class ReceiveController extends Controller
                     'qc_status' => 'pass',
                     'invoice_no' => $arrivalItem->arrival?->invoice_no,
                     'truck_no' => $truckNo,
+                    'location_code' => $locationCode,
                     'ata_date' => $receiveAt,
                 ]);
 
@@ -218,6 +223,7 @@ class ReceiveController extends Controller
             'uomCodes' => UomCatalog::codes(),
             'packingUnits' => UomCatalog::packingUnits(),
             'weightUnit' => UomCatalog::WEIGHT,
+            'locations' => $this->activeLocations(),
         ]);
     }
 
@@ -232,6 +238,7 @@ class ReceiveController extends Controller
             'receive_date' => ['required', 'date'],
             'tag' => ['nullable', 'string', 'max:255'],
             'truck_no' => ['nullable', 'string', 'max:50'],
+            'location_code' => $this->locationRule(),
             'qty' => ['required', 'numeric', 'min:0.0001'],
             'bundle_qty' => ['nullable', 'numeric', 'min:0'],
             'bundle_unit' => ['nullable', 'string', 'max:20', Rule::in(UomCatalog::packingUnits())],
@@ -257,6 +264,9 @@ class ReceiveController extends Controller
             $this->receiveService->reverseStock($receive);
 
             $receive->update([
+                ...(array_key_exists('location_code', $validated)
+                    ? ['location_code' => $this->normalizeLocationCode($validated['location_code'])]
+                    : []),
                 'tag' => $tag,
                 'qty' => $validated['qty'],
                 'bundle_qty' => $validated['bundle_qty'] ?? null,
@@ -293,5 +303,33 @@ class ReceiveController extends Controller
 
         return redirect()
             ->route($route, $receive->arrivalItem->arrival)->with('success', __('Receive :tag deleted.', ['tag' => $receive->tag]));
+    }
+
+    /**
+     * Lokasi aktif untuk dropdown penerimaan.
+     *
+     * @return list<array{code: string, name: string}>
+     */
+    private function activeLocations(): array
+    {
+        return Location::query()
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->get(['code', 'name'])
+            ->map(fn (Location $location) => ['code' => $location->code, 'name' => $location->name])
+            ->all();
+    }
+
+    /** Lokasi bersifat opsional dan harus ada di master serta masih aktif. */
+    private function locationRule(): array
+    {
+        return ['nullable', 'string', 'max:40', Rule::exists('locations', 'code')->where('is_active', true)];
+    }
+
+    private function normalizeLocationCode(?string $code): ?string
+    {
+        $trimmed = trim((string) $code);
+
+        return $trimmed === '' ? null : $trimmed;
     }
 }

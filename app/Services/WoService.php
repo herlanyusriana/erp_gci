@@ -508,7 +508,7 @@ class WoService
      * material issue, lalu posting output WIP/FG seperti release biasa.
      *
      * @param  array<int, array{work_order_item_id:int, scans: array<int, array{tag:string, qty:float, part_id?:int|null}>}>  $itemScans
-     * @param  array{issue_date?:string|null, received_by?:string|null, idempotency_key?:string|null, notes?:string|null}  $meta
+     * @param  array{issue_date?:string|null, received_by?:string|null, location_code?:string|null, idempotency_key?:string|null, notes?:string|null}  $meta
      * @return array{0: WorkOrder, 1: array<int, array<string, mixed>>, 2: MaterialIssue}
      */
     public function releaseWithScans(WorkOrder $workOrder, array $itemScans, array $meta, ?int $actorId = null): array
@@ -596,6 +596,7 @@ class WoService
                 'issue_date' => $issueDate,
                 'issued_by' => $actorId,
                 'received_by' => $meta['received_by'] ?? null,
+                'location_code' => $meta['location_code'] ?? null,
                 'status' => 'posted',
                 'idempotency_key' => $meta['idempotency_key'] ?? null,
                 'notes' => $meta['notes'] ?? null,

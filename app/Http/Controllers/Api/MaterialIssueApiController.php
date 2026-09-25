@@ -7,13 +7,16 @@ use App\Models\Machine;
 use App\Models\Part;
 use App\Models\PartStock;
 use App\Models\WorkOrder;
+use App\Services\DailyScheduleService;
 use App\Services\ProductionResultService;
 use App\Services\ReceiveMaterialService;
+use App\Services\ReleaseContextService;
 use App\Services\WoService;
 use App\Support\UomCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 
 /**
  * API mobile "issue out to production" — release WO lewat scan label.
@@ -25,43 +28,82 @@ class MaterialIssueApiController extends Controller
         private WoService $woService,
         private ProductionResultService $resultService,
         private ReceiveMaterialService $stockService,
+        private ReleaseContextService $releaseContextService,
+        private DailyScheduleService $schedule,
     ) {}
 
+    /**
+     * Daftar WO yang dijadwalkan pada tanggal pabrik berjalan.
+     *
+     * Kolom Production Plan yang dibaca bergeser sesuai jarak tanggal:
+     * `target_d` pada `plan_date`, `target_d1` sehari sesudahnya, `target_d2` dua
+     * hari sesudahnya. Qty hari itu diambil dari nilai terbesar antar baris mesin.
+     */
     public function workOrders(Request $request): JsonResponse
     {
         Gate::authorize('viewAny', WorkOrder::class);
 
+        $today = $this->schedule->plantToday();
+        $waiting = $this->schedule->waitingForPlan($today);
+
         $page = WorkOrder::query()
             ->with(['part:id,part_number,part_name,model'])
-            ->when(
-                $request->input('status'),
-                fn ($q, $status) => $q->where('status', $status),
-                fn ($q) => $q->whereIn('status', ['planned', 'in_progress']),
-            )
-            ->when($request->input('search'), fn ($q, $s) => $q->where('wo_no', 'ilike', "%{$s}%"))
-            ->orderByDesc('created_at')
-            ->orderByDesc('id')
-            ->paginate((int) $request->input('per_page', 20));
+            ->joinSub($this->schedule->scheduledQuantities($today), 'schedule', 'schedule.work_order_id', '=', 'work_orders.id')
+            ->leftJoinSub($this->schedule->issuedQuantities(), 'issued', 'issued.work_order_id', '=', 'work_orders.id')
+            ->whereIn('work_orders.status', ['planned', 'in_progress'])
+            ->when($request->input('status'), fn ($q, $status) => $q->where('work_orders.status', $status))
+            ->when($request->input('search'), function ($q, $search) {
+                $q->where(function ($q) use ($search) {
+                    $q->where('work_orders.wo_no', 'ilike', "%{$search}%")
+                        ->orWhereHas('part', fn ($p) => $p->where('part_number', 'ilike', "%{$search}%"));
+                });
+            })
+            ->orderByRaw('schedule.step_sequence ASC NULLS LAST')
+            ->orderBy('work_orders.wo_no')
+            ->select('work_orders.*')
+            ->selectRaw('schedule.planned_qty AS schedule_planned_qty')
+            ->selectRaw('schedule.plan_date AS schedule_plan_date')
+            ->selectRaw('COALESCE(issued.issued_qty, 0) AS issued_total')
+            ->paginate(min(max((int) $request->input('per_page', 200), 1), 500));
 
         return response()->json([
             'ok' => true,
-            'data' => collect($page->items())->map(fn (WorkOrder $wo) => [
-                'id' => $wo->id,
-                'wo_no' => $wo->wo_no,
-                'status' => $wo->status,
-                'qty' => (float) $wo->qty,
-                'planned_date' => $wo->planned_date?->toDateString(),
-                'part' => $wo->part ? [
-                    'id' => $wo->part->id,
-                    'part_number' => $wo->part->part_number,
-                    'part_name' => $wo->part->part_name,
-                ] : null,
-            ])->values(),
+            'data' => collect($page->items())->map(function (WorkOrder $wo) {
+                $planned = round((float) $wo->schedule_planned_qty, 4);
+                $issued = round((float) $wo->issued_total, 4);
+
+                return [
+                    'id' => $wo->id,
+                    'wo_no' => $wo->wo_no,
+                    'status' => $wo->status,
+                    'qty' => (float) $wo->qty,
+                    'planned_date' => $wo->planned_date?->toDateString(),
+                    'plan_date' => $wo->schedule_plan_date,
+                    'planned_qty' => $planned,
+                    'issued_qty' => $issued,
+                    'remaining_qty' => round(max(0.0, $planned - $issued), 4),
+                    'part' => $wo->part ? [
+                        'id' => $wo->part->id,
+                        'part_number' => $wo->part->part_number,
+                        'part_name' => $wo->part->part_name,
+                        'model' => $wo->part->model,
+                    ] : null,
+                ];
+            })->values(),
             'meta' => [
                 'current_page' => $page->currentPage(),
                 'last_page' => $page->lastPage(),
                 'per_page' => $page->perPage(),
                 'total' => $page->total(),
+                'waiting_for_plan' => $waiting->count(),
+                'waiting_work_orders' => $waiting->map(fn (WorkOrder $wo) => [
+                    'id' => $wo->id,
+                    'wo_no' => $wo->wo_no,
+                    'part' => $wo->part ? [
+                        'part_number' => $wo->part->part_number,
+                        'part_name' => $wo->part->part_name,
+                    ] : null,
+                ])->values()->all(),
             ],
         ]);
     }
@@ -74,102 +116,6 @@ class MaterialIssueApiController extends Controller
         Gate::authorize('issue', $workOrder);
 
         $workOrder->load(['part:id,part_number,part_name,model']);
-        $items = $workOrder->items()
-            ->with([
-                'process:id,process_name',
-                'machine:id,machine_code,machine_name',
-                'childPart:id,part_number,part_name',
-                'allocations.part:id,part_number,part_name',
-            ])
-            ->get();
-
-        $postedParentIds = [];
-        foreach ($items as $it) {
-            if (strtoupper((string) $it->source) !== 'SUBCON' && $it->parent_part_id !== null) {
-                $postedParentIds[$it->parent_part_id] = true;
-            }
-        }
-
-        // Hanya leaf (child bukan WIP internal) yang perlu scan.
-        $leafItems = $items->reject(
-            fn ($it) => $it->child_part_id !== null && isset($postedParentIds[$it->child_part_id]),
-        )->values();
-
-        $allowedByItem = [];
-        $allPartIds = [];
-        foreach ($leafItems as $it) {
-            $ids = $this->woService->allowedPartIdsForItem($it);
-            $allowedByItem[$it->id] = $ids;
-            $allPartIds = array_merge($allPartIds, $ids);
-        }
-        $allPartIds = array_values(array_unique($allPartIds));
-
-        $parts = Part::query()->whereIn('id', $allPartIds)->get(['id', 'part_number', 'part_name'])->keyBy('id');
-
-        // Satu query stok untuk semua part yang diizinkan (hindari N+1).
-        $stocksByPart = PartStock::query()
-            ->whereIn('part_id', $allPartIds)
-            ->where('qty', '>', 0)
-            ->orderByRaw('received_at ASC NULLS LAST')
-            ->orderBy('id')
-            ->get(['id', 'part_id', 'tag', 'qty', 'qty_unit', 'received_at'])
-            ->groupBy('part_id');
-
-        // Stok tersedia per baris = qty − booking aktif (jangan tawarkan yang sudah dikunci).
-        $bookedByStock = $this->stockService->bookedQtyByStock($stocksByPart->flatten()->pluck('id'));
-
-        $rows = [];
-        foreach ($leafItems as $it) {
-            $allowedIds = $allowedByItem[$it->id];
-            $mainId = (int) $it->child_part_id;
-            $uom = UomCatalog::normalize((string) $it->uom_rm);
-
-            $allowed = collect($allowedIds)->map(fn ($id) => [
-                'id' => (int) $id,
-                'part_number' => $parts[$id]->part_number ?? null,
-                'part_name' => $parts[$id]->part_name ?? null,
-                'kind' => (int) $id === $mainId ? 'main' : 'substitute',
-            ])->values();
-
-            $recommended = collect($allowedIds)
-                ->flatMap(fn ($id) => $stocksByPart->get($id, collect()))
-                ->filter(fn ($s) => $uom === null || UomCatalog::normalize((string) $s->qty_unit) === $uom)
-                ->map(function ($s) use ($bookedByStock) {
-                    $booked = (float) ($bookedByStock[$s->id] ?? 0);
-
-                    return [
-                        'tag' => $s->tag,
-                        'part_id' => (int) $s->part_id,
-                        'part_number' => $parts[$s->part_id]->part_number ?? null,
-                        'stock_qty' => (float) $s->qty,
-                        'qty' => max(0.0, (float) $s->qty - $booked),
-                        'booked' => $booked,
-                        'uom' => UomCatalog::normalize((string) $s->qty_unit),
-                        'received_at' => $s->received_at?->toIso8601String(),
-                    ];
-                })
-                ->filter(fn (array $t) => $t['qty'] > 1e-9)
-                ->values();
-
-            $rows[] = [
-                'work_order_item_id' => $it->id,
-                'sequence' => $it->sequence,
-                'process' => $it->process?->process_name,
-                'machine' => $it->machine?->machine_name,
-                'part' => $it->childPart ? [
-                    'id' => $it->childPart->id,
-                    'part_number' => $it->childPart->part_number,
-                    'part_name' => $it->childPart->part_name,
-                ] : null,
-                'child_part_name' => $it->child_part_name,
-                'uom' => $uom,
-                'required' => round((float) $it->qty_required, 4),
-                'consumed' => round((float) $it->qty_consumed, 4),
-                'remaining' => round(max(0.0, (float) $it->qty_required - (float) $it->qty_consumed), 4),
-                'allowed_parts' => $allowed,
-                'recommended_tags' => $recommended,
-            ];
-        }
 
         return response()->json([
             'ok' => true,
@@ -185,7 +131,7 @@ class MaterialIssueApiController extends Controller
                         'part_name' => $workOrder->part->part_name,
                     ] : null,
                 ],
-                'items' => $rows,
+                'items' => $this->releaseContextService->items($workOrder),
             ],
         ]);
     }
@@ -247,6 +193,9 @@ class MaterialIssueApiController extends Controller
                 'price' => $stock->price !== null ? (float) $stock->price : null,
                 'invoice' => $receive?->invoice_no,
                 'supplier' => $receive?->arrivalItem?->arrival?->supplier?->supplier_name,
+                // Rak yang tercatat saat penerimaan; APK memakainya untuk
+                // memperingatkan bila operator memindai rak yang berbeda.
+                'location_code' => $receive?->location_code,
                 'received_at' => $stock->received_at?->toIso8601String(),
             ],
         ]);
@@ -396,6 +345,9 @@ class MaterialIssueApiController extends Controller
         $data = $request->validate([
             'issue_date' => ['nullable', 'date'],
             'received_by' => ['nullable', 'string', 'max:255'],
+            // Lokasi rak bersifat opsional: satu data rak yang basi tidak boleh
+            // menghentikan pengeluaran material.
+            'location_code' => ['nullable', 'string', 'max:40', Rule::exists('locations', 'code')->where('is_active', true)],
             // Wajib: mencegah Issue Out ganda saat APK retry setelah jaringan putus.
             'idempotency_key' => ['required', 'string', 'max:80'],
             'notes' => ['nullable', 'string', 'max:2000'],
@@ -413,6 +365,7 @@ class MaterialIssueApiController extends Controller
             [
                 'issue_date' => $data['issue_date'] ?? null,
                 'received_by' => $data['received_by'] ?? null,
+                'location_code' => $data['location_code'] ?? null,
                 'idempotency_key' => $data['idempotency_key'],
                 'notes' => $data['notes'] ?? null,
             ],

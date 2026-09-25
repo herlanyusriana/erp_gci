@@ -5,6 +5,8 @@ use App\Http\Controllers\ConfigMasterController;
 use App\Http\Controllers\IncomingArrivalController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\LocalPoController;
+use App\Http\Controllers\LocationController;
+use App\Http\Controllers\LocationSetupController;
 use App\Http\Controllers\MachineController;
 use App\Http\Controllers\MachineCycleTimeController;
 use App\Http\Controllers\MaterialIssueController;
@@ -66,6 +68,18 @@ Route::middleware(['auth'])->group(function () {
     Route::resource('trucking-companies', TruckingCompanyController::class)->except(['show'])->parameters(['trucking-companies' => 'trucking']);
     Route::resource('machines', MachineController::class)->except(['show']);
     Route::get('machines/{machine}/label', [MachineController::class, 'printLabel'])->name('machines.label');
+
+    // Master lokasi rak gudang. Berbeda dari master lain, route ini memakai
+    // middleware `permission` sesuai AGENTS.md.
+    Route::get('locations', [LocationController::class, 'index'])->middleware('permission:location.view')->name('locations.index');
+    Route::post('locations', [LocationController::class, 'store'])->middleware('permission:location.create')->name('locations.store');
+    Route::put('locations/{location}', [LocationController::class, 'update'])->middleware('permission:location.update')->name('locations.update');
+    Route::delete('locations/{location}', [LocationController::class, 'destroy'])->middleware('permission:location.delete')->name('locations.destroy');
+    Route::get('locations/{location}/label', [LocationController::class, 'printLabel'])->middleware('permission:location.view')->name('locations.label');
+
+    // Setup Lokasi — menata lokasi untuk penerimaan yang belum berlokasi.
+    Route::get('locations-setup', [LocationSetupController::class, 'index'])->middleware('permission:location.view')->name('locations.setup');
+    Route::post('locations-setup', [LocationSetupController::class, 'assign'])->middleware('permission:location.update')->name('locations.setup.assign');
     Route::resource('processes', ProcessController::class)->except(['show']);
     Route::resource('uoms', UomController::class)->except(['show']);
     Route::resource('substitutes', PartSubstituteController::class)->except(['show']);

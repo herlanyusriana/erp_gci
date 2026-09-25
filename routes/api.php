@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\IncomingApiController;
+use App\Http\Controllers\Api\LocationApiController;
+use App\Http\Controllers\Api\MaterialBoardApiController;
 use App\Http\Controllers\Api\MaterialIssueApiController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -14,11 +16,16 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::get('/incoming/departures', [IncomingApiController::class, 'departures']);
     Route::post('/incoming/arrival-items/{arrivalItem}/receive', [IncomingApiController::class, 'receive']);
 
+    // Papan material harian (berbasis material, bukan WO).
+    Route::get('/material-board', [MaterialBoardApiController::class, 'index']);
+    Route::get('/material-board/{part}/details', [MaterialBoardApiController::class, 'details']);
+
     // Issue out to production — release WO lewat scan label.
     Route::get('/work-orders', [MaterialIssueApiController::class, 'workOrders']);
     Route::get('/work-orders/{workOrder}/release-context', [MaterialIssueApiController::class, 'releaseContext']);
     Route::post('/stock-tags/resolve', [MaterialIssueApiController::class, 'resolveTag']);
     Route::post('/machines/resolve', [MaterialIssueApiController::class, 'resolveMachine']);
+    Route::post('/locations/resolve', [LocationApiController::class, 'resolve']);
 
     // Production result (WIP per proses)
     Route::get('/work-orders/{workOrder}/result-context', [MaterialIssueApiController::class, 'resultContext']);

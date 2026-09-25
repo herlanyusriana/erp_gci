@@ -99,6 +99,13 @@ export interface Process {
     is_active: boolean;
 }
 
+export interface Location {
+    id: number;
+    code: string;
+    name: string;
+    is_active: boolean;
+}
+
 export interface PartSubstitute {
     id: number;
     part_id: number;
@@ -303,8 +310,10 @@ export interface IncomingReceive {
     gross_weight: number | null;
     qc_status: string | null;
     truck_no: string | null;
+    location_code: string | null;
     invoice_no: string | null;
     ata_date: string | null;
+    part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
     arrival_item?: IncomingArrivalItem;
 }
 

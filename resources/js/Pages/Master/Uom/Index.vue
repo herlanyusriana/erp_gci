@@ -68,34 +68,36 @@ function remove(u: Uom) {
         <input v-model="search" @input="doSearch" type="search" :placeholder="t('master.uomSearch')" :aria-label="t('master.uomSearch')" class="mb-4 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
 
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
-            <table class="min-w-full divide-y divide-borderline text-sm">
-                <thead class="bg-background">
-                    <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th scope="col" class="px-4 py-3">{{ t('master.code') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('master.name') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('master.status') }}</th>
-                        <th scope="col" class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-borderline">
-                    <tr v-for="u in uoms.data" :key="u.id" class="hover:bg-primary-light/40">
-                        <td class="px-4 py-3 font-medium text-ink-primary">{{ u.code }}</td>
-                        <td class="px-4 py-3 text-ink-primary">{{ u.name ?? '—' }}</td>
-                        <td class="px-4 py-3">
-                            <StatusBadge :tone="u.is_active ? 'success' : 'warning'">{{ u.is_active ? t('master.active') : t('master.inactive') }}</StatusBadge>
-                        </td>
-                        <td class="px-4 py-3">
-                            <div class="flex justify-end gap-1.5">
-                                <ActionButton :label="t('master.edit')" variant="edit" @click="openEdit(u)" />
-                                <ActionButton :label="t('master.delete')" variant="delete" @click="remove(u)" />
-                            </div>
-                        </td>
-                    </tr>
-                    <tr v-if="uoms.data.length === 0">
-                        <td colspan="4" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.uomEmpty') }}</td>
-                    </tr>
-                </tbody>
-            </table>
+                        <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-borderline text-sm">
+                    <thead class="bg-background">
+                        <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
+                            <th scope="col" class="px-4 py-3">{{ t('master.code') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.name') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.status') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-borderline">
+                        <tr v-for="u in uoms.data" :key="u.id" class="hover:bg-primary-light/40">
+                            <td class="px-4 py-3 font-medium text-ink-primary">{{ u.code }}</td>
+                            <td class="px-4 py-3 text-ink-primary">{{ u.name ?? '—' }}</td>
+                            <td class="px-4 py-3">
+                                <StatusBadge :tone="u.is_active ? 'success' : 'warning'">{{ u.is_active ? t('master.active') : t('master.inactive') }}</StatusBadge>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="flex justify-end gap-1.5">
+                                    <ActionButton :label="t('master.edit')" variant="edit" @click="openEdit(u)" />
+                                    <ActionButton :label="t('master.delete')" variant="delete" @click="remove(u)" />
+                                </div>
+                            </td>
+                        </tr>
+                        <tr v-if="uoms.data.length === 0">
+                            <td colspan="4" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.uomEmpty') }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <Pagination :links="uoms.links" />

@@ -327,7 +327,7 @@ WO yang dijadwalkan tanggal itu.
 - [x] Satu material dari beberapa WO dijumlahkan menjadi satu baris.
 - [x] Material dengan kebutuhan tuntas tidak muncul.
 - [x] Material tanpa WO terjadwal tidak muncul.
-- [ ] Material Subcon tetap muncul, mengikuti aturan leaf alur release — **diverifikasi lewat review kode**, bukan test (BOM data uji tidak punya baris Subcon)
+- [x] Material Subcon tetap muncul, mengikuti aturan leaf alur release
 - [x] D+2 tidak muncul.
 - [x] Otorisasi tetap berlaku; query memakai batch tanpa N+1.
 
@@ -604,7 +604,7 @@ sudah ada, berisi JSON `{type, location_id, location_code, location_name}`.
 **Acceptance criteria:**
 - [x] Halaman label dapat dibuka per lokasi dan menampilkan QR.
 - [x] Isi QR berupa JSON dengan `type` bernilai `location`.
-- [ ] Lokasi nonaktif **belum** diblokir dari pencetakan — belum diimplementasi
+- [x] Lokasi nonaktif ditolak saat mencetak label (404)
 - [x] Otorisasi tetap berlaku.
 
 **Verification:**
@@ -776,17 +776,22 @@ tidak ada regresi pada alur produksi lain di ERP maupun APK.
 - [x] APK: `flutter test` (70 test) dan `flutter analyze` (no issues)
 - [ ] Manual check: **belum dijalankan** — saya tidak bisa menjalankan aplikasi terhadap server
 
-**Celah yang belum ditutup (jujur, bukan klaim selesai):**
-1. **Lokasi nonaktif masih bisa dicetak labelnya.** Kriteria `location-scan` ini
-   belum diimplementasi (tercatat di Task 13c).
-2. **Material Subcon** diverifikasi lewat review kode, bukan test — data uji BOM
-   tidak memuat baris Subcon.
-3. **Endpoint penerimaan mobile** belum mengirim lokasi; hanya form web.
-4. **Jalur kamera** (scan material & scan lokasi) belum diuji otomatis.
-5. **Verifikasi visual** oleh manusia belum dilakukan untuk papan material, DETAILS,
-   dan layar issue.
-6. **`work_orders_screen.dart` masih kode mati** — tidak ditautkan sejak papan
-   material menjadi layar utama; menunggu keputusan hapus atau tautkan.
+**Celah yang ditutup setelah audit `get-design`:**
+1. ~~Lokasi nonaktif masih bisa dicetak labelnya~~ → kini 404, ada test.
+2. ~~Material Subcon diverifikasi review kode saja~~ → kini ada test di papan material.
+3. Target sentuh < 44dp, 4 kontrol tanpa nama, teks < 11px, container ber-border
+   bersarang, 24 tabel web terpotong, hover kontras 4.04, dan indikator navigasi
+   web — semuanya diperbaiki dan diverifikasi ulang.
+
+**Celah yang masih terbuka (jujur, bukan klaim selesai):**
+1. **Endpoint penerimaan mobile belum mengirim lokasi**; yang berubah hanya form web.
+   APK receiving belum punya pemilih lokasi. Ini slice baru, bukan perbaikan.
+2. **Jalur kamera** (scan material & scan lokasi) belum diuji otomatis — `ScanScreen`
+   memakai plugin kamera yang tidak bisa didorong di widget test.
+3. **Verifikasi visual** oleh manusia belum dilakukan untuk papan material, DETAILS,
+   dan layar issue. Golden tersedia di `test/golden/goldens/`.
+4. **`work_orders_screen.dart` masih kode mati** — tidak ditautkan sejak papan
+   material menjadi layar utama. **Perlu keputusan**: hapus atau tautkan.
 
 **Dependencies:** Task 8 sampai Task 16
 

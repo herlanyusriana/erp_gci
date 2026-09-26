@@ -341,6 +341,32 @@ class MaterialBoardApiTest extends TestCase
         $this->assertSame([$wo->wo_no], collect($data['waiting_work_orders'])->pluck('wo_no')->all());
     }
 
+    public function test_material_board_includes_a_subcon_material(): void
+    {
+        $this->actingAsApi();
+        $wo = $this->createWorkOrder(10);
+        $this->schedulePlanRow($wo, $this->plantDate(), ['d' => 10]);
+
+        // Material Subcon dikirim keluar gudang, jadi tetap dihitung. Yang tidak
+        // masuk papan adalah MESIN Subcon, dan itu urusan papan Production Plan.
+        $subconPartId = $this->partId('PINCB02');
+        WorkOrderItem::create([
+            'work_order_id' => $wo->id,
+            'sequence' => 98,
+            'child_part_id' => $subconPartId,
+            'child_part_name' => 'PIN SUB',
+            'uom_rm' => 'PCS',
+            'qty_required' => 30,
+            'qty_consumed' => 0,
+            'source' => 'SUBCON',
+        ]);
+
+        $row = $this->boardRow($subconPartId, 'PCS');
+
+        $this->assertNotNull($row, 'Material Subcon harus tetap masuk papan.');
+        $this->assertSame(30.0, (float) $row['day_qty']);
+    }
+
     public function test_material_board_returns_the_current_and_next_plant_date(): void
     {
         $this->actingAsApi();

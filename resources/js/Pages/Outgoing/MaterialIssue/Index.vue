@@ -207,52 +207,54 @@ function formatDateTime(value: string | undefined, fallback: string): string {
         </div>
 
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
-            <table class="min-w-full divide-y divide-borderline text-sm">
-                <thead class="bg-background">
-                    <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th scope="col" class="px-4 py-3">{{ t('outgoing.issueNo') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('outgoing.issueDate') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('outgoing.workOrder') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('outgoing.issuedBy') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('outgoing.receivedBy') }}</th>
-                        <th scope="col" class="px-4 py-3 text-right">{{ t('outgoing.items') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('outgoing.status') }}</th>
-                        <th scope="col" class="px-4 py-3 text-right">{{ t('outgoing.actions') }}</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-borderline">
-                    <tr v-for="it in rows" :key="it.id" :class="['hover:bg-primary-light/40', highlightedId === it.id ? 'bg-success/10' : '']">
-                        <td class="px-4 py-3">
-                            <Link :href="route('material-issues.show', it.id)" class="font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
-                                {{ it.issue_no }}
-                            </Link>
-                        </td>
-                        <td class="px-4 py-3 text-ink-primary">
-                            {{ it.issue_date }}
-                            <span class="block text-xs text-ink-secondary">{{ formatDateTime(it.created_at, '—') }}</span>
-                        </td>
-                        <td class="px-4 py-3 text-ink-primary">
-                            {{ it.work_order?.wo_no ?? '—' }}
-                            <span class="block text-xs text-ink-secondary">{{ it.work_order?.part?.part_number ?? '' }} {{ it.work_order?.part?.part_name ?? '' }}</span>
-                        </td>
-                        <td class="px-4 py-3 text-ink-primary">{{ it.issuer?.name ?? '—' }}</td>
-                        <td class="px-4 py-3 text-ink-primary">{{ it.received_by ?? '—' }}</td>
-                        <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ it.items_count ?? 0 }}</td>
-                        <td class="px-4 py-3"><StatusBadge :status="it.status">{{ t(`outgoing.${it.status}`) }}</StatusBadge></td>
-                        <td class="px-4 py-3 text-right">
-                            <Link :href="route('material-issues.show', it.id)" class="font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
-                                {{ t('outgoing.view') }}
-                            </Link>
-                            <a :href="route('material-issues.print', it.id)" target="_blank" rel="noopener" class="ml-3 font-medium text-ink-secondary underline-offset-2 hover:text-ink-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
-                                {{ t('outgoing.print') }}
-                            </a>
-                        </td>
-                    </tr>
-                    <tr v-if="!issues.data.length">
-                        <td colspan="8" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('outgoing.empty') }}</td>
-                    </tr>
-                </tbody>
-            </table>
+                        <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-borderline text-sm">
+                    <thead class="bg-background">
+                        <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
+                            <th scope="col" class="px-4 py-3">{{ t('outgoing.issueNo') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('outgoing.issueDate') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('outgoing.workOrder') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('outgoing.issuedBy') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('outgoing.receivedBy') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('outgoing.items') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('outgoing.status') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('outgoing.actions') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-borderline">
+                        <tr v-for="it in rows" :key="it.id" :class="['hover:bg-primary-light/40', highlightedId === it.id ? 'bg-success/10' : '']">
+                            <td class="px-4 py-3">
+                                <Link :href="route('material-issues.show', it.id)" class="font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
+                                    {{ it.issue_no }}
+                                </Link>
+                            </td>
+                            <td class="px-4 py-3 text-ink-primary">
+                                {{ it.issue_date }}
+                                <span class="block text-xs text-ink-secondary">{{ formatDateTime(it.created_at, '—') }}</span>
+                            </td>
+                            <td class="px-4 py-3 text-ink-primary">
+                                {{ it.work_order?.wo_no ?? '—' }}
+                                <span class="block text-xs text-ink-secondary">{{ it.work_order?.part?.part_number ?? '' }} {{ it.work_order?.part?.part_name ?? '' }}</span>
+                            </td>
+                            <td class="px-4 py-3 text-ink-primary">{{ it.issuer?.name ?? '—' }}</td>
+                            <td class="px-4 py-3 text-ink-primary">{{ it.received_by ?? '—' }}</td>
+                            <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ it.items_count ?? 0 }}</td>
+                            <td class="px-4 py-3"><StatusBadge :status="it.status">{{ t(`outgoing.${it.status}`) }}</StatusBadge></td>
+                            <td class="px-4 py-3 text-right">
+                                <Link :href="route('material-issues.show', it.id)" class="font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
+                                    {{ t('outgoing.view') }}
+                                </Link>
+                                <a :href="route('material-issues.print', it.id)" target="_blank" rel="noopener" class="ml-3 font-medium text-ink-secondary underline-offset-2 hover:text-ink-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
+                                    {{ t('outgoing.print') }}
+                                </a>
+                            </td>
+                        </tr>
+                        <tr v-if="!issues.data.length">
+                            <td colspan="8" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('outgoing.empty') }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <Pagination :links="issues.links" />

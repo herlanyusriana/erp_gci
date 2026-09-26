@@ -105,48 +105,50 @@ function partTypeLabel(partType: PartType | null): string {
 
         <!-- Table -->
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
-            <table class="min-w-full divide-y divide-borderline text-sm">
-                <thead class="bg-background">
-                    <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th scope="col" class="px-4 py-3">{{ t('master.partNumber') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('master.name') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('master.hsCode') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('master.type') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('master.model') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('master.uom') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('master.size') }}</th>
-                        <th scope="col" class="px-4 py-3 text-right">{{ t('master.netWeight') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('master.status') }}</th>
-                        <th scope="col" class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-borderline">
-                    <tr v-for="p in parts.data" :key="p.id" class="hover:bg-primary-light/40">
-                        <td class="px-4 py-3 font-medium text-ink-primary">{{ p.part_number }}</td>
-                        <td class="px-4 py-3 text-ink-primary">{{ p.part_name }}</td>
-                        <td class="px-4 py-3 text-ink-secondary">{{ p.hs_code ?? '—' }}</td>
-                        <td class="px-4 py-3">
-                            <span class="rounded-md bg-primary-light px-2 py-0.5 text-xs font-semibold text-primary">{{ p.part_type?.code }}</span>
-                        </td>
-                        <td class="px-4 py-3 text-ink-secondary">{{ p.model ?? '—' }}</td>
-                        <td class="px-4 py-3 text-ink-secondary">{{ p.uom?.code ?? '—' }}</td>
-                        <td class="px-4 py-3 text-ink-secondary">{{ p.size ?? '—' }}</td>
-                        <td class="px-4 py-3 text-right tabular-nums text-ink-secondary">{{ p.nett_weight ?? '—' }}</td>
-                        <td class="px-4 py-3">
-                            <StatusBadge :tone="p.is_active ? 'success' : 'warning'">{{ p.is_active ? t('master.active') : t('master.inactive') }}</StatusBadge>
-                        </td>
-                        <td class="px-4 py-3">
-                            <div class="flex justify-end gap-1.5">
-                                <ActionButton v-if="perms.update" :href="route('parts.edit', p.id)" :label="t('master.edit')" variant="edit" />
-                                <ActionButton v-if="perms.delete" :label="t('master.delete')" variant="delete" @click="destroy(p)" />
-                            </div>
-                        </td>
-                    </tr>
-                    <tr v-if="parts.data.length === 0">
-                        <td colspan="10" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.partEmpty') }}</td>
-                    </tr>
-                </tbody>
-            </table>
+                        <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-borderline text-sm">
+                    <thead class="bg-background">
+                        <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
+                            <th scope="col" class="px-4 py-3">{{ t('master.partNumber') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.name') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.hsCode') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.type') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.model') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.uom') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.size') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('master.netWeight') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.status') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-borderline">
+                        <tr v-for="p in parts.data" :key="p.id" class="hover:bg-primary-light/40">
+                            <td class="px-4 py-3 font-medium text-ink-primary">{{ p.part_number }}</td>
+                            <td class="px-4 py-3 text-ink-primary">{{ p.part_name }}</td>
+                            <td class="px-4 py-3 text-ink-secondary">{{ p.hs_code ?? '—' }}</td>
+                            <td class="px-4 py-3">
+                                <span class="rounded-md bg-primary-light px-2 py-0.5 text-xs font-semibold text-primary">{{ p.part_type?.code }}</span>
+                            </td>
+                            <td class="px-4 py-3 text-ink-secondary">{{ p.model ?? '—' }}</td>
+                            <td class="px-4 py-3 text-ink-secondary">{{ p.uom?.code ?? '—' }}</td>
+                            <td class="px-4 py-3 text-ink-secondary">{{ p.size ?? '—' }}</td>
+                            <td class="px-4 py-3 text-right tabular-nums text-ink-secondary">{{ p.nett_weight ?? '—' }}</td>
+                            <td class="px-4 py-3">
+                                <StatusBadge :tone="p.is_active ? 'success' : 'warning'">{{ p.is_active ? t('master.active') : t('master.inactive') }}</StatusBadge>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="flex justify-end gap-1.5">
+                                    <ActionButton v-if="perms.update" :href="route('parts.edit', p.id)" :label="t('master.edit')" variant="edit" />
+                                    <ActionButton v-if="perms.delete" :label="t('master.delete')" variant="delete" @click="destroy(p)" />
+                                </div>
+                            </td>
+                        </tr>
+                        <tr v-if="parts.data.length === 0">
+                            <td colspan="10" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.partEmpty') }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <Pagination :links="parts.links" />

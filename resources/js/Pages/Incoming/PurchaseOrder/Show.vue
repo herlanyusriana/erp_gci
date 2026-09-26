@@ -51,27 +51,29 @@ defineProps<{
         </div>
 
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
-            <table class="min-w-full divide-y divide-borderline text-sm">
-                <thead class="bg-background">
-                    <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th scope="col" class="px-4 py-3">{{ t('incoming.part') }}</th>
-                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.qty') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('incoming.unit') }}</th>
-                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.price') }}</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-borderline">
-                    <tr v-for="item in purchaseOrder.items" :key="item.id" class="hover:bg-primary-light/40">
-                        <td class="px-4 py-3 font-medium text-ink-primary">{{ item.part?.part_number ?? '—' }}</td>
-                        <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ item.qty }}</td>
-                        <td class="px-4 py-3 text-ink-primary">{{ item.unit ?? '—' }}</td>
-                        <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ item.price ?? '—' }}</td>
-                    </tr>
-                    <tr v-if="!purchaseOrder.items?.length">
-                        <td colspan="4" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noItems') }}</td>
-                    </tr>
-                </tbody>
-            </table>
+                        <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-borderline text-sm">
+                    <thead class="bg-background">
+                        <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
+                            <th scope="col" class="px-4 py-3">{{ t('incoming.part') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.qty') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('incoming.unit') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.price') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-borderline">
+                        <tr v-for="item in purchaseOrder.items" :key="item.id" class="hover:bg-primary-light/40">
+                            <td class="px-4 py-3 font-medium text-ink-primary">{{ item.part?.part_number ?? '—' }}</td>
+                            <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ item.qty }}</td>
+                            <td class="px-4 py-3 text-ink-primary">{{ item.unit ?? '—' }}</td>
+                            <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ item.price ?? '—' }}</td>
+                        </tr>
+                        <tr v-if="!purchaseOrder.items?.length">
+                            <td colspan="4" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noItems') }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </AppLayout>
 </template>

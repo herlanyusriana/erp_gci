@@ -68,34 +68,36 @@ function remove(p: Process) {
         <input v-model="search" @input="doSearch" type="search" :placeholder="t('master.processSearch')" :aria-label="t('master.processSearch')" class="mb-4 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
 
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
-            <table class="min-w-full divide-y divide-borderline text-sm">
-                <thead class="bg-background">
-                    <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th scope="col" class="px-4 py-3">{{ t('master.code') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('master.name') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('master.status') }}</th>
-                        <th scope="col" class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-borderline">
-                    <tr v-for="p in processes.data" :key="p.id" class="hover:bg-primary-light/40">
-                        <td class="px-4 py-3 font-medium text-ink-primary">{{ p.process_code }}</td>
-                        <td class="px-4 py-3 text-ink-primary">{{ p.process_name }}</td>
-                        <td class="px-4 py-3">
-                            <StatusBadge :tone="p.is_active ? 'success' : 'warning'">{{ p.is_active ? t('master.active') : t('master.inactive') }}</StatusBadge>
-                        </td>
-                        <td class="px-4 py-3">
-                            <div class="flex justify-end gap-1.5">
-                                <ActionButton :label="t('master.edit')" variant="edit" @click="openEdit(p)" />
-                                <ActionButton :label="t('master.delete')" variant="delete" @click="remove(p)" />
-                            </div>
-                        </td>
-                    </tr>
-                    <tr v-if="processes.data.length === 0">
-                        <td colspan="4" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.processEmpty') }}</td>
-                    </tr>
-                </tbody>
-            </table>
+                        <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-borderline text-sm">
+                    <thead class="bg-background">
+                        <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
+                            <th scope="col" class="px-4 py-3">{{ t('master.code') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.name') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.status') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-borderline">
+                        <tr v-for="p in processes.data" :key="p.id" class="hover:bg-primary-light/40">
+                            <td class="px-4 py-3 font-medium text-ink-primary">{{ p.process_code }}</td>
+                            <td class="px-4 py-3 text-ink-primary">{{ p.process_name }}</td>
+                            <td class="px-4 py-3">
+                                <StatusBadge :tone="p.is_active ? 'success' : 'warning'">{{ p.is_active ? t('master.active') : t('master.inactive') }}</StatusBadge>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="flex justify-end gap-1.5">
+                                    <ActionButton :label="t('master.edit')" variant="edit" @click="openEdit(p)" />
+                                    <ActionButton :label="t('master.delete')" variant="delete" @click="remove(p)" />
+                                </div>
+                            </td>
+                        </tr>
+                        <tr v-if="processes.data.length === 0">
+                            <td colspan="4" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.processEmpty') }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <Pagination :links="processes.links" />

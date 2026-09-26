@@ -86,107 +86,113 @@ function removeItem(id: number) {
         <!-- Items -->
         <h2 class="mb-3 text-base font-semibold text-ink-primary">{{ t('incoming.items') }}</h2>
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
-            <table class="min-w-full divide-y divide-borderline text-sm">
-                <thead class="bg-background">
-                    <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th scope="col" class="px-4 py-3">{{ t('incoming.part') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('incoming.groupSize') }}</th>
-                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.qtyGoods') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('incoming.unit') }}</th>
-                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.receivedUnit', { unit: weightUnit }) }}</th>
-                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.remainingUnit', { unit: weightUnit }) }}</th>
-                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.actions') }}</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-borderline">
-                    <tr v-for="p in pending" :key="p.item.id" class="hover:bg-primary-light/40">
-                        <td class="px-4 py-3 font-medium text-ink-primary">
-                            {{ p.item.part?.part_number ?? '—' }}
-                            <div class="text-xs text-ink-secondary">{{ p.item.part?.part_name ?? '' }}</div>
-                        </td>
-                        <td class="px-4 py-3 text-ink-primary">{{ p.item.material_group ?? '—' }} · {{ p.item.size ?? '—' }}</td>
-                        <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ p.item.qty_goods }}</td>
-                        <td class="px-4 py-3 text-ink-primary">{{ p.item.unit_goods ?? '—' }}</td>
-                        <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ p.received }}</td>
-                        <td class="px-4 py-3 text-right tabular-nums font-semibold" :class="p.remaining > 0 ? 'text-warning' : 'text-success'">{{ p.remaining }}</td>
-                        <td class="px-4 py-3">
-                            <div class="flex justify-end gap-1.5">
-                                <ActionButton :href="route('receive.create', p.item.id)" :label="t('incoming.receiveAction')" variant="view" />
-                            </div>
-                        </td>
-                    </tr>
-                    <tr v-if="!pending.length">
-                        <td colspan="7" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noItems') }}</td>
-                    </tr>
-                </tbody>
-            </table>
+                        <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-borderline text-sm">
+                    <thead class="bg-background">
+                        <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
+                            <th scope="col" class="px-4 py-3">{{ t('incoming.part') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('incoming.groupSize') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.qtyGoods') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('incoming.unit') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.receivedUnit', { unit: weightUnit }) }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.remainingUnit', { unit: weightUnit }) }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.actions') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-borderline">
+                        <tr v-for="p in pending" :key="p.item.id" class="hover:bg-primary-light/40">
+                            <td class="px-4 py-3 font-medium text-ink-primary">
+                                {{ p.item.part?.part_number ?? '—' }}
+                                <div class="text-xs text-ink-secondary">{{ p.item.part?.part_name ?? '' }}</div>
+                            </td>
+                            <td class="px-4 py-3 text-ink-primary">{{ p.item.material_group ?? '—' }} · {{ p.item.size ?? '—' }}</td>
+                            <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ p.item.qty_goods }}</td>
+                            <td class="px-4 py-3 text-ink-primary">{{ p.item.unit_goods ?? '—' }}</td>
+                            <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ p.received }}</td>
+                            <td class="px-4 py-3 text-right tabular-nums font-semibold" :class="p.remaining > 0 ? 'text-warning' : 'text-success'">{{ p.remaining }}</td>
+                            <td class="px-4 py-3">
+                                <div class="flex justify-end gap-1.5">
+                                    <ActionButton :href="route('receive.create', p.item.id)" :label="t('incoming.receiveAction')" variant="view" />
+                                </div>
+                            </td>
+                        </tr>
+                        <tr v-if="!pending.length">
+                            <td colspan="7" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noItems') }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <!-- Containers -->
         <h2 class="mb-3 mt-8 text-base font-semibold text-ink-primary">{{ t('incoming.receiveTag') }}</h2>
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
-            <table class="min-w-full divide-y divide-borderline text-sm">
-                <thead class="bg-background">
-                    <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th scope="col" class="px-4 py-3">{{ t('incoming.part') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('incoming.tag') }}</th>
-                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.qty') }}</th>
-                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.netUnit', { unit: weightUnit }) }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('incoming.date') }}</th>
-                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.actions') }}</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-borderline">
-                    <tr v-for="r in receiveRows" :key="r.receive.id" class="hover:bg-primary-light/40">
-                        <td class="px-4 py-3 font-medium text-ink-primary">
-                            {{ r.item.part?.part_number ?? '—' }}
-                            <div class="text-xs text-ink-secondary">{{ r.item.material_group ?? '' }}</div>
-                        </td>
-                        <td class="px-4 py-3 text-ink-primary">{{ r.receive.tag ?? '—' }}</td>
-                        <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ r.receive.qty }}</td>
-                        <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ r.receive.net_weight }}</td>
-                        <td class="px-4 py-3 text-ink-primary">{{ r.receive.ata_date ?? '—' }}</td>
-                        <td class="px-4 py-3">
-                            <div class="flex justify-end gap-1.5">
-                                <a :href="route('receive.label', r.receive.id)" target="_blank" rel="noopener" class="rounded-md border border-borderline px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">{{ t('incoming.label') }}</a>
-                                <ActionButton :href="route('receive.edit', r.receive.id)" :label="t('incoming.edit')" variant="edit" />
-                            </div>
-                        </td>
-                    </tr>
-                    <tr v-if="!receiveRows.length">
-                        <td colspan="6" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noReceipts') }}</td>
-                    </tr>
-                </tbody>
-            </table>
+                        <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-borderline text-sm">
+                    <thead class="bg-background">
+                        <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
+                            <th scope="col" class="px-4 py-3">{{ t('incoming.part') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('incoming.tag') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.qty') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.netUnit', { unit: weightUnit }) }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('incoming.date') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.actions') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-borderline">
+                        <tr v-for="r in receiveRows" :key="r.receive.id" class="hover:bg-primary-light/40">
+                            <td class="px-4 py-3 font-medium text-ink-primary">
+                                {{ r.item.part?.part_number ?? '—' }}
+                                <div class="text-xs text-ink-secondary">{{ r.item.material_group ?? '' }}</div>
+                            </td>
+                            <td class="px-4 py-3 text-ink-primary">{{ r.receive.tag ?? '—' }}</td>
+                            <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ r.receive.qty }}</td>
+                            <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ r.receive.net_weight }}</td>
+                            <td class="px-4 py-3 text-ink-primary">{{ r.receive.ata_date ?? '—' }}</td>
+                            <td class="px-4 py-3">
+                                <div class="flex justify-end gap-1.5">
+                                    <a :href="route('receive.label', r.receive.id)" target="_blank" rel="noopener" class="rounded-md border border-borderline px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">{{ t('incoming.label') }}</a>
+                                    <ActionButton :href="route('receive.edit', r.receive.id)" :label="t('incoming.edit')" variant="edit" />
+                                </div>
+                            </td>
+                        </tr>
+                        <tr v-if="!receiveRows.length">
+                            <td colspan="6" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noReceipts') }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <!-- Containers -->
         <h2 class="mb-3 mt-8 text-base font-semibold text-ink-primary">{{ t('incoming.containers') }}</h2>
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
-            <table class="min-w-full divide-y divide-borderline text-sm">
-                <thead class="bg-background">
-                    <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th scope="col" class="px-4 py-3">{{ t('incoming.containerNo') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('incoming.seal') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('incoming.size') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('incoming.inspection') }}</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-borderline">
-                    <tr v-for="c in arrival.containers" :key="c.id" class="hover:bg-primary-light/40">
-                        <td class="px-4 py-3 font-medium text-ink-primary">{{ c.container_no }}</td>
-                        <td class="px-4 py-3 text-ink-primary">{{ c.seal_code ?? '—' }}</td>
-                        <td class="px-4 py-3 text-ink-primary">{{ c.size ?? '—' }}</td>
-                        <td class="px-4 py-3">
-                            <StatusBadge v-if="c.inspection" :tone="c.inspection.status === 'ok' ? 'success' : 'danger'" uppercase>{{ t('incoming.status_' + c.inspection.status) }}</StatusBadge>
-                            <StatusBadge v-else tone="warning">{{ t('incoming.notInspected') }}</StatusBadge>
-                        </td>
-                    </tr>
-                    <tr v-if="!arrival.containers?.length">
-                        <td colspan="4" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noContainers') }}</td>
-                    </tr>
-                </tbody>
-            </table>
+                        <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-borderline text-sm">
+                    <thead class="bg-background">
+                        <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
+                            <th scope="col" class="px-4 py-3">{{ t('incoming.containerNo') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('incoming.seal') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('incoming.size') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('incoming.inspection') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-borderline">
+                        <tr v-for="c in arrival.containers" :key="c.id" class="hover:bg-primary-light/40">
+                            <td class="px-4 py-3 font-medium text-ink-primary">{{ c.container_no }}</td>
+                            <td class="px-4 py-3 text-ink-primary">{{ c.seal_code ?? '—' }}</td>
+                            <td class="px-4 py-3 text-ink-primary">{{ c.size ?? '—' }}</td>
+                            <td class="px-4 py-3">
+                                <StatusBadge v-if="c.inspection" :tone="c.inspection.status === 'ok' ? 'success' : 'danger'" uppercase>{{ t('incoming.status_' + c.inspection.status) }}</StatusBadge>
+                                <StatusBadge v-else tone="warning">{{ t('incoming.notInspected') }}</StatusBadge>
+                            </td>
+                        </tr>
+                        <tr v-if="!arrival.containers?.length">
+                            <td colspan="4" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noContainers') }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </AppLayout>
 </template>

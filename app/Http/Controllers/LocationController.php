@@ -73,6 +73,10 @@ class LocationController extends Controller
 
     public function printLabel(Location $location)
     {
+        // Lokasi nonaktif tidak boleh lagi ditempel: labelnya akan gagal
+        // di-resolve APK dan menyesatkan operator di rak.
+        abort_unless($location->is_active, 404);
+
         return view('locations.label', [
             'location' => $location,
             'companyName' => ConfigMaster::getValue('SYSTEM', 'company_name', 'PT Geum Cheon Indo'),

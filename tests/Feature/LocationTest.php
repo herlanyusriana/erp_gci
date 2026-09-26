@@ -168,6 +168,15 @@ class LocationTest extends TestCase
             ->assertSee('Rak H1', false);
     }
 
+    public function test_location_label_is_refused_for_an_inactive_location(): void
+    {
+        $location = Location::create(['code' => 'X-01', 'name' => 'Rak Lama', 'is_active' => false]);
+
+        $this->actingAs($this->user('warehouse@geumcheon.local'))
+            ->get(route('locations.label', $location))
+            ->assertNotFound();
+    }
+
     private function receiveIntoLocation(?string $code, ?string $tag = null): IncomingReceive
     {
         $arrival = IncomingArrival::create([

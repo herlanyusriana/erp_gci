@@ -104,43 +104,45 @@ function remove(s: PartSubstitute) {
         </div>
 
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
-            <table class="min-w-full divide-y divide-borderline text-sm">
-                <thead class="bg-background">
-                    <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th scope="col" class="px-4 py-3">{{ t('master.materialPart') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('master.substitutePart') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('master.supplier') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('master.groupSource') }}</th>
-                        <th scope="col" class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-borderline">
-                    <tr v-for="s in substitutes.data" :key="s.id" class="hover:bg-primary-light/40">
-                        <td class="px-4 py-3">
-                            <div class="font-medium text-ink-primary">{{ s.part?.part_number ?? '—' }}</div>
-                            <div class="text-xs text-ink-secondary">{{ s.part?.part_name }}</div>
-                        </td>
-                        <td class="px-4 py-3">
-                            <div class="font-medium text-ink-primary">{{ s.substitute_part?.part_number ?? '—' }}</div>
-                            <div class="text-xs text-ink-secondary">{{ s.substitute_part?.part_name }}</div>
-                        </td>
-                        <td class="px-4 py-3 text-ink-primary">{{ s.supplier?.supplier_name ?? '—' }}</td>
-                        <td class="px-4 py-3">
-                            <div class="text-ink-primary">{{ s.material_group ?? '—' }}</div>
-                            <div class="text-xs text-ink-secondary">{{ s.source ?? '—' }}</div>
-                        </td>
-                        <td class="px-4 py-3">
-                            <div class="flex justify-end gap-1.5">
-                                <ActionButton v-if="perms.update" :label="t('master.edit')" variant="edit" @click="openEdit(s)" />
-                                <ActionButton v-if="perms.delete" :label="t('master.delete')" variant="delete" @click="remove(s)" />
-                            </div>
-                        </td>
-                    </tr>
-                    <tr v-if="substitutes.data.length === 0">
-                        <td colspan="5" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.substituteEmpty') }}</td>
-                    </tr>
-                </tbody>
-            </table>
+                        <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-borderline text-sm">
+                    <thead class="bg-background">
+                        <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
+                            <th scope="col" class="px-4 py-3">{{ t('master.materialPart') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.substitutePart') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.supplier') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.groupSource') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-borderline">
+                        <tr v-for="s in substitutes.data" :key="s.id" class="hover:bg-primary-light/40">
+                            <td class="px-4 py-3">
+                                <div class="font-medium text-ink-primary">{{ s.part?.part_number ?? '—' }}</div>
+                                <div class="text-xs text-ink-secondary">{{ s.part?.part_name }}</div>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="font-medium text-ink-primary">{{ s.substitute_part?.part_number ?? '—' }}</div>
+                                <div class="text-xs text-ink-secondary">{{ s.substitute_part?.part_name }}</div>
+                            </td>
+                            <td class="px-4 py-3 text-ink-primary">{{ s.supplier?.supplier_name ?? '—' }}</td>
+                            <td class="px-4 py-3">
+                                <div class="text-ink-primary">{{ s.material_group ?? '—' }}</div>
+                                <div class="text-xs text-ink-secondary">{{ s.source ?? '—' }}</div>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="flex justify-end gap-1.5">
+                                    <ActionButton v-if="perms.update" :label="t('master.edit')" variant="edit" @click="openEdit(s)" />
+                                    <ActionButton v-if="perms.delete" :label="t('master.delete')" variant="delete" @click="remove(s)" />
+                                </div>
+                            </td>
+                        </tr>
+                        <tr v-if="substitutes.data.length === 0">
+                            <td colspan="5" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.substituteEmpty') }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <Pagination :links="substitutes.links" />

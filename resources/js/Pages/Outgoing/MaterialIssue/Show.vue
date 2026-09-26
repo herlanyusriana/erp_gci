@@ -50,34 +50,36 @@ const totalQty = () => (props.issue.items ?? []).reduce((sum, it) => sum + Numbe
         </div>
 
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
-            <table class="min-w-full divide-y divide-borderline text-sm">
-                <thead class="bg-background">
-                    <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th scope="col" class="px-4 py-3">{{ t('outgoing.part') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('outgoing.tag') }}</th>
-                        <th scope="col" class="px-4 py-3 text-right">{{ t('outgoing.qty') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('outgoing.unit') }}</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-borderline">
-                    <tr v-for="it in issue.items" :key="it.id" class="hover:bg-primary-light/40">
-                        <td class="px-4 py-3 font-medium text-ink-primary">{{ it.part?.part_number }} · {{ it.part?.part_name }}</td>
-                        <td class="px-4 py-3 text-ink-primary">{{ it.tag ?? '—' }}</td>
-                        <td class="px-4 py-3 text-right tabular-nums font-semibold text-ink-primary">{{ it.qty }}</td>
-                        <td class="px-4 py-3 text-ink-primary">{{ it.uom ?? '—' }}</td>
-                    </tr>
-                    <tr v-if="!issue.items?.length">
-                        <td colspan="4" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('outgoing.noItems') }}</td>
-                    </tr>
-                </tbody>
-                <tfoot v-if="issue.items?.length" class="bg-background">
-                    <tr>
-                        <td colspan="2" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('outgoing.totalQty') }}</td>
-                        <td class="px-4 py-3 text-right tabular-nums font-semibold text-ink-primary">{{ totalQty() }}</td>
-                        <td />
-                    </tr>
-                </tfoot>
-            </table>
+                        <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-borderline text-sm">
+                    <thead class="bg-background">
+                        <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
+                            <th scope="col" class="px-4 py-3">{{ t('outgoing.part') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('outgoing.tag') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('outgoing.qty') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('outgoing.unit') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-borderline">
+                        <tr v-for="it in issue.items" :key="it.id" class="hover:bg-primary-light/40">
+                            <td class="px-4 py-3 font-medium text-ink-primary">{{ it.part?.part_number }} · {{ it.part?.part_name }}</td>
+                            <td class="px-4 py-3 text-ink-primary">{{ it.tag ?? '—' }}</td>
+                            <td class="px-4 py-3 text-right tabular-nums font-semibold text-ink-primary">{{ it.qty }}</td>
+                            <td class="px-4 py-3 text-ink-primary">{{ it.uom ?? '—' }}</td>
+                        </tr>
+                        <tr v-if="!issue.items?.length">
+                            <td colspan="4" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('outgoing.noItems') }}</td>
+                        </tr>
+                    </tbody>
+                    <tfoot v-if="issue.items?.length" class="bg-background">
+                        <tr>
+                            <td colspan="2" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('outgoing.totalQty') }}</td>
+                            <td class="px-4 py-3 text-right tabular-nums font-semibold text-ink-primary">{{ totalQty() }}</td>
+                            <td />
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
         </div>
     </AppLayout>
 </template>

@@ -78,46 +78,48 @@ function assign() {
         </div>
 
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
-            <table class="min-w-full divide-y divide-borderline text-sm">
-                <thead class="bg-background">
-                    <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th scope="col" class="w-12 px-4 py-3">
-                            <input
-                                type="checkbox"
-                                :aria-label="t('master.setupAssign')"
-                                :checked="allSelected"
-                                @change="toggleAll"
-                                class="rounded border-borderline text-primary focus:ring-primary"
-                            />
-                        </th>
-                        <th scope="col" class="px-4 py-3">{{ t('master.setupTag') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('master.setupPart') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('master.setupInvoice') }}</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-borderline">
-                    <tr v-for="receive in receives.data" :key="receive.id" class="hover:bg-primary-light/40">
-                        <td class="px-4 py-3">
-                            <input
-                                type="checkbox"
-                                :aria-label="receive.tag ?? ''"
-                                :checked="selected.includes(receive.id)"
-                                @change="toggle(receive.id)"
-                                class="rounded border-borderline text-primary focus:ring-primary"
-                            />
-                        </td>
-                        <td class="px-4 py-3 font-medium text-ink-primary">{{ receive.tag ?? '—' }}</td>
-                        <td class="px-4 py-3 text-ink-primary">
-                            {{ receive.part?.part_number ?? '—' }}
-                            <span class="text-ink-secondary">{{ receive.part?.part_name ?? '' }}</span>
-                        </td>
-                        <td class="px-4 py-3 text-ink-secondary">{{ receive.invoice_no ?? '—' }}</td>
-                    </tr>
-                    <tr v-if="receives.data.length === 0">
-                        <td colspan="4" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.setupEmpty') }}</td>
-                    </tr>
-                </tbody>
-            </table>
+                        <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-borderline text-sm">
+                    <thead class="bg-background">
+                        <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
+                            <th scope="col" class="w-12 px-4 py-3">
+                                <input
+                                    type="checkbox"
+                                    :aria-label="t('master.setupAssign')"
+                                    :checked="allSelected"
+                                    @change="toggleAll"
+                                    class="rounded border-borderline text-primary focus:ring-primary"
+                                />
+                            </th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.setupTag') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.setupPart') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.setupInvoice') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-borderline">
+                        <tr v-for="receive in receives.data" :key="receive.id" class="hover:bg-primary-light/40">
+                            <td class="px-4 py-3">
+                                <input
+                                    type="checkbox"
+                                    :aria-label="receive.tag ?? ''"
+                                    :checked="selected.includes(receive.id)"
+                                    @change="toggle(receive.id)"
+                                    class="rounded border-borderline text-primary focus:ring-primary"
+                                />
+                            </td>
+                            <td class="px-4 py-3 font-medium text-ink-primary">{{ receive.tag ?? '—' }}</td>
+                            <td class="px-4 py-3 text-ink-primary">
+                                {{ receive.part?.part_number ?? '—' }}
+                                <span class="text-ink-secondary">{{ receive.part?.part_name ?? '' }}</span>
+                            </td>
+                            <td class="px-4 py-3 text-ink-secondary">{{ receive.invoice_no ?? '—' }}</td>
+                        </tr>
+                        <tr v-if="receives.data.length === 0">
+                            <td colspan="4" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.setupEmpty') }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <Pagination :links="receives.links" />

@@ -112,41 +112,43 @@ function remove(s: Supplier) {
 
         <!-- Table -->
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
-            <table class="min-w-full divide-y divide-borderline text-sm">
-                <thead class="bg-background">
-                    <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th scope="col" class="px-4 py-3">{{ t('master.code') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('master.name') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('master.address') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('master.status') }}</th>
-                        <th scope="col" class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-borderline">
-                    <tr v-for="s in suppliers.data" :key="s.id" class="hover:bg-primary-light/40">
-                        <td class="px-4 py-3 font-medium text-ink-primary">{{ s.supplier_code }}</td>
-                        <td class="px-4 py-3 text-ink-primary">
-                            <div>{{ s.supplier_name }}</div>
-                            <div v-if="s.phone || s.contact_person" class="text-xs text-ink-secondary">
-                                {{ [s.contact_person, s.phone].filter(Boolean).join(' · ') }}
-                            </div>
-                        </td>
-                        <td class="px-4 py-3 text-ink-secondary">{{ s.address ?? '—' }}</td>
-                        <td class="px-4 py-3">
-                            <StatusBadge :tone="s.is_active ? 'success' : 'warning'">{{ s.is_active ? t('master.active') : t('master.inactive') }}</StatusBadge>
-                        </td>
-                        <td class="px-4 py-3">
-                            <div class="flex justify-end gap-1.5">
-                                <ActionButton :label="t('master.edit')" variant="edit" @click="openEdit(s)" />
-                                <ActionButton :label="t('master.delete')" variant="delete" @click="remove(s)" />
-                            </div>
-                        </td>
-                    </tr>
-                    <tr v-if="suppliers.data.length === 0">
-                        <td colspan="5" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.supplierEmpty') }}</td>
-                    </tr>
-                </tbody>
-            </table>
+                        <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-borderline text-sm">
+                    <thead class="bg-background">
+                        <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
+                            <th scope="col" class="px-4 py-3">{{ t('master.code') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.name') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.address') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.status') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-borderline">
+                        <tr v-for="s in suppliers.data" :key="s.id" class="hover:bg-primary-light/40">
+                            <td class="px-4 py-3 font-medium text-ink-primary">{{ s.supplier_code }}</td>
+                            <td class="px-4 py-3 text-ink-primary">
+                                <div>{{ s.supplier_name }}</div>
+                                <div v-if="s.phone || s.contact_person" class="text-xs text-ink-secondary">
+                                    {{ [s.contact_person, s.phone].filter(Boolean).join(' · ') }}
+                                </div>
+                            </td>
+                            <td class="px-4 py-3 text-ink-secondary">{{ s.address ?? '—' }}</td>
+                            <td class="px-4 py-3">
+                                <StatusBadge :tone="s.is_active ? 'success' : 'warning'">{{ s.is_active ? t('master.active') : t('master.inactive') }}</StatusBadge>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="flex justify-end gap-1.5">
+                                    <ActionButton :label="t('master.edit')" variant="edit" @click="openEdit(s)" />
+                                    <ActionButton :label="t('master.delete')" variant="delete" @click="remove(s)" />
+                                </div>
+                            </td>
+                        </tr>
+                        <tr v-if="suppliers.data.length === 0">
+                            <td colspan="5" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.supplierEmpty') }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <Pagination :links="suppliers.links" />

@@ -52,41 +52,43 @@ function remove(po: PurchaseOrder) {
         <input v-model="search" @input="doSearch" type="search" :placeholder="t('incoming.searchPo')" :aria-label="t('incoming.searchPo')" class="mb-4 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
 
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
-            <table class="min-w-full divide-y divide-borderline text-sm">
-                <thead class="bg-background">
-                    <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th scope="col" class="px-4 py-3">{{ t('incoming.poNo') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('incoming.supplier') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('incoming.items') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('incoming.expected') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('incoming.status') }}</th>
-                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.actions') }}</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-borderline">
-                    <tr v-for="po in purchaseOrders.data" :key="po.id" class="hover:bg-primary-light/40">
-                        <td class="px-4 py-3">
-                            <Link :href="route('purchase-orders.show', po.id)" class="font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">{{ po.po_no }}</Link>
-                        </td>
-                        <td class="px-4 py-3 text-ink-primary">{{ po.supplier?.supplier_name ?? '—' }}</td>
-                        <td class="px-4 py-3 text-ink-primary">{{ po.items_count ?? 0 }}</td>
-                        <td class="px-4 py-3 text-ink-primary">{{ po.expected_date ?? '—' }}</td>
-                        <td class="px-4 py-3">
-                            <StatusBadge uppercase :status="po.status">{{ t('incoming.status_' + po.status) }}</StatusBadge>
-                        </td>
-                        <td class="px-4 py-3">
-                            <div class="flex justify-end gap-1.5">
-                                <ActionButton :href="route('purchase-orders.show', po.id)" :label="t('incoming.view')" variant="view" />
-                                <ActionButton :href="route('purchase-orders.edit', po.id)" :label="t('incoming.edit')" variant="edit" />
-                                <ActionButton :label="t('incoming.delete')" variant="delete" @click="remove(po)" />
-                            </div>
-                        </td>
-                    </tr>
-                    <tr v-if="purchaseOrders.data.length === 0">
-                        <td colspan="6" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noPo') }}</td>
-                    </tr>
-                </tbody>
-            </table>
+                        <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-borderline text-sm">
+                    <thead class="bg-background">
+                        <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
+                            <th scope="col" class="px-4 py-3">{{ t('incoming.poNo') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('incoming.supplier') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('incoming.items') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('incoming.expected') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('incoming.status') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.actions') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-borderline">
+                        <tr v-for="po in purchaseOrders.data" :key="po.id" class="hover:bg-primary-light/40">
+                            <td class="px-4 py-3">
+                                <Link :href="route('purchase-orders.show', po.id)" class="font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">{{ po.po_no }}</Link>
+                            </td>
+                            <td class="px-4 py-3 text-ink-primary">{{ po.supplier?.supplier_name ?? '—' }}</td>
+                            <td class="px-4 py-3 text-ink-primary">{{ po.items_count ?? 0 }}</td>
+                            <td class="px-4 py-3 text-ink-primary">{{ po.expected_date ?? '—' }}</td>
+                            <td class="px-4 py-3">
+                                <StatusBadge uppercase :status="po.status">{{ t('incoming.status_' + po.status) }}</StatusBadge>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="flex justify-end gap-1.5">
+                                    <ActionButton :href="route('purchase-orders.show', po.id)" :label="t('incoming.view')" variant="view" />
+                                    <ActionButton :href="route('purchase-orders.edit', po.id)" :label="t('incoming.edit')" variant="edit" />
+                                    <ActionButton :label="t('incoming.delete')" variant="delete" @click="remove(po)" />
+                                </div>
+                            </td>
+                        </tr>
+                        <tr v-if="purchaseOrders.data.length === 0">
+                            <td colspan="6" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noPo') }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <Pagination :links="purchaseOrders.links" />

@@ -50,39 +50,41 @@ const fmtQty = (n: number | null) => (n == null ? '—' : Number(n));
         </div>
 
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
-            <table class="min-w-full divide-y divide-borderline text-sm">
-                <thead class="bg-background">
-                    <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th scope="col" class="px-4 py-3">{{ t('master.number') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('master.fgPartNumber') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('master.fgName') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('master.model') }}</th>
-                        <th scope="col" class="px-4 py-3 text-center">{{ t('master.itemCount') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('master.status') }}</th>
-                        <th scope="col" class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-borderline">
-                    <tr v-for="b in boms.data" :key="b.id" class="hover:bg-primary-light/40">
-                        <td class="px-4 py-3 text-ink-secondary">{{ b.bom_no ?? b.id }}</td>
-                        <td class="px-4 py-3 font-medium text-ink-primary">{{ b.part?.part_number }}</td>
-                        <td class="px-4 py-3 text-ink-primary">{{ b.part?.part_name }}</td>
-                        <td class="px-4 py-3 text-ink-secondary">{{ b.part?.model ?? '—' }}</td>
-                        <td class="px-4 py-3 text-center tabular-nums text-ink-secondary">{{ b.items_count ?? b.items?.length ?? 0 }}</td>
-                        <td class="px-4 py-3">
-                            <StatusBadge :tone="b.is_active ? 'success' : 'warning'">{{ b.is_active ? t('master.active') : t('master.inactive') }}</StatusBadge>
-                        </td>
-                        <td class="px-4 py-3">
-                            <div class="flex justify-end gap-1.5">
-                                <ActionButton :href="route('boms.show', b.id)" :label="t('master.view')" variant="view" />
-                            </div>
-                        </td>
-                    </tr>
-                    <tr v-if="boms.data.length === 0">
-                        <td colspan="7" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.bomEmpty') }}</td>
-                    </tr>
-                </tbody>
-            </table>
+                        <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-borderline text-sm">
+                    <thead class="bg-background">
+                        <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
+                            <th scope="col" class="px-4 py-3">{{ t('master.number') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.fgPartNumber') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.fgName') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.model') }}</th>
+                            <th scope="col" class="px-4 py-3 text-center">{{ t('master.itemCount') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.status') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-borderline">
+                        <tr v-for="b in boms.data" :key="b.id" class="hover:bg-primary-light/40">
+                            <td class="px-4 py-3 text-ink-secondary">{{ b.bom_no ?? b.id }}</td>
+                            <td class="px-4 py-3 font-medium text-ink-primary">{{ b.part?.part_number }}</td>
+                            <td class="px-4 py-3 text-ink-primary">{{ b.part?.part_name }}</td>
+                            <td class="px-4 py-3 text-ink-secondary">{{ b.part?.model ?? '—' }}</td>
+                            <td class="px-4 py-3 text-center tabular-nums text-ink-secondary">{{ b.items_count ?? b.items?.length ?? 0 }}</td>
+                            <td class="px-4 py-3">
+                                <StatusBadge :tone="b.is_active ? 'success' : 'warning'">{{ b.is_active ? t('master.active') : t('master.inactive') }}</StatusBadge>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="flex justify-end gap-1.5">
+                                    <ActionButton :href="route('boms.show', b.id)" :label="t('master.view')" variant="view" />
+                                </div>
+                            </td>
+                        </tr>
+                        <tr v-if="boms.data.length === 0">
+                            <td colspan="7" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.bomEmpty') }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <Pagination :links="boms.links" />

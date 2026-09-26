@@ -102,38 +102,40 @@ function remove(company: TruckingCompany) {
 
         <!-- Table -->
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
-            <table class="min-w-full divide-y divide-borderline text-sm">
-                <thead class="bg-background">
-                    <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th scope="col" class="px-4 py-3">{{ t('master.code') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('master.name') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('master.contact') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('master.phone') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('master.status') }}</th>
-                        <th scope="col" class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-borderline">
-                    <tr v-for="company in truckings.data" :key="company.id" class="hover:bg-primary-light/40">
-                        <td class="px-4 py-3 font-medium text-ink-primary">{{ company.company_code }}</td>
-                        <td class="px-4 py-3 text-ink-primary">{{ company.company_name }}</td>
-                        <td class="px-4 py-3 text-ink-primary">{{ company.contact_person ?? '—' }}</td>
-                        <td class="px-4 py-3 text-ink-primary">{{ company.phone ?? '—' }}</td>
-                        <td class="px-4 py-3">
-                            <StatusBadge :tone="company.is_active ? 'success' : 'warning'">{{ company.is_active ? t('master.active') : t('master.inactive') }}</StatusBadge>
-                        </td>
-                        <td class="px-4 py-3">
-                            <div class="flex justify-end gap-1.5">
-                                <ActionButton :label="t('master.edit')" variant="edit" @click="openEdit(company)" />
-                                <ActionButton :label="t('master.delete')" variant="delete" @click="remove(company)" />
-                            </div>
-                        </td>
-                    </tr>
-                    <tr v-if="truckings.data.length === 0">
-                        <td colspan="6" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.truckingEmpty') }}</td>
-                    </tr>
-                </tbody>
-            </table>
+                        <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-borderline text-sm">
+                    <thead class="bg-background">
+                        <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
+                            <th scope="col" class="px-4 py-3">{{ t('master.code') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.name') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.contact') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.phone') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.status') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-borderline">
+                        <tr v-for="company in truckings.data" :key="company.id" class="hover:bg-primary-light/40">
+                            <td class="px-4 py-3 font-medium text-ink-primary">{{ company.company_code }}</td>
+                            <td class="px-4 py-3 text-ink-primary">{{ company.company_name }}</td>
+                            <td class="px-4 py-3 text-ink-primary">{{ company.contact_person ?? '—' }}</td>
+                            <td class="px-4 py-3 text-ink-primary">{{ company.phone ?? '—' }}</td>
+                            <td class="px-4 py-3">
+                                <StatusBadge :tone="company.is_active ? 'success' : 'warning'">{{ company.is_active ? t('master.active') : t('master.inactive') }}</StatusBadge>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="flex justify-end gap-1.5">
+                                    <ActionButton :label="t('master.edit')" variant="edit" @click="openEdit(company)" />
+                                    <ActionButton :label="t('master.delete')" variant="delete" @click="remove(company)" />
+                                </div>
+                            </td>
+                        </tr>
+                        <tr v-if="truckings.data.length === 0">
+                            <td colspan="6" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.truckingEmpty') }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <Pagination :links="truckings.links" />

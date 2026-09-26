@@ -108,38 +108,40 @@ function remove(c: ConfigMaster) {
         </div>
 
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
-            <table class="min-w-full divide-y divide-borderline text-sm">
-                <thead class="bg-background">
-                    <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th scope="col" class="px-4 py-3">{{ t('account.group') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('account.key') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('account.value') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('account.type') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('account.status') }}</th>
-                        <th scope="col" class="px-4 py-3 text-right">{{ t('account.actions') }}</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-borderline">
-                    <tr v-for="c in configs.data" :key="c.id" class="hover:bg-primary-light/40">
-                        <td class="px-4 py-3 font-medium text-ink-primary">{{ c.group }}</td>
-                        <td class="px-4 py-3 text-ink-primary">{{ c.key }}</td>
-                        <td class="px-4 py-3 max-w-[16rem] truncate text-ink-primary">{{ c.value ?? '—' }}</td>
-                        <td class="px-4 py-3"><StatusBadge :tone="badgeTone(c.data_type)">{{ t(`account.dataTypes.${c.data_type}`) }}</StatusBadge></td>
-                        <td class="px-4 py-3">
-                            <StatusBadge :tone="c.is_active ? 'success' : 'warning'">{{ c.is_active ? t('account.active') : t('account.inactive') }}</StatusBadge>
-                        </td>
-                        <td class="px-4 py-3">
-                            <div class="flex justify-end gap-1.5">
-                                <ActionButton v-if="canEdit" :label="t('account.edit')" variant="edit" @click="openEdit(c)" />
-                                <ActionButton v-if="canEdit" :label="t('account.delete')" variant="delete" @click="remove(c)" />
-                            </div>
-                        </td>
-                    </tr>
-                    <tr v-if="configs.data.length === 0">
-                        <td colspan="6" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('account.emptyConfigs') }}</td>
-                    </tr>
-                </tbody>
-            </table>
+                        <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-borderline text-sm">
+                    <thead class="bg-background">
+                        <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
+                            <th scope="col" class="px-4 py-3">{{ t('account.group') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('account.key') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('account.value') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('account.type') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('account.status') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('account.actions') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-borderline">
+                        <tr v-for="c in configs.data" :key="c.id" class="hover:bg-primary-light/40">
+                            <td class="px-4 py-3 font-medium text-ink-primary">{{ c.group }}</td>
+                            <td class="px-4 py-3 text-ink-primary">{{ c.key }}</td>
+                            <td class="px-4 py-3 max-w-[16rem] truncate text-ink-primary">{{ c.value ?? '—' }}</td>
+                            <td class="px-4 py-3"><StatusBadge :tone="badgeTone(c.data_type)">{{ t(`account.dataTypes.${c.data_type}`) }}</StatusBadge></td>
+                            <td class="px-4 py-3">
+                                <StatusBadge :tone="c.is_active ? 'success' : 'warning'">{{ c.is_active ? t('account.active') : t('account.inactive') }}</StatusBadge>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="flex justify-end gap-1.5">
+                                    <ActionButton v-if="canEdit" :label="t('account.edit')" variant="edit" @click="openEdit(c)" />
+                                    <ActionButton v-if="canEdit" :label="t('account.delete')" variant="delete" @click="remove(c)" />
+                                </div>
+                            </td>
+                        </tr>
+                        <tr v-if="configs.data.length === 0">
+                            <td colspan="6" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('account.emptyConfigs') }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <Pagination :links="configs.links" />

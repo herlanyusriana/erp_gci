@@ -103,41 +103,43 @@ function remove(u: ManagedUser) {
         <input v-model="search" @input="doSearch" type="search" :placeholder="t('account.searchUsers')" :aria-label="t('account.searchUsers')" class="mb-4 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
 
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
-            <table class="min-w-full divide-y divide-borderline text-sm">
-                <thead class="bg-background">
-                    <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th scope="col" class="px-4 py-3">{{ t('account.name') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('account.email') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('account.roles') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('account.status') }}</th>
-                        <th scope="col" class="px-4 py-3 text-right">{{ t('account.actions') }}</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-borderline">
-                    <tr v-for="u in users.data" :key="u.id" class="hover:bg-primary-light/40">
-                        <td class="px-4 py-3 font-medium text-ink-primary">{{ u.name }}</td>
-                        <td class="px-4 py-3 text-ink-primary">{{ u.email }}</td>
-                        <td class="px-4 py-3">
-                            <div class="flex flex-wrap gap-1">
-                                <span v-for="r in u.roles ?? []" :key="r.id" class="rounded-md bg-primary-light px-2 py-0.5 text-xs font-semibold text-primary">{{ r.label ?? r.name }}</span>
-                                <span v-if="(u.roles ?? []).length === 0" class="text-xs text-ink-secondary">—</span>
-                            </div>
-                        </td>
-                        <td class="px-4 py-3">
-                            <StatusBadge :tone="u.deleted_at ? 'warning' : (u.is_active ? 'success' : 'warning')">{{ u.deleted_at ? t('account.deactivated') : u.is_active ? t('account.active') : t('account.inactive') }}</StatusBadge>
-                        </td>
-                        <td class="px-4 py-3">
-                            <div class="flex justify-end gap-1.5">
-                                <ActionButton v-if="perms.update && !u.deleted_at" :label="t('account.edit')" variant="edit" @click="openEdit(u)" />
-                                <ActionButton v-if="perms.delete && !u.deleted_at" :label="t('account.deactivate')" variant="power" @click="remove(u)" />
-                            </div>
-                        </td>
-                    </tr>
-                    <tr v-if="users.data.length === 0">
-                        <td colspan="5" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('account.emptyUsers') }}</td>
-                    </tr>
-                </tbody>
-            </table>
+                        <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-borderline text-sm">
+                    <thead class="bg-background">
+                        <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
+                            <th scope="col" class="px-4 py-3">{{ t('account.name') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('account.email') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('account.roles') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('account.status') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('account.actions') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-borderline">
+                        <tr v-for="u in users.data" :key="u.id" class="hover:bg-primary-light/40">
+                            <td class="px-4 py-3 font-medium text-ink-primary">{{ u.name }}</td>
+                            <td class="px-4 py-3 text-ink-primary">{{ u.email }}</td>
+                            <td class="px-4 py-3">
+                                <div class="flex flex-wrap gap-1">
+                                    <span v-for="r in u.roles ?? []" :key="r.id" class="rounded-md bg-primary-light px-2 py-0.5 text-xs font-semibold text-primary">{{ r.label ?? r.name }}</span>
+                                    <span v-if="(u.roles ?? []).length === 0" class="text-xs text-ink-secondary">—</span>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3">
+                                <StatusBadge :tone="u.deleted_at ? 'warning' : (u.is_active ? 'success' : 'warning')">{{ u.deleted_at ? t('account.deactivated') : u.is_active ? t('account.active') : t('account.inactive') }}</StatusBadge>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="flex justify-end gap-1.5">
+                                    <ActionButton v-if="perms.update && !u.deleted_at" :label="t('account.edit')" variant="edit" @click="openEdit(u)" />
+                                    <ActionButton v-if="perms.delete && !u.deleted_at" :label="t('account.deactivate')" variant="power" @click="remove(u)" />
+                                </div>
+                            </td>
+                        </tr>
+                        <tr v-if="users.data.length === 0">
+                            <td colspan="5" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('account.emptyUsers') }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <Pagination :links="users.links" />

@@ -70,42 +70,44 @@ defineProps<{
 
         <h2 class="mb-3 text-base font-semibold text-ink-primary">{{ t('incoming.items') }}</h2>
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
-            <table class="min-w-full divide-y divide-borderline text-sm">
-                <thead class="bg-background">
-                    <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th scope="col" class="px-4 py-3">{{ t('incoming.part') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('incoming.size') }}</th>
-                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.qty') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('incoming.unit') }}</th>
-                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.price') }}</th>
-                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.received') }}</th>
-                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.remaining') }}</th>
-                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.actions') }}</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-borderline">
-                    <tr v-for="p in pending" :key="p.item.id" class="hover:bg-primary-light/40">
-                        <td class="px-4 py-3 font-medium text-ink-primary">
-                            {{ p.item.part?.part_number ?? '—' }}
-                            <div class="text-xs text-ink-secondary">{{ p.item.part?.part_name ?? '' }}</div>
-                        </td>
-                        <td class="px-4 py-3 text-ink-primary">{{ p.item.size ?? '—' }}</td>
-                        <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ p.item.qty_goods }}</td>
-                        <td class="px-4 py-3 text-ink-primary">{{ p.item.unit_goods ?? '—' }}</td>
-                        <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ p.item.price ?? 0 }}</td>
-                        <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ p.received }}</td>
-                        <td class="px-4 py-3 text-right tabular-nums font-semibold" :class="p.remaining > 0 ? 'text-warning' : 'text-success'">{{ p.remaining }}</td>
-                        <td class="px-4 py-3">
-                            <div class="flex justify-end gap-1.5">
-                                <ActionButton :href="route('receive.create', p.item.id)" :label="t('incoming.receiveAction')" variant="view" />
-                            </div>
-                        </td>
-                    </tr>
-                    <tr v-if="!pending.length">
-                        <td colspan="8" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noItems') }}</td>
-                    </tr>
-                </tbody>
-            </table>
+                        <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-borderline text-sm">
+                    <thead class="bg-background">
+                        <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
+                            <th scope="col" class="px-4 py-3">{{ t('incoming.part') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('incoming.size') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.qty') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('incoming.unit') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.price') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.received') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.remaining') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.actions') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-borderline">
+                        <tr v-for="p in pending" :key="p.item.id" class="hover:bg-primary-light/40">
+                            <td class="px-4 py-3 font-medium text-ink-primary">
+                                {{ p.item.part?.part_number ?? '—' }}
+                                <div class="text-xs text-ink-secondary">{{ p.item.part?.part_name ?? '' }}</div>
+                            </td>
+                            <td class="px-4 py-3 text-ink-primary">{{ p.item.size ?? '—' }}</td>
+                            <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ p.item.qty_goods }}</td>
+                            <td class="px-4 py-3 text-ink-primary">{{ p.item.unit_goods ?? '—' }}</td>
+                            <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ p.item.price ?? 0 }}</td>
+                            <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ p.received }}</td>
+                            <td class="px-4 py-3 text-right tabular-nums font-semibold" :class="p.remaining > 0 ? 'text-warning' : 'text-success'">{{ p.remaining }}</td>
+                            <td class="px-4 py-3">
+                                <div class="flex justify-end gap-1.5">
+                                    <ActionButton :href="route('receive.create', p.item.id)" :label="t('incoming.receiveAction')" variant="view" />
+                                </div>
+                            </td>
+                        </tr>
+                        <tr v-if="!pending.length">
+                            <td colspan="8" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noItems') }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </AppLayout>
 </template>

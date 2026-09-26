@@ -571,7 +571,7 @@ function submitEdit() {
                     <tbody>
                         <template v-for="(group, gi) in groups" :key="group.machine?.id ?? 'none'">
                             <tr v-if="group.rows.length === 0" class="group border-t border-borderline" :class="gi > 0 ? 'border-t-2 !border-t-borderline' : ''">
-                                <td class="sticky left-0 z-10 border-r border-borderline bg-surface px-3 py-2.5 align-top group-hover:bg-primary-light">
+                                <td class="sticky left-0 z-10 border-r border-borderline bg-surface px-3 py-2.5 align-top group-hover:bg-primary-light/40">
                                     <div class="flex flex-col items-start gap-1">
                                         <span class="font-semibold leading-tight text-ink-primary">{{ group.machine?.machine_name ?? t('production.noMachine') }}</span>
                                         <span v-if="processNames(group.rows)" class="text-[11px] tracking-wide text-ink-secondary">{{ processNames(group.rows) }}</span>
@@ -579,7 +579,7 @@ function submitEdit() {
                                 </td>
                                 <td colspan="6" class="px-3 py-2.5 text-xs text-ink-secondary">{{ t('production.noMachineWo') }}</td>
                                 <td colspan="3" class="border-l border-borderline px-2 py-2.5 text-center text-xs text-ink-secondary">—</td>
-                                <td class="border-l border-borderline bg-surface px-3 py-2.5 text-right group-hover:bg-primary-light">
+                                <td class="border-l border-borderline bg-surface px-3 py-2.5 text-right group-hover:bg-primary-light/40">
                                     <button
                                         type="button"
                                         :title="t('production.newWo')"
@@ -597,7 +597,7 @@ function submitEdit() {
                                 class="group border-t border-borderline transition hover:bg-primary-light/40"
                                 :class="[index === 0 && gi > 0 ? 'border-t-2 !border-t-borderline' : '', row.avail_qty < 0 ? 'bg-danger/5' : '']"
                             >
-                                <td v-if="index === 0" class="sticky left-0 z-10 border-r border-borderline bg-surface px-3 py-2.5 align-top group-hover:bg-primary-light" :rowspan="group.rows.length">
+                                <td v-if="index === 0" class="sticky left-0 z-10 border-r border-borderline bg-surface px-3 py-2.5 align-top group-hover:bg-primary-light/40" :rowspan="group.rows.length">
                                     <div class="flex flex-col items-start gap-1">
                                         <span class="font-semibold leading-tight text-ink-primary">{{ group.machine?.machine_name ?? t('production.noMachine') }}</span>
                                         <span v-if="processNames(group.rows)" class="text-[11px] tracking-wide text-ink-secondary">{{ processNames(group.rows) }}</span>
@@ -662,7 +662,7 @@ function submitEdit() {
                                         </label>
                                     </div>
                                 </td>
-                                <td class="border-l border-borderline bg-surface px-3 py-2.5 group-hover:bg-primary-light">
+                                <td class="border-l border-borderline bg-surface px-3 py-2.5 group-hover:bg-primary-light/40">
                                     <div class="flex justify-end gap-1">
                                         <a
                                             v-if="row.work_order"

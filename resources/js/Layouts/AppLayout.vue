@@ -2,7 +2,7 @@
 import { ref, watch } from 'vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
-import { Link, usePage } from '@inertiajs/vue3';
+import { Link, router, usePage } from '@inertiajs/vue3';
 import LanguageSelector from '@/Components/LanguageSelector.vue';
 import { useI18n } from 'vue-i18n';
 
@@ -10,6 +10,12 @@ const { t } = useI18n();
 
 const page = usePage();
 const flashVisible = ref(false);
+
+// Indikator navigasi: Inertia menunggu respons server, dan tanpa umpan balik
+// aplikasi terasa hang di jaringan pabrik.
+const navigating = ref(false);
+router.on('start', () => (navigating.value = true));
+router.on('finish', () => (navigating.value = false));
 
 watch(
     () => (page.props as any).flash,
@@ -25,6 +31,12 @@ watch(
 
 <template>
     <div class="min-h-screen bg-background">
+        <div
+            v-show="navigating"
+            class="fixed inset-x-0 top-0 z-[70] h-0.5 bg-primary"
+            role="progressbar"
+            :aria-label="t('common.loading')"
+        />
         <a
             href="#main-content"
             class="sr-only focus-visible:not-sr-only focus-visible:absolute focus-visible:left-4 focus-visible:top-4 focus-visible:z-[60] focus-visible:rounded-md focus-visible:bg-primary focus-visible:px-4 focus-visible:py-2 focus-visible:text-sm focus-visible:font-semibold focus-visible:text-white"

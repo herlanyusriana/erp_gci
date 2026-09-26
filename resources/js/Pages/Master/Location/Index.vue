@@ -89,35 +89,37 @@ function remove(location: Location) {
         <input v-model="search" @input="doSearch" type="search" :placeholder="t('master.locationSearch')" :aria-label="t('master.locationSearch')" class="mb-4 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
 
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
-            <table class="min-w-full divide-y divide-borderline text-sm">
-                <thead class="bg-background">
-                    <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th scope="col" class="px-4 py-3">{{ t('master.code') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('master.name') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('master.status') }}</th>
-                        <th scope="col" class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-borderline">
-                    <tr v-for="location in locations.data" :key="location.id" class="hover:bg-primary-light/40">
-                        <td class="px-4 py-3 font-medium text-ink-primary">{{ location.code }}</td>
-                        <td class="px-4 py-3 text-ink-primary">{{ location.name }}</td>
-                        <td class="px-4 py-3">
-                            <StatusBadge :tone="location.is_active ? 'success' : 'warning'">{{ location.is_active ? t('master.active') : t('master.inactive') }}</StatusBadge>
-                        </td>
-                        <td class="px-4 py-3">
-                            <div class="flex justify-end gap-1.5">
-                                <ActionButton :label="t('master.printLabel')" variant="print" :href="route('locations.label', location.id)" />
-                                <ActionButton :label="t('master.edit')" variant="edit" @click="openEdit(location)" />
-                                <ActionButton :label="t('master.delete')" variant="delete" @click="remove(location)" />
-                            </div>
-                        </td>
-                    </tr>
-                    <tr v-if="locations.data.length === 0">
-                        <td colspan="4" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.locationEmpty') }}</td>
-                    </tr>
-                </tbody>
-            </table>
+                        <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-borderline text-sm">
+                    <thead class="bg-background">
+                        <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
+                            <th scope="col" class="px-4 py-3">{{ t('master.code') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.name') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.status') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-borderline">
+                        <tr v-for="location in locations.data" :key="location.id" class="hover:bg-primary-light/40">
+                            <td class="px-4 py-3 font-medium text-ink-primary">{{ location.code }}</td>
+                            <td class="px-4 py-3 text-ink-primary">{{ location.name }}</td>
+                            <td class="px-4 py-3">
+                                <StatusBadge :tone="location.is_active ? 'success' : 'warning'">{{ location.is_active ? t('master.active') : t('master.inactive') }}</StatusBadge>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="flex justify-end gap-1.5">
+                                    <ActionButton :label="t('master.printLabel')" variant="print" :href="route('locations.label', location.id)" />
+                                    <ActionButton :label="t('master.edit')" variant="edit" @click="openEdit(location)" />
+                                    <ActionButton :label="t('master.delete')" variant="delete" @click="remove(location)" />
+                                </div>
+                            </td>
+                        </tr>
+                        <tr v-if="locations.data.length === 0">
+                            <td colspan="4" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.locationEmpty') }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <Pagination :links="locations.links" />

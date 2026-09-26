@@ -116,34 +116,36 @@ function remove(role: Role) {
         <input v-model="search" @input="doSearch" type="search" :placeholder="t('account.searchRoles')" :aria-label="t('account.searchRoles')" class="mb-4 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
 
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
-            <table class="min-w-full divide-y divide-borderline text-sm">
-                <thead class="bg-background">
-                    <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th scope="col" class="px-4 py-3">{{ t('account.role') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('account.label') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('account.users') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('account.permissions') }}</th>
-                        <th scope="col" class="px-4 py-3 text-right">{{ t('account.actions') }}</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-borderline">
-                    <tr v-for="r in roles.data" :key="r.id" class="hover:bg-primary-light/40">
-                        <td class="px-4 py-3 font-medium text-ink-primary">{{ r.name }}</td>
-                        <td class="px-4 py-3 text-ink-primary">{{ r.label ?? '—' }}</td>
-                        <td class="px-4 py-3 text-ink-primary">{{ r.users_count }}</td>
-                        <td class="px-4 py-3 text-ink-secondary">{{ (r.permissions ?? []).length }}</td>
-                        <td class="px-4 py-3">
-                            <div class="flex justify-end gap-1.5">
-                                <ActionButton v-if="perms.update && r.name !== 'super-admin'" :label="t('account.edit')" variant="edit" @click="openEdit(r)" />
-                                <ActionButton v-if="perms.delete && r.name !== 'super-admin'" :label="t('account.delete')" variant="delete" @click="remove(r)" />
-                            </div>
-                        </td>
-                    </tr>
-                    <tr v-if="roles.data.length === 0">
-                        <td colspan="5" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('account.emptyRoles') }}</td>
-                    </tr>
-                </tbody>
-            </table>
+                        <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-borderline text-sm">
+                    <thead class="bg-background">
+                        <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
+                            <th scope="col" class="px-4 py-3">{{ t('account.role') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('account.label') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('account.users') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('account.permissions') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('account.actions') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-borderline">
+                        <tr v-for="r in roles.data" :key="r.id" class="hover:bg-primary-light/40">
+                            <td class="px-4 py-3 font-medium text-ink-primary">{{ r.name }}</td>
+                            <td class="px-4 py-3 text-ink-primary">{{ r.label ?? '—' }}</td>
+                            <td class="px-4 py-3 text-ink-primary">{{ r.users_count }}</td>
+                            <td class="px-4 py-3 text-ink-secondary">{{ (r.permissions ?? []).length }}</td>
+                            <td class="px-4 py-3">
+                                <div class="flex justify-end gap-1.5">
+                                    <ActionButton v-if="perms.update && r.name !== 'super-admin'" :label="t('account.edit')" variant="edit" @click="openEdit(r)" />
+                                    <ActionButton v-if="perms.delete && r.name !== 'super-admin'" :label="t('account.delete')" variant="delete" @click="remove(r)" />
+                                </div>
+                            </td>
+                        </tr>
+                        <tr v-if="roles.data.length === 0">
+                            <td colspan="5" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('account.emptyRoles') }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <Pagination :links="roles.links" />

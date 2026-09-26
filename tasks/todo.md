@@ -783,15 +783,38 @@ tidak ada regresi pada alur produksi lain di ERP maupun APK.
    bersarang, 24 tabel web terpotong, hover kontras 4.04, dan indikator navigasi
    web — semuanya diperbaiki dan diverifikasi ulang.
 
+**Koreksi setelah ditelusuri (dua celah ternyata salah klasifikasi):**
+
+- ~~Endpoint penerimaan mobile belum mengirim lokasi~~ → **bukan celah APK.** APK
+  **tidak punya layar penerimaan sama sekali**; `Api\IncomingApiController` belum
+  punya klien di APK. Yang tersedia hanya form penerimaan web, dan itu sudah
+  menyimpan lokasi. Tidak ada pekerjaan APK yang tertunda di sini.
+- ~~`work_orders_screen.dart` kode mati~~ → **bukan kode mati.** `result_screen.dart`
+  masih mengarahkan ke `/work-orders`, sehingga setelah release operator dilempar
+  ke daftar WO lama. Itu **bug**, dan sudah diperbaiki: kini kembali ke papan
+  material, dijaga test yang terbukti gagal bila bug dikembalikan.
+
 **Celah yang masih terbuka (jujur, bukan klaim selesai):**
-1. **Endpoint penerimaan mobile belum mengirim lokasi**; yang berubah hanya form web.
-   APK receiving belum punya pemilih lokasi. Ini slice baru, bukan perbaikan.
-2. **Jalur kamera** (scan material & scan lokasi) belum diuji otomatis — `ScanScreen`
-   memakai plugin kamera yang tidak bisa didorong di widget test.
-3. **Verifikasi visual** oleh manusia belum dilakukan untuk papan material, DETAILS,
-   dan layar issue. Golden tersedia di `test/golden/goldens/`.
-4. **`work_orders_screen.dart` masih kode mati** — tidak ditautkan sejak papan
-   material menjadi layar utama. **Perlu keputusan**: hapus atau tautkan.
+
+1. **Jalur kamera** (scan material & scan lokasi) belum diuji otomatis. Logika
+   parse QR kami sudah diuji (`ScannedLocation`), tetapi plugin kameranya
+   (`mobile_scanner`) tidak bisa didorong di widget test.
+2. **Verifikasi visual** oleh manusia belum dilakukan untuk papan material, DETAILS,
+   dan layar issue. Golden tersedia di `test/golden/goldens/`. Saya tidak bisa
+   membaca gambar.
+3. **`work_orders_screen.dart` kini benar-benar yatim** setelah bug navigasi
+   diperbaiki: rute `/work-orders`, layarnya, dan test-nya tidak lagi dijangkau
+   dari mana pun. **Keputusan produk yang saya tinggalkan untuk Anda**, bukan saya
+   hapus sendiri:
+   - **Hapus** — konsisten dengan PRD yang menyatakan papan material menggantikan
+     daftar WO. Konsekuensi: `GET /api/work-orders` (Task 1–2) kehilangan satu-
+     satunya konsumen; logika jadwalnya tetap terpakai lewat `DailyScheduleService`.
+   - **Tautkan** dari papan material sebagai aksi sekunder — "semua WO hari ini"
+     tetap bisa dilihat, tetapi menambah UI yang tidak ada di PRD.
+   Rekomendasi saya: **tautkan**, karena kemampuan "lihat semua WO hari ini" tidak
+   tergantikan oleh papan per material, dan menghapus test butuh persetujuan.
+4. **Verifikasi runtime browser** tidak ada di sesi ini (tanpa DevTools MCP).
+   Audit hanya level source + kontras terhitung.
 
 **Dependencies:** Task 8 sampai Task 16
 

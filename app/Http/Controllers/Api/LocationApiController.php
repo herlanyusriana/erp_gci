@@ -28,6 +28,15 @@ class LocationApiController extends Controller
             'location_id' => ['nullable', 'integer'],
         ]);
 
+        // Tanpa salah satu identifier, jangan menebak lokasi aktif pertama —
+        // itu akan mencatat pengeluaran material pada rak yang salah.
+        if (($data['location_id'] ?? null) === null && trim((string) ($data['location_code'] ?? '')) === '') {
+            return response()->json([
+                'ok' => false,
+                'message' => __('Lokasi tidak ditemukan.'),
+            ], 404);
+        }
+
         $location = Location::query()
             ->where('is_active', true)
             ->when($data['location_id'] ?? null, fn ($q, $id) => $q->whereKey($id))

@@ -10,6 +10,7 @@ use App\Models\Part;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
+use Database\Seeders\LocationSeeder;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
@@ -87,11 +88,12 @@ class LocationTest extends TestCase
         Location::create(['code' => 'B-01', 'name' => 'Rak B1']);
 
         $this->actingAs($this->user('warehouse@geumcheon.local'))
-            ->get(route('locations.index'))
+            ->get(route('locations.index', ['search' => 'B-01']))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Master/Location/Index')
-                ->has('locations.data', 1));
+                ->has('locations.data', 1)
+                ->where('locations.data.0.code', 'B-01'));
     }
 
     public function test_location_store_creates_a_location(): void
@@ -356,5 +358,35 @@ class LocationTest extends TestCase
     private function receiveWithoutLocation(string $tag): IncomingReceive
     {
         return $this->receiveIntoLocation(null, $tag);
+    }
+
+    public function test_warehouse_location_seeder_creates_the_rack_master(): void
+    {
+        $this->seed(LocationSeeder::class);
+
+        foreach (['Rack-1', 'Rack-2', 'Rack-3', 'Rack-4', 'Rack-5', 'S1', 'S2'] as $code) {
+            $this->assertDatabaseHas('locations', ['code' => $code, 'is_active' => true]);
+        }
+    }
+
+    public function test_warehouse_location_seeder_is_idempotent(): void
+    {
+        $this->seed(LocationSeeder::class);
+        $this->seed(LocationSeeder::class);
+
+        $this->assertSame(1, Location::where('code', 'Rack-1')->count());
+        $this->assertSame(7, Location::whereIn('code', ['Rack-1', 'Rack-2', 'Rack-3', 'Rack-4', 'Rack-5', 'S1', 'S2'])->count());
+    }
+
+    public function test_warehouse_location_seeder_keeps_an_admin_deactivated_rack_inactive(): void
+    {
+        Location::withTrashed()->updateOrCreate(
+            ['code' => 'Rack-1'],
+            ['name' => 'Rak 1', 'is_active' => false, 'deleted_at' => null],
+        );
+
+        $this->seed(LocationSeeder::class);
+
+        $this->assertFalse(Location::where('code', 'Rack-1')->firstOrFail()->is_active);
     }
 }

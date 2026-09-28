@@ -1147,6 +1147,15 @@ class MaterialIssueApiTest extends TestCase
         $this->postJson('/api/locations/resolve', ['location_code' => 'TIDAK-ADA'])->assertNotFound();
     }
 
+    public function test_resolve_location_returns_404_without_any_identifier(): void
+    {
+        $this->actingAsApi();
+        Location::create(['code' => 'RAK-ANY', 'name' => 'Rak Apa Saja']);
+
+        // Tanpa kode/id, tidak boleh menebak rak pertama — itu mencatat lokasi salah.
+        $this->postJson('/api/locations/resolve', [])->assertNotFound();
+    }
+
     public function test_resolve_location_returns_404_for_an_inactive_location(): void
     {
         $this->actingAsApi();

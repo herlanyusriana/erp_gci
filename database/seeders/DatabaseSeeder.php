@@ -16,6 +16,7 @@ class DatabaseSeeder extends Seeder
             ConfigMasterSeeder::class,
             UomSeeder::class,
             MasterDataSeeder::class,
+            LocationSeeder::class,
             BomSeeder::class,
         ]);
     }

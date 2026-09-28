@@ -34,11 +34,11 @@ class LocationSeeder extends Seeder
     private function locations(): array
     {
         return [
-            'Rack-1' => 'Rak 1',
-            'Rack-2' => 'Rak 2',
-            'Rack-3' => 'Rak 3',
-            'Rack-4' => 'Rak 4',
-            'Rack-5' => 'Rak 5',
+            'Rack-1' => 'Rack 1',
+            'Rack-2' => 'Rack 2',
+            'Rack-3' => 'Rack 3',
+            'Rack-4' => 'Rack 4',
+            'Rack-5' => 'Rack 5',
             'S1' => 'S1',
             'S2' => 'S2',
         ];

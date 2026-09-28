@@ -51,13 +51,14 @@ class DailyScheduleService
             );
 
         // Carry-over: baris plan dengan plan_date < windowStart.
-        // WO yang belum selesai tetap butuh material. Gunakan sisa WO
-        // (qty - hasil produksi sampai dengan tanggal papan) sebagai jadwal.
+        // Hanya WO yang sudah release (in_progress/completed) yang carry-over.
+        // WO planned belum butuh material fisik.
         $carryOver = DB::table('production_plan_items as ppi')
             ->join('production_plans as pp', 'pp.id', '=', 'ppi.production_plan_id')
             ->join('work_orders as wo', 'wo.id', '=', 'ppi.work_order_id')
             ->where('pp.plan_date', '<', $windowStart)
             ->whereNotNull('ppi.work_order_id')
+            ->whereIn('wo.status', ['in_progress', 'completed'])
             ->selectRaw('ppi.work_order_id, pp.plan_date, ppi.step_sequence')
             ->selectRaw('GREATEST(0, wo.qty - COALESCE((SELECT SUM(pr.qty_good) FROM production_results pr WHERE pr.work_order_id = wo.id AND pr.result_date <= ?), 0)) AS target', [$date]);
 

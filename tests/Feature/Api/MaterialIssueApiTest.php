@@ -331,6 +331,7 @@ class MaterialIssueApiTest extends TestCase
     {
         $this->actingAsApi();
         $wo = $this->makeWorkOrder('WO-TOO-OLD');
+        $wo->update(['status' => 'in_progress']);
         $this->schedulePlanRow($wo, $this->plantDate(-3), ['d' => 100, 'd1' => 100, 'd2' => 100]);
 
         // Carry-over: WO lama yang belum selesai tetap muncul karena sisa qty WO.

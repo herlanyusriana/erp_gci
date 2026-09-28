@@ -584,6 +584,8 @@ class MaterialBoardApiTest extends TestCase
     {
         $this->actingAsApi();
         $wo = $this->createWorkOrder(100);
+        // WO harus sudah release supaya carry-over berlaku.
+        $wo->update(['status' => 'in_progress']);
         // Plan from 5 days ago with D=100 — this is a carry-over baris
         $this->schedulePlanRow($wo, $this->plantDate(-5), ['d' => 100, 'd1' => 0, 'd2' => 0]);
 
@@ -598,6 +600,8 @@ class MaterialBoardApiTest extends TestCase
     {
         $this->actingAsApi();
         $wo = $this->createWorkOrder(100);
+        // WO harus sudah release supaya carry-over berlaku.
+        $wo->update(['status' => 'in_progress']);
         // Schedule mostly done — hanya 20 lagi yang harus dikerjakan
         $this->schedulePlanRow($wo, $this->plantDate(-3), ['d' => 60, 'd1' => 15, 'd2' => 5]);
 
@@ -620,6 +624,8 @@ class MaterialBoardApiTest extends TestCase
     {
         $this->actingAsApi();
         $wo = $this->createWorkOrder(100);
+        // WO harus sudah release supaya carry-over berlaku.
+        $wo->update(['status' => 'in_progress']);
         $row = $this->schedulePlanRow($wo, $this->plantDate(-2), ['d' => 50]);
         $row->update(['sequence_d' => 3, 'sequence_d1' => 0, 'sequence_d2' => 0]);
 

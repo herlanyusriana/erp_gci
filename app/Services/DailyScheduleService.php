@@ -28,13 +28,19 @@ class DailyScheduleService
      * Qty jadwal pada sebuah tanggal per WO: nilai terbesar antar baris mesin,
      * beserta `plan_date` baris yang menghasilkan nilai itu dan step routing
      * terawal.
+     *
+     * Untuk baris plan yang tanggalnya di luar jendela D..D+2, carry-over
+     * dihitung sebagai sisa WO yang belum selesai (qty - hasil produksi),
+     * bukan target kolom yang sudah kedaluwarsa.
      */
     public function scheduledQuantities(string $date): QueryBuilder
     {
         $dayBefore = Carbon::parse($date)->subDay()->toDateString();
         $windowStart = Carbon::parse($date)->subDays(2)->toDateString();
 
-        $effective = DB::table('production_plan_items as ppi')
+        // Baris normal: plan_date di dalam jendela D-2 .. D.
+        // Target diambil dari kolom yang sesuai dengan offset harinya.
+        $scheduled = DB::table('production_plan_items as ppi')
             ->join('production_plans as pp', 'pp.id', '=', 'ppi.production_plan_id')
             ->whereBetween('pp.plan_date', [$windowStart, $date])
             ->whereNotNull('ppi.work_order_id')
@@ -44,8 +50,21 @@ class DailyScheduleService
                 [$date, $dayBefore],
             );
 
+        // Carry-over: baris plan dengan plan_date < windowStart.
+        // WO yang belum selesai tetap butuh material. Gunakan sisa WO
+        // (qty - hasil produksi sampai dengan tanggal papan) sebagai jadwal.
+        $carryOver = DB::table('production_plan_items as ppi')
+            ->join('production_plans as pp', 'pp.id', '=', 'ppi.production_plan_id')
+            ->join('work_orders as wo', 'wo.id', '=', 'ppi.work_order_id')
+            ->where('pp.plan_date', '<', $windowStart)
+            ->whereNotNull('ppi.work_order_id')
+            ->selectRaw('ppi.work_order_id, pp.plan_date, ppi.step_sequence')
+            ->selectRaw('GREATEST(0, wo.qty - COALESCE((SELECT SUM(pr.qty_good) FROM production_results pr WHERE pr.work_order_id = wo.id AND pr.result_date <= ?), 0)) AS target', [$date]);
+
+        $all = $scheduled->unionAll($carryOver);
+
         return DB::query()
-            ->fromSub($effective, 'effective')
+            ->fromSub($all, 'effective')
             ->groupBy('effective.work_order_id')
             ->selectRaw('effective.work_order_id')
             ->selectRaw('MAX(effective.target) AS planned_qty')

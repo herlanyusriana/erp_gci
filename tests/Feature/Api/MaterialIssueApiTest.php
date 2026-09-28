@@ -327,13 +327,14 @@ class MaterialIssueApiTest extends TestCase
         $this->assertSame(25.0, (float) $row['planned_qty']);
     }
 
-    public function test_work_orders_list_hides_work_orders_outside_the_three_day_window(): void
+    public function test_work_orders_list_includes_carry_over_from_old_plans(): void
     {
         $this->actingAsApi();
         $wo = $this->makeWorkOrder('WO-TOO-OLD');
         $this->schedulePlanRow($wo, $this->plantDate(-3), ['d' => 100, 'd1' => 100, 'd2' => 100]);
 
-        $this->assertSame([], $this->listedWoNumbers());
+        // Carry-over: WO lama yang belum selesai tetap muncul karena sisa qty WO.
+        $this->assertContains('WO-TOO-OLD', $this->listedWoNumbers());
     }
 
     public function test_work_orders_list_uses_the_largest_target_across_machine_rows(): void

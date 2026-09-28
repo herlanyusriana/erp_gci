@@ -12,6 +12,7 @@ use App\Models\PartStock;
 use App\Models\PartSubstitute;
 use App\Models\ProductionPlan;
 use App\Models\ProductionPlanItem;
+use App\Models\ProductionResult;
 use App\Models\Supplier;
 use App\Models\User;
 use App\Models\WorkOrder;
@@ -577,5 +578,53 @@ class MaterialBoardApiTest extends TestCase
         $this->assertSame($this->plantDate(1), $tomorrow['date']);
         $this->assertCount(1, $tomorrow['work_orders']);
         $this->assertSame([], $today['work_orders']);
+    }
+
+    public function test_material_board_includes_carry_over_from_old_plans(): void
+    {
+        $this->actingAsApi();
+        $wo = $this->createWorkOrder(100);
+        // Plan from 5 days ago with D=100 — this is a carry-over baris
+        $this->schedulePlanRow($wo, $this->plantDate(-5), ['d' => 100, 'd1' => 0, 'd2' => 0]);
+
+        $row = $this->boardRow($this->partId());
+
+        $this->assertNotNull($row, 'Baris plan lama (carry-over) harus tetap muncul di papan.');
+        $this->assertSame((float) $this->leafRequirement($wo), (float) $row['day_qty']);
+        $this->assertSame(1, $row['day_wo_count']);
+    }
+
+    public function test_material_board_carry_over_uses_remaining_wo_qty_not_target_column(): void
+    {
+        $this->actingAsApi();
+        $wo = $this->createWorkOrder(100);
+        // Schedule mostly done — hanya 20 lagi yang harus dikerjakan
+        $this->schedulePlanRow($wo, $this->plantDate(-3), ['d' => 60, 'd1' => 15, 'd2' => 5]);
+
+        // Simulasikan hasil produksi 80 pcs sudah selesai
+        ProductionResult::create([
+            'work_order_id' => $wo->id,
+            'parent_part_id' => $wo->items()->first()->parent_part_id,
+            'qty_good' => 80,
+            'result_date' => $this->plantDate(-1),
+        ]);
+
+        $row = $this->boardRow($this->partId());
+
+        $this->assertNotNull($row, 'WO carry-over dengan sisa harus tetap muncul.');
+        $expected = round($this->leafRequirement($wo) * (20 / 100), 4);
+        $this->assertSame($expected, (float) $row['day_qty'], 'Hanya sisa WO (20 dari 100) yang ditampilkan, bukan target_d asli (60).');
+    }
+
+    public function test_material_board_carry_over_with_sequence_is_present(): void
+    {
+        $this->actingAsApi();
+        $wo = $this->createWorkOrder(100);
+        $row = $this->schedulePlanRow($wo, $this->plantDate(-2), ['d' => 50]);
+        $row->update(['sequence_d' => 3, 'sequence_d1' => 0, 'sequence_d2' => 0]);
+
+        $resp = $this->getJson('/api/material-board')->assertOk();
+
+        $this->assertNotNull($this->boardRow($this->partId()), 'Baris carry-over dengan sequence harus muncul.');
     }
 }

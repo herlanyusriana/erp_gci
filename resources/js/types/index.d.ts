@@ -350,7 +350,7 @@ export interface PartStock {
     booked_qty?: number;
     avail_qty?: number;
     part?: (Pick<Part, 'id' | 'part_number' | 'part_name'> & { part_type?: PartType | null }) | null;
-    receive?: (Pick<IncomingReceive, 'id' | 'invoice_no'> & {
+    receive?: (Pick<IncomingReceive, 'id' | 'invoice_no' | 'location_code'> & {
         arrival_item?: (Pick<IncomingArrivalItem, 'id' | 'arrival_id'> & {
             arrival?: (Pick<IncomingArrival, 'id'> & {
                 supplier?: Pick<Supplier, 'id' | 'supplier_name'> | null;

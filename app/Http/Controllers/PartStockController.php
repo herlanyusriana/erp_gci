@@ -19,7 +19,7 @@ class PartStockController extends Controller
             ->with([
                 'part:id,part_number,part_name,part_type_id',
                 'part.partType:id,code,name',
-                'receive:id,invoice_no,arrival_item_id',
+                'receive:id,invoice_no,arrival_item_id,location_code',
                 'receive.arrivalItem:id,arrival_id',
                 'receive.arrivalItem.arrival:id,supplier_id',
                 'receive.arrivalItem.arrival.supplier:id,supplier_name',

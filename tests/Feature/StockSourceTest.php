@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\IncomingArrival;
 use App\Models\IncomingArrivalItem;
 use App\Models\IncomingReceive;
+use App\Models\Location;
 use App\Models\Part;
 use App\Models\PartStock;
 use App\Models\Supplier;
@@ -151,9 +152,11 @@ class StockSourceTest extends TestCase
         ]);
     }
 
-    public function test_stock_index_exposes_invoice_and_supplier(): void
+    public function test_stock_index_exposes_invoice_supplier_and_rack_location(): void
     {
         [$stock] = $this->makeStockSource('INV-TEST-0001', 'TAG-TEST-0001');
+        $location = Location::firstOrCreate(['code' => 'Rack-2'], ['name' => 'Rack 2']);
+        $stock->receive->update(['location_code' => $location->code]);
 
         $this->actingAs($this->admin())
             ->get(route('stocks.index'))
@@ -162,6 +165,7 @@ class StockSourceTest extends TestCase
                 ->component('Incoming/Stock/Index')
                 ->where('stocks.data.0.id', $stock->id)
                 ->where('stocks.data.0.receive.invoice_no', 'INV-TEST-0001')
+                ->where('stocks.data.0.receive.location_code', 'Rack-2')
                 ->where('stocks.data.0.receive.arrival_item.arrival.supplier.supplier_name', 'PT Sumber Test'));
     }
 

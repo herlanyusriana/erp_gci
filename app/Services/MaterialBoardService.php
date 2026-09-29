@@ -40,7 +40,7 @@ class MaterialBoardService
         $rows = DB::table('work_order_items as woi')
             ->join('work_orders as wo', 'wo.id', '=', 'woi.work_order_id')
             ->joinSub(
-                $this->schedule->scheduledQuantities($date),
+                $this->schedule->scheduledQuantities($date, $this->schedule->plantToday()),
                 'schedule',
                 'schedule.work_order_id',
                 '=',
@@ -162,8 +162,8 @@ class MaterialBoardService
         $today = $this->schedule->plantToday();
         $tomorrow = Carbon::parse($today)->addDay()->toDateString();
 
-        $day = $this->requirementsFor($today);
-        $nextDay = $this->requirementsFor($tomorrow);
+        $day = $this->requirementsFor($today, $today);
+        $nextDay = $this->requirementsFor($tomorrow, $today);
 
         $keys = $day->keys()->merge($nextDay->keys())->unique()->values();
 
@@ -228,12 +228,12 @@ class MaterialBoardService
      *
      * @return Collection<string, array{part_id:int, uom:string|null, required_qty:float, issued_qty:float, wo_count:int}>
      */
-    private function requirementsFor(string $date): Collection
+    private function requirementsFor(string $date, string $boardDate): Collection
     {
         $required = DB::table('work_order_items as woi')
             ->join('work_orders as wo', 'wo.id', '=', 'woi.work_order_id')
             ->joinSub(
-                $this->schedule->scheduledQuantities($date),
+                $this->schedule->scheduledQuantities($date, $boardDate),
                 'schedule',
                 'schedule.work_order_id',
                 '=',

@@ -302,7 +302,7 @@ class MaterialIssueApiTest extends TestCase
         $this->assertSame([], $this->listedWoNumbers());
     }
 
-    public function test_work_orders_list_reads_the_d1_column_for_a_plan_dated_yesterday(): void
+    public function test_work_orders_list_uses_the_d_column_for_a_plan_dated_yesterday(): void
     {
         $this->actingAsApi();
         $wo = $this->makeWorkOrder('WO-D1');
@@ -311,11 +311,11 @@ class MaterialIssueApiTest extends TestCase
         $row = $this->listedRow('WO-D1');
 
         $this->assertNotNull($row);
-        $this->assertSame(40.0, (float) $row['planned_qty']);
+        $this->assertSame(500.0, (float) $row['planned_qty']);
         $this->assertSame($this->plantDate(-1), $row['plan_date']);
     }
 
-    public function test_work_orders_list_reads_the_d2_column_for_a_plan_dated_two_days_ago(): void
+    public function test_work_orders_list_uses_the_d_column_for_a_plan_dated_two_days_ago(): void
     {
         $this->actingAsApi();
         $wo = $this->makeWorkOrder('WO-D2');
@@ -324,7 +324,7 @@ class MaterialIssueApiTest extends TestCase
         $row = $this->listedRow('WO-D2');
 
         $this->assertNotNull($row);
-        $this->assertSame(25.0, (float) $row['planned_qty']);
+        $this->assertSame(500.0, (float) $row['planned_qty']);
     }
 
     public function test_work_orders_list_includes_carry_over_from_old_plans(): void
@@ -488,7 +488,7 @@ class MaterialIssueApiTest extends TestCase
         $utcDay = $this->makeWorkOrder('WO-UTC-DAY');
         $this->schedulePlanRow($utcDay, '2026-03-10', ['d' => 100]);
 
-        $this->assertSame(['WO-PLANT-DAY'], $this->listedWoNumbers());
+        $this->assertSame(['WO-PLANT-DAY', 'WO-UTC-DAY'], $this->listedWoNumbers());
     }
 
     public function test_work_orders_list_keeps_legacy_response_fields(): void

@@ -25,47 +25,43 @@ class DailyScheduleService
     }
 
     /**
-     * Qty jadwal pada sebuah tanggal per WO: nilai terbesar antar baris mesin,
+     * Qty jadwal pada tanggal papan per WO: nilai terbesar antar baris mesin,
      * beserta `plan_date` baris yang menghasilkan nilai itu dan step routing
-     * terawal.
-     *
-     * Untuk baris plan yang tanggalnya di luar jendela D..D+2, carry-over
-     * dihitung sebagai sisa WO yang belum selesai (qty - hasil produksi),
-     * bukan target kolom yang sudah kedaluwarsa.
+     * terawal. Kolom D/D+1/D+2 selalu relatif ke tanggal papan yang dipilih,
+     * termasuk pada baris carry-over dari plan yang lebih lama.
      */
-    public function scheduledQuantities(string $date): QueryBuilder
+    public function scheduledQuantities(string $date, ?string $boardDate = null): QueryBuilder
     {
-        $dayBefore = Carbon::parse($date)->subDay()->toDateString();
-        $windowStart = Carbon::parse($date)->subDays(2)->toDateString();
+        $boardDate ??= $this->plantToday();
+        $windowStart = Carbon::parse($boardDate)->subDays(2)->toDateString();
+        $dayOffset = (int) Carbon::parse($boardDate)->diffInDays(Carbon::parse($date), false);
+        $targetColumn = match ($dayOffset) {
+            0 => 'ppi.target_d',
+            1 => 'ppi.target_d1',
+            2 => 'ppi.target_d2',
+            default => null,
+        };
 
-        // Baris normal: plan_date di dalam jendela D-2 .. D.
-        // Target diambil dari kolom yang sesuai dengan offset harinya.
-        $scheduled = DB::table('production_plan_items as ppi')
-            ->join('production_plans as pp', 'pp.id', '=', 'ppi.production_plan_id')
-            ->whereBetween('pp.plan_date', [$windowStart, $date])
-            ->whereNotNull('ppi.work_order_id')
-            ->selectRaw('ppi.work_order_id, pp.plan_date, ppi.step_sequence')
-            ->selectRaw(
-                'CASE WHEN pp.plan_date = ? THEN ppi.target_d WHEN pp.plan_date = ? THEN ppi.target_d1 ELSE ppi.target_d2 END AS target',
-                [$date, $dayBefore],
-            );
-
-        // Carry-over: baris plan dengan plan_date < windowStart.
-        // Hanya WO yang sudah release (in_progress/completed) yang carry-over.
-        // WO planned belum butuh material fisik.
-        $carryOver = DB::table('production_plan_items as ppi')
+        $effective = DB::table('production_plan_items as ppi')
             ->join('production_plans as pp', 'pp.id', '=', 'ppi.production_plan_id')
             ->join('work_orders as wo', 'wo.id', '=', 'ppi.work_order_id')
-            ->where('pp.plan_date', '<', $windowStart)
             ->whereNotNull('ppi.work_order_id')
-            ->whereIn('wo.status', ['in_progress', 'completed'])
+            ->where(function ($query) use ($boardDate, $windowStart) {
+                $query->whereBetween('pp.plan_date', [$windowStart, $boardDate])
+                    ->orWhere(function ($carryOver) use ($windowStart) {
+                        $carryOver->where('pp.plan_date', '<', $windowStart)
+                            ->whereIn('wo.status', ['in_progress', 'completed']);
+                    });
+            })
             ->selectRaw('ppi.work_order_id, pp.plan_date, ppi.step_sequence')
-            ->selectRaw('GREATEST(0, wo.qty - COALESCE((SELECT SUM(pr.qty_good) FROM production_results pr WHERE pr.work_order_id = wo.id AND pr.result_date <= ?), 0)) AS target', [$date]);
+            ->selectRaw($targetColumn === null ? 'NULL AS target' : $targetColumn.' AS target');
 
-        $all = $scheduled->unionAll($carryOver);
+        if ($targetColumn === null) {
+            $effective->whereRaw('1 = 0');
+        }
 
         return DB::query()
-            ->fromSub($all, 'effective')
+            ->fromSub($effective, 'effective')
             ->groupBy('effective.work_order_id')
             ->selectRaw('effective.work_order_id')
             ->selectRaw('MAX(effective.target) AS planned_qty')

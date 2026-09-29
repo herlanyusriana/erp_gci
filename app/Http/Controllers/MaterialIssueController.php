@@ -18,7 +18,7 @@ class MaterialIssueController extends Controller
     {
         Gate::authorize('viewAny', MaterialIssue::class);
 
-        $today = now('Asia/Jakarta')->toDateString();
+        $today = now((string) ConfigMaster::getValue('SYSTEM', 'timezone', 'Asia/Jakarta'))->toDateString();
         $validated = $request->validate([
             'search' => ['nullable', 'string', 'max:100'],
             'date_from' => ['nullable', 'date'],

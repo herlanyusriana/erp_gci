@@ -25,6 +25,7 @@ use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 class MaterialIssueApiTest extends TestCase
@@ -954,6 +955,28 @@ class MaterialIssueApiTest extends TestCase
         // Output FG lahir dari Production Result.
         $fgStock = PartStock::where('part_id', $wo->part_id)->where('qty', '>', 0)->sum('qty');
         $this->assertEqualsWithDelta(0.0, (float) $fgStock, 0.001);
+    }
+
+    public function test_release_after_utc_midnight_boundary_appears_in_default_issue_monitoring(): void
+    {
+        $this->travelTo(Carbon::parse('2026-09-28 17:30:00', 'UTC'));
+        $wo = $this->createWorkOrder();
+        $this->actingAsApi();
+        $scans = $this->seedStockAndBuildScans($wo);
+
+        $this->postJson("/api/work-orders/{$wo->id}/release", [
+            'idempotency_key' => 'plant-day-monitoring-1',
+            'items' => $scans,
+        ])->assertOk();
+
+        $issue = MaterialIssue::where('idempotency_key', 'plant-day-monitoring-1')->firstOrFail();
+        $this->assertSame('2026-09-29', $issue->issue_date->toDateString());
+
+        $this->actingAs($this->admin)
+            ->get(route('material-issues.index'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Outgoing/MaterialIssue/Index')
+                ->where('issues.data.0.id', $issue->id));
     }
 
     public function test_release_dispatches_one_safe_issue_event_after_commit(): void

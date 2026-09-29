@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Events\MaterialIssuePosted;
 use App\Models\Bom;
+use App\Models\ConfigMaster;
 use App\Models\MaterialIssue;
 use App\Models\MaterialIssueItem;
 use App\Models\Part;
@@ -588,7 +589,7 @@ class WoService
             $releasedAt = now();
             $issueDate = isset($meta['issue_date']) && $meta['issue_date']
                 ? Carbon::parse($meta['issue_date'])->toDateString()
-                : $releasedAt->toDateString();
+                : now((string) ConfigMaster::getValue('SYSTEM', 'timezone', 'Asia/Jakarta'))->toDateString();
 
             $issue = MaterialIssue::create([
                 'issue_no' => MaterialIssue::generateIssueNo(),

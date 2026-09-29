@@ -522,7 +522,7 @@ class WoService
             }
         }
 
-        abort_if($workOrder->status !== 'planned', 422, __('WO hanya bisa di-release dari status planned.'));
+        abort_if(in_array($workOrder->status, ['completed', 'cancelled'], true), 422, __('WO tidak bisa di-issue dalam status saat ini.'));
 
         $items = $workOrder->items()->with(['parentPart', 'childPart', 'allocations'])->get();
         $workOrder->load('part');

@@ -16,6 +16,7 @@ use App\Http\Controllers\PartStockController;
 use App\Http\Controllers\PartSubstituteController;
 use App\Http\Controllers\ProcessController;
 use App\Http\Controllers\ProductionPlanController;
+use App\Http\Controllers\ProductionReceiptController;
 use App\Http\Controllers\ProductionResultController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PurchaseOrderController;
@@ -137,6 +138,9 @@ Route::middleware(['auth'])->group(function () {
     Route::post('work-orders/{workOrder}/complete', [WorkOrderController::class, 'complete'])->name('work-orders.complete');
     Route::post('work-orders/{workOrder}/cancel', [WorkOrderController::class, 'cancel'])->name('work-orders.cancel');
     Route::delete('work-orders/{workOrder}', [WorkOrderController::class, 'destroy'])->name('work-orders.destroy');
+
+    // Penerimaan Material Production (monitoring)
+    Route::get('production-receipts', [ProductionReceiptController::class, 'index'])->name('production-receipts.index');
 
     // Administration
     Route::resource('config', ConfigMasterController::class)->except(['show', 'create', 'edit']);

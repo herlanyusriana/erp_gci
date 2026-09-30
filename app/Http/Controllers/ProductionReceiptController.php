@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ConfigMaster;
 use App\Models\Machine;
 use App\Models\ProductionMaterialReceipt;
 use App\Models\WorkOrder;
@@ -20,29 +21,28 @@ class ProductionReceiptController extends Controller
             ->where('is_active', true)
             ->orderBy('machine_name')
             ->get(['id', 'machine_code', 'machine_name']);
-
+        $timezone = ConfigMaster::getValue('SYSTEM', 'timezone', 'Asia/Jakarta');
         $selectedMachineId = $request->input('machine_id');
-        $date = $request->input('date') ?? now()->toDateString();
-
+        $date = $request->input('date') ?? now($timezone)->toDateString();
         $receipts = [];
+
         if ($selectedMachineId !== null) {
+            $machineId = (int) $selectedMachineId;
             $receipts = ProductionMaterialReceipt::query()
-                ->where('machine_id', (int) $selectedMachineId)
+                ->where('machine_id', $machineId)
                 ->whereDate('received_at', $date)
-                ->with([
-                    'part:id,part_number,part_name,model,size',
-                    'receiver:id,name',
-                    'materialIssueItem:id,invoice,supplier',
-                ])
+                ->with(['part:id,part_number,part_name,model,size', 'receiver:id,name', 'materialIssueItem:id,invoice,supplier'])
                 ->orderByDesc('received_at')
                 ->get()
                 ->map(fn (ProductionMaterialReceipt $r) => [
                     'id' => $r->id,
                     'tag' => $r->tag,
-                    'part_number' => $r->part?->part_number,
-                    'part_name' => $r->part?->part_name,
-                    'model' => $r->part?->model,
-                    'size' => $r->part?->size,
+                    'part' => $r->part ? [
+                        'part_number' => $r->part->part_number,
+                        'part_name' => $r->part->part_name,
+                        'model' => $r->part->model,
+                        'size' => $r->part->size,
+                    ] : null,
                     'invoice' => $r->materialIssueItem?->invoice,
                     'supplier' => $r->materialIssueItem?->supplier,
                     'receiver_name' => $r->receiver?->name,
@@ -57,6 +57,7 @@ class ProductionReceiptController extends Controller
             'selectedMachineId' => $selectedMachineId !== null ? (int) $selectedMachineId : null,
             'date' => $date,
             'receipts' => $receipts,
+            'timezone' => $timezone,
         ]);
     }
 }

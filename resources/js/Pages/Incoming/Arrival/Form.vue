@@ -26,12 +26,6 @@ interface ItemRow {
     notes: string;
 }
 
-interface ContainerRow {
-    container_no: string;
-    seal_code: string;
-    size: string;
-}
-
 const props = defineProps<{
     arrival: IncomingArrival | null;
     suppliers: Array<Pick<Supplier, 'id' | 'supplier_code' | 'supplier_name'>>;
@@ -48,8 +42,6 @@ const blankItem = (): ItemRow => ({
     weight_nett: '', unit_weight: '', weight_gross: '', price: '', total_price: '',
     is_foc: false, notes: '',
 });
-const blankContainer = (): ContainerRow => ({ container_no: '', seal_code: '', size: '' });
-
 const itemRows = ref<ItemRow[]>(
     props.arrival?.items?.map((i) => ({
         id: i.id ?? null,
@@ -69,9 +61,6 @@ const itemRows = ref<ItemRow[]>(
     })) ?? [blankItem()],
 );
 
-const containerRows = ref<ContainerRow[]>(
-    props.arrival?.containers?.map((c) => ({ container_no: c.container_no, seal_code: c.seal_code ?? '', size: c.size ?? '' })) ?? [],
-);
 
 const form = useForm({
     invoice_no: props.arrival?.invoice_no ?? '',
@@ -95,7 +84,7 @@ const form = useForm({
     notes: props.arrival?.notes ?? '',
     status: props.arrival?.status ?? 'pending',
     items: [] as any[],
-    containers: [] as any[],
+
 });
 
 const materialGroups = computed(() => Array.from(new Set(
@@ -167,8 +156,6 @@ const rowErrorList = computed(() =>
 
 function addItem() { itemRows.value.push(blankItem()); }
 function removeItem(i: number) { if (itemRows.value.length > 1) itemRows.value.splice(i, 1); }
-function addContainer() { containerRows.value.push(blankContainer()); }
-function removeContainer(i: number) { containerRows.value.splice(i, 1); }
 
 function isRowEmpty(r: ItemRow) {
     return !r.material_group && !r.size && r.qty_goods === '' && r.total_price === '';

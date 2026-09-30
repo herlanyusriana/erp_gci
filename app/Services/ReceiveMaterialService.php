@@ -150,16 +150,10 @@ class ReceiveMaterialService
      */
     public function hasPendingReceives(IncomingArrival $arrival): bool
     {
-        $arrival->loadMissing(['items.receives', 'containers.inspection']);
+        $arrival->loadMissing(['items.receives']);
 
         foreach ($arrival->items as $item) {
             if ($this->remainingQty($item) > 0) {
-                return true;
-            }
-        }
-
-        foreach ($arrival->containers as $container) {
-            if (! $container->inspection) {
                 return true;
             }
         }

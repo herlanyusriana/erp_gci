@@ -3,13 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Machine;
 use App\Services\ProductionReceiptService;
-use App\Support\QrSvg;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -27,7 +23,11 @@ class ProductionReceiptController extends Controller
 
     public function confirm(Request $request): JsonResponse
     {
-        Gate::authorize('issue', \App\Models\WorkOrder::class);
+        abort_unless(
+            $request->user()?->hasPermission('stock.issue') ?? false,
+            403,
+            __('Tidak berwenang mengakses data stok.'),
+        );
 
         $data = $request->validate([
             'tag' => ['required', 'string', 'max:255'],
@@ -75,7 +75,11 @@ class ProductionReceiptController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        Gate::authorize('viewAny', \App\Models\WorkOrder::class);
+        abort_unless(
+            $request->user()?->hasPermission('stock.issue') ?? false,
+            403,
+            __('Tidak berwenang mengakses data stok.'),
+        );
 
         $data = $request->validate([
             'machine_id' => ['required', 'integer', 'exists:machines,id'],

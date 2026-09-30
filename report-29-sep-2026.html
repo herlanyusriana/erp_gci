@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Laporan Harian — ERP Material Tracker — 29 September 2026</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: Georgia, "Times New Roman", serif;
+    color: #2d2d2d;
+    line-height: 1.7;
+    font-size: 11pt;
+    text-align: justify;
+    text-align-last: left;
+    margin: 0;
+    padding: 0;
+}
+
+@page {
+    size: A4;
+    margin: 2.5cm 2.5cm;
+    @top-center { content: string(doctitle); font-size: 9pt; color: #888; font-family: Georgia, serif; }
+    @bottom-center { content: counter(page); font-size: 9pt; color: #666; font-family: Georgia, serif; }
+}
+
+@page cover {
+    margin: 0;
+    @top-center { content: none; }
+    @bottom-center { content: none; }
+}
+
+@page :first {
+    margin: 0;
+    @top-center { content: none; }
+    @bottom-center { content: none; }
+}
+
+body { string-set: doctitle ""; }
+h1 { string-set: doctitle "Laporan Harian — ERP Material Tracker — 29 Sep 2026"; }
+
+/* ── Cover ── */
+.cover {
+    width: 210mm;
+    height: 297mm;
+    margin: 0;
+    position: relative;
+    overflow: hidden;
+    page: cover;
+    page-break-after: always;
+    background: #fafafa;
+}
+
+.cover-content {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    width: 70%;
+}
+
+.cover-title {
+    font-size: 26pt;
+    font-weight: 700;
+    color: #1a1a1a;
+    letter-spacing: 2pt;
+    margin-bottom: 0.8cm;
+    line-height: 1.3;
+}
+
+.cover-subtitle {
+    font-size: 13pt;
+    color: #555;
+    margin-bottom: 1.2cm;
+    letter-spacing: 1pt;
+}
+
+.cover-divider {
+    width: 40%;
+    height: 0.5px;
+    background: #888;
+    margin: 0 auto 1.2cm auto;
+}
+
+.cover-meta {
+    font-size: 11pt;
+    color: #444;
+    line-height: 2;
+}
+
+.cover-meta p { margin: 0.15cm 0; }
+
+/* ── Decorative corner elements ── */
+.cover::before {
+    content: "";
+    position: absolute;
+    top: 2cm;
+    left: 2cm;
+    width: 80px;
+    height: 80px;
+    border-left: 1.5px solid #bbb;
+    border-top: 1.5px solid #bbb;
+}
+
+.cover::after {
+    content: "";
+    position: absolute;
+    bottom: 2cm;
+    right: 2cm;
+    width: 80px;
+    height: 80px;
+    border-right: 1.5px solid #bbb;
+    border-bottom: 1.5px solid #bbb;
+}
+
+/* ── Section headings ── */
+h1 {
+    font-size: 16pt;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin: 1.2cm 0 0.4cm 0;
+    border-bottom: 1.5px solid #333;
+    padding-bottom: 4pt;
+    page-break-after: avoid;
+}
+
+h2 {
+    font-size: 12pt;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin: 0.6cm 0 0.3cm 0;
+    page-break-after: avoid;
+}
+
+p { margin: 0.3cm 0; }
+
+/* ── Code / commit references ── */
+.code {
+    font-family: "Courier New", Courier, monospace;
+    font-size: 10pt;
+    background: #f5f5f5;
+    padding: 0 4px;
+    color: #333;
+}
+
+/* ── Three-line tables (booktabs style) ── */
+table {
+    width: 100%;
+    max-width: 100%;
+    border-collapse: collapse;
+    margin: 0.5cm 0;
+    font-size: 10pt;
+    box-sizing: border-box;
+}
+
+thead { display: table-header-group; }
+
+thead tr {
+    border-top: 2px solid #333;
+    border-bottom: 1px solid #333;
+}
+
+thead th {
+    padding: 6pt 8pt;
+    text-align: left;
+    font-weight: 700;
+    color: #1a1a1a;
+    font-size: 10pt;
+}
+
+tbody tr { border-bottom: none; }
+tbody tr:last-child { border-bottom: 2px solid #333; }
+
+tbody td {
+    padding: 5pt 8pt;
+    vertical-align: top;
+    line-height: 1.5;
+}
+
+tbody tr:nth-child(even) { background: #f9f9f9; }
+
+tr { page-break-inside: avoid; }
+
+/* ── Lists ── */
+ul { margin: 0.2cm 0 0.2cm 1.5em; }
+li { margin: 0.15cm 0; }
+
+/* ── Blockquote / highlight box ── */
+.highlight-box {
+    border-left: 3px solid #555;
+    padding: 0.4cm 0.5cm;
+    margin: 0.5cm 0;
+    background: #f7f7f7;
+}
+
+.highlight-box p { margin: 0.1cm 0; }
+
+/* ── Tag / status badges (inline text only) ── */
+.tag-ok { color: #2a7a2a; font-weight: 700; }
+.tag-regression { color: #a32; font-weight: 700; }
+.tag-commit { font-family: "Courier New", Courier, monospace; font-size: 9pt; background: #f0f0f0; padding: 1px 5px; }
+
+/* ── Prevent overflow ── */
+pre, table, figure, img, svg, .mermaid, blockquote, .equation {
+    max-width: 100%;
+    box-sizing: border-box;
+}
+pre { overflow-x: auto; white-space: pre-wrap; word-wrap: break-word; }
+a { word-break: break-all; }
+code { word-break: break-word; }
+
+/* ── Page breaks ── */
+.page-break { page-break-before: always; }
+
+/* ── Clean list style for commit list ── */
+.commit-list { list-style: none; margin-left: 0; }
+.commit-list li { margin: 0.2em 0; }
+</style>
+</head>
+<body>
+
+<!-- ═══ COVER PAGE ═══ -->
+<div class="cover">
+    <div class="cover-content">
+        <p class="cover-title">LAPORAN HARIAN<br>ERP MATERIAL TRACKER</p>
+        <p class="cover-subtitle">PT Geum Cheon Indo</p>
+        <div class="cover-divider"></div>
+        <div class="cover-meta">
+            <p>29 September 2026</p>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ SECTION 1: RINGKASAN ═══ -->
+<h1>1. Ringkasan</h1>
+
+<p>Pada hari ini, 29 September 2026, sebanyak 8 <em>commit</em> telah didorong ke dua repositori utama (ERP dan APK Material Tracker). Seluruh pengujian otomatis berjalan tanpa hambatan:</p>
+
+<ul>
+    <li><strong>ERP:</strong> 251 <em>test</em> lulus (1.398 asersi) — seluruh suite <em>feature</em> dan <em>unit</em> hijau.</li>
+    <li><strong>APK:</strong> 87 <em>test</em> lulus — mencakup <em>widget test</em>, <em>repository test</em>, dan <em>integration test</em> Flutter.</li>
+    <li><strong>Lint &amp; build:</strong> <code>vendor/bin/pint</code> (PHP), <code>npm run build</code> (Vite + vue-tsc), dan <code>flutter analyze</code> — semuanya lulus tanpa <em>warning</em>.</li>
+</ul>
+
+<p>Empat area utama yang dikerjakan: perbaikan <em>carry-over</em> Production Plan, pemetaan target harian antar kolom papan, penambahan <em>Location Master</em> dan inventori gudang, serta perbaikan <em>issue-out</em> dan <em>monitoring</em>. Berikut rincian setiap area.</p>
+
+<!-- ═══ SECTION 2 ═══ -->
+<h1>2. Perbaikan Production Plan Carry-Over</h1>
+
+<table>
+    <thead>
+        <tr><th style="width:3cm;">Commit</th><th>Deskripsi</th></tr>
+    </thead>
+    <tbody>
+        <tr><td><span class="code">d14e4f3</span></td><td>Perbaikan baris plan lama tetap tampil di papan material APK</td></tr>
+        <tr><td><span class="code">6172090</span></td><td>Baris lama menggunakan sisa WO, bukan target kolom kedaluwarsa</td></tr>
+    </tbody>
+</table>
+
+<p>Baris Production Plan dengan <code>plan_date</code> lebih dari 3 hari sebelumnya sebelumnya menghilang dari papan material APK setelah melewati tanggal rencana. Setelah perbaikan, baris-baris lama tersebut tetap muncul.</p>
+
+<p>Jika suatu baris adalah <em>carry-over</em> (plan_date sudah lewat), nilai target yang ditampilkan di papan bukan lagi angka kolom kedaluwarsa, melainkan sisa <em>Work Order</em>: <code>qty_wo &minus; hasil_produksi</code>. Dengan demikian operator tetap melihat berapa jumlah yang masih harus dikerjakan.</p>
+
+<p>WO berstatus <code>planned</code> (belum di-<em>release</em>) tidak ikut <em>carry-over</em>. Hanya WO dengan status <code>in_progress</code> atau <code>completed</code> yang dipindahkan ke papan baru. Perbaikan ini mencegah munculnya WO yang belum di-<em>release</em> di papan material APK dan membingungkan operator.</p>
+
+<!-- ═══ SECTION 3 ═══ -->
+<h1>3. Pemetaan Target Harian</h1>
+
+<table>
+    <thead>
+        <tr><th style="width:3cm;">Commit</th><th>Deskripsi</th></tr>
+    </thead>
+    <tbody>
+        <tr><td><span class="code">da48308</span></td><td>Target kolom D/D+1/D+2 relatif terhadap tanggal papan yang dipilih</td></tr>
+    </tbody>
+</table>
+
+<p><strong>Sebelumnya:</strong> target WO <em>carry-over</em> tidak dihitung per kolom. APK menjumlahkan sisa seluruh WO dan menampilkan angka yang sama di kolom D dan D+1. Akibatnya perencanaan pergeseran beban kerja harian tidak akurat.</p>
+
+<p><strong>Sekarang:</strong> kolom D, D+1, dan D+2 dihitung relatif terhadap tanggal papan yang dipilih, <em>bukan</em> tanggal asal baris plan. Setiap WO mempertahankan target kolomnya sendiri.</p>
+
+<div class="highlight-box">
+    <p><strong>Contoh:</strong></p>
+    <p>WO1 target D = 4.000 pcs, WO2 target D+2 = 3.000 pcs.</p>
+    <p>Kolom D hanya menampilkan 4.000 (bagian WO1). Target WO2 tidak bergeser ke D+1 — kolom D+1 tetap kosong atau berisi WO lain yang memang memiliki target di hari itu.</p>
+</div>
+
+<p><span class="tag-regression">Regresi:</span> <code>test_material_board_uses_daily_targets_for_old_plan_rows</code> — <em>test</em> ini diperbarui untuk memvalidasi bahwa nilai kolom target untuk baris plan lama mengikuti aturan baru.</p>
+
+<!-- ═══ SECTION 4 ═══ -->
+<h1>4. Location Master dan Inventori</h1>
+
+<table>
+    <thead>
+        <tr><th style="width:3cm;">Commit</th><th>Deskripsi</th></tr>
+    </thead>
+    <tbody>
+        <tr><td><span class="code">04617ce</span></td><td>LocationSeeder: 7 lokasi gudang standar</td></tr>
+        <tr><td><span class="code">2a36105</span></td><td>Kolom lokasi rak di halaman Stock</td></tr>
+        <tr><td><span class="code">4d58c15</span></td><td>POST /api/locations/resolve tanpa kode/id mengembalikan 404</td></tr>
+    </tbody>
+</table>
+
+<p><strong>LocationSeeder</strong> menambahkan 7 lokasi gudang sesuai peta fisik:</p>
+
+<table>
+    <thead>
+        <tr><th>Kode Rak</th><th>Keterangan</th></tr>
+    </thead>
+    <tbody>
+        <tr><td>Rack-1</td><td>Rak 1 — area penyimpanan utama barat</td></tr>
+        <tr><td>Rack-2</td><td>Rak 2 — area penyimpanan utama tengah</td></tr>
+        <tr><td>Rack-3</td><td>Rak 3 — area penyimpanan utama timur</td></tr>
+        <tr><td>Rack-4</td><td>Rak 4 — material ringan / fast-moving</td></tr>
+        <tr><td>Rack-5</td><td>Rak 5 — material berat / slow-moving</td></tr>
+        <tr><td>S1</td><td>Storage 1 — area karantina / inspeksi</td></tr>
+        <tr><td>S2</td><td>Storage 2 — area buffer / overstock</td></tr>
+    </tbody>
+</table>
+
+<p>Halaman <strong>Incoming &rarr; Stock</strong> sekarang menampilkan kolom lokasi rak per tag stok. Stok lama yang belum memiliki data lokasi menampilkan label <em>&ldquo;&mdash; Tanpa lokasi &mdash;&rdquo;</em> sebagai pengganti nilai kosong.</p>
+
+<p><strong>Perbaikan keamanan:</strong> <code>POST /api/locations/resolve</code> tanpa menyertakan kode atau ID lokasi sebelumnya mengembalikan <em>response</em> 200 dengan data kosong. <span class="tag-ok">Sekarang mengembalikan 404</span>, mencegah kebingungan di sisi klien dan potensi <em>error handling</em> yang salah.</p>
+
+<!-- ═══ SECTION 5 ═══ -->
+<h1>5. Perbaikan Issue-Out dan Monitoring</h1>
+
+<table>
+    <thead>
+        <tr><th style="width:3cm;">Commit</th><th>Deskripsi</th></tr>
+    </thead>
+    <tbody>
+        <tr><td><span class="code">8d08fbc</span></td><td>Issue date dan filter monitoring memakai timezone Asia/Jakarta</td></tr>
+        <tr><td><span class="code">f692bca</span></td><td>WO in_progress diizinkan untuk issue-out dari APK</td></tr>
+    </tbody>
+</table>
+
+<h2>5.1 Masalah A — Zona Waktu Monitoring</h2>
+
+<p>Halaman Monitoring Issue Out menyediakan <em>filter default</em> hari ini berdasarkan WIB (Asia/Jakarta, UTC+7). Namun, API menyimpan <code>issue_date</code> dalam UTC. <em>Release</em> yang terjadi antara tengah malam pukul 00.00 hingga 07.00 WIB tercatat dengan tanggal UTC hari sebelumnya. Akibatnya halaman monitoring tidak menampilkan <em>issue</em> yang baru saja dilakukan di jam tersebut.</p>
+
+<p><span class="tag-ok">Perbaikan:</span> <code>issue_date</code> dan seluruh logika <em>filter</em> monitoring kini menggunakan <code>Asia/Jakarta</code> (timezone pabrik). Data historis tetap tersimpan dalam UTC di basis data, tetapi konversi dilakukan saat pembacaan.</p>
+
+<h2>5.2 Masalah B — Issue-Out untuk WO in_progress</h2>
+
+<p>WO yang sudah di-<em>release</em> dari web (status <code>in_progress</code>) tidak dapat di-<em>issue-out</em> dari APK karena validasi di <em>endpoint</em> hanya menerima status <code>planned</code>.</p>
+
+<p><span class="tag-ok">Perbaikan:</span> APK kini dapat melakukan <em>issue-out</em> untuk WO berstatus <code>planned</code> <em>atau</em> <code>in_progress</code>. Hanya WO dengan status <code>completed</code> atau <code>cancelled</code> yang ditolak.</p>
+
+<p><span class="tag-regression">Regresi:</span> <code>test_release_after_utc_midnight_boundary_appears_in_default_issue_monitoring</code> — <em>test</em> baru untuk memvalidasi batas tengah malam zona waktu.</p>
+
+<!-- ═══ SECTION 6 ═══ -->
+<h1>6. Hasil Trial Issue-Out</h1>
+
+<p><strong>Tujuan:</strong> memverifikasi bahwa <em>issue-out</em> yang dilakukan dari APK muncul di halaman Monitoring web, khususnya untuk WO yang sudah di-<em>release</em> dari web.</p>
+
+<table>
+    <thead>
+        <tr><th style="width:3.5cm;">Parameter</th><th>Nilai</th></tr>
+    </thead>
+    <tbody>
+        <tr><td>WO target</td><td><span class="code">WO-26090005</span> (AGU30018303)</td></tr>
+        <tr><td>Part</td><td>BACK PLATE, qty=4.000</td></tr>
+        <tr><td>Status WO</td><td><code>in_progress</code> (sudah di-<em>release</em> dari web)</td></tr>
+        <tr><td>Endpoint</td><td><code>POST /api/work-orders/{id}/release</code></td></tr>
+        <tr><td>Tag stok</td><td>Tag #13 — <span class="code">CYXGIBPVT7XS</span>, qty=800, part_id=285</td></tr>
+    </tbody>
+</table>
+
+<div class="highlight-box">
+    <p><strong>Hasil percobaan pertama (sebelum perbaikan <span class="code">f692bca</span>):</strong></p>
+    <p><code>422 Unprocessable Entity</code> — <em>"WO tidak bisa di-issue dalam status saat ini"</em></p>
+    <p>Validasi hanya menerima status <code>planned</code>, sementara WO sudah <code>in_progress</code>.</p>
+</div>
+
+<div class="highlight-box">
+    <p><strong>Hasil percobaan kedua (setelah perbaikan <span class="code">f692bca</span>):</strong></p>
+    <p><code>200 OK</code> — <em>Issue-out</em> berhasil. Tag <code>CYXGIBPVT7XS</code> terpakai, material tercatat sebagai konsumsi.</p>
+</div>
+
+<p><strong>Kesimpulan:</strong> <em>Issue-out</em> untuk WO berstatus <code>in_progress</code> sekarang berfungsi penuh. WO-26090005 sudah dapat di-<em>issue-out</em> dari APK setelah <em>deploy</em> perbaikan <span class="code">f692bca</span>. Data muncul di Monitoring web dengan benar sesuai zona waktu Asia/Jakarta.</p>
+
+<!-- ═══ SECTION 7 ═══ -->
+<div class="page-break"></div>
+<h1>7. Status Commit</h1>
+
+<p>Total 8 <em>commit</em> baru hari ini pada dua repositori:</p>
+
+<table>
+    <thead>
+        <tr><th style="width:2.5cm;">Repo</th><th>Pesan Commit</th><th style="width:2.8cm;">Hash</th></tr>
+    </thead>
+    <tbody>
+        <tr><td>ERP</td><td>fix(plan): tampilkan baris plan lama di papan material APK</td><td><span class="code">d14e4f3</span></td></tr>
+        <tr><td>ERP</td><td>fix(plan): carry-over pakai sisa WO, bukan target kolom</td><td><span class="code">6172090</span></td></tr>
+        <tr><td>ERP</td><td>fix(plan): target D/D+1/D+2 relatif terhadap tanggal papan</td><td><span class="code">da48308</span></td></tr>
+        <tr><td>ERP</td><td>feat(stock): LocationSeeder 7 lokasi gudang</td><td><span class="code">04617ce</span></td></tr>
+        <tr><td>ERP</td><td>feat(stock): kolom lokasi rak di halaman Stock</td><td><span class="code">2a36105</span></td></tr>
+        <tr><td>ERP</td><td>fix(api): POST locations/resolve tanpa kode → 404</td><td><span class="code">4d58c15</span></td></tr>
+        <tr><td>ERP</td><td>fix(issue): gunakan Asia/Jakarta untuk monitoring issue-out</td><td><span class="code">8d08fbc</span></td></tr>
+        <tr><td>ERP</td><td><strong>fix(issue): izinkan issue-out untuk WO in_progress</strong></td><td><span class="code">f692bca</span></td></tr>
+        <tr><td>APK</td><td>fix(issue): pesan jelas saat pemindaian ditolak izin</td><td><span class="code">43ad42b</span></td></tr>
+    </tbody>
+</table>
+
+<p style="margin-top:0.6cm;"><em>Akhir laporan &mdash; 29 September 2026.</em></p>
+
+</body>
+</html>

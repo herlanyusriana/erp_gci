@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\IncomingApiController;
 use App\Http\Controllers\Api\LocationApiController;
 use App\Http\Controllers\Api\MaterialBoardApiController;
 use App\Http\Controllers\Api\MaterialIssueApiController;
+use App\Http\Controllers\Api\ProductionReceiptController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -31,6 +32,8 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::get('/work-orders/{workOrder}/result-context', [MaterialIssueApiController::class, 'resultContext']);
     Route::post('/work-orders/{workOrder}/results', [MaterialIssueApiController::class, 'storeResult']);
     Route::post('/work-orders/{workOrder}/release', [MaterialIssueApiController::class, 'release']);
+    Route::post('/receipts/confirm', [ProductionReceiptController::class, 'confirm']);
+    Route::get('/receipts', [ProductionReceiptController::class, 'index']);
 
     Route::get('/user', function (Request $request) {
         return $request->user();

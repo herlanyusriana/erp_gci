@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\LocationApiController;
 use App\Http\Controllers\Api\MaterialBoardApiController;
 use App\Http\Controllers\Api\MaterialIssueApiController;
 use App\Http\Controllers\Api\ProductionReceiptController;
+use App\Http\Controllers\Api\WipBoardApiController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -34,6 +35,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::post('/work-orders/{workOrder}/release', [MaterialIssueApiController::class, 'release']);
     Route::post('/receipts/confirm', [ProductionReceiptController::class, 'confirm']);
     Route::get('/receipts', [ProductionReceiptController::class, 'index']);
+    Route::get('/wip-board', [WipBoardApiController::class, 'index']);
 
     Route::get('/user', function (Request $request) {
         return $request->user();

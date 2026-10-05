@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Laporan — 29–30 September 2026</title>
+<style>
+@page { size: A4; margin: 2.5cm 2cm; }
+@page :first { margin: 0; }
+body { margin: 0; padding: 0; font-family: Georgia, 'Times New Roman', serif; color: #333; font-size: 11pt; line-height: 1.6; }
+pre, table, figure, blockquote { max-width: 100%; box-sizing: border-box; }
+table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 10pt; }
+th, td { border: none; padding: 6px 10px; text-align: left; }
+thead { border-top: 2px solid #333; border-bottom: 1px solid #333; }
+tbody { border-bottom: 2px solid #333; }
+th { font-weight: 700; background: #f5f5f5; }
+tr { page-break-inside: avoid; }
+code { font-size: 9pt; background: #f5f5f5; padding: 1px 4px; border-radius: 2px; }
+.cover { width: 210mm; height: 297mm; margin: 0; position: relative; overflow: hidden; page-break-after: always; background: linear-gradient(135deg, #24106C 0%, #1b0c52 100%); }
+.cover-content { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; width: 80%; }
+.cover-title { font-size: 30pt; font-weight: 700; color: #fff; margin-bottom: 0.3cm; letter-spacing: 2px; }
+.cover-subtitle { font-size: 14pt; color: #ccc; margin-bottom: 3cm; }
+.cover-meta { font-size: 11pt; color: #ddd; line-height: 2.2; }
+.cover-line { width: 60%; height: 2px; background: #fff; margin: 1cm auto; }
+h1 { font-size: 18pt; color: #24106C; margin-top: 1.5cm; margin-bottom: 0.3cm; page-break-after: avoid; }
+h2 { font-size: 14pt; color: #333; margin-top: 1cm; margin-bottom: 0.2cm; page-break-after: avoid; }
+h3 { font-size: 12pt; color: #444; margin-top: 0.7cm; page-break-after: avoid; }
+p { margin: 0.3em 0; }
+ul { margin: 0.3em 0; padding-left: 1.5em; }
+li { margin: 0.2em 0; }
+.commit { background: #f5f5f5; padding: 8px 12px; border-left: 3px solid #24106C; margin: 0.5em 0; font-size: 10pt; }
+.tag { display: inline-block; background: #24106C; color: white; padding: 2px 8px; border-radius: 3px; font-size: 9pt; font-weight: 700; margin-right: 4px; }
+.flow-box { border: 1px solid #ccc; border-radius: 8px; padding: 12px; margin: 0.5em 0; background: #fafafa; }
+.flow-arrow { text-align: center; font-size: 18pt; color: #24106C; margin: 2px 0; }
+.flow-step { font-weight: 700; color: #24106C; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+    <div class="cover-content">
+        <h1 class="cover-title">LAPORAN</h1>
+        <p class="cover-subtitle">ERP Material Tracker — PT Geum Cheon Indo<br>29–30 September 2026</p>
+        <div class="cover-line"></div>
+        <div class="cover-meta">
+            <p>15 commit — 3 repositori</p>
+            <p>ERP: 259 test · APK Warehouse: 87 test · APK Production: baru</p>
+        </div>
+    </div>
+</div>
+
+<h1>Ringkasan Eksekutif</h1>
+
+<p>Dua hari pengerjaan (29–30 September 2026) mencakup <strong>15 commit</strong> di tiga repositori. Fokus utama: perbaikan issue-out (carry-over, target harian, monitoring), master data lokasi gudang, dan modul baru Penerimaan Material Production dengan APK terpisah.</p>
+
+<h2>Tiga Repositori</h2>
+
+<table>
+<thead><tr><th>Repositori</th><th>Path</th><th>Role</th><th>APK</th></tr></thead>
+<tbody>
+<tr><td><code>erp_gci</code></td><td>/home/herlan/Project/erp_gci</td><td>Backend ERP + Web</td><td>—</td></tr>
+<tr><td><code>erp_gci_mobile</code></td><td>/home/herlan/Project/erp_gci_mobile</td><td>APK Warehouse</td><td>MaterialTracker-1.0.1+4.apk (71,4 MB)</td></tr>
+<tr><td><code>erp_gci_mobile_production</code></td><td>/home/herlan/Project/erp_gci_mobile_production</td><td>APK Production <strong>(baru)</strong></td><td>app-release.apk (70,4 MB)</td></tr>
+</tbody>
+</table>
+
+<h2>Metrik</h2>
+
+<table>
+<thead><tr><th>Metrik</th><th>29 Sep</th><th>30 Sep</th><th>Total</th></tr></thead>
+<tbody>
+<tr><td>Commit ERP</td><td>7</td><td>5</td><td>12</td></tr>
+<tr><td>Commit APK Warehouse</td><td>2</td><td>1</td><td>3</td></tr>
+<tr><td>Project baru APK Production</td><td>—</td><td>1</td><td>1</td></tr>
+<tr><td>Test ERP</td><td>251</td><td>259 (+8)</td><td>259</td></tr>
+<tr><td>Test APK Warehouse</td><td>87</td><td>87</td><td>87</td></tr>
+<tr><td>Test APK Production</td><td>—</td><td>1</td><td>1 (baru)</td></tr>
+</tbody>
+</table>
+
+<h1>Alur End-to-End</h1>
+
+<div class="flow-box">
+<div class="flow-step">1. INCOMING — Barang dari Supplier</div>
+<div class="flow-arrow">↓</div>
+<div><strong>Web</strong>: Arrival → Receive (tag FIFO) → catat lokasi rak</div>
+<div class="flow-arrow">↓</div>
+<div class="flow-step">2. STOK TERSEDIA di Gudang</div>
+<div class="flow-arrow">↓</div>
+<div><strong>Web</strong>: Incoming → Stock (lihat stok per tag + rak)</div>
+<div class="flow-arrow">↓</div>
+<div class="flow-step">3. PRODUCTION PLAN — WO dijadwalkan</div>
+<div class="flow-arrow">↓</div>
+<div><strong>Web</strong>: Set target D/D+1/D+2<br><strong>APK Warehouse</strong>: Papan material (kebutuhan hari ini)</div>
+<div class="flow-arrow">↓</div>
+<div class="flow-step">4. ISSUE OUT — Warehouse</div>
+<div class="flow-arrow">↓</div>
+<div><strong>APK Warehouse</strong>: Scan tag stok → scan rak → Release WO</div>
+<div class="flow-arrow">↓</div>
+<div class="flow-step">5. PENERIMAAN MATERIAL — Production <span class="tag">BARU</span></div>
+<div class="flow-arrow">↓</div>
+<div><strong>APK Production</strong>: Scan tag material → scan QR mesin → konfirmasi<br><strong>Web</strong>: Monitoring penerimaan per mesin (live Echo)</div>
+</div>
+
+<p><em>Catatan: Langkah 1–4 dilakukan di web atau APK Warehouse. Langkah 5 adalah fitur baru yang memisahkan peran warehouse dan production ke APK berbeda.</em></p>
+
+<h1>Perbaikan Issue-Out (29 September)</h1>
+
+<h2>1. Carry-Over Production Plan</h2>
+<div class="commit">
+<strong>d14e4f3</strong> · <strong>6172090</strong><br>
+Baris Production Plan lama (plan_date melebihi 3 hari) kini muncul di papan material APK. WO berstatus <code>planned</code> tidak ikut carry-over — hanya <code>in_progress</code>/<code>completed</code>.
+</div>
+
+<h2>2. Target Harian yang Tepat</h2>
+<div class="commit">
+<strong>da48308</strong><br>
+Kolom D/D+1/D+2 relatif terhadap tanggal papan, bukan tanggal asal baris plan. Setiap WO mempertahankan target kolomnya sendiri. Dua WO tidak lagi menggabungkan target.
+</div>
+
+<h2>3. Issue-Out untuk WO in_progress</h2>
+<div class="commit">
+<strong>f692bca</strong><br>
+APK bisa issue-out untuk WO <code>planned</code> ATAU <code>in_progress</code>. Sebelumnya hanya <code>planned</code>.
+</div>
+
+<h2>4. Timezone Monitoring</h2>
+<div class="commit">
+<strong>8d08fbc</strong><br>
+<code>issue_date</code> dan filter monitoring memakai timezone pabrik (Asia/Jakarta). Release tengah malam tidak lagi hilang dari monitoring.
+</div>
+
+<h1>Master Data Lokasi Gudang</h1>
+
+<div class="commit">
+<strong>04617ce</strong> · <strong>2a36105</strong> · <strong>4d58c15</strong>
+</div>
+
+<p>Seeder <code>LocationSeeder</code> — 7 lokasi dari peta gudang:</p>
+
+<table>
+<thead><tr><th>Kode</th><th>Nama</th></tr></thead>
+<tbody>
+<tr><td>Rack-1</td><td>Rack 1</td></tr>
+<tr><td>Rack-2</td><td>Rack 2</td></tr>
+<tr><td>Rack-3</td><td>Rack 3</td></tr>
+<tr><td>Rack-4</td><td>Rack 4</td></tr>
+<tr><td>Rack-5</td><td>Rack 5</td></tr>
+<tr><td>S1</td><td>S1</td></tr>
+<tr><td>S2</td><td>S2</td></tr>
+</tbody>
+</table>
+
+<p>Halaman <strong>Incoming → Stock</strong> menampilkan kolom Lokasi Rak per tag stok. Endpoint <code>POST /api/locations/resolve</code> tanpa kode/id mengembalikan 404 (perbaikan keamanan).</p>
+
+<h1>Pembersihan Container Incoming</h1>
+
+<div class="commit">
+<strong>b90cdb8</strong> · <strong>fd9ac44</strong>
+</div>
+
+<p>Fitur container (nomor kontainer, seal, ukuran) dan foto inspeksi dihapus karena tidak pernah digunakan dan menyebabkan status invoice selalu "pending". Yang dihapus:</p>
+<ul>
+<li>Route <code>POST incoming-containers/{container}/inspect</code></li>
+<li>Method <code>IncomingArrivalController::inspectContainer()</code></li>
+<li>Tipe <code>ContainerRow</code>, form, tabel di Arrival/Form.vue dan Arrival/Show.vue</li>
+<li>Pengecekan <code>containers.inspection</code> di <code>hasPendingReceives()</code></li>
+</ul>
+
+<h1>Modul Baru: Penerimaan Material Production</h1>
+
+<h2>Komponen Backend</h2>
+
+<table>
+<thead><tr><th>Komponen</th><th>File</th></tr></thead>
+<tbody>
+<tr><td>Migrasi</td><td><code>database/migrations/2026_09_30_074958_...</code></td></tr>
+<tr><td>Model</td><td><code>app/Models/ProductionMaterialReceipt.php</code></td></tr>
+<tr><td>Service</td><td><code>app/Services/ProductionReceiptService.php</code></td></tr>
+<tr><td>Controller API</td><td><code>app/Http/Controllers/Api/ProductionReceiptController.php</code></td></tr>
+<tr><td>Controller Web</td><td><code>app/Http/Controllers/ProductionReceiptController.php</code></td></tr>
+<tr><td>Route API</td><td><code>POST /api/receipts/confirm</code>, <code>GET /api/receipts</code></td></tr>
+<tr><td>Route Web</td><td><code>GET /production-receipts</code></td></tr>
+<tr><td>Test API</td><td><code>tests/Feature/Api/ProductionReceiptApiTest.php</code> (8 test)</td></tr>
+<tr><td>Halaman Web</td><td><code>resources/js/Pages/Production/Receipt/Index.vue</code></td></tr>
+</tbody>
+</table>
+
+<h2>APK Production (Project Baru)</h2>
+
+<table>
+<thead><tr><th>Komponen</th><th>File</th></tr></thead>
+<tbody>
+<tr><td>Screen konfirmasi</td><td><code>lib/features/receipt/confirm_screen.dart</code></td></tr>
+<tr><td>Screen daftar mesin</td><td><code>lib/features/receipt/machine_receipt_list.dart</code></td></tr>
+<tr><td>Model</td><td><code>lib/models/production_receipt.dart</code>, <code>receipt_confirmation.dart</code>, <code>resolved_machine.dart</code></td></tr>
+<tr><td>Repository</td><td><code>lib/repositories/production_receipt_repository.dart</code></td></tr>
+<tr><td>Provider</td><td><code>lib/providers/production_receipt_provider.dart</code></td></tr>
+<tr><td>Parser QR mesin</td><td><code>lib/core/utils/qr_label.dart</code></td></tr>
+<tr><td>Router</td><td><code>lib/router/app_router.dart</code></td></tr>
+<tr><td>Login</td><td><code>lib/features/login/login_screen.dart</code></td></tr>
+</tbody>
+</table>
+
+<h2>Alur APK Production</h2>
+
+<ol>
+<li>Login dengan akun ERP (Sanctum token)</li>
+<li>Screen utama: pilih mesin atau scan langsung</li>
+<li><strong>Scan tag material</strong> → resolve tag → tampilkan info part, qty, invoice</li>
+<li><strong>Scan QR mesin</strong> → resolve machine → tampilkan nama mesin</li>
+<li><strong>Konfirmasi</strong> → API menyimpan receipt → sukses</li>
+<li>Lihat daftar penerimaan per mesin (hari ini)</li>
+</ol>
+
+<h1>Commit Log</h1>
+
+<h2>ERP — 8 commit (29 Sep)</h2>
+<table>
+<thead><tr><th>Hash</th><th>Deskripsi</th></tr></thead>
+<tbody>
+<tr><td>d14e4f3</td><td>Carry-over Production Plan rows now visible in APK</td></tr>
+<tr><td>6172090</td><td>Planned WO tidak carry-over</td></tr>
+<tr><td>04617ce</td><td>Seed warehouse rack locations from the layout map</td></tr>
+<tr><td>2a36105</td><td>Pakai nama Rack pada seed lokasi gudang</td></tr>
+<tr><td>4d58c15</td><td>Show rack location in stock inventory</td></tr>
+<tr><td>da48308</td><td>Honor daily targets on carry-over plans</td></tr>
+<tr><td>8d08fbc</td><td>Use plant timezone for issue monitoring dates</td></tr>
+<tr><td>f692bca</td><td>Allow issue-out for in-progress WO</td></tr>
+</tbody>
+</table>
+
+<h2>ERP — 4 commit (30 Sep)</h2>
+<table>
+<thead><tr><th>Hash</th><th>Deskripsi</th></tr></thead>
+<tbody>
+<tr><td>d860c7a</td><td>Web monitoring + Flutter screens (receipt)</td></tr>
+<tr><td>ed216b5</td><td>Web monitoring penerimaan material + menu</td></tr>
+<tr><td>b90cdb8</td><td>Hapus fitur container dan inspeksi di incoming</td></tr>
+<tr><td>fd9ac44</td><td>Hapus sisa kode container (route, controller, vue)</td></tr>
+</tbody>
+</table>
+
+<h2>APK Warehouse — 3 commit</h2>
+<table>
+<thead><tr><th>Hash</th><th>Deskripsi</th></tr></thead>
+<tbody>
+<tr><td>357d655</td><td>Initial commit of Material Tracker app</td></tr>
+<tr><td>b55c913</td><td>Fix result navigation → material board</td></tr>
+<tr><td>43ad42b</td><td>Pesan jelas saat pemindaian ditolak izin</td></tr>
+<tr><td>96a4d13</td><td>Production material receipt — Flutter screens</td></tr>
+</tbody>
+</table>
+
+<h2>APK Production — Project baru</h2>
+<p>Project dibuat 30 September. Belum ada commit Git. Source lengkap di <code>/home/herlan/Project/erp_gci_mobile_production/</code>.</p>
+
+<h1>Arsitektur Aplikasi</h1>
+
+<h2>Tiga APK Terpisah</h2>
+
+<table>
+<thead><tr><th>APK</th><th>Pengguna</th><th>Screen Utama</th></tr></thead>
+<tbody>
+<tr><td><strong>Material Tracker</strong> (warehouse)</td><td>Warehouse</td><td>Papan material → issue-out → scan rak</td></tr>
+<tr><td><strong>Material Tracker Production</strong> (baru)</td><td>Operator produksi</td><td>Penerimaan material → scan tag → scan mesin → daftar per mesin</td></tr>
+</tbody>
+</table>
+
+<h2>API Endpoints</h2>
+
+<table>
+<thead><tr><th>Endpoint</th><th>Method</th><th>APK</th><th>Deskripsi</th></tr></thead>
+<tbody>
+<tr><td><code>/api/auth/login</code></td><td>POST</td><td>Semua</td><td>Login Sanctum</td></tr>
+<tr><td><code>/api/material-board</code></td><td>GET</td><td>Warehouse</td><td>Papan kebutuhan material</td></tr>
+<tr><td><code>/api/work-orders</code></td><td>GET</td><td>Warehouse</td><td>Daftar WO terjadwal</td></tr>
+<tr><td><code>/api/work-orders/{id}/release-context</code></td><td>GET</td><td>Warehouse</td><td>Kebutuhan per WO + tag</td></tr>
+<tr><td><code>/api/stock-tags/resolve</code></td><td>POST</td><td>Semua</td><td>Resolve tag stok</td></tr>
+<tr><td><code>/api/machines/resolve</code></td><td>POST</td><td>Production</td><td>Resolve QR mesin</td></tr>
+<tr><td><code>/api/locations/resolve</code></td><td>POST</td><td>Warehouse</td><td>Resolve QR lokasi rak</td></tr>
+<tr><td><code>/api/work-orders/{id}/release</code></td><td>POST</td><td>Warehouse</td><td>Issue-out material</td></tr>
+<tr><td><code>/api/receipts/confirm</code></td><td>POST</td><td>Production</td><td>Konfirmasi penerimaan <span class="tag">BARU</span></td></tr>
+<tr><td><code>/api/receipts</code></td><td>GET</td><td>Production</td><td>Daftar penerimaan per mesin <span class="tag">BARU</span></td></tr>
+</tbody>
+</table>
+
+<h1>Verifikasi</h1>
+
+<table>
+<thead><tr><th>Gerbang</th><th>29 Sep</th><th>30 Sep</th></tr></thead>
+<tbody>
+<tr><td>Test ERP</td><td>251 lulus</td><td>259 lulus</td></tr>
+<tr><td>Test APK Warehouse</td><td>87 lulus</td><td>87 lulus</td></tr>
+<tr><td>Test APK Production</td><td>—</td><td>1 lulus (widget)</td></tr>
+<tr><td>Pint (Laravel)</td><td>Lulus</td><td>Lulus</td></tr>
+<tr><td>flutter analyze (Warehouse)</td><td>Lulus (2 info)</td><td>Lulus (3 info)</td></tr>
+<tr><td>flutter analyze (Production)</td><td>—</td><td>Lulus (2 info)</td></tr>
+<tr><td>npm run build (Vue)</td><td>Lulus</td><td>Lulus</td></tr>
+</tbody>
+</table>
+
+<h1>Catatan Deployment</h1>
+
+<ol>
+<li><strong>Pull ERP</strong>: <code>git pull &amp;&amp; php artisan migrate --force</code></li>
+<li><strong>Seed</strong>: <code>php artisan db:seed --class=RolesAndPermissionsSeeder --force</code></li>
+<li><strong>Seed lokasi</strong>: <code>php artisan db:seed --class=LocationSeeder --force</code></li>
+<li><strong>Clear cache</strong>: <code>php artisan optimize:clear</code></li>
+<li><strong>APK Warehouse</strong>: Install <code>dist/MaterialTracker-1.0.1+4.apk</code> (atau build ulang untuk +5)</li>
+<li><strong>APK Production</strong>: Install <code>build/app/outputs/flutter-apk/app-release.apk</code></li>
+</ol>
+
+<h1>Yang Belum Selesai</h1>
+
+<ul>
+<li>APK Production belum di-commit Git</li>
+<li>Broadcast event untuk Echo live di monitoring penerimaan</li>
+<li>APK produksi per step (WIP → FG) — masih PRD</li>
+<li>3 info-level lint di APK (non-blocking)</li>
+</ul>
+
+</body>
+</html>

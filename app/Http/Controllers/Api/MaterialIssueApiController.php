@@ -323,6 +323,18 @@ class MaterialIssueApiController extends Controller
             (int) $request->user()->id,
         );
 
+        // Cari step berikutnya berdasarkan sequence.
+        $currentSeq = $workOrder->items()
+            ->where('parent_part_id', $data['parent_part_id'])
+            ->min('sequence') ?? 0;
+
+        $nextStep = $workOrder->items()
+            ->with(['parentPart:id,part_number,part_name', 'process:id,process_name', 'machine:id,machine_name'])
+            ->where('sequence', '>', $currentSeq)
+            ->whereNotNull('parent_part_id')
+            ->orderBy('sequence')
+            ->first();
+
         return response()->json([
             'ok' => true,
             'message' => __('Hasil produksi tersimpan.'),
@@ -331,6 +343,14 @@ class MaterialIssueApiController extends Controller
                 'parent_part_id' => (int) $result->parent_part_id,
                 'qty_good' => (float) $result->qty_good,
                 'qty_reject' => (float) $result->qty_reject,
+                'next_step' => $nextStep ? [
+                    'parent_part_id' => (int) $nextStep->parent_part_id,
+                    'part_number' => $nextStep->parentPart?->part_number,
+                    'part_name' => $nextStep->parentPart?->part_name,
+                    'process' => $nextStep->process?->process_name,
+                    'machine' => $nextStep->machine?->machine_name,
+                    'sequence' => (int) $nextStep->sequence,
+                ] : null,
             ],
         ]);
     }

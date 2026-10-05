@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Laporan Harian — 30 September 2026</title>
+<style>
+@page { size: A4; margin: 2.5cm 2cm; }
+@page :first { margin: 0; }
+body { margin: 0; padding: 0; font-family: Georgia, 'Times New Roman', serif; color: #333; font-size: 11pt; line-height: 1.6; text-align: justify; text-align-last: left; }
+pre, table, figure, img, svg, blockquote { max-width: 100%; box-sizing: border-box; }
+table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 10pt; }
+th, td { border: none; padding: 6px 10px; text-align: left; }
+thead { border-top: 2px solid #333; border-bottom: 1px solid #333; }
+tbody { border-bottom: 2px solid #333; }
+th { font-weight: 700; background: #f5f5f5; }
+tr { page-break-inside: avoid; }
+code { font-size: 9pt; background: #f5f5f5; padding: 1px 4px; border-radius: 2px; }
+.cover { width: 210mm; height: 297mm; margin: 0; position: relative; overflow: hidden; page-break-after: always; background: linear-gradient(135deg, #f7f9fc 0%, #e8ecf1 100%); }
+.cover-content { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; width: 80%; }
+.cover-title { font-size: 28pt; font-weight: 700; color: #1b0c52; margin-bottom: 0.3cm; letter-spacing: 1px; }
+.cover-subtitle { font-size: 14pt; color: #555; margin-bottom: 3cm; }
+.cover-meta { font-size: 11pt; color: #333; line-height: 2.2; }
+.cover-line { width: 60%; height: 2px; background: #1b0c52; margin: 1cm auto; }
+h1 { font-size: 18pt; color: #1b0c52; margin-top: 1.5cm; margin-bottom: 0.3cm; string-set: doctitle content(); page-break-after: avoid; }
+h2 { font-size: 14pt; color: #333; margin-top: 1cm; margin-bottom: 0.2cm; page-break-after: avoid; }
+h3 { font-size: 12pt; color: #444; margin-top: 0.7cm; page-break-after: avoid; }
+p { margin: 0.3em 0; }
+ul { margin: 0.3em 0; padding-left: 1.5em; }
+li { margin: 0.2em 0; }
+.commit { background: #f5f5f5; padding: 8px 12px; border-left: 3px solid #1b0c52; margin: 0.5em 0; font-size: 10pt; }
+.tag { display: inline-block; background: #1b0c52; color: white; padding: 2px 8px; border-radius: 3px; font-size: 9pt; font-weight: 700; margin-right: 4px; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+    <div class="cover-content">
+        <h1 class="cover-title">LAPORAN HARIAN</h1>
+        <p class="cover-subtitle">ERP Material Tracker — PT Geum Cheon Indo</p>
+        <div class="cover-line"></div>
+        <div class="cover-meta">
+            <p>30 September 2026</p>
+            <p>8 commit — 2 repositori</p>
+            <p>ERP: 259 test · APK: 87 test</p>
+        </div>
+    </div>
+</div>
+
+<h1>Ringkasan Eksekutif</h1>
+
+<p>Hari ini dikerjakan modul <strong>Penerimaan Material Production</strong> — fitur yang menjembatani issue-out material oleh warehouse dengan konfirmasi penerimaan di mesin oleh operator produksi. Modul ini mencakup backend (API, service, migrasi), Flutter APK (scan tag + scan mesin + daftar penerimaan), dan web monitoring (halaman Inertia dengan live Echo).</p>
+
+<p>Selain itu dilakukan pembersihan fitur container &amp; foto inspeksi pada modul Incoming yang tidak terpakai dan menyebabkan status invoice selalu "pending".</p>
+
+<table>
+<thead><tr><th>Metrik</th><th>Nilai</th></tr></thead>
+<tbody>
+<tr><td>Total commit ERP</td><td>8</td></tr>
+<tr><td>Total commit APK</td><td>2</td></tr>
+<tr><td>Test ERP</td><td>259 lulus (1417 assertions)</td></tr>
+<tr><td>Test APK</td><td>87 lulus</td></tr>
+<tr><td>Pint / flutter analyze</td><td>Lulus</td></tr>
+<tr><td>npm run build</td><td>Lulus</td></tr>
+</tbody>
+</table>
+
+<h1>Fitur Baru: Penerimaan Material Production</h1>
+
+<p>Alur baru di APK Material Tracker: setelah warehouse melakukan issue-out (scan tag material → release WO), operator produksi di lantai membuka APK, <strong>scan tag material</strong> yang sudah di-issue, lalu <strong>scan QR mesin</strong> tujuan. Sistem mencatat bahwa tag tersebut telah diterima di mesin tertentu pada jam tertentu. Tidak ada input qty — qty diambil dari dokumen issue.</p>
+
+<h2>Komponen yang Dibangun</h2>
+
+<h3>Backend (ERP)</h3>
+<ul>
+    <li><strong>Migrasi</strong> — tabel <code>production_material_receipts</code> dengan kolom material_issue_item_id, tag, part_id, machine_id, received_by, received_at. Unique constraint (material_issue_item_id, machine_id).</li>
+    <li><strong>Model</strong> — <code>ProductionMaterialReceipt</code> dengan relasi ke MaterialIssueItem, Part, Machine, User.</li>
+    <li><strong>Service</strong> — <code>ProductionReceiptService</code> dengan validasi: tag harus sudah di-issue-out, mesin harus aktif, tidak boleh duplikat (tag + mesin yang sama).</li>
+    <li><strong>API</strong> — <code>POST /api/receipts/confirm</code> dan <code>GET /api/receipts?machine_id=</code>. Authorization via permission <code>stock.issue</code>.</li>
+    <li><strong>8 test API</strong> — mencakup sukses, unknown tag, inactive machine, duplikat, list by machine, filter by date.</li>
+</ul>
+
+<h3>Web Monitoring (Inertia Vue)</h3>
+<ul>
+    <li>Halaman <strong>Produksi → Penerimaan Material</strong> dengan filter mesin (dropdown) dan tanggal.</li>
+    <li>Tabel daftar penerimaan: tag, part, invoice, supplier, penerima, jam.</li>
+    <li>Statistik realtime dengan koneksi Echo (live update).</li>
+    <li>Indikator koneksi (connected/disconnected).</li>
+    <li>Link di module launcher Produksi.</li>
+</ul>
+
+<h3>Flutter APK</h3>
+<ul>
+    <li><strong>Model</strong>: <code>ProductionReceipt</code>, <code>ReceiptConfirmation</code>, <code>ResolvedMachine</code>.</li>
+    <li><strong>Parser QR</strong>: <code>ScannedMachine</code> untuk label mesin.</li>
+    <li><strong>Repository</strong>: <code>ProductionReceiptRepository</code> — confirm, receiptsByMachine, resolveTag, resolveMachine.</li>
+    <li><strong>Provider</strong>: <code>ReceiptConfirmNotifier</code> + <code>ReceiptListNotifier</code> (Riverpod).</li>
+    <li><strong>Screen</strong>: <code>ReceiptConfirmScreen</code> — alur 2 langkah (scan tag → scan mesin → konfirmasi).</li>
+    <li><strong>Screen</strong>: <code>MachineReceiptListScreen</code> — daftar penerimaan per mesin.</li>
+    <li><strong>i18n</strong>: Semua kunci baru dalam id/en/ko.</li>
+</ul>
+
+<h1>Pembersihan: Container &amp; Foto Inspeksi</h1>
+
+<p>Fitur container (nomor kontainer, seal, ukuran) dan foto inspeksi (photo_front, photo_back, dll.) pada modul Incoming Arrival dihapus karena tidak pernah digunakan. Fitur ini juga menyebabkan <code>hasPendingReceives()</code> menganggap arrival sebagai "pending" selama container belum diinspeksi — sehingga invoice tetap berstatus "pending" meskipun semua barang sudah diterima.</p>
+
+<p>Yang dihapus:</p>
+<ul>
+    <li>Route <code>POST incoming-containers/{container}/inspect</code></li>
+    <li>Method <code>IncomingArrivalController::inspectContainer()</code></li>
+    <li>Tipe <code>ContainerRow</code> di Form.vue</li>
+    <li>Blok form container + tombol add/remove</li>
+    <li>Blok tabel container di Show.vue</li>
+    <li>Pengecekan <code>containers.inspection</code> di <code>hasPendingReceives()</code></li>
+    <li>Parameter <code>containers</code> dari eager load</li>
+</ul>
+
+<h1>Perubahan Lain</h1>
+
+<table>
+<thead><tr><th>Hash</th><th>Deskripsi</th></tr></thead>
+<tbody>
+<tr><td><code>fd9ac44</code></td><td>Hapus sisa kode container (route, controller, Vue)</td></tr>
+<tr><td><code>b90cdb8</code></td><td>Hapus fitur container dan inspeksi di incoming</td></tr>
+<tr><td><code>ed216b5</code></td><td>Monitoring penerimaan material production + menu</td></tr>
+<tr><td><code>d860c7a</code></td><td>Web monitoring + Flutter screens</td></tr>
+<tr><td><code>ba94c55</code></td><td>Production material receipt module (migration, model, service, controller, API, tests)</td></tr>
+<tr><td><code>96a4d13</code></td><td>APK: confirm screen, list screen, models, repo, provider, i18n</td></tr>
+<tr><td><code>43ad42b</code></td><td>APK: pesan jelas saat pemindaian ditolak izin</td></tr>
+</tbody>
+</table>
+
+<h1>Status Commit</h1>
+
+<table>
+<thead><tr><th>Repositori</th><th>Commit Terakhir</th><th>Hash</th></tr></thead>
+<tbody>
+<tr><td>ERP (erp_gci)</td><td>Hapus sisa kode container</td><td><code>fd9ac44</code></td></tr>
+<tr><td>APK (erp_gci_mobile)</td><td>Production material receipt — Flutter</td><td><code>96a4d13</code></td></tr>
+</tbody>
+</table>
+
+<h1>Catatan</h1>
+
+<ul>
+    <li>Deploy ERP dan APK perlu dilakukan ke server production.</li>
+    <li>Seeder <code>RolesAndPermissionsSeeder</code> perlu dijalankan agar permission <code>stock.issue</code> tersedia untuk role operator produksi.</li>
+    <li>Seeder <code>LocationSeeder</code> perlu dijalankan agar data lokasi rak tersedia.</li>
+    <li>Broadcast event <code>ProductionReceiptPosted</code> untuk Echo live di halaman monitoring belum dibuat (sementara halaman web hanya refresh manual).</li>
+    <li>Fitur APK produksi per step (WIP → FG) masih dalam tahap PRD.</li>
+</ul>
+
+</body>
+</html>

@@ -4,13 +4,17 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class ProductionResult extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = [
         'work_order_id', 'parent_part_id', 'process_id', 'machine_id',
         'result_date', 'shift', 'qty_good', 'qty_reject', 'uom',
         'reported_by', 'notes', 'created_by', 'updated_by',
+        'output_part_stock_id', 'reversed_by',
     ];
 
     protected $casts = [

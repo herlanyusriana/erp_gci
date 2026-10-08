@@ -1,4 +1,9 @@
 {
+    "Pilih item bon material yang tepat.": "올바른 자재 출고 항목을 선택하세요.",
+    "Item bon material tidak valid.": "자재 출고 항목이 유효하지 않습니다.",
+    "Item bon material sudah diterima.": "이미 입고된 자재 출고 항목입니다.",
+    "Stok bon material tidak mencukupi atau tidak valid.": "출고 재고가 부족하거나 유효하지 않습니다.",
+    "Booking bon material tidak mencukupi atau tidak valid.": "출고 예약 수량이 부족하거나 유효하지 않습니다.",
     "UOM created.": "단위 항목이 생성되었습니다.",
     "UOM updated.": "단위 항목이 수정되었습니다.",
     "UOM deleted.": "단위 항목이 삭제되었습니다.",
@@ -114,5 +119,12 @@
     "Your email address is not verified.": "이메일 주소가 인증되지 않았습니다.",
     "Payment Required": "결제 필요",
     "Tipe part tidak diizinkan untuk aksi ini.": "이 작업에는 이 부품 유형이 허용되지 않습니다.",
-    "Work Order hanya untuk part FG.": "작업 지시는 완제품(FG) 부품만 가능합니다."
+    "Work Order hanya untuk part FG.": "작업 지시는 완제품(FG) 부품만 가능합니다.",
+    "Stok WIP tidak mencukupi. Selesaikan step sebelumnya.": "재공품 재고가 부족합니다. 이전 공정을 먼저 완료해 주세요.",
+    "Saldo material di mesin tidak mencukupi. Terima material untuk item WO ini terlebih dahulu.": "해당 기계의 자재 잔량이 부족합니다. 이 작업 지시 항목의 자재를 먼저 인수해 주세요.",
+    "Hasil produksi lama perlu rekonsiliasi sebelum dibatalkan.": "기존 생산 실적은 취소 전에 재고 대사가 필요합니다.",
+    "Output hasil ini sudah digunakan atau dibooking. Batalkan proses berikutnya terlebih dahulu.": "이 실적의 생산품이 이미 사용되었거나 예약되었습니다. 후속 공정을 먼저 취소해 주세요.",
+    "Saldo konsumsi tidak valid. Rekonsiliasi diperlukan.": "소비 잔량이 올바르지 않습니다. 재고 대사가 필요합니다.",
+    "Mesin tidak sesuai grup routing item WO.": "이 기계는 작업 지시 항목의 공정 기계 그룹에 속하지 않습니다.",
+    "Qty hasil maksimal empat angka desimal.": "실적 수량은 소수점 이하 네 자리까지 입력할 수 있습니다."
 }

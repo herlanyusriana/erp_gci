@@ -30,17 +30,19 @@ class ProductionReceiptController extends Controller
         );
 
         $data = $request->validate([
-            'tag' => ['required', 'string', 'max:255'],
+            'tag' => ['nullable', 'required_without:material_issue_item_id', 'string', 'max:255'],
+            'material_issue_item_id' => ['nullable', 'integer', 'exists:material_issue_items,id'],
             'machine_id' => ['required', 'integer', 'exists:machines,id'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
 
         try {
             $receipt = $this->receiptService->confirm(
-                tag: $data['tag'],
+                tag: $data['tag'] ?? null,
                 machineId: (int) $data['machine_id'],
                 userId: (int) $request->user()->id,
                 notes: $data['notes'] ?? null,
+                materialIssueItemId: isset($data['material_issue_item_id']) ? (int) $data['material_issue_item_id'] : null,
             );
 
             $receipt->loadMissing(['part:id,part_number,part_name,model,size', 'receiver:id,name']);
@@ -50,6 +52,7 @@ class ProductionReceiptController extends Controller
                 'message' => __('Material diterima di mesin.'),
                 'data' => [
                     'id' => $receipt->id,
+                    'material_issue_item_id' => $receipt->material_issue_item_id,
                     'tag' => $receipt->tag,
                     'part_id' => $receipt->part_id,
                     'part' => $receipt->part ? [
@@ -71,6 +74,19 @@ class ProductionReceiptController extends Controller
                 'errors' => $e->errors(),
             ], 422);
         }
+    }
+
+    public function resolve(Request $request): JsonResponse
+    {
+        abort_unless($request->user()?->hasPermission('stock.issue') ?? false, 403, __('Tidak berwenang mengakses data stok.'));
+        $data = $request->validate([
+            'tag' => ['required', 'string', 'max:255'],
+            'part_id' => ['nullable', 'integer', 'exists:parts,id'],
+        ]);
+
+        return response()->json(['ok' => true, 'data' => $this->receiptService->resolve(
+            $data['tag'], isset($data['part_id']) ? (int) $data['part_id'] : null,
+        )]);
     }
 
     public function index(Request $request): JsonResponse

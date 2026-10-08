@@ -3,10 +3,17 @@
 namespace App\Services;
 
 use App\Models\Machine;
+use App\Models\MaterialIssue;
 use App\Models\MaterialIssueItem;
 use App\Models\PartStock;
 use App\Models\ProductionMaterialReceipt;
+use App\Models\WorkOrder;
+use App\Models\WorkOrderItem;
 use App\Models\WorkOrderMaterialBooking;
+use App\Support\MachineRouting;
+use App\Support\UomCatalog;
+use Brick\Math\BigDecimal;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -20,52 +27,120 @@ use Illuminate\Validation\ValidationException;
  */
 class ProductionReceiptService
 {
-    /**
-     * Konfirmasi satu penerimaan: tag material masuk ke mesin tertentu.
-     * Stok gudang berkurang saat ini dipanggil.
-     *
-     * @throws ValidationException
-     */
-    public function confirm(string $tag, int $machineId, ?int $userId = null, ?string $notes = null): ProductionMaterialReceipt
+    public function resolve(string $tag, ?int $partId = null): array
     {
-        $tag = strtoupper(trim($tag));
+        return $this->issuedItemsForTag($tag)
+            ->when($partId !== null, fn (Builder $query) => $query->where('part_id', $partId))
+            ->whereNotIn('id', ProductionMaterialReceipt::query()->select('material_issue_item_id'))
+            ->with(['materialIssue.workOrder', 'part'])
+            ->orderBy('id')->get()->map(fn (MaterialIssueItem $item) => [
+                'material_issue_item_id' => $item->id,
+                'material_issue_id' => $item->material_issue_id,
+                'issue_no' => $item->materialIssue->issue_no,
+                'work_order_id' => $item->materialIssue->work_order_id,
+                'wo_no' => $item->materialIssue->workOrder->wo_no,
+                'work_order_item_id' => $item->work_order_item_id,
+                'tag' => $item->tag,
+                'part_id' => $item->part_id,
+                'part' => $item->part?->only(['part_number', 'part_name', 'model', 'size']),
+                'qty' => $item->qty,
+                'uom' => $item->uom,
+                'invoice' => $item->invoice,
+                'supplier' => $item->supplier,
+                'status' => 'pending',
+            ])->all();
+    }
 
-        // Cari item issue yang cocok dengan tag ini — material harus sudah di-issue-out.
-        $issueItem = MaterialIssueItem::query()
-            ->whereRaw('LOWER(COALESCE(tag, \'\')) = ?', [mb_strtolower($tag)])
-            ->latest('id')
-            ->first();
+    private function issuedItemsForTag(string $tag): Builder
+    {
+        return MaterialIssueItem::query()
+            ->whereRaw('LOWER(tag) = ?', [mb_strtolower(trim($tag))])
+            ->whereHas('materialIssue', fn (Builder $query) => $query->where('status', 'posted')
+                ->whereHas('workOrder', fn (Builder $wo) => $wo->whereIn('status', ['released', 'in_progress'])));
+    }
 
-        if ($issueItem === null) {
-            throw ValidationException::withMessages([
-                'tag' => __('Tag :tag belum di-issue-out.', ['tag' => $tag]),
-            ]);
-        }
+    public function confirm(?string $tag, int $machineId, ?int $userId = null, ?string $notes = null, ?int $materialIssueItemId = null): ProductionMaterialReceipt
+    {
+        return DB::transaction(function () use ($tag, $machineId, $userId, $notes, $materialIssueItemId) {
+            if ($materialIssueItemId === null) {
+                $ids = $this->issuedItemsForTag($tag ?? '')->pluck('id');
+                if ($ids->count() !== 1) {
+                    throw ValidationException::withMessages(['tag' => __('Pilih item bon material yang tepat.')]);
+                }
+                $materialIssueItemId = (int) $ids->sole();
+            }
+            $issueItem = MaterialIssueItem::query()->find($materialIssueItemId);
+            if ($issueItem === null || ($tag !== null && mb_strtolower(trim($tag)) !== mb_strtolower((string) $issueItem->tag))) {
+                throw ValidationException::withMessages(['material_issue_item_id' => __('Item bon material tidak valid.')]);
+            }
+            $issue = MaterialIssue::query()->find($issueItem->material_issue_id);
+            $wo = $issue ? WorkOrder::query()->lockForUpdate()->find($issue->work_order_id) : null;
+            $issue = $issue ? MaterialIssue::query()->lockForUpdate()->find($issue->id) : null;
+            $issueItem = MaterialIssueItem::query()->lockForUpdate()->find($materialIssueItemId);
+            if ($issueItem === null || $issue === null || $wo === null
+                || $issue->work_order_id !== $wo->id || $issueItem->material_issue_id !== $issue->id
+                || ($tag !== null && mb_strtolower(trim($tag)) !== mb_strtolower((string) $issueItem->tag))) {
+                throw ValidationException::withMessages(['material_issue_item_id' => __('Item bon material tidak valid.')]);
+            }
+            $woItem = WorkOrderItem::query()->lockForUpdate()->find($issueItem->work_order_item_id);
+            if ($issue?->status !== 'posted' || $wo === null || ! in_array($wo->status, ['released', 'in_progress'], true)
+                || $woItem === null || $woItem->work_order_id !== $wo->id || $issueItem->qty <= 0
+                || UomCatalog::normalize((string) $issueItem->uom) === null
+                || UomCatalog::normalize((string) $woItem->uom_rm) !== UomCatalog::normalize((string) $issueItem->uom)) {
+                throw ValidationException::withMessages(['material_issue_item_id' => __('Item bon material tidak valid.')]);
+            }
+            $machine = Machine::query()->lockForUpdate()->find($machineId);
+            MachineRouting::assertEligible($machine, $woItem);
+            if (ProductionMaterialReceipt::where('material_issue_item_id', $issueItem->id)->exists()) {
+                throw ValidationException::withMessages(['material_issue_item_id' => __('Item bon material sudah diterima.')]);
+            }
+            $stock = PartStock::query()->lockForUpdate()->find($issueItem->part_stock_id);
+            if ($stock === null || $stock->part_id !== $issueItem->part_id
+                || mb_strtolower((string) $stock->tag) !== mb_strtolower((string) $issueItem->tag)
+                || UomCatalog::normalize((string) $stock->qty_unit) !== UomCatalog::normalize((string) $issueItem->uom)
+                || BigDecimal::of($stock->getRawOriginal('qty'))->isLessThan($issueItem->getRawOriginal('qty'))) {
+                throw ValidationException::withMessages(['material_issue_item_id' => __('Stok bon material tidak mencukupi atau tidak valid.')]);
+            }
+            $bookings = WorkOrderMaterialBooking::query()
+                ->where('work_order_id', $wo->id)->where('work_order_item_id', $woItem->id)
+                ->where('part_id', $issueItem->part_id)->where('part_stock_id', $stock->id)
+                ->whereRaw('LOWER(tag) = ?', [mb_strtolower((string) $issueItem->tag)])
+                ->where('status', WorkOrderMaterialBooking::STATUS_BOOKED)
+                ->orderBy('id')->lockForUpdate()->get();
+            if ($bookings->isEmpty() || $bookings->contains(fn ($booking) => $booking->qty <= 0
+                || UomCatalog::normalize((string) $booking->uom) !== UomCatalog::normalize((string) $issueItem->uom))
+                || $bookings->sum('qty') + 1e-9 < $issueItem->qty) {
+                throw ValidationException::withMessages(['material_issue_item_id' => __('Booking bon material tidak mencukupi atau tidak valid.')]);
+            }
+            $remaining = $issueItem->qty;
+            foreach ($bookings as $booking) {
+                if ($remaining <= 1e-9) {
+                    break;
+                }
+                $taken = min($remaining, $booking->qty);
+                if ($booking->qty - $taken > 1e-9) {
+                    $transferred = $booking->replicate();
+                    $transferred->fill(['qty' => $taken, 'status' => WorkOrderMaterialBooking::STATUS_TRANSFERRED, 'transferred_at' => now(), 'updated_by' => $userId])->save();
+                    $booking->update(['qty' => $booking->qty - $taken, 'updated_by' => $userId]);
+                } else {
+                    $booking->update(['status' => WorkOrderMaterialBooking::STATUS_TRANSFERRED, 'transferred_at' => now(), 'updated_by' => $userId]);
+                }
+                $remaining -= $taken;
+            }
+            $warehouseRemaining = BigDecimal::of($stock->getRawOriginal('qty'))->minus($issueItem->getRawOriginal('qty'));
+            PartStock::query()->whereKey($stock->id)->update(['qty' => (string) $warehouseRemaining]);
 
-        // Mesin harus aktif.
-        $machine = Machine::find($machineId);
-        if ($machine === null || ! $machine->is_active) {
-            throw ValidationException::withMessages([
-                'machine_id' => __('Mesin tidak ditemukan atau tidak aktif.'),
-            ]);
-        }
-
-        // Satu tag hanya bisa diterima sekali per mesin.
-        $alreadyReceived = ProductionMaterialReceipt::query()
-            ->where('material_issue_item_id', $issueItem->id)
-            ->where('machine_id', $machineId)
-            ->exists();
-
-        if ($alreadyReceived) {
-            throw ValidationException::withMessages([
-                'tag' => __('Tag :tag sudah pernah diterima di mesin ini.', ['tag' => $tag]),
-            ]);
-        }
-
-        // Simpan receipt + kurangi stok gudang dalam satu transaksi.
-        $receipt = DB::transaction(function () use ($issueItem, $tag, $machineId, $userId, $notes) {
-            $receipt = ProductionMaterialReceipt::create([
+            return ProductionMaterialReceipt::create([
                 'material_issue_item_id' => $issueItem->id,
+                'transfer_status' => 'transferred',
+                'work_order_id' => $wo->id,
+                'work_order_item_id' => $woItem->id,
+                'part_stock_id' => $stock->id,
+                'qty' => $issueItem->getRawOriginal('qty'),
+                'qty_consumed' => 0,
+                'uom' => UomCatalog::normalize((string) $issueItem->uom),
+                'invoice' => $issueItem->invoice,
+                'supplier' => $issueItem->supplier,
                 'tag' => $issueItem->tag,
                 'part_id' => $issueItem->part_id,
                 'machine_id' => $machineId,
@@ -73,44 +148,7 @@ class ProductionReceiptService
                 'received_at' => now(),
                 'notes' => $notes,
             ]);
-
-            // Kurangi stok gudang: cari baris stok berdasarkan tag ini,
-            // lalu kurangi booking-nya.
-            $stock = PartStock::query()
-                ->whereRaw('LOWER(COALESCE(tag, \'\')) = ?', [mb_strtolower($tag)])
-                ->lockForUpdate()
-                ->first();
-
-            if ($stock !== null) {
-                $booking = WorkOrderMaterialBooking::query()
-                    ->where('part_stock_id', $stock->id)
-                    ->where('status', WorkOrderMaterialBooking::STATUS_BOOKED)
-                    ->lockForUpdate()
-                    ->first();
-
-                if ($booking !== null) {
-                    // Kurangi stok fisik.
-                    $newQty = (float) $stock->qty - (float) $booking->qty;
-                    if ($newQty <= 1e-9) {
-                        $stock->delete();
-                    } else {
-                        $stock->update(['qty' => $newQty]);
-                    }
-
-                    // Tandai booking sebagai consumed.
-                    $booking->update([
-                        'status' => WorkOrderMaterialBooking::STATUS_CONSUMED,
-                        'consumed_at' => now(),
-                        'updated_by' => $userId,
-                        'updated_at' => now(),
-                    ]);
-                }
-            }
-
-            return $receipt;
         });
-
-        return $receipt;
     }
 
     /**

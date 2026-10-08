@@ -5,9 +5,13 @@ namespace App\Services;
 use App\Models\IncomingArrival;
 use App\Models\IncomingArrivalItem;
 use App\Models\IncomingReceive;
+use App\Models\MaterialIssueItem;
 use App\Models\PartStock;
+use App\Models\ProductionMaterialReceipt;
+use App\Models\ProductionResult;
 use App\Models\WorkOrderMaterialBooking;
 use App\Support\UomCatalog;
+use Brick\Math\BigDecimal;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -521,7 +525,15 @@ class ReceiveMaterialService
                 ->where('status', WorkOrderMaterialBooking::STATUS_BOOKED)
                 ->sum('qty');
 
-            $bookable = (float) $stock->qty - $booked;
+            $ownBookings = WorkOrderMaterialBooking::query()->where('part_stock_id', $stock->id)
+                ->where('work_order_id', $workOrderId)->where('work_order_item_id', $workOrderItemId)
+                ->where('status', WorkOrderMaterialBooking::STATUS_BOOKED)->orderBy('id')->lockForUpdate()->get();
+            $pendingIssued = (float) MaterialIssueItem::query()->where('part_stock_id', $stock->id)
+                ->where('work_order_item_id', $workOrderItemId)
+                ->whereHas('materialIssue', fn ($query) => $query->where('work_order_id', $workOrderId)->where('status', 'posted'))
+                ->whereNotIn('id', ProductionMaterialReceipt::query()->select('material_issue_item_id'))->sum('qty');
+            $unissuedBooking = max(0, (float) $ownBookings->sum('qty') - $pendingIssued);
+            $bookable = (float) $stock->qty - $booked + $unissuedBooking;
             if ($bookable <= 1e-9) {
                 return null;
             }
@@ -533,22 +545,24 @@ class ReceiveMaterialService
 
             $receive = $stock->receive;
 
-            $booking = WorkOrderMaterialBooking::create([
+            $newBookingQty = max(0, $take - $unissuedBooking);
+            $booking = $newBookingQty > 0 ? WorkOrderMaterialBooking::create([
                 'work_order_id' => $workOrderId,
                 'work_order_item_id' => $workOrderItemId,
                 'part_id' => $stock->part_id,
                 'part_stock_id' => $stock->id,
                 'tag' => $stock->tag,
-                'qty' => $take,
+                'qty' => $newBookingQty,
                 'uom' => $stock->qty_unit,
                 'status' => WorkOrderMaterialBooking::STATUS_BOOKED,
                 'booked_at' => now(),
                 'created_by' => $actorId,
                 'updated_by' => $actorId,
-            ]);
+            ]) : $ownBookings->first();
 
             return [
                 'booking_id' => $booking->id,
+                'part_id' => $stock->part_id,
                 'part_stock_id' => $stock->id,
                 'tag' => $stock->tag,
                 'take_qty' => $take,
@@ -729,7 +743,7 @@ class ReceiveMaterialService
      * Return list alokasi: [{ part_stock_id, tag, take_qty, remaining_stock_after, uom }].
      * Dipakai WO / Material Allocation untuk UOM apa pun (KGM/SHEET/ROLL/PCS).
      */
-    public function consumeFifoByUom(int $partId, float $qtyNeed, ?string $uom = null): array
+    public function consumeFifoByUom(int $partId, float|string $qtyNeed, ?string $uom = null, ?int $workOrderId = null): array
     {
         if ($qtyNeed <= 0) {
             return [];
@@ -737,12 +751,17 @@ class ReceiveMaterialService
 
         $result = [];
 
-        DB::transaction(function () use ($partId, $qtyNeed, $uom, &$result) {
+        DB::transaction(function () use ($partId, $qtyNeed, $uom, $workOrderId, &$result) {
             $stocksQ = PartStock::query()
                 ->where('part_id', $partId)
                 ->where('qty', '>', 0)
                 ->orderByRaw('received_at ASC NULLS LAST')
                 ->orderBy('id');
+
+            if ($workOrderId !== null) {
+                $stocksQ->whereIn('id', ProductionResult::query()->where('work_order_id', $workOrderId)
+                    ->where('parent_part_id', $partId)->whereNotNull('output_part_stock_id')->select('output_part_stock_id'));
+            }
 
             if (UomCatalog::normalize($uom) !== null) {
                 $stocksQ->whereRaw('UPPER(COALESCE(qty_unit, \'\')) = ?', [UomCatalog::normalize($uom)]);
@@ -758,38 +777,38 @@ class ReceiveMaterialService
                 ->selectRaw('part_stock_id, SUM(qty) AS total')
                 ->pluck('total', 'part_stock_id');
 
-            $remainingNeed = $qtyNeed;
+            $remainingNeed = BigDecimal::of($qtyNeed);
             foreach ($stocks as $stock) {
-                if ($remainingNeed <= 1e-9) {
+                if ($remainingNeed->isZero()) {
                     break;
                 }
 
-                $free = (float) $stock->qty - (float) ($bookedByStock[$stock->id] ?? 0);
-                if ($free <= 1e-9) {
+                $free = BigDecimal::of($stock->getRawOriginal('qty'))->minus($bookedByStock[$stock->id] ?? 0);
+                if ($free->isLessThanOrEqualTo(0)) {
                     continue;
                 }
 
-                $take = min($free, $remainingNeed);
-                $newQty = (float) $stock->qty - $take;
+                $take = $free->isLessThan($remainingNeed) ? $free : $remainingNeed;
+                $newQty = BigDecimal::of($stock->getRawOriginal('qty'))->minus($take);
 
-                if ($newQty <= 1e-9) {
+                if ($newQty->isZero()) {
+                    PartStock::query()->whereKey($stock->id)->update(['qty' => 0]);
                     $stock->delete();
                     $stockId = $stock->id;
-                    $newQty = 0;
                 } else {
-                    $stock->update(['qty' => $newQty]);
+                    PartStock::query()->whereKey($stock->id)->update(['qty' => (string) $newQty]);
                     $stockId = $stock->id;
                 }
 
                 $result[] = [
                     'part_stock_id' => $stockId,
                     'tag' => $stock->tag,
-                    'take_qty' => $take,
-                    'remaining_stock_after' => $newQty,
+                    'take_qty' => (string) $take,
+                    'remaining_stock_after' => (string) $newQty,
                     'uom' => (string) ($stock->qty_unit ?? $uom ?? ''),
                 ];
 
-                $remainingNeed -= $take;
+                $remainingNeed = $remainingNeed->minus($take);
             }
         });
 
@@ -800,7 +819,7 @@ class ReceiveMaterialService
      * Post stok hasil produksi (WO output WIP/FG).
      * receive_id = null, tag produksi bebas, received_at = waktu produksi.
      */
-    public function postProductionStock(int $partId, string $tag, float $qty, ?string $uom = null, $receivedAt = null): PartStock
+    public function postProductionStock(int $partId, string $tag, float|string $qty, ?string $uom = null, $receivedAt = null): PartStock
     {
         $receivedAt = $receivedAt ?? now();
         $uom = UomCatalog::normalize($uom) ?? UomCatalog::PIECE;

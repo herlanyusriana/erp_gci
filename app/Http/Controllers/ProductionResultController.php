@@ -112,7 +112,7 @@ class ProductionResultController extends Controller
             throw ValidationException::withMessages(['result' => __('Hasil tidak termasuk WO ini.')]);
         }
 
-        $result->delete();
+        $this->resultService->reverse($workOrder, $result, (int) auth()->id());
 
         return redirect()
             ->route('production-results.create', $workOrder)

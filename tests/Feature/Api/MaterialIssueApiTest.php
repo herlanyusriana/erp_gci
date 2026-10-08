@@ -7,6 +7,7 @@ use App\Models\IncomingArrival;
 use App\Models\IncomingArrivalItem;
 use App\Models\IncomingReceive;
 use App\Models\Location;
+use App\Models\Machine;
 use App\Models\MaterialIssue;
 use App\Models\MaterialIssueItem;
 use App\Models\Part;
@@ -20,6 +21,7 @@ use App\Models\WorkOrderItem;
 use App\Models\WorkOrderItemAllocation;
 use App\Models\WorkOrderMaterialBooking;
 use Illuminate\Broadcasting\BroadcastEvent;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfInterceptor;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Carbon;
@@ -1341,13 +1343,127 @@ class MaterialIssueApiTest extends TestCase
         $first = $steps[0];
 
         $this->postJson("/api/work-orders/{$wo->id}/results", [
+            'parent_part_id' => $first['parent_part_id'], 'qty_good' => 10,
+        ])->assertUnprocessable()->assertJsonValidationErrors('qty_good');
+
+        $rows = $wo->items()->where('parent_part_id', $first['parent_part_id'])->get();
+        $machineId = $rows->first()->machine_id ?? Machine::where('is_active', true)->value('id');
+        $wo->items()->where('parent_part_id', $first['parent_part_id'])->update(['machine_id' => $machineId]);
+        foreach (MaterialIssueItem::whereIn('work_order_item_id', $rows->pluck('id'))->get() as $issueItem) {
+            $this->postJson('/api/receipts/confirm', [
+                'material_issue_item_id' => $issueItem->id, 'machine_id' => $machineId,
+            ])->assertOk();
+        }
+        $warehouseAfterReceipt = (float) PartStock::whereIn('id', MaterialIssueItem::whereIn('work_order_item_id', $rows->pluck('id'))->pluck('part_stock_id'))->sum('qty');
+
+        $this->postJson("/api/work-orders/{$wo->id}/results", [
             'parent_part_id' => $first['parent_part_id'],
             'qty_good' => 10,
         ])
             ->assertOk()
             ->assertJsonPath('data.parent_part_id', $first['parent_part_id']);
 
+        $this->assertEqualsWithDelta($warehouseAfterReceipt, (float) PartStock::whereIn('id', MaterialIssueItem::whereIn('work_order_item_id', $rows->pluck('id'))->pluck('part_stock_id'))->sum('qty'), 0.001);
+
         $after = $this->getJson("/api/work-orders/{$wo->id}/result-context")->json('data.steps');
         $this->assertEqualsWithDelta(10.0, (float) $after[0]['produced_qty'], 0.001);
+    }
+
+    public function test_web_release_then_mobile_issue_receipt_and_report_does_not_double_reserve_or_consume_warehouse(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->actingAsApi();
+        $scans = $this->seedStockAndBuildScans($wo);
+        $this->withoutMiddleware(ValidateCsrfInterceptor::class);
+
+        $this->post(route('work-orders.release', $wo))->assertSessionHasNoErrors();
+        $this->assertSame('in_progress', $wo->fresh()->status);
+        $this->assertGreaterThan(0, $wo->planItems()->count());
+        $this->assertSame(0, MaterialIssue::where('work_order_id', $wo->id)->count());
+        $bookedBeforeIssue = (float) WorkOrderMaterialBooking::where('work_order_id', $wo->id)->where('status', 'booked')->sum('qty');
+        $bookingIds = WorkOrderMaterialBooking::where('work_order_id', $wo->id)->where('status', 'booked')->orderBy('id')->pluck('id')->all();
+        $this->assertGreaterThan(0, $bookedBeforeIssue);
+
+        $this->postJson("/api/work-orders/{$wo->id}/release", [
+            'idempotency_key' => 'web-release-mobile-issue', 'items' => $scans,
+        ])->assertOk();
+        $this->assertEqualsWithDelta($bookedBeforeIssue, (float) WorkOrderMaterialBooking::where('work_order_id', $wo->id)->where('status', 'booked')->sum('qty'), 0.00000000001);
+        $this->assertSame($bookingIds, WorkOrderMaterialBooking::where('work_order_id', $wo->id)->where('status', 'booked')->orderBy('id')->pluck('id')->all());
+        $issue = MaterialIssue::where('work_order_id', $wo->id)->sole();
+        $issueItems = $issue->items()->get();
+        $stockIds = $issueItems->pluck('part_stock_id');
+        $warehouseBeforeReceipt = (float) PartStock::whereIn('id', $stockIds)->sum('qty');
+        $this->assertEqualsWithDelta($bookedBeforeIssue, $warehouseBeforeReceipt, 0.00000000001);
+
+        foreach ($issueItems as $issueItem) {
+            $row = $wo->items()->findOrFail($issueItem->work_order_item_id);
+            $machineId = $row->machine_id ?? Machine::where('is_active', true)->value('id');
+            $this->postJson('/api/receipts/confirm', [
+                'material_issue_item_id' => $issueItem->id, 'machine_id' => $machineId,
+            ])->assertOk();
+        }
+        $warehouseAfterReceipt = (float) PartStock::whereIn('id', $stockIds)->sum('qty');
+        $this->assertEqualsWithDelta(0, $warehouseAfterReceipt, 0.00000000001);
+        $first = $wo->items()->orderBy('sequence')->firstOrFail();
+        $this->postJson("/api/work-orders/{$wo->id}/results", [
+            'parent_part_id' => $first->parent_part_id, 'qty_good' => 5, 'qty_reject' => 1,
+            'machine_id' => $first->machine_id,
+        ])->assertOk();
+        $this->assertEqualsWithDelta($warehouseAfterReceipt, (float) PartStock::whereIn('id', $stockIds)->sum('qty'), 0.00000000001);
+        $this->assertEqualsWithDelta((float) $first->child_qty * 6, (float) $first->fresh()->qty_consumed, 0.00000000001);
+
+        $this->postJson("/api/work-orders/{$wo->id}/release", [
+            'idempotency_key' => 'web-release-mobile-issue', 'items' => $scans,
+        ])->assertOk();
+        $this->assertSame(1, MaterialIssue::where('work_order_id', $wo->id)->count());
+        $this->assertSame(0.0, (float) WorkOrderMaterialBooking::where('work_order_id', $wo->id)->where('status', 'booked')->sum('qty'));
+    }
+
+    public function test_partial_mobile_issues_bind_only_unissued_web_bookings_and_preserve_other_item_reservations(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->actingAsApi();
+        $scans = $this->seedStockAndBuildScans($wo);
+        $this->withoutMiddleware(ValidateCsrfInterceptor::class);
+        $this->post(route('work-orders.release', $wo))->assertSessionHasNoErrors();
+        $bookingIds = WorkOrderMaterialBooking::where('work_order_id', $wo->id)->where('status', 'booked')->orderBy('id')->pluck('id')->all();
+        $bookedBefore = (float) WorkOrderMaterialBooking::where('work_order_id', $wo->id)->where('status', 'booked')->sum('qty');
+        $first = $scans[0];
+        $required = $first['scans'][0]['qty'];
+        $half = round($required / 2, 4);
+        $first['scans'][0]['qty'] = $half;
+
+        $this->postJson("/api/work-orders/{$wo->id}/release", [
+            'idempotency_key' => 'partial-web-first', 'items' => [$first],
+        ])->assertOk();
+        $first['scans'][0]['qty'] = $required - $half;
+        $this->postJson("/api/work-orders/{$wo->id}/release", [
+            'idempotency_key' => 'partial-web-second', 'items' => [$first],
+        ])->assertOk();
+
+        $this->assertSame($bookingIds, WorkOrderMaterialBooking::where('work_order_id', $wo->id)->where('status', 'booked')->orderBy('id')->pluck('id')->all());
+        $this->assertEqualsWithDelta($bookedBefore, (float) WorkOrderMaterialBooking::where('work_order_id', $wo->id)->where('status', 'booked')->sum('qty'), 0.00000000001);
+        $this->assertEqualsWithDelta($required, (float) MaterialIssueItem::where('work_order_item_id', $first['work_order_item_id'])->sum('qty'), 0.00000000001);
+        $this->postJson("/api/work-orders/{$wo->id}/release", [
+            'idempotency_key' => 'partial-web-overissue', 'items' => [$first],
+        ])->assertUnprocessable();
+        $this->assertSame(2, MaterialIssue::where('work_order_id', $wo->id)->count());
+    }
+
+    public function test_issue_without_part_hint_still_validates_the_actual_stock_part(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->actingAsApi();
+        $first = $this->firstReleaseItem($wo);
+        $stock = $this->addStock($wo->part_id, 'WRONG-ACTUAL-PART', (float) $first['required'], $first['uom']);
+
+        $this->postJson("/api/work-orders/{$wo->id}/release", [
+            'idempotency_key' => 'wrong-actual-stock-part',
+            'items' => [['work_order_item_id' => $first['work_order_item_id'], 'scans' => [['tag' => $stock->tag, 'qty' => (float) $first['required']]]]],
+        ])->assertUnprocessable();
+
+        $this->assertSame(0, MaterialIssue::where('work_order_id', $wo->id)->count());
+        $this->assertSame(0, WorkOrderMaterialBooking::where('work_order_id', $wo->id)->count());
+        $this->assertEqualsWithDelta((float) $first['required'], $stock->fresh()->qty, 0.00000000001);
     }
 }

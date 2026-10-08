@@ -4,12 +4,16 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class WorkOrderConsumption extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = [
         'work_order_id', 'work_order_item_id', 'part_stock_id', 'part_id',
         'qty', 'uom',
+        'production_result_id', 'production_material_receipt_id', 'reversed_by',
     ];
 
     protected $casts = [

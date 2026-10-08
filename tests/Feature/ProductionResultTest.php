@@ -2,11 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Models\Machine;
+use App\Models\MaterialIssue;
+use App\Models\MaterialIssueItem;
 use App\Models\Part;
 use App\Models\PartStock;
+use App\Models\ProductionMaterialReceipt;
 use App\Models\User;
 use App\Models\WorkOrder;
 use App\Models\WorkOrderMaterialBooking;
+use App\Services\ProductionReceiptService;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfInterceptor;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -26,7 +31,7 @@ class ProductionResultTest extends TestCase
         $this->actingAs(User::where('email', 'admin@geumcheon.local')->firstOrFail());
     }
 
-    private function releasedWorkOrder(): WorkOrder
+    private function releasedWorkOrder(bool $receive = true): WorkOrder
     {
         $fg = Part::where('part_number', 'AAN30056405')->firstOrFail();
 
@@ -52,7 +57,30 @@ class ProductionResultTest extends TestCase
 
         $this->post(route('work-orders.release', $wo))->assertRedirect();
 
+        if ($receive) {
+            $this->receiveMaterials($wo);
+        }
+
         return $wo->fresh();
+    }
+
+    private function receiveMaterials(WorkOrder $wo): void
+    {
+        $issue = MaterialIssue::create(['issue_no' => 'MI-RESULT-'.uniqid(), 'work_order_id' => $wo->id, 'issue_date' => now(), 'status' => 'posted']);
+        foreach (WorkOrderMaterialBooking::where('work_order_id', $wo->id)->where('status', 'booked')->get() as $booking) {
+            $row = $wo->items()->findOrFail($booking->work_order_item_id);
+            $machineId = $wo->items()->where('parent_part_id', $row->parent_part_id)->first()->machine_id;
+            if ($machineId === null) {
+                $machineId = Machine::where('is_active', true)->value('id');
+                $wo->items()->where('parent_part_id', $row->parent_part_id)->update(['machine_id' => $machineId]);
+            }
+            $item = MaterialIssueItem::create([
+                'material_issue_id' => $issue->id, 'work_order_item_id' => $row->id,
+                'part_id' => $booking->part_id, 'part_stock_id' => $booking->part_stock_id,
+                'tag' => $booking->tag, 'qty' => $booking->qty, 'uom' => $booking->uom,
+            ]);
+            app(ProductionReceiptService::class)->confirm(null, $machineId, materialIssueItemId: $item->id);
+        }
     }
 
     private function stepIds(WorkOrder $wo): Collection
@@ -136,7 +164,7 @@ class ProductionResultTest extends TestCase
 
     public function test_release_books_stock_and_result_consumes_it(): void
     {
-        $wo = $this->releasedWorkOrder();
+        $wo = $this->releasedWorkOrder(false);
         $rmId = (int) Part::where('part_number', 'CBKG07256C')->value('id');
 
         // Setelah release: stok fisik utuh, hanya di-book, belum ada konsumsi.
@@ -144,7 +172,8 @@ class ProductionResultTest extends TestCase
         $this->assertGreaterThan(0.0, (float) WorkOrderMaterialBooking::where('work_order_id', $wo->id)->where('status', 'booked')->sum('qty'));
         $this->assertSame(0, $wo->consumptions()->count());
 
-        // Laporkan step pertama → booking RM dikonsumsi, stok fisik baru turun.
+        $this->receiveMaterials($wo);
+        $warehouseAfterReceipt = (float) PartStock::where('part_id', $rmId)->sum('qty');
         $first = $this->stepIds($wo)->first()['parent_part_id'];
 
         $this->post(route('production-results.store', $wo), [
@@ -153,6 +182,7 @@ class ProductionResultTest extends TestCase
         ])->assertSessionHasNoErrors();
 
         $this->assertLessThan(20.0, (float) PartStock::where('part_id', $rmId)->sum('qty'));
+        $this->assertEqualsWithDelta($warehouseAfterReceipt, (float) PartStock::where('part_id', $rmId)->sum('qty'), 0.001);
         $this->assertGreaterThan(0, $wo->consumptions()->count());
         $this->assertSame(
             0.0,
@@ -162,7 +192,7 @@ class ProductionResultTest extends TestCase
         $this->assertDatabaseHas('work_order_material_bookings', [
             'work_order_id' => $wo->id,
             'part_id' => $rmId,
-            'status' => 'consumed',
+            'status' => 'transferred',
         ]);
     }
 
@@ -181,8 +211,8 @@ class ProductionResultTest extends TestCase
             'qty_reject' => 1,
         ])->assertSessionHasNoErrors();
 
-        // 9 good + 1 NG sama-sama telah memakai 10 unit material yang dibooking.
-        $this->assertEqualsWithDelta($stockBefore - (10 * $unitNeed), (float) PartStock::where('part_id', $rmId)->sum('qty'), 0.001);
+        $this->assertEqualsWithDelta($stockBefore, (float) PartStock::where('part_id', $rmId)->sum('qty'), 0.001);
+        $this->assertEqualsWithDelta(10 * $unitNeed, (float) ProductionMaterialReceipt::where('work_order_id', $wo->id)->where('part_id', $rmId)->sum('qty_consumed'), 0.001);
         $this->assertSame(
             0.0,
             (float) WorkOrderMaterialBooking::where('work_order_id', $wo->id)

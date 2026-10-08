@@ -1,4 +1,9 @@
 {
+    "Pilih item bon material yang tepat.": "Pilih item bon material yang tepat.",
+    "Item bon material tidak valid.": "Item bon material tidak valid.",
+    "Item bon material sudah diterima.": "Item bon material sudah diterima.",
+    "Stok bon material tidak mencukupi atau tidak valid.": "Stok bon material tidak mencukupi atau tidak valid.",
+    "Booking bon material tidak mencukupi atau tidak valid.": "Booking bon material tidak mencukupi atau tidak valid.",
     "UOM created.": "Satuan dibuat.",
     "UOM updated.": "Satuan diperbarui.",
     "UOM deleted.": "Satuan dihapus.",
@@ -114,5 +119,12 @@
     "Your email address is not verified.": "Alamat email Anda belum diverifikasi.",
     "Payment Required": "Pembayaran diperlukan",
     "Tipe part tidak diizinkan untuk aksi ini.": "Tipe part tidak diizinkan untuk aksi ini.",
-    "Work Order hanya untuk part FG.": "Work Order hanya untuk part FG."
+    "Work Order hanya untuk part FG.": "Work Order hanya untuk part FG.",
+    "Stok WIP tidak mencukupi. Selesaikan step sebelumnya.": "Stok WIP tidak mencukupi. Selesaikan step sebelumnya.",
+    "Saldo material di mesin tidak mencukupi. Terima material untuk item WO ini terlebih dahulu.": "Saldo material di mesin tidak mencukupi. Terima material untuk item WO ini terlebih dahulu.",
+    "Hasil produksi lama perlu rekonsiliasi sebelum dibatalkan.": "Hasil produksi lama perlu rekonsiliasi sebelum dibatalkan.",
+    "Output hasil ini sudah digunakan atau dibooking. Batalkan proses berikutnya terlebih dahulu.": "Output hasil ini sudah digunakan atau dibooking. Batalkan proses berikutnya terlebih dahulu.",
+    "Saldo konsumsi tidak valid. Rekonsiliasi diperlukan.": "Saldo konsumsi tidak valid. Rekonsiliasi diperlukan.",
+    "Mesin tidak sesuai grup routing item WO.": "Mesin tidak sesuai grup routing item WO.",
+    "Qty hasil maksimal empat angka desimal.": "Qty hasil maksimal empat angka desimal."
 }

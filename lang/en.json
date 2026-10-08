@@ -1,4 +1,9 @@
 {
+    "Pilih item bon material yang tepat.": "Select the correct material issue item.",
+    "Item bon material tidak valid.": "The material issue item is invalid.",
+    "Item bon material sudah diterima.": "The material issue item has already been received.",
+    "Stok bon material tidak mencukupi atau tidak valid.": "The issued stock is insufficient or invalid.",
+    "Booking bon material tidak mencukupi atau tidak valid.": "The issued booking is insufficient or invalid.",
     "UOM created.": "Unit of measure created.",
     "UOM updated.": "Unit of measure updated.",
     "UOM deleted.": "Unit of measure deleted.",
@@ -114,5 +119,12 @@
     "Your email address is not verified.": "Your email address is not verified.",
     "Payment Required": "Payment Required",
     "Tipe part tidak diizinkan untuk aksi ini.": "This part type is not allowed for this action.",
-    "Work Order hanya untuk part FG.": "Work Orders are only for FG parts."
+    "Work Order hanya untuk part FG.": "Work Orders are only for FG parts.",
+    "Stok WIP tidak mencukupi. Selesaikan step sebelumnya.": "Insufficient WIP stock. Complete the previous step first.",
+    "Saldo material di mesin tidak mencukupi. Terima material untuk item WO ini terlebih dahulu.": "Insufficient material balance at this machine. Receive material for this work order item first.",
+    "Hasil produksi lama perlu rekonsiliasi sebelum dibatalkan.": "Legacy production results require reconciliation before reversal.",
+    "Output hasil ini sudah digunakan atau dibooking. Batalkan proses berikutnya terlebih dahulu.": "This result's output has been used or booked. Reverse the downstream process first.",
+    "Saldo konsumsi tidak valid. Rekonsiliasi diperlukan.": "Invalid consumption balance. Reconciliation is required.",
+    "Mesin tidak sesuai grup routing item WO.": "The machine is outside this work order item's routing group.",
+    "Qty hasil maksimal empat angka desimal.": "Result quantities may have at most four decimal places."
 }

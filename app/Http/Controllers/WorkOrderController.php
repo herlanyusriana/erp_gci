@@ -325,8 +325,12 @@ class WorkOrderController extends Controller
     {
         Gate::authorize('update', $workOrder);
 
-        $produced = $this->resultService->fgProduced($workOrder);
-        $this->woService->complete($workOrder, (int) auth()->id());
+        [$workOrder, $produced] = DB::transaction(function () use ($workOrder) {
+            $workOrder = WorkOrder::query()->lockForUpdate()->findOrFail($workOrder->id);
+            $produced = $this->resultService->fgProduced($workOrder);
+
+            return [$this->woService->complete($workOrder, (int) auth()->id()), $produced];
+        });
 
         if ($produced + 1e-9 < (float) $workOrder->qty) {
             return redirect()
@@ -358,6 +362,7 @@ class WorkOrderController extends Controller
         // WO soft-delete → FK cascade tidak jalan, jadi lepas booking manual
         // supaya stok tidak terkunci selamanya.
         DB::transaction(function () use ($workOrder) {
+            $workOrder = WorkOrder::query()->lockForUpdate()->findOrFail($workOrder->id);
             $this->receiveService->releaseBookings($workOrder->id, null, (int) auth()->id());
             $workOrder->delete();
         });

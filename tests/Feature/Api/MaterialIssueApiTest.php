@@ -1042,6 +1042,52 @@ class MaterialIssueApiTest extends TestCase
         Event::assertDispatchedTimes(MaterialIssuePosted::class, 1);
     }
 
+    public function test_release_partial_item_then_release_the_rest(): void
+    {
+        Event::fake();
+
+        $wo = $this->createWorkOrder();
+        $this->actingAsApi();
+        $items = $this->getJson("/api/work-orders/{$wo->id}/release-context")->assertOk()->json('data.items');
+        $this->assertGreaterThanOrEqual(2, count($items), 'Butuh minimal dua item WO untuk uji release per material.');
+
+        // Siapkan stok untuk dua item pertama.
+        $scansByItem = [];
+        foreach (array_slice($items, 0, 2) as $item) {
+            $main = collect($item['allowed_parts'])->firstWhere('kind', 'main');
+            $tag = 'PART-'.$item['work_order_item_id'];
+            PartStock::create([
+                'part_id' => $main['id'],
+                'tag' => $tag,
+                'qty' => $item['required'],
+                'qty_unit' => $item['uom'],
+                'received_at' => now(),
+            ]);
+            $scansByItem[] = [
+                'work_order_item_id' => $item['work_order_item_id'],
+                'scans' => [['tag' => $tag, 'qty' => (float) $item['required'], 'part_id' => (int) $main['id']]],
+            ];
+        }
+
+        // Release hanya material pertama.
+        $first = $this->postJson("/api/work-orders/{$wo->id}/release", [
+            'idempotency_key' => 'partial-1',
+            'items' => [$scansByItem[0]],
+        ])->assertOk()->json('data.issue_no');
+
+        $this->assertNotNull($first);
+        $this->assertDatabaseHas('material_issues', ['idempotency_key' => 'partial-1']);
+
+        // Material kedua belum di-issue, jadi masih bisa di-release dengan key baru.
+        $second = $this->postJson("/api/work-orders/{$wo->id}/release", [
+            'idempotency_key' => 'partial-2',
+            'items' => [$scansByItem[1]],
+        ])->assertOk()->json('data.issue_no');
+
+        $this->assertNotSame($first, $second, 'Release kedua harus dokumen issue baru, bukan retry.');
+        $this->assertSame(2, MaterialIssue::whereIn('idempotency_key', ['partial-1', 'partial-2'])->count());
+    }
+
     public function test_release_rejects_unrelated_tag(): void
     {
         $wo = $this->createWorkOrder();

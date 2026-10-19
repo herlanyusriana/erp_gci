@@ -792,6 +792,36 @@ class MaterialIssueApiTest extends TestCase
         $this->assertSame('PT Sumber Logam', $tag['supplier']);
     }
 
+    public function test_release_context_reports_the_rack_location_on_each_tag(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->actingAsApi();
+        $item = $this->firstReleaseItem($wo);
+        $substituteId = $this->substituteIds($item)[0];
+        $this->seedStockWithLocation($substituteId, 'LOC-TAG-A', 20, $item['uom'], 'Rack-3');
+
+        $tags = $this->materialFor($this->firstReleaseItem($wo), $substituteId)['tags'];
+        $tag = collect($tags)->firstWhere('tag', 'LOC-TAG-A');
+
+        $this->assertNotNull($tag);
+        $this->assertSame('Rack-3', $tag['location_code'], 'Saran tag harus membawa rak asal barang.');
+    }
+
+    public function test_release_context_sends_null_location_for_stock_without_a_receive(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->actingAsApi();
+        $item = $this->firstReleaseItem($wo);
+        $substituteId = $this->substituteIds($item)[0];
+        $this->addStock($substituteId, 'NO-LOC-TAG', 20, $item['uom']);
+
+        $tag = collect($this->materialFor($this->firstReleaseItem($wo), $substituteId)['tags'])
+            ->firstWhere('tag', 'NO-LOC-TAG');
+
+        $this->assertNotNull($tag);
+        $this->assertNull($tag['location_code']);
+    }
+
     public function test_release_context_orders_material_tags_by_invoice_date_as_tiebreaker(): void
     {
         $wo = $this->createWorkOrder();
@@ -806,6 +836,59 @@ class MaterialIssueApiTest extends TestCase
         $ordered = $tags->filter(fn ($tag) => in_array($tag, ['LATE-INVOICE', 'EARLY-INVOICE'], true))->values()->all();
 
         $this->assertSame(['EARLY-INVOICE', 'LATE-INVOICE'], $ordered);
+    }
+
+    public function test_release_context_exposes_exact_fifo_tie_keys_for_each_candidate(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->actingAsApi();
+        $item = $this->releaseItemWithSubstitutes($wo);
+        [$firstPart, $secondPart] = $this->substituteIds($item);
+        $receivedAt = Carbon::parse('2026-03-25 08:00:00', 'UTC');
+        $dated = $this->addStockWithReceive($firstPart, 'FIFO-DATED', 10, $item['uom'], 'INV-FIFO-1', null, '2026-03-10', $receivedAt);
+        $undated = $this->addStockWithReceive($secondPart, 'FIFO-UNDATED', 10, $item['uom'], 'INV-FIFO-2', null, null, $receivedAt);
+        $withoutReceive = $this->addStock($secondPart, 'FIFO-NO-RECEIVE', 10, $item['uom']);
+
+        $context = collect($this->getJson("/api/work-orders/{$wo->id}/release-context")
+            ->assertOk()->json('data.items'))->firstWhere('work_order_item_id', $item['work_order_item_id']);
+
+        $materialTags = collect($context['materials'])->flatMap(fn (array $material) => $material['tags'])->keyBy('tag');
+        $recommendedTags = collect($context['recommended_tags'])->keyBy('tag');
+        foreach ([$materialTags, $recommendedTags] as $tags) {
+            foreach ([[$dated, '2026-03-10'], [$undated, null], [$withoutReceive, null]] as [$stock, $invoiceDate]) {
+                $this->assertArrayHasKey($stock->tag, $tags->all());
+                $this->assertArrayHasKey('part_stock_id', $tags[$stock->tag]);
+                $this->assertArrayHasKey('invoice_date', $tags[$stock->tag]);
+                $this->assertSame($stock->id, $tags[$stock->tag]['part_stock_id']);
+                $this->assertSame($invoiceDate, $tags[$stock->tag]['invoice_date']);
+            }
+        }
+    }
+
+    public function test_release_context_preserves_fifo_order_with_all_tie_keys(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->actingAsApi();
+        $item = $this->firstReleaseItem($wo);
+        $partId = $this->substituteIds($item)[0];
+        $receivedAt = Carbon::parse('2026-03-25 08:00:00', 'UTC');
+        $lateInvoice = $this->addStockWithReceive($partId, 'A-LATE-INVOICE', 10, $item['uom'], 'INV-FIFO-LATE', null, '2026-03-20', $receivedAt);
+        $firstId = $this->addStockWithReceive($partId, 'Z-FIRST-ID', 10, $item['uom'], 'INV-FIFO-FIRST', null, '2026-03-10', $receivedAt);
+        $secondId = $this->addStockWithReceive($partId, 'B-SECOND-ID', 10, $item['uom'], 'INV-FIFO-SECOND', null, '2026-03-10', $receivedAt);
+        $noInvoice = $this->addStockWithReceive($partId, 'C-NO-INVOICE', 10, $item['uom'], 'INV-FIFO-NULL', null, null, $receivedAt);
+        $oldReceipt = $this->addStockWithReceive($partId, 'Y-OLD-RECEIPT', 10, $item['uom'], 'INV-FIFO-OLD', null, '2026-03-30', $receivedAt->copy()->subDay());
+        $noReceiptDate = $this->addStockWithReceive($partId, 'D-NO-RECEIPT-DATE', 10, $item['uom'], 'INV-FIFO-NODATE', null, '2026-03-01', $receivedAt);
+        $noReceiptDate->update(['received_at' => null]);
+        $orderedStocks = [$oldReceipt, $firstId, $secondId, $lateInvoice, $noInvoice, $noReceiptDate];
+
+        $context = $this->firstReleaseItem($wo);
+
+        foreach ([$this->materialFor($context, $partId)['tags'], $context['recommended_tags']] as $tags) {
+            $tags = collect($tags)->whereIn('tag', array_map(fn (PartStock $stock) => $stock->tag, $orderedStocks))->values();
+            $this->assertSame(['Y-OLD-RECEIPT', 'Z-FIRST-ID', 'B-SECOND-ID', 'A-LATE-INVOICE', 'C-NO-INVOICE', 'D-NO-RECEIPT-DATE'], $tags->pluck('tag')->all());
+            $this->assertSame(array_map(fn (PartStock $stock) => $stock->id, $orderedStocks), $tags->pluck('part_stock_id')->all());
+            $this->assertSame(['2026-03-30', '2026-03-10', '2026-03-10', '2026-03-20', null, '2026-03-01'], $tags->pluck('invoice_date')->all());
+        }
     }
 
     public function test_release_context_keeps_material_tags_without_invoice(): void

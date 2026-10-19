@@ -41,7 +41,7 @@ class PartStockTagService
             ->whereIn('part_id', $partIds)
             ->where('qty', '>', 0)
             ->with([
-                'receive:id,invoice_no,arrival_item_id',
+                'receive:id,invoice_no,arrival_item_id,location_code',
                 'receive.arrivalItem:id,arrival_id',
                 'receive.arrivalItem.arrival:id,supplier_id,invoice_date',
                 'receive.arrivalItem.arrival.supplier:id,supplier_name',
@@ -76,6 +76,7 @@ class PartStockTagService
             }
 
             $result[$partId]['tags'][] = [
+                'part_stock_id' => (int) $stock->id,
                 'tag' => $stock->tag,
                 'part_id' => $partId,
                 'part_number' => $partNumbers[$partId] ?? null,
@@ -85,7 +86,9 @@ class PartStockTagService
                 'uom' => UomCatalog::normalize((string) $stock->qty_unit),
                 'received_at' => $stock->received_at?->toIso8601String(),
                 'invoice' => $stock->receive?->invoice_no,
+                'invoice_date' => $this->invoiceDate($stock)?->toDateString(),
                 'supplier' => $stock->receive?->arrivalItem?->arrival?->supplier?->supplier_name,
+                'location_code' => $stock->receive?->location_code,
             ];
         }
 

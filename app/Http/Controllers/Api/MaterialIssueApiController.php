@@ -64,6 +64,24 @@ class MaterialIssueApiController extends Controller
             ->selectRaw('schedule.planned_qty AS schedule_planned_qty')
             ->selectRaw('schedule.plan_date AS schedule_plan_date')
             ->selectRaw('COALESCE(issued.issued_qty, 0) AS issued_total')
+            // Kelengkapan material dihitung per item, bukan dari planned - issued
+            // yang mencampur satuan FG (pcs) dengan satuan material (KGM/SHEET).
+            ->selectRaw('NOT EXISTS (
+                SELECT 1 FROM work_order_items woi
+                WHERE woi.work_order_id = work_orders.id
+                  AND woi.child_part_id IS NOT NULL
+                  AND NOT EXISTS (
+                      SELECT 1 FROM work_order_items sib
+                      WHERE sib.work_order_id = woi.work_order_id
+                        AND sib.parent_part_id = woi.child_part_id
+                        AND UPPER(COALESCE(sib.source, \'\')) <> \'SUBCON\'
+                  )
+                  AND woi.qty_required > COALESCE((
+                      SELECT SUM(mii.qty) FROM material_issue_items mii
+                      JOIN material_issues mi ON mi.id = mii.material_issue_id
+                      WHERE mi.status = \'posted\' AND mii.work_order_item_id = woi.id
+                  ), 0) + 1e-9
+            ) AS material_complete')
             ->paginate(min(max((int) $request->input('per_page', 200), 1), 500));
 
         return response()->json([
@@ -82,6 +100,7 @@ class MaterialIssueApiController extends Controller
                     'planned_qty' => $planned,
                     'issued_qty' => $issued,
                     'remaining_qty' => round(max(0.0, $planned - $issued), 4),
+                    'material_complete' => (bool) $wo->material_complete,
                     'part' => $wo->part ? [
                         'id' => $wo->part->id,
                         'part_number' => $wo->part->part_number,

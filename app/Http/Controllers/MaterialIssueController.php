@@ -147,6 +147,7 @@ class MaterialIssueController extends Controller
             'workOrder.part',
             'issuer:id,name',
             'items.part:id,part_number,part_name',
+            'items.workOrderItem:id,child_part_name,uom_rm,qty_required',
         ]);
 
         return view('material-issues.print', [

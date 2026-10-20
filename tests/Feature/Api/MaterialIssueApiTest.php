@@ -1171,6 +1171,49 @@ class MaterialIssueApiTest extends TestCase
         $this->assertSame(2, MaterialIssue::whereIn('idempotency_key', ['partial-1', 'partial-2'])->count());
     }
 
+    public function test_work_orders_list_reports_material_complete_when_every_item_is_issued(): void
+    {
+        $this->actingAsApi();
+        $wo = $this->createWorkOrder();
+        // Daftar WO hanya memuat WO yang punya jadwal harian.
+        $this->schedulePlanRow($wo, $this->plantDate(), ['d' => 10]);
+        $scans = $this->seedStockAndBuildScans($wo);
+
+        $before = collect($this->getJson('/api/work-orders')->assertOk()->json('data'))
+            ->firstWhere('wo_no', $wo->wo_no);
+        $this->assertFalse((bool) $before['material_complete'], 'Sebelum issue, material belum lengkap.');
+
+        $this->postJson("/api/work-orders/{$wo->id}/release", [
+            'idempotency_key' => 'complete-flag-1',
+            'items' => $scans,
+        ])->assertOk();
+
+        $after = collect($this->getJson('/api/work-orders')->assertOk()->json('data'))
+            ->firstWhere('wo_no', $wo->wo_no);
+        $this->assertTrue((bool) $after['material_complete'], 'Setelah semua item di-issue, material lengkap.');
+    }
+
+    public function test_release_is_rejected_when_every_item_is_already_issued(): void
+    {
+        $this->actingAsApi();
+        $wo = $this->createWorkOrder();
+        $scans = $this->seedStockAndBuildScans($wo);
+
+        $this->postJson("/api/work-orders/{$wo->id}/release", [
+            'idempotency_key' => 'already-issued-1',
+            'items' => $scans,
+        ])->assertOk();
+
+        $second = $this->postJson("/api/work-orders/{$wo->id}/release", [
+            'idempotency_key' => 'already-issued-2',
+            'items' => $scans,
+        ]);
+
+        $second->assertStatus(422);
+        $this->assertStringContainsString('sudah di-issue', (string) $second->json('message'));
+        $this->assertSame(1, MaterialIssue::where('work_order_id', $wo->id)->count());
+    }
+
     public function test_release_rejects_unrelated_tag(): void
     {
         $wo = $this->createWorkOrder();
@@ -1211,7 +1254,7 @@ class MaterialIssueApiTest extends TestCase
         $this->assertDatabaseMissing('material_issues', ['idempotency_key' => 'test-rollback-event-1']);
     }
 
-    public function test_release_rejects_over_scan(): void
+    public function test_release_accepts_a_full_package_over_the_requirement(): void
     {
         $wo = $this->createWorkOrder();
         $this->actingAsApi();
@@ -1219,13 +1262,37 @@ class MaterialIssueApiTest extends TestCase
 
         $first = $items[0];
         $main = collect($first['allowed_parts'])->firstWhere('kind', 'main');
-        PartStock::create(['part_id' => $main['id'], 'tag' => 'BIG', 'qty' => 999, 'qty_unit' => $first['uom'], 'received_at' => now()]);
+        $required = (float) $first['required'];
+        PartStock::create(['part_id' => $main['id'], 'tag' => 'BIG', 'qty' => $required + 1, 'qty_unit' => $first['uom'], 'received_at' => now()]);
+
+        $this->postJson("/api/work-orders/{$wo->id}/release", [
+            'idempotency_key' => 'test-overscan-ok',
+            'items' => [[
+                'work_order_item_id' => $first['work_order_item_id'],
+                'scans' => [['tag' => 'BIG', 'qty' => $required + 1, 'part_id' => (int) $main['id']]],
+            ]],
+        ])->assertOk();
+
+        $this->assertSame('in_progress', $wo->fresh()->status);
+        $this->assertDatabaseHas('material_issue_items', ['tag' => 'BIG', 'qty' => $required + 1]);
+    }
+
+    public function test_release_rejects_a_scan_beyond_twice_the_requirement(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->actingAsApi();
+        $items = $this->getJson("/api/work-orders/{$wo->id}/release-context")->json('data.items');
+
+        $first = $items[0];
+        $main = collect($first['allowed_parts'])->firstWhere('kind', 'main');
+        $required = (float) $first['required'];
+        PartStock::create(['part_id' => $main['id'], 'tag' => 'HUGE', 'qty' => 999, 'qty_unit' => $first['uom'], 'received_at' => now()]);
 
         $this->postJson("/api/work-orders/{$wo->id}/release", [
             'idempotency_key' => 'test-overscan-1',
             'items' => [[
                 'work_order_item_id' => $first['work_order_item_id'],
-                'scans' => [['tag' => 'BIG', 'qty' => (float) $first['required'] + 1, 'part_id' => (int) $main['id']]],
+                'scans' => [['tag' => 'HUGE', 'qty' => 999, 'part_id' => (int) $main['id']]],
             ]],
         ])->assertStatus(422);
 

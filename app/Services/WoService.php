@@ -548,6 +548,26 @@ class WoService
                 ->where('work_order_id', $workOrder->id)->where('status', 'posted'))
                 ->selectRaw('work_order_item_id, SUM(qty) AS issued')->groupBy('work_order_item_id')->pluck('issued', 'work_order_item_id');
 
+            // Semua item leaf sudah terpenuhi: hentikan di level WO supaya APK
+            // bisa memberi pesan jelas, bukan gagal per item tanpa konteks.
+            $leafItems = $items->reject(fn ($it) => $it->child_part_id !== null && isset($postedParentIds[$it->child_part_id]));
+            $allCovered = $leafItems->isNotEmpty() && $leafItems->every(
+                fn ($it) => (float) ($issuedByItem[$it->id] ?? 0) + 1e-9 >= (float) $it->qty_required,
+            );
+
+            if ($allCovered) {
+                $issueNumbers = MaterialIssue::query()
+                    ->where('work_order_id', $workOrder->id)
+                    ->where('status', 'posted')
+                    ->orderBy('id')
+                    ->pluck('issue_no')
+                    ->implode(', ');
+
+                throw ValidationException::withMessages([
+                    'items' => __('Semua material WO ini sudah di-issue (:issues).', ['issues' => $issueNumbers]),
+                ]);
+            }
+
             // Normalisasi + validasi scan per item.
             $scansByItem = [];
             foreach ($itemScans as $row) {
@@ -582,12 +602,24 @@ class WoService
                     $scans[] = ['tag' => $tag, 'part_id' => $partId, 'qty' => $qty];
                 }
 
-                $required = max(0, (float) $item->qty_required - (float) ($issuedByItem[$itemId] ?? 0));
-                if ($total > $required + 1e-9) {
+                $qtyRequired = (float) $item->qty_required;
+                $alreadyIssued = (float) ($issuedByItem[$itemId] ?? 0);
+                $required = max(0, $qtyRequired - $alreadyIssued);
+
+                // Satu kemasan fisik tidak bisa dipisah: tag boleh keluar penuh
+                // walau melebihi sisa. Batas kumulatif 2x kebutuhan menahan
+                // salah scan tanpa mengubah aturan booking.
+                if ($alreadyIssued > 1e-9 && $required <= 1e-9) {
                     throw ValidationException::withMessages([
-                        "items.$itemId" => __('Total scan (:total) melebihi kebutuhan (:required).', [
+                        "items.$itemId" => __('Kebutuhan item ini sudah terpenuhi.'),
+                    ]);
+                }
+
+                if ($total > $required + $qtyRequired + 1e-9) {
+                    throw ValidationException::withMessages([
+                        "items.$itemId" => __('Total scan (:total) melebihi batas (:max).', [
                             'total' => round($total, 4),
-                            'required' => round($required, 4),
+                            'max' => round($required + $qtyRequired, 4),
                         ]),
                     ]);
                 }

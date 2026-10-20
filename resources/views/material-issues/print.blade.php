@@ -49,6 +49,7 @@
         <div><div class="k">Part FG</div><div class="v">{{ $issue->workOrder?->part?->part_number }} · {{ $issue->workOrder?->part?->part_name }}</div></div>
         <div><div class="k">Dikeluarkan oleh</div><div class="v">{{ $issue->issuer?->name ?? '-' }}</div></div>
         <div><div class="k">Diterima oleh</div><div class="v">{{ $issue->received_by ?? '-' }}</div></div>
+        <div><div class="k">Lokasi rak</div><div class="v">{{ $issue->location_code ?? '-' }}</div></div>
     </div>
 
     <table>
@@ -60,6 +61,8 @@
                 <th>Invoice</th>
                 <th class="num">Qty</th>
                 <th>Satuan</th>
+                <th class="num">Kebutuhan</th>
+                <th class="num">Kelebihan</th>
             </tr>
         </thead>
         <tbody>
@@ -71,6 +74,12 @@
                     <td>{{ $item->invoice ?? '-' }}</td>
                     <td class="num">{{ rtrim(rtrim(number_format((float) $item->qty, 4, '.', ''), '0'), '.') }}</td>
                     <td>{{ $item->uom ?? '-' }}</td>
+                    @php
+                        $needed = (float) ($item->workOrderItem?->qty_required ?? 0);
+                        $over = max(0, (float) $item->qty - $needed);
+                    @endphp
+                    <td class="num">{{ $needed > 0 ? rtrim(rtrim(number_format($needed, 4, '.', ''), '0'), '.') : '-' }}</td>
+                    <td class="num">{{ $over > 0 ? rtrim(rtrim(number_format($over, 4, '.', ''), '0'), '.') : '-' }}</td>
                 </tr>
             @endforeach
         </tbody>
@@ -78,6 +87,8 @@
             <tr>
                 <td colspan="4" class="num">TOTAL</td>
                 <td class="num">{{ rtrim(rtrim(number_format((float) $issue->items->sum('qty'), 4, '.', ''), '0'), '.') }}</td>
+                <td></td>
+                <td></td>
                 <td></td>
             </tr>
         </tfoot>

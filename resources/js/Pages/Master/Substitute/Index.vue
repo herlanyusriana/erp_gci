@@ -152,6 +152,7 @@ function remove(s: PartSubstitute) {
                             <th scope="col" class="px-4 py-3">{{ t('master.materialPart') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('master.substitutePart') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('master.size') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.uom') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('master.packingType') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('master.supplier') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('master.groupSource') }}</th>
@@ -169,6 +170,7 @@ function remove(s: PartSubstitute) {
                                 <div class="text-xs text-ink-secondary">{{ s.substitute_part?.part_name }}</div>
                             </td>
                             <td class="px-4 py-3 text-ink-primary">{{ s.size || '—' }}</td>
+                            <td class="px-4 py-3 text-ink-primary">{{ s.substitute_part?.uom?.code ?? '—' }}</td>
                             <td class="px-4 py-3 text-ink-primary">{{ s.packing_type ?? '—' }}</td>
                             <td class="px-4 py-3 text-ink-primary">{{ s.supplier?.supplier_name ?? '—' }}</td>
                             <td class="px-4 py-3">
@@ -183,7 +185,7 @@ function remove(s: PartSubstitute) {
                             </td>
                         </tr>
                         <tr v-if="substitutes.data.length === 0">
-                            <td colspan="7" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.substituteEmpty') }}</td>
+                            <td colspan="8" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.substituteEmpty') }}</td>
                         </tr>
                     </tbody>
                 </table>

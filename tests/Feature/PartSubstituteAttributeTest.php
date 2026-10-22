@@ -345,7 +345,8 @@ class PartSubstituteAttributeTest extends TestCase
                 ->where("packingTypes.{$substitutePart->id}", ['PALLET'])
                 ->where('substitutes.data.0.id', $relation->id)
                 ->where('substitutes.data.0.packing_type', 'PALLET')
-                ->where('substitutes.data.0.substitute_part.uom.code', $substitutePart->uom?->code));
+                ->where('substitutes.data.0.substitute_part.uom.code', $substitutePart->uom?->code)
+                ->where('substitutes.data.0.size', null));
     }
 
     public function test_store_packing_type_adds_an_option_without_touching_arrivals(): void

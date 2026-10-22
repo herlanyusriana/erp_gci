@@ -30,7 +30,7 @@ const props = defineProps<{
     bom: Bom | null;
     items?: BomItem[];
     fgParts: Array<Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'>>;
-    materials: Array<Pick<Part, 'id' | 'part_number' | 'part_name'>>;
+    materials: Array<Pick<Part, 'id' | 'part_number' | 'part_name'> & { uom?: { code?: string | null } | null }>;
     processes: Array<Pick<Process, 'id' | 'process_code' | 'process_name'>>;
     machines: Array<Pick<Machine, 'id' | 'machine_code' | 'machine_name'>>;
     uoms: string[];
@@ -61,11 +61,11 @@ const seedItems = (): ItemRow[] => {
             sequence: i.sequence ?? '',
             process_id: i.process?.id ?? '',
             machine_id: i.machine?.id ?? '',
-            parent_part_id: i.parent_part?.id ?? '',
+            parent_part_id: i.parent_part_id ?? i.parent_part?.id ?? '',
             parent_part_name: i.parent_part_name ?? '',
             parent_qty: i.parent_qty ?? '',
             parent_uom: i.parent_uom ?? '',
-            child_part_id: i.child_part?.id ?? '',
+            child_part_id: i.child_part_id ?? i.child_part?.id ?? '',
             child_part_name: i.child_part_name ?? '',
             size: i.size ?? '',
             child_qty: i.child_qty ?? '',
@@ -99,12 +99,14 @@ function onChildChange(r: ItemRow) {
     const part = props.materials.find((p) => p.id === Number(r.child_part_id));
     if (!part) return;
     if (r.child_part_name === '') r.child_part_name = part.part_name;
+    if (r.uom_rm === '') r.uom_rm = part.uom?.code ?? '';
 }
 
 function onParentChange(r: ItemRow) {
     const part = props.materials.find((p) => p.id === Number(r.parent_part_id));
     if (!part) return;
     if (r.parent_part_name === '') r.parent_part_name = part.part_name;
+    if (r.parent_uom === '') r.parent_uom = part.uom?.code ?? '';
 }
 
 function submit() {

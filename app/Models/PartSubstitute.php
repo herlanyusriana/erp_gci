@@ -4,12 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\DB;
 
 class PartSubstitute extends Model
 {
     protected $fillable = [
         'part_id', 'substitute_part_id', 'supplier_id',
-        'material_group', 'source', 'is_active', 'created_by', 'updated_by',
+        'material_group', 'size', 'packing_type', 'source', 'is_active', 'created_by', 'updated_by',
     ];
 
     protected $casts = [
@@ -29,6 +30,41 @@ class PartSubstitute extends Model
     public function supplier(): BelongsTo
     {
         return $this->belongsTo(Supplier::class);
+    }
+
+    /**
+     * UOM mengikuti master part pengganti, bukan disimpan ulang di relasi.
+     */
+    public function substituteUomCode(): ?string
+    {
+        return $this->substitutePart?->uom?->code;
+    }
+
+    /**
+     * Isi packing_type hanya bila part pengganti punya tepat satu kode historis.
+     * Nilai ganda atau kosong sengaja dibiarkan null agar pengelola yang memilih;
+     * sistem tidak menebak.
+     *
+     * @return int jumlah relasi yang terisi
+     */
+    public static function backfillPackingType(): int
+    {
+        $candidates = DB::table('part_packing_types')
+            ->select('part_id', DB::raw('COUNT(*) AS total'), DB::raw('MIN(code) AS code'))
+            ->groupBy('part_id')
+            ->havingRaw('COUNT(*) = 1')
+            ->get();
+
+        $filled = 0;
+
+        foreach ($candidates as $candidate) {
+            $filled += DB::table('part_substitutes')
+                ->where('substitute_part_id', $candidate->part_id)
+                ->whereNull('packing_type')
+                ->update(['packing_type' => $candidate->code]);
+        }
+
+        return $filled;
     }
 
     /**

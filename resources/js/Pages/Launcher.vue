@@ -9,7 +9,7 @@ const { t } = useI18n();
 const modules = computed(() => [
     { href: '/master-data', title: t('account.masterData'), subtitle: t('account.masterSubtitle') },
     { href: '/incoming-data', title: t('account.incoming'), subtitle: t('account.incomingSubtitle') },
-    { href: '#', title: t('account.inventory'), subtitle: t('account.notAvailable') },
+    { href: '/stocks', title: t('account.inventory'), subtitle: t('account.inventorySubtitle') },
     { href: '/production-data', title: t('account.production'), subtitle: t('account.productionSubtitle') },
     { href: '#', title: t('account.quality'), subtitle: t('account.notAvailable') },
     { href: '/outgoing', title: t('account.outgoing'), subtitle: t('account.outgoingSubtitle') },

@@ -196,4 +196,95 @@ class BomController extends Controller
             'bom' => $bom,
         ]);
     }
+
+    public function edit(Bom $bom): Response
+    {
+        Gate::authorize('update', $bom);
+
+        $bom->load([
+            'part:id,part_number,part_name',
+            'items' => fn ($q) => $q->with(['process:id,process_code,process_name', 'machine:id,machine_code,machine_name', 'parentPart:id,part_number,part_name', 'childPart:id,part_number,part_name'])->orderBy('sequence'),
+        ]);
+
+        return Inertia::render('Master/Bom/Form', [
+            'bom' => $bom,
+            'items' => $bom->items,
+            'fgParts' => Part::query()
+                ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) = ?', ['fg']))
+                ->whereKey($bom->part_id)
+                ->orderBy('part_number')
+                ->get(['id', 'part_number', 'part_name', 'model', 'part_type_id']),
+            'materials' => Part::query()
+                ->with('uom:id,code')
+                ->orderBy('part_number')
+                ->get(['id', 'part_number', 'part_name', 'part_type_id', 'uom_id']),
+            'processes' => Process::query()->orderBy('process_name')->get(['id', 'process_code', 'process_name']),
+            'machines' => Machine::query()
+                ->where('is_active', true)
+                ->orderBy('machine_name')
+                ->get(['id', 'machine_code', 'machine_name']),
+            'uoms' => UomCatalog::codes(),
+        ]);
+    }
+
+    public function update(Request $request, Bom $bom): RedirectResponse
+    {
+        Gate::authorize('update', $bom);
+
+        $data = $request->validate($this->updateRules());
+        $partId = (int) $data['part_id'];
+
+        $isFg = Part::query()
+            ->whereKey($partId)
+            ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) = ?', ['fg']))
+            ->exists();
+        if (! $isFg) {
+            throw ValidationException::withMessages(['part_id' => __('BOM hanya untuk part FG.')]);
+        }
+
+        DB::transaction(function () use ($request, $bom, $data, $partId): void {
+            $ownerBomId = Bom::withTrashed()->where('part_id', $partId)->value('id');
+            if ($ownerBomId !== null && (int) $ownerBomId !== $bom->id) {
+                throw ValidationException::withMessages([
+                    'part_id' => __('Part FG ini sudah memiliki BOM lain.'),
+                ]);
+            }
+
+            $actorId = $request->user()?->id;
+            $bom->update([
+                'part_id' => $partId,
+                'version' => $data['version'] ?? $bom->version,
+                'updated_by' => $actorId,
+            ]);
+
+            $bom->items()->delete();
+
+            foreach ($data['items'] as $item) {
+                $bom->items()->create($this->normalizeItem($item) + [
+                    'is_active' => true,
+                    'created_by' => $actorId,
+                    'updated_by' => $actorId,
+                ]);
+            }
+        });
+
+        $bom->refresh();
+
+        return redirect()->route('boms.show', $bom)->with('success', __('BOM diperbarui.'));
+    }
+
+    /**
+     * Aturan update sama dengan create. Keunikan part_id tidak divalidasi di sini
+     * karena BOM milik part itu sendiri harus tetap boleh disimpan; bentrok
+     * dengan BOM lain ditolak di dalam transaksi.
+     *
+     * @return array<string, mixed>
+     */
+    private function updateRules(): array
+    {
+        $rules = $this->rules();
+        $rules['part_id'] = ['required', 'integer', 'exists:parts,id'];
+
+        return $rules;
+    }
 }

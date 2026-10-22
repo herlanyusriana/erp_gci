@@ -323,4 +323,114 @@ class BomMaintenanceTest extends TestCase
 
         $this->assertTrue(Bom::query()->where('part_id', $fg->id)->exists());
     }
+
+    private function existingBom(): Bom
+    {
+        $fg = $this->makeFgWithoutBom();
+
+        $this->post(route('boms.store'), $this->payload($fg, [$this->item()]))
+            ->assertSessionHasNoErrors();
+
+        return Bom::query()->where('part_id', $fg->id)->firstOrFail();
+    }
+
+    public function test_edit_page_shows_bom_items_ordered_by_sequence(): void
+    {
+        $bom = $this->existingBom();
+
+        $this->get(route('boms.edit', $bom))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Master/Bom/Form')
+                ->where('bom.id', $bom->id)
+                ->has('items', 1)
+                ->where('items.0.sequence', 10));
+    }
+
+    public function test_update_replaces_items_on_the_same_bom_record(): void
+    {
+        $bom = $this->existingBom();
+        $bomNo = $bom->bom_no;
+
+        $this->put(route('boms.update', $bom), $this->payload($bom->part, [
+            $this->item(['sequence' => 30, 'child_qty' => 9]),
+            $this->item(['sequence' => 40, 'child_qty' => 4]),
+        ]))
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('boms.show', $bom));
+
+        $bom->refresh();
+
+        $this->assertSame(1, Bom::withTrashed()->where('part_id', $bom->part_id)->count(), 'Edit tidak boleh membuat BOM baru.');
+        $this->assertSame($bomNo, $bom->bom_no, 'Nomor BOM tidak boleh berubah saat edit.');
+        $this->assertSame(2, BomItem::where('bom_id', $bom->id)->count());
+        $this->assertSame(
+            [30, 40],
+            BomItem::where('bom_id', $bom->id)->orderBy('sequence')->pluck('sequence')->map(fn ($v) => (int) $v)->all(),
+        );
+    }
+
+    public function test_update_removes_items_that_are_no_longer_sent(): void
+    {
+        $bom = $this->existingBom();
+        $this->assertSame(1, BomItem::where('bom_id', $bom->id)->count());
+
+        $this->put(route('boms.update', $bom), $this->payload($bom->part, [
+            $this->item(['sequence' => 10]),
+            $this->item(['sequence' => 20]),
+        ]))->assertSessionHasNoErrors();
+
+        $kept = BomItem::where('bom_id', $bom->id)->orderBy('sequence')->firstOrFail();
+
+        $this->put(route('boms.update', $bom), $this->payload($bom->part, [
+            $this->item(['sequence' => 20]),
+        ]))->assertSessionHasNoErrors();
+
+        $this->assertSame(1, BomItem::where('bom_id', $bom->id)->count());
+        $this->assertSame(20, (int) BomItem::where('bom_id', $bom->id)->value('sequence'));
+        $this->assertNull(BomItem::find($kept->id), 'Item yang dihapus tidak boleh tertinggal.');
+    }
+
+    public function test_update_rejects_part_that_is_not_fg(): void
+    {
+        $bom = $this->existingBom();
+        $material = $this->makePart('MATERIAL');
+
+        $this->put(route('boms.update', $bom), $this->payload($material, [$this->item()]))
+            ->assertSessionHasErrors('part_id');
+    }
+
+    public function test_update_rejects_part_that_already_owns_another_bom(): void
+    {
+        $bom = $this->existingBom();
+        $other = $this->existingBom();
+
+        $this->put(route('boms.update', $bom), $this->payload($other->part, [$this->item()]))
+            ->assertSessionHasErrors('part_id');
+    }
+
+    public function test_update_writes_nothing_when_an_item_is_invalid(): void
+    {
+        $bom = $this->existingBom();
+        $originalQty = (float) BomItem::where('bom_id', $bom->id)->value('child_qty');
+
+        $invalid = $this->item(['sequence' => 99]);
+        unset($invalid['child_part_id']);
+
+        $this->put(route('boms.update', $bom), $this->payload($bom->part, [$invalid]))
+            ->assertSessionHasErrors('items.0.child_part_id');
+
+        $this->assertSame(1, BomItem::where('bom_id', $bom->id)->count());
+        $this->assertSame($originalQty, (float) BomItem::where('bom_id', $bom->id)->value('child_qty'));
+    }
+
+    public function test_edit_and_update_are_forbidden_without_bom_update_permission(): void
+    {
+        $bom = $this->existingBom();
+
+        $this->actingAs(User::where('email', 'warehouse@geumcheon.local')->firstOrFail());
+
+        $this->get(route('boms.edit', $bom))->assertForbidden();
+        $this->put(route('boms.update', $bom), $this->payload($bom->part, [$this->item()]))->assertForbidden();
+    }
 }

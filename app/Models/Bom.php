@@ -28,4 +28,13 @@ class Bom extends Model
     {
         return $this->hasMany(BomItem::class)->orderBy('sequence');
     }
+
+    /**
+     * Nomor BOM berurutan mulai dari 1. withTrashed(): nomor baris terhapus tidak
+     * dipakai ulang.
+     */
+    public static function generateBomNo(): int
+    {
+        return (int) static::withTrashed()->max('bom_no') + 1;
+    }
 }

@@ -87,7 +87,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('substitutes/packing-types', [PartSubstituteController::class, 'storePackingType'])->name('substitutes.packing-types.store');
     Route::resource('cycle-times', MachineCycleTimeController::class)->except(['show']);
     Route::resource('prices', PartPriceController::class)->except(['show']);
-    Route::resource('boms', BomController::class)->only(['index', 'show']);
+    Route::resource('boms', BomController::class)->only(['index', 'create', 'store', 'show']);
 
     // Incoming module
     Route::resource('purchase-orders', PurchaseOrderController::class)->parameters(['purchase-orders' => 'purchaseOrder']);

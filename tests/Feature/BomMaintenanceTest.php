@@ -433,4 +433,31 @@ class BomMaintenanceTest extends TestCase
         $this->get(route('boms.edit', $bom))->assertForbidden();
         $this->put(route('boms.update', $bom), $this->payload($bom->part, [$this->item()]))->assertForbidden();
     }
+
+    public function test_form_page_receives_the_options_the_ui_needs(): void
+    {
+        $bom = $this->existingBom();
+
+        $this->get(route('boms.edit', $bom))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Master/Bom/Form')
+                ->has('items', 1)
+                ->has('materials')
+                ->has('processes')
+                ->has('machines')
+                ->has('uoms')
+                ->where('bom.part.id', $bom->part_id)
+                ->where('fgParts.0.id', $bom->part_id));
+    }
+
+    public function test_create_form_offers_no_bom_items_to_seed(): void
+    {
+        $this->get(route('boms.create'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Master/Bom/Form')
+                ->where('bom', null)
+                ->missing('items'));
+    }
 }

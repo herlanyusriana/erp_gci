@@ -2,17 +2,26 @@
 import StatusBadge from '@/Components/StatusBadge.vue';
 import { useI18n } from 'vue-i18n';
 import { computed } from 'vue';
+import { usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
-import type { Bom } from '@/types';
+import ActionButton from '@/Components/ActionButton.vue';
+import type { Bom, PageProps } from '@/types';
 
 const { t } = useI18n();
+
+const page = usePage<PageProps>();
 
 const props = defineProps<{
     bom: Bom;
 }>();
 
 const items = computed(() => props.bom.items ?? []);
+
+const canUpdate = computed(() => {
+    const list: string[] = page.props.auth.permissions ?? [];
+    return list.some((x) => ['bom.update', 'master.bom.update'].includes(x));
+});
 
 const fmt = (n: number | null | undefined) => {
     if (n == null) return '—';
@@ -49,6 +58,9 @@ function sourceLabel(source: string | null): string {
             <div class="rounded-lg border border-borderline bg-surface px-4 py-2 text-sm text-ink-secondary">
                 {{ t('master.type') }}: <span class="font-semibold text-primary">{{ bom.part?.part_type?.code ?? '—' }}</span>
                 · {{ t('master.uom') }}: <span class="font-semibold text-ink-primary">{{ bom.part?.uom?.code ?? '—' }}</span>
+            </div>
+            <div class="flex gap-2">
+                <ActionButton v-if="canUpdate" :href="route('boms.edit', bom.id)" :label="t('master.edit')" variant="edit" />
             </div>
         </div>
 

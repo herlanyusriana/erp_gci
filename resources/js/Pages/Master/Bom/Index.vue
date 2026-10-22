@@ -2,15 +2,17 @@
 import { useI18n } from 'vue-i18n';
 import { ref } from 'vue';
 import { watch, computed } from 'vue';
-import { router, Link } from '@inertiajs/vue3';
+import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import ActionButton from '@/Components/ActionButton.vue';
 import Pagination from '@/Components/Pagination.vue';
-import type { Bom, Paginated } from '@/types';
+import type { Bom, Paginated, PageProps } from '@/types';
 import StatusBadge from '@/Components/StatusBadge.vue';
 
 const { t } = useI18n();
+
+const page = usePage<PageProps>();
 
 const props = defineProps<{
     boms: Paginated<Bom>;
@@ -30,6 +32,15 @@ watch(search, () => {
 });
 
 const fmtQty = (n: number | null) => (n == null ? '—' : Number(n));
+
+const canCreate = computed(() => {
+    const list: string[] = page.props.auth.permissions ?? [];
+    return list.some((x) => ['bom.create', 'master.bom.create'].includes(x));
+});
+const canUpdate = computed(() => {
+    const list: string[] = page.props.auth.permissions ?? [];
+    return list.some((x) => ['bom.update', 'master.bom.update'].includes(x));
+});
 </script>
 
 <template>
@@ -43,6 +54,10 @@ const fmtQty = (n: number | null) => (n == null ? '—' : Number(n));
                     {{ t('master.bomSubtitle') }}
                 </p>
             </div>
+            <Link v-if="canCreate" :href="route('boms.create')" class="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                {{ t('master.addBom') }}
+            </Link>
         </div>
 
         <div class="mb-4">
@@ -76,6 +91,7 @@ const fmtQty = (n: number | null) => (n == null ? '—' : Number(n));
                             <td class="px-4 py-3">
                                 <div class="flex justify-end gap-1.5">
                                     <ActionButton :href="route('boms.show', b.id)" :label="t('master.view')" variant="view" />
+                                    <ActionButton v-if="canUpdate" :href="route('boms.edit', b.id)" :label="t('master.edit')" variant="edit" />
                                 </div>
                             </td>
                         </tr>

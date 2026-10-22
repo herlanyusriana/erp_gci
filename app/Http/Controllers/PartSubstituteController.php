@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Part;
+use App\Models\PartPackingType;
 use App\Models\PartSubstitute;
 use App\Models\Supplier;
 use App\Rules\PartTypeRule;
@@ -20,12 +21,17 @@ class PartSubstituteController extends Controller
         Gate::authorize('viewAny', PartSubstitute::class);
 
         $query = PartSubstitute::query()
-            ->with(['part:id,part_number,part_name', 'substitutePart:id,part_number,part_name', 'supplier:id,supplier_code,supplier_name'])
+            ->with([
+                'part:id,part_number,part_name',
+                'substitutePart:id,part_number,part_name,uom_id',
+                'substitutePart.uom:id,code',
+                'supplier:id,supplier_code,supplier_name',
+            ])
             ->when($request->input('search'), function ($q, $search) {
                 $q->where(fn ($w) => $w
                     ->whereHas('part', fn ($p) => $p->where('part_number', 'ilike', "%{$search}%")->orWhere('part_name', 'ilike', "%{$search}%"))
                     ->orWhereHas('substitutePart', fn ($p) => $p->where('part_number', 'ilike', "%{$search}%")->orWhere('part_name', 'ilike', "%{$search}%"))
-                    ->orWhereHas('supplier', fn ($s) => $s->where('supplier_name', 'ilike', "%{$search}%")));
+                    ->orWhereHas('supplier', fn ($s) => $s->where('supplier_name', 'ilike', "%{$search}%")->orWhere('supplier_code', 'ilike', "%{$search}%")));
             })
             ->when($request->input('supplier_id'), fn ($q, $sid) => $q->where('supplier_id', $sid));
 
@@ -36,8 +42,26 @@ class PartSubstituteController extends Controller
             'filters' => $request->only('search', 'supplier_id'),
             'suppliers' => Supplier::orderBy('supplier_name')->get(['id', 'supplier_code', 'supplier_name']),
             'parts' => Part::whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))
-                ->orderBy('part_number')->get(['id', 'part_number', 'part_name']),
+                ->with('uom:id,code')
+                ->orderBy('part_number')->get(['id', 'part_number', 'part_name', 'uom_id']),
+            'packingTypes' => $this->packingTypeOptions(),
         ]);
+    }
+
+    /**
+     * Pilihan packing type per part pengganti untuk form, digabungkan per part.
+     *
+     * @return array<int, list<string>> key = part_id, value = kode packing terurut
+     */
+    private function packingTypeOptions(): array
+    {
+        return PartPackingType::query()
+            ->orderBy('part_id')
+            ->orderBy('code')
+            ->get(['part_id', 'code'])
+            ->groupBy('part_id')
+            ->map(fn ($rows) => $rows->pluck('code')->values()->all())
+            ->all();
     }
 
     public function store(Request $request): RedirectResponse
@@ -123,6 +147,26 @@ class PartSubstituteController extends Controller
             'max:20',
             Rule::exists('part_packing_types', 'code')->where('part_id', $substitutePartId),
         ];
+    }
+
+    /**
+     * Tambahkan packing type baru untuk satu part pengganti.
+     *
+     * Nilai disimpan sebagai pilihan part tersebut, bukan sebagai transaksi
+     * kedatangan/invoice.
+     */
+    public function storePackingType(Request $request): RedirectResponse
+    {
+        Gate::authorize('create', PartSubstitute::class);
+
+        $data = $request->validate([
+            'part_id' => ['required', 'exists:parts,id'],
+            'code' => ['required', 'string', 'max:20'],
+        ]);
+
+        PartPackingType::register((int) $data['part_id'], (string) $data['code']);
+
+        return back()->with('success', __('Packing type ditambahkan.'));
     }
 
     public function destroy(PartSubstitute $substitute): RedirectResponse

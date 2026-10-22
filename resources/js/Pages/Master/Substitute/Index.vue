@@ -19,6 +19,7 @@ const props = defineProps<{
     filters: { search?: string; supplier_id?: string };
     suppliers: Supplier[];
     parts: Part[];
+    packingTypes: Record<string, string[]>;
 }>();
 
 const search = ref(props.filters.search ?? '');
@@ -48,9 +49,47 @@ const form = useForm({
     substitute_part_id: '',
     supplier_id: '',
     material_group: '',
+    size: '',
+    packing_type: '',
     source: '',
     is_active: true,
 });
+
+const showPackingForm = ref(false);
+const packingForm = useForm({ part_id: '', code: '' });
+
+/** Kode packing yang tersedia untuk part pengganti pada form. */
+const packingOptions = computed(() => props.packingTypes[String(form.substitute_part_id)] ?? []);
+
+/** UOM dari master part pengganti, baca-saja. */
+const substituteUom = computed(() => {
+    const part = props.parts.find((p) => String(p.id) === form.substitute_part_id);
+    return part?.uom?.code ?? '—';
+});
+
+/** Daftar part pengganti untuk props lama yang belum memuat katalog. */
+const missingPackingCatalog = computed(() => props.packingTypes[String(form.substitute_part_id)] === undefined);
+
+function onSubstitutePartChange() {
+    form.packing_type = '';
+}
+
+function openPackingForm() {
+    packingForm.reset();
+    packingForm.clearErrors();
+    packingForm.part_id = form.substitute_part_id;
+    showPackingForm.value = true;
+}
+function closePackingForm() { showPackingForm.value = false; }
+function submitPackingType() {
+    packingForm.post(route('substitutes.packing-types.store'), {
+        preserveState: false,
+        onSuccess: () => {
+            closePackingForm();
+            router.reload({ only: ['packingTypes'] });
+        },
+    });
+}
 
 function openCreate() {
     editing.value = null;
@@ -65,6 +104,8 @@ function openEdit(s: PartSubstitute) {
     form.substitute_part_id = s.substitute_part?.id != null ? String(s.substitute_part.id) : '';
     form.supplier_id = s.supplier?.id != null ? String(s.supplier.id) : '';
     form.material_group = s.material_group ?? '';
+    form.size = s.size ?? '';
+    form.packing_type = s.packing_type ?? '';
     form.source = s.source ?? '';
     form.is_active = s.is_active;
     showForm.value = true;
@@ -110,6 +151,8 @@ function remove(s: PartSubstitute) {
                         <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                             <th scope="col" class="px-4 py-3">{{ t('master.materialPart') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('master.substitutePart') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.size') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.packingType') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('master.supplier') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('master.groupSource') }}</th>
                             <th scope="col" class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
@@ -125,6 +168,8 @@ function remove(s: PartSubstitute) {
                                 <div class="font-medium text-ink-primary">{{ s.substitute_part?.part_number ?? '—' }}</div>
                                 <div class="text-xs text-ink-secondary">{{ s.substitute_part?.part_name }}</div>
                             </td>
+                            <td class="px-4 py-3 text-ink-primary">{{ s.size || '—' }}</td>
+                            <td class="px-4 py-3 text-ink-primary">{{ s.packing_type ?? '—' }}</td>
                             <td class="px-4 py-3 text-ink-primary">{{ s.supplier?.supplier_name ?? '—' }}</td>
                             <td class="px-4 py-3">
                                 <div class="text-ink-primary">{{ s.material_group ?? '—' }}</div>
@@ -138,7 +183,7 @@ function remove(s: PartSubstitute) {
                             </td>
                         </tr>
                         <tr v-if="substitutes.data.length === 0">
-                            <td colspan="5" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.substituteEmpty') }}</td>
+                            <td colspan="7" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.substituteEmpty') }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -162,11 +207,33 @@ function remove(s: PartSubstitute) {
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.substitutePart') }}</label>
-                        <select :aria-label="t('master.substitutePart')" v-model="form.substitute_part_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                        <select :aria-label="t('master.substitutePart')" v-model="form.substitute_part_id" @change="onSubstitutePartChange" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                             <option value="">{{ t('master.selectPart') }}</option>
                             <option v-for="p in parts" :key="p.id" :value="String(p.id)">{{ p.part_number }} · {{ p.part_name }}</option>
                         </select>
                         <InputError :message="form.errors.substitute_part_id" class="mt-1" />
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('master.uom') }}</label>
+                        <input :aria-label="t('master.uom')" :value="substituteUom" type="text" readonly disabled class="mt-1 w-full cursor-not-allowed rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-secondary" />
+                        <p class="mt-1 text-xs text-ink-secondary">{{ t('master.substituteUomHelp') }}</p>
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('master.size') }}</label>
+                        <input :aria-label="t('master.size')" v-model="form.size" type="text" :placeholder="t('master.sizeExample')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <InputError :message="form.errors.size" class="mt-1" />
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('master.packingType') }}</label>
+                        <div class="mt-1 flex gap-2">
+                            <select :aria-label="t('master.packingType')" v-model="form.packing_type" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                                <option value="">{{ t('master.selectPackingType') }}</option>
+                                <option v-for="code in packingOptions" :key="code" :value="code">{{ code }}</option>
+                            </select>
+                            <button v-if="form.substitute_part_id" type="button" @click="openPackingForm" :title="t('master.addPackingType')" class="inline-flex shrink-0 items-center justify-center rounded-lg border border-borderline px-3 py-2 text-sm font-semibold text-ink-primary transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">+</button>
+                        </div>
+                        <p v-if="form.substitute_part_id && packingOptions.length === 0" class="mt-1 text-xs text-ink-secondary">{{ t('master.packingTypeEmptyHelp') }}</p>
+                        <InputError :message="form.errors.packing_type" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.supplier') }}</label>
@@ -197,6 +264,22 @@ function remove(s: PartSubstitute) {
                 <div class="mt-4 flex items-center justify-end gap-3">
                     <button type="button" @click="closeForm" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-primary hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">{{ t('master.cancel') }}</button>
                     <button type="submit" :disabled="form.processing" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">{{ form.processing ? t('master.saving') : t('master.save') }}</button>
+                </div>
+            </form>
+        </Modal>
+
+        <!-- Add packing type for the selected substitute part -->
+        <Modal :show="showPackingForm" max-width="sm" @close="closePackingForm">
+            <form @submit.prevent="submitPackingType" class="p-6">
+                <h2 class="mb-4 text-base font-semibold text-ink-primary">{{ t('master.addPackingType') }}</h2>
+                <div>
+                    <label class="text-xs font-semibold text-ink-secondary">{{ t('master.packingType') }}</label>
+                    <input :aria-label="t('master.packingType')" v-model="packingForm.code" type="text" :placeholder="t('master.packingTypeExample')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary uppercase focus:border-primary focus:ring-primary" />
+                    <InputError :message="packingForm.errors.code" class="mt-1" />
+                </div>
+                <div class="mt-4 flex items-center justify-end gap-3">
+                    <button type="button" @click="closePackingForm" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-primary hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">{{ t('master.cancel') }}</button>
+                    <button type="submit" :disabled="packingForm.processing" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">{{ packingForm.processing ? t('master.saving') : t('master.save') }}</button>
                 </div>
             </form>
         </Modal>

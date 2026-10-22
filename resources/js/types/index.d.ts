@@ -112,10 +112,14 @@ export interface PartSubstitute {
     substitute_part_id: number;
     supplier_id: number | null;
     material_group: string | null;
+    size: string | null;
+    packing_type: string | null;
     source: string | null;
     is_active: boolean;
     part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
-    substitute_part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
+    substitute_part?: (Pick<Part, 'id' | 'part_number' | 'part_name'> & {
+        uom?: Pick<Uom, 'id' | 'code'> | null;
+    }) | null;
     supplier?: Pick<Supplier, 'id' | 'supplier_code' | 'supplier_name'> | null;
 }
 

@@ -10,6 +10,7 @@ use App\Models\PartSubstitute;
 use App\Models\Supplier;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
 class PartSubstituteAttributeTest extends TestCase
@@ -318,5 +319,72 @@ class PartSubstituteAttributeTest extends TestCase
             $relation->substituteUomCode(),
             'UOM harus dibaca dari master part pengganti.',
         );
+    }
+
+    public function test_index_exposes_packing_options_and_substitute_uom(): void
+    {
+        $substitutePart = $this->materialPart('CBKG07256C');
+        $supplier = $this->supplier('SUP-ATTR-04');
+
+        $relation = PartSubstitute::updateOrCreate(
+            [
+                'part_id' => $this->materialPart('4000W4A003A')->id,
+                'substitute_part_id' => $substitutePart->id,
+                'supplier_id' => $supplier->id,
+            ],
+            ['size' => null, 'packing_type' => 'PALLET', 'is_active' => true],
+        );
+
+        PartPackingType::register($substitutePart->id, 'PALLET');
+
+        $this->actingAs($this->admin())
+            ->get(route('substitutes.index', ['search' => 'SUP-ATTR-04']))
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('Master/Substitute/Index')
+                ->where("packingTypes.{$substitutePart->id}", ['PALLET'])
+                ->where('substitutes.data.0.id', $relation->id)
+                ->where('substitutes.data.0.packing_type', 'PALLET')
+                ->where('substitutes.data.0.substitute_part.uom.code', $substitutePart->uom?->code));
+    }
+
+    public function test_store_packing_type_adds_an_option_without_touching_arrivals(): void
+    {
+        $substitutePart = $this->materialPart('CBKG07256C');
+
+        $this->actingAs($this->admin())
+            ->post(route('substitutes.packing-types.store'), [
+                'part_id' => $substitutePart->id,
+                'code' => 'drum',
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('part_packing_types', [
+            'part_id' => $substitutePart->id,
+            'code' => 'DRUM',
+            'origin' => PartPackingType::ORIGIN_MANUAL,
+        ]);
+        $this->assertSame(
+            0,
+            IncomingArrivalItem::where('part_id', $substitutePart->id)->count(),
+            'Menambah packing type tidak boleh membuat record Arrival.',
+        );
+    }
+
+    public function test_store_packing_type_requires_a_substitute_create_permission(): void
+    {
+        $other = User::create([
+            'name' => 'Viewer',
+            'email' => 'viewer-attr@example.com',
+            'password' => bcrypt('password'),
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($other)
+            ->post(route('substitutes.packing-types.store'), [
+                'part_id' => $this->materialPart('CBKG07256C')->id,
+                'code' => 'DRUM',
+            ])
+            ->assertForbidden();
     }
 }

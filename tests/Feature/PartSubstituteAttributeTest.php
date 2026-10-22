@@ -166,4 +166,157 @@ class PartSubstituteAttributeTest extends TestCase
             'Nilai ganda tidak boleh ditebak sistem.',
         );
     }
+
+    private function materialPart(string $number): Part
+    {
+        return Part::where('part_number', $number)->firstOrFail();
+    }
+
+    private function payload(array $overrides = []): array
+    {
+        return array_merge([
+            'part_id' => $this->materialPart('4000W4A003A')->id,
+            'substitute_part_id' => $this->materialPart('CBKG07256C')->id,
+            'supplier_id' => $this->supplier('SUP-ATTR-01')->id,
+            'material_group' => 'STEEL',
+            'size' => '25 x 30 mm',
+            'packing_type' => 'PALLET',
+            'source' => null,
+            'is_active' => true,
+        ], $overrides);
+    }
+
+    public function test_store_saves_size_and_packing_type_on_the_relation(): void
+    {
+        PartPackingType::register($this->materialPart('CBKG07256C')->id, 'PALLET');
+
+        $this->actingAs($this->admin())
+            ->post(route('substitutes.store'), $this->payload())
+            ->assertRedirect(route('substitutes.index'))
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('part_substitutes', [
+            'part_id' => $this->materialPart('4000W4A003A')->id,
+            'substitute_part_id' => $this->materialPart('CBKG07256C')->id,
+            'size' => '25 x 30 mm',
+            'packing_type' => 'PALLET',
+        ]);
+    }
+
+    public function test_store_rejects_packing_type_missing_from_the_part_catalog(): void
+    {
+        $this->actingAs($this->admin())
+            ->post(route('substitutes.store'), $this->payload(['packing_type' => 'CRATE']))
+            ->assertSessionHasErrors('packing_type');
+
+        $this->assertDatabaseMissing('part_substitutes', [
+            'part_id' => $this->materialPart('4000W4A003A')->id,
+            'substitute_part_id' => $this->materialPart('CBKG07256C')->id,
+        ]);
+    }
+
+    public function test_store_rejects_packing_type_belonging_to_another_part(): void
+    {
+        PartPackingType::register($this->materialPart('PINCB01')->id, 'BAG');
+
+        $this->actingAs($this->admin())
+            ->post(route('substitutes.store'), $this->payload(['packing_type' => 'BAG']))
+            ->assertSessionHasErrors('packing_type');
+    }
+
+    public function test_store_requires_packing_type(): void
+    {
+        $payload = $this->payload();
+        unset($payload['packing_type']);
+
+        $this->actingAs($this->admin())
+            ->post(route('substitutes.store'), $payload)
+            ->assertSessionHasErrors('packing_type');
+    }
+
+    public function test_store_rejects_a_supplier_that_does_not_exist(): void
+    {
+        PartPackingType::register($this->materialPart('CBKG07256C')->id, 'PALLET');
+
+        $this->actingAs($this->admin())
+            ->post(route('substitutes.store'), $this->payload(['supplier_id' => 999999]))
+            ->assertSessionHasErrors('supplier_id');
+    }
+
+    public function test_blank_size_is_stored_as_null(): void
+    {
+        PartPackingType::register($this->materialPart('CBKG07256C')->id, 'PALLET');
+
+        $this->actingAs($this->admin())
+            ->post(route('substitutes.store'), $this->payload(['size' => '   ']))
+            ->assertSessionHasNoErrors();
+
+        $relation = PartSubstitute::where('part_id', $this->materialPart('4000W4A003A')->id)
+            ->where('substitute_part_id', $this->materialPart('CBKG07256C')->id)
+            ->firstOrFail();
+
+        $this->assertNull($relation->size);
+    }
+
+    public function test_update_saves_attributes_and_requires_packing_type_for_legacy_rows(): void
+    {
+        $part = $this->materialPart('4000W4A003A');
+        $substitutePart = $this->materialPart('CBKG07256C');
+        $supplier = $this->supplier('SUP-ATTR-02');
+
+        $relation = PartSubstitute::create([
+            'part_id' => $part->id,
+            'substitute_part_id' => $substitutePart->id,
+            'supplier_id' => $supplier->id,
+            'is_active' => true,
+        ]);
+        $this->assertNull($relation->fresh()->packing_type);
+
+        $payload = [
+            'part_id' => $part->id,
+            'substitute_part_id' => $substitutePart->id,
+            'supplier_id' => $supplier->id,
+            'size' => '10 mm',
+            'is_active' => true,
+        ];
+
+        // Relasi lama tanpa packing type tidak boleh lolos sebelum dipilih.
+        $this->actingAs($this->admin())
+            ->put(route('substitutes.update', $relation), $payload)
+            ->assertSessionHasErrors('packing_type');
+
+        PartPackingType::register($substitutePart->id, 'ROLL');
+
+        $this->actingAs($this->admin())
+            ->put(route('substitutes.update', $relation), $payload + ['packing_type' => 'ROLL'])
+            ->assertSessionHasNoErrors();
+
+        $relation->refresh();
+        $this->assertSame('10 mm', $relation->size);
+        $this->assertSame('ROLL', $relation->packing_type);
+        $this->assertSame(1, PartSubstitute::where('part_id', $part->id)
+            ->where('substitute_part_id', $substitutePart->id)
+            ->where('supplier_id', $supplier->id)
+            ->count(), 'Update tidak boleh membuat record baru.');
+    }
+
+    public function test_uom_comes_from_the_substitute_part_master(): void
+    {
+        $substitutePart = $this->materialPart('CBKG07256C');
+        $relation = PartSubstitute::create([
+            'part_id' => $this->materialPart('4000W4A003A')->id,
+            'substitute_part_id' => $substitutePart->id,
+            'supplier_id' => $this->supplier('SUP-ATTR-03')->id,
+            'packing_type' => 'PALLET',
+            'is_active' => true,
+        ]);
+
+        $relation->load('substitutePart.uom');
+
+        $this->assertSame(
+            $substitutePart->uom?->code,
+            $relation->substituteUomCode(),
+            'UOM harus dibaca dari master part pengganti.',
+        );
+    }
 }

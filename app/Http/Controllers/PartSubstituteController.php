@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\PartSubstitute;
 use App\Models\Part;
+use App\Models\PartSubstitute;
 use App\Models\Supplier;
+use App\Rules\PartTypeRule;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -40,10 +42,16 @@ class PartSubstituteController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $request->merge(['size' => $this->normalizeSize($request->input('size'))]);
+        $request->merge(['packing_type' => $this->normalizePackingType($request->input('packing_type'))]);
+
         $data = $request->validate([
-            'part_id' => ['required', 'exists:parts,id', \App\Rules\PartTypeRule::notFg()],
-            'substitute_part_id' => ['required', 'exists:parts,id', 'different:part_id', \App\Rules\PartTypeRule::notFg()],
+            'part_id' => ['required', 'exists:parts,id', PartTypeRule::notFg()],
+            'substitute_part_id' => ['required', 'exists:parts,id', 'different:part_id', PartTypeRule::notFg()],
+            'supplier_id' => ['nullable', 'exists:suppliers,id'],
             'material_group' => ['nullable', 'string', 'max:255'],
+            'size' => ['nullable', 'string', 'max:100'],
+            'packing_type' => $this->packingTypeRules($request),
             'source' => ['nullable', 'string', 'max:120'],
             'is_active' => ['sometimes', 'boolean'],
         ]);
@@ -63,11 +71,16 @@ class PartSubstituteController extends Controller
 
     public function update(Request $request, PartSubstitute $substitute): RedirectResponse
     {
+        $request->merge(['size' => $this->normalizeSize($request->input('size'))]);
+        $request->merge(['packing_type' => $this->normalizePackingType($request->input('packing_type'))]);
+
         $data = $request->validate([
-            'part_id' => ['required', 'exists:parts,id', \App\Rules\PartTypeRule::notFg()],
-            'substitute_part_id' => ['required', 'exists:parts,id', 'different:part_id', \App\Rules\PartTypeRule::notFg()],
+            'part_id' => ['required', 'exists:parts,id', PartTypeRule::notFg()],
+            'substitute_part_id' => ['required', 'exists:parts,id', 'different:part_id', PartTypeRule::notFg()],
             'supplier_id' => ['nullable', 'exists:suppliers,id'],
             'material_group' => ['nullable', 'string', 'max:255'],
+            'size' => ['nullable', 'string', 'max:100'],
+            'packing_type' => $this->packingTypeRules($request),
             'source' => ['nullable', 'string', 'max:120'],
             'is_active' => ['sometimes', 'boolean'],
         ]);
@@ -76,6 +89,40 @@ class PartSubstituteController extends Controller
         $substitute->update($data);
 
         return redirect()->route('substitutes.index')->with('success', __('Substitute diperbarui.'));
+    }
+
+    /**
+     * Ukuran kosong disimpan sebagai null, bukan string kosong atau tanda hubung.
+     */
+    private function normalizeSize(mixed $value): ?string
+    {
+        $trimmed = trim((string) ($value ?? ''));
+
+        return $trimmed === '' ? null : $trimmed;
+    }
+
+    private function normalizePackingType(mixed $value): ?string
+    {
+        $trimmed = strtoupper(trim((string) ($value ?? '')));
+
+        return $trimmed === '' ? null : $trimmed;
+    }
+
+    /**
+     * Packing type wajib dan harus terdaftar pada katalog part pengganti.
+     *
+     * @return list<mixed>
+     */
+    private function packingTypeRules(Request $request): array
+    {
+        $substitutePartId = (int) $request->input('substitute_part_id');
+
+        return [
+            'required',
+            'string',
+            'max:20',
+            Rule::exists('part_packing_types', 'code')->where('part_id', $substitutePartId),
+        ];
     }
 
     public function destroy(PartSubstitute $substitute): RedirectResponse

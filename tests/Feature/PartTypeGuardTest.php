@@ -6,6 +6,7 @@ use App\Models\Bom;
 use App\Models\BomItem;
 use App\Models\IncomingArrival;
 use App\Models\Part;
+use App\Models\PartPackingType;
 use App\Models\PartSubstitute;
 use App\Models\PartType;
 use App\Models\PurchaseOrder;
@@ -111,15 +112,21 @@ class PartTypeGuardTest extends TestCase
         $material = $this->makePart('MATERIAL');
         $wip = $this->makePart('WIP');
 
+        // packing_type wajib dan harus ada di katalog part pengganti; siapkan
+        // agar kegagalan yang diuji benar-benar berasal dari aturan tipe part.
+        PartPackingType::register($wip->id, 'PALLET');
+
         $this->post(route('substitutes.store'), [
             'part_id' => $fg->id,
             'substitute_part_id' => $material->id,
+            'packing_type' => 'PALLET',
             'is_active' => true,
         ])->assertSessionHasErrors(['part_id']);
 
         $this->post(route('substitutes.store'), [
             'part_id' => $material->id,
             'substitute_part_id' => $wip->id,
+            'packing_type' => 'PALLET',
             'is_active' => true,
         ])->assertSessionHasNoErrors();
         $this->assertSame(1, PartSubstitute::where('part_id', $material->id)->where('substitute_part_id', $wip->id)->count());

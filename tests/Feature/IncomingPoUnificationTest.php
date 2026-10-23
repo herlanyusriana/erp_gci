@@ -126,4 +126,18 @@ class IncomingPoUnificationTest extends TestCase
 
         $this->assertDatabaseHas('purchase_orders', ['supplier_id' => $import->id]);
     }
+
+    public function test_incoming_entry_point_states_which_flow_needs_arrival(): void
+    {
+        $this->get(route('incoming-data'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->component('Incoming/ModuleLauncher'));
+
+        // Launcher dirender sebagai SPA, jadi tautan tidak ada di HTML awal.
+        $source = file_get_contents(resource_path('js/Pages/Incoming/ModuleLauncher.vue'));
+
+        $this->assertStringContainsString("href: '/purchase-orders'", $source);
+        $this->assertStringContainsString("href: '/local-pos'", $source);
+        $this->assertStringContainsString("href: '/incoming-arrivals'", $source);
+    }
 }

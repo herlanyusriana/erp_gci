@@ -36,9 +36,9 @@ point dan daftar PO disatukan.
    terpisah, so that kedatangan impor dapat mengikuti proses Incoming yang ada.
 7. As a pengguna Incoming, I want mencatat PO local melalui Local PO saja,
    so that PO local tidak masuk ke alur Arrival import.
-8. As a pengguna Incoming, I want melihat PO import dan Local PO dalam satu
-   daftar dengan source yang jelas, so that pencarian dan tindak lanjut tidak
-   memerlukan perpindahan menu.
+8. As a pengguna Incoming, I want mengenali dengan jelas bahwa PO import dan PO
+   local adalah dua alur berbeda, so that saya tidak memilih alur yang salah
+   saat mencatat PO supplier.
 9. As a pengguna Incoming, I want source PO tetap setelah record disimpan,
    so that catatan tidak berpindah ke lifecycle local/import yang salah.
 10. As a administrator, I want kategori supplier lama dapat dipulihkan dari
@@ -53,7 +53,7 @@ point dan daftar PO disatukan.
 Menyederhanakan pencatatan PO yang diterima dari supplier dengan satu entry
 point, sambil mempertahankan alur Import → Arrival dan Local → Local PO. Sukses
 berarti pengguna dapat mencatat kedua jenis PO dari satu area, memilih hanya
-supplier yang sesuai, dan melihat record keduanya dalam satu daftar.
+supplier yang sesuai, dan mengenali alur mana yang berlanjut ke Arrival.
 
 ## Technical Decisions
 
@@ -80,8 +80,11 @@ supplier yang sesuai, dan melihat record keduanya dalam satu daftar.
 - Field dan validasi khusus setiap source tetap dipertahankan. Penyatuan pada
   tahap ini adalah pada menu, daftar, dan entry point/form, bukan penyamaan
   lifecycle bisnis local dan import.
-- Daftar gabungan mencakup record PO import serta Local PO lama dan baru,
-  menampilkan source dan mendukung pencarian/filter source.
+- Titik masuk Incoming menampilkan PO import dan PO local sebagai dua pilihan
+  dengan alur yang dinyatakan jelas: PO import berlanjut ke Arrival (dokumen
+  BL/PEN/AJU, vessel, container), sedangkan PO local tanpa langkah Arrival dan
+  langsung ke penerimaan. Setiap jenis tetap memakai daftar dan kolomnya sendiri,
+  karena field dokumennya memang berbeda.
 - Implementasi dapat tetap menggunakan model/record source-specific yang ada;
   tidak ada keputusan untuk menggabungkan seluruh data historis ke satu tabel.
 - Permission yang sudah ada untuk Purchase Order, Incoming, Local PO, dan
@@ -97,7 +100,7 @@ supplier yang sesuai, dan melihat record keduanya dalam satu daftar.
                                    minimum jika diperlukan untuk daftar terpadu
     resources/js/Pages/Master/  -> Form Master Supplier
     resources/js/Pages/Incoming/-> Form dan daftar PO gabungan, Arrival, Local PO
-    resources/js/types/         -> Tipe Supplier, PO, dan daftar gabungan
+    resources/js/types/         -> Tipe Supplier dan PO
     tests/Feature/              -> Test HTTP, filtering source, persistence, alur
     docs/prd/                   -> PRD dan dokumen kebutuhan lainnya
 
@@ -151,7 +154,9 @@ internal filter.
 
 - Membuat atau mengirim PO keluar kepada supplier.
 - Menyamakan lifecycle import dan local; import tetap memakai Arrival terpisah,
-  sedangkan local tetap memakai Local PO.
+  sedangkan local tetap memakai Local PO tanpa langkah Arrival.
+- Satu tabel daftar gabungan berisi kedua jenis PO, karena field dokumen keduanya
+  berbeda jauh dan akan merugikan kedua alur.
 - Mengubah field transaksi, inventory, invoice, atau aturan receive yang telah
   berlaku pada masing-masing source.
 - Mengubah supplier lama yang punya riwayat campuran secara otomatis.
@@ -165,8 +170,8 @@ internal filter.
 - [ ] Dropdown supplier hanya menampilkan supplier dengan kategori yang cocok;
       server menegakkan aturan yang sama.
 - [ ] Supplier baru wajib memiliki satu kategori source `local` atau `import`.
-- [ ] Daftar gabungan menampilkan PO import dan Local PO lama maupun baru dengan
-      source yang jelas dan filter source berfungsi.
+- [ ] Titik masuk Incoming menyatakan perbedaan alur import dan local secara
+      eksplisit; tidak ada daftar gabungan yang memaksakan kolom seragam.
 - [ ] PO import melanjutkan ke Arrival terpisah; Local PO tetap berada di
       workflow Local PO dan tidak masuk ke Arrival import.
 - [ ] Supplier lama dengan nama diawali `PT` mendapat klasifikasi awal local;

@@ -11,6 +11,7 @@ use App\Models\Process;
 use App\Models\User;
 use App\Services\WoService;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -459,5 +460,25 @@ class BomMaintenanceTest extends TestCase
                 ->component('Master/Bom/Form')
                 ->where('bom', null)
                 ->missing('items'));
+    }
+
+    public function test_bom_no_is_protected_by_a_unique_index(): void
+    {
+        $first = $this->makeFgWithoutBom();
+        $second = $this->makeFgWithoutBom();
+
+        $this->post(route('boms.store'), $this->payload($first, [$this->item()]))
+            ->assertSessionHasNoErrors();
+
+        $no = Bom::where('part_id', $first->id)->value('bom_no');
+
+        $this->expectException(QueryException::class);
+
+        Bom::create([
+            'part_id' => $second->id,
+            'bom_no' => $no,
+            'version' => '1.0',
+            'is_active' => true,
+        ]);
     }
 }

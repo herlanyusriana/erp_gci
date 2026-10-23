@@ -33,6 +33,12 @@ class Bom extends Model
      * Nomor BOM berurutan mulai dari 1. withTrashed(): nomor baris terhapus tidak
      * dipakai ulang.
      */
+    /**
+     * Nomor BOM berikutnya.
+     *
+     * bom_no punya unique index, jadi dua create bersamaan bisa gagal. Pemanggil
+     * disarankan mencoba ulang saat terjadi pelanggaran unique.
+     */
     public static function generateBomNo(): int
     {
         return (int) static::withTrashed()->max('bom_no') + 1;

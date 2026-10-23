@@ -145,7 +145,7 @@ class PartTypeGuardTest extends TestCase
         ])->assertSessionHasErrors(['part_id']);
         $this->assertSame(0, WorkOrder::count());
 
-        $bom = Bom::create(['part_id' => $fg->id, 'bom_no' => 1, 'is_active' => true]);
+        $bom = Bom::create(['part_id' => $fg->id, 'bom_no' => Bom::generateBomNo(), 'is_active' => true]);
         BomItem::create(['bom_id' => $bom->id, 'sequence' => 10, 'child_part_id' => $material->id, 'child_qty' => 1, 'uom_rm' => 'PCS', 'is_active' => true]);
 
         $this->post(route('work-orders.store'), [

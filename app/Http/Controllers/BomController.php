@@ -7,6 +7,7 @@ use App\Models\Machine;
 use App\Models\Part;
 use App\Models\Process;
 use App\Support\UomCatalog;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -83,35 +84,65 @@ class BomController extends Controller
             throw ValidationException::withMessages(['part_id' => __('BOM hanya untuk part FG.')]);
         }
 
-        $bom = DB::transaction(function () use ($request, $data, $partId): Bom {
-            if (Bom::withTrashed()->where('part_id', $partId)->exists()) {
-                throw ValidationException::withMessages([
-                    'part_id' => __('Part FG ini sudah memiliki BOM. Silakan ubah BOM yang ada.'),
-                ]);
-            }
+        $actorId = $request->user()?->id;
+        $items = array_map(fn (array $item): array => $this->normalizeItem($item), $data['items']);
 
-            $actorId = $request->user()?->id;
-            $bom = Bom::create([
-                'part_id' => $partId,
-                'bom_no' => Bom::generateBomNo(),
-                'version' => $data['version'] ?? '1.0',
-                'is_active' => true,
-                'created_by' => $actorId,
-                'updated_by' => $actorId,
-            ]);
+        $bom = $this->withBomNoRetry(function () use ($data, $partId, $actorId, $items): Bom {
+            return DB::transaction(function () use ($data, $partId, $actorId, $items): Bom {
+                if (Bom::withTrashed()->where('part_id', $partId)->exists()) {
+                    throw ValidationException::withMessages([
+                        'part_id' => __('Part FG ini sudah memiliki BOM. Silakan ubah BOM yang ada.'),
+                    ]);
+                }
 
-            foreach ($data['items'] as $item) {
-                $bom->items()->create($this->normalizeItem($item) + [
+                $bom = Bom::create([
+                    'part_id' => $partId,
+                    'bom_no' => Bom::generateBomNo(),
+                    'version' => $data['version'] ?? '1.0',
                     'is_active' => true,
                     'created_by' => $actorId,
                     'updated_by' => $actorId,
                 ]);
-            }
 
-            return $bom;
+                foreach ($items as $item) {
+                    $bom->items()->create($item + [
+                        'is_active' => true,
+                        'created_by' => $actorId,
+                        'updated_by' => $actorId,
+                    ]);
+                }
+
+                return $bom;
+            });
         });
 
         return redirect()->route('boms.show', $bom)->with('success', __('BOM dibuat.'));
+    }
+
+    /**
+     * Ulangi pembuatan BOM bila nomor yang dihasilkan bentrok dengan request lain.
+     * bom_no punya unique index, sehingga tabrakan muncul sebagai pelanggaran
+     * integritas alih-alih nomor ganda yang diam-diam.
+     *
+     * @param  callable(): Bom  $callback
+     */
+    private function withBomNoRetry(callable $callback, int $attempts = 3): Bom
+    {
+        for ($attempt = 1; ; $attempt++) {
+            try {
+                return $callback();
+            } catch (QueryException $exception) {
+                if ($attempt >= $attempts || ! $this->isUniqueViolation($exception, 'boms_bom_no_unique')) {
+                    throw $exception;
+                }
+            }
+        }
+    }
+
+    private function isUniqueViolation(QueryException $exception, string $constraint): bool
+    {
+        return (string) $exception->getCode() === '23505'
+            && str_contains($exception->getMessage(), $constraint);
     }
 
     /**

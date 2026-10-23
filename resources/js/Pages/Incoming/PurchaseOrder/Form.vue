@@ -43,6 +43,8 @@ const props = defineProps<{
 
 const blankItem = (): ItemRow => ({ part_id: '', qty: '', unit: '', price: '', notes: '' });
 
+const isLocked = computed(() => props.purchaseOrder?.id != null);
+
 const rows = ref<ItemRow[]>(
     props.purchaseOrder?.items?.map((i) => ({
         part_id: i.part_id ?? '',
@@ -158,7 +160,7 @@ function submit() {
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.supplier') }}</label>
-                        <select :aria-label="t('incoming.supplier')" v-model="form.supplier_id" @change="onSupplierChange" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                        <select :aria-label="t('incoming.supplier')" v-model="form.supplier_id" @change="onSupplierChange" :disabled="isLocked" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary disabled:bg-background disabled:text-ink-secondary">
                             <option value="">{{ t('incoming.chooseSupplier') }}</option>
                             <option v-for="s in suppliers" :key="s.id" :value="s.id">{{ s.supplier_code }} · {{ s.supplier_name }}</option>
                         </select>
@@ -204,6 +206,7 @@ function submit() {
                             <option value="">{{ t('incoming.choosePart') }}</option>
                             <option v-for="p in partOptions" :key="p.id" :value="p.id">{{ p.part_number }} · {{ p.part_name }}</option>
                         </select>
+                        <p v-if="isLocked" class="mt-1 text-xs text-ink-secondary">{{ t('incoming.supplierLocked') }}</p>
                         <p v-if="form.supplier_id && partOptions.length === 0" class="mt-1 text-xs text-warning">{{ t('incoming.supplierNoParts') }}</p>
                     </div>
                     <div class="sm:col-span-2">

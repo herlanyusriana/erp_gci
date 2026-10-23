@@ -279,4 +279,31 @@ class IncomingPoUnificationTest extends TestCase
 
         $this->assertSame($local->id, $localPo->fresh()->supplier_id);
     }
+
+    public function test_arrival_form_only_offers_import_suppliers(): void
+    {
+        $this->get(route('incoming-arrivals.create'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Incoming/Arrival/Form')
+                ->where('suppliers', fn ($suppliers) => collect($suppliers)->every(fn ($s) => ($s['source'] ?? null) === 'import')));
+    }
+
+    public function test_arrival_rejects_a_local_supplier(): void
+    {
+        [$local] = $this->freshSupplierWithPart(Supplier::SOURCE_LOCAL);
+
+        $this->post(route('incoming-arrivals.store'), [
+            'invoice_no' => 'INV-REJ-'.uniqid(),
+            'supplier_id' => $local->id,
+            'items' => [[
+                'material_group' => 'STEEL',
+                'size' => 'L',
+                'qty_goods' => 5,
+                'unit_goods' => 'PCS',
+            ]],
+        ])->assertSessionHasErrors('supplier_id');
+
+        $this->assertDatabaseMissing('incoming_arrivals', ['supplier_id' => $local->id]);
+    }
 }

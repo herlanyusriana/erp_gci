@@ -77,7 +77,12 @@ class MasterDataSeeder extends Seeder
             $code = $this->slugCode($name);
             $supplierIds[$name] = Supplier::withTrashed()->updateOrCreate(
                 ['supplier_code' => $code],
-                ['supplier_name' => $name, 'is_active' => true, 'created_by' => $systemUser],
+                [
+                    'supplier_name' => $name,
+                    'source' => $this->guessSource($name),
+                    'is_active' => true,
+                    'created_by' => $systemUser,
+                ],
             )->id;
         }
 
@@ -141,6 +146,20 @@ class MasterDataSeeder extends Seeder
                 ?->processes()
                 ->syncWithoutDetaching([$processIds[$mp['process_name']]]);
         }
+    }
+
+    /**
+     * Klasifikasi awal dari nama: badan usaha "PT"/"PT." adalah supplier lokal.
+     * Selain itu dibiarkan null dan dilengkapi DerivedDataSeeder bila riwayatnya
+     * menunjukkan satu source.
+     */
+    private function guessSource(string $name): ?string
+    {
+        $upper = strtoupper(trim($name));
+
+        return str_starts_with($upper, 'PT.') || str_starts_with($upper, 'PT ')
+            ? Supplier::SOURCE_LOCAL
+            : null;
     }
 
     private function slugCode(string $name): string

@@ -114,7 +114,7 @@ class IncomingArrivalController extends Controller
 
         return Inertia::render('Incoming/Arrival/Form', [
             'arrival' => null,
-            'suppliers' => Supplier::select('id', 'supplier_code', 'supplier_name')->orderBy('supplier_name')->get(),
+            'suppliers' => Supplier::select('id', 'supplier_code', 'supplier_name', 'source')->where('source', Supplier::SOURCE_IMPORT)->orderBy('supplier_name')->get(),
             'truckings' => TruckingCompany::select('id', 'company_code', 'company_name')->where('is_active', true)->orderBy('company_name')->get(),
             'materialOptions' => $this->materialOptions(),
             'purchaseOrders' => PurchaseOrder::select('id', 'po_no', 'supplier_id')->orderByDesc('created_at')->get(),
@@ -130,7 +130,7 @@ class IncomingArrivalController extends Controller
         $validated = $request->validate([
             'invoice_no' => ['nullable', 'string', 'max:255'],
             'invoice_date' => ['nullable', 'date'],
-            'supplier_id' => ['required', 'exists:suppliers,id'],
+            'supplier_id' => ['required', Rule::exists('suppliers', 'id')->where('source', Supplier::SOURCE_IMPORT)],
             'trucking_company_id' => ['nullable', 'exists:trucking_companies,id'],
             'purchase_order_id' => ['nullable', 'exists:purchase_orders,id'],
             'vessel' => ['nullable', 'string', 'max:255'],
@@ -269,7 +269,7 @@ class IncomingArrivalController extends Controller
 
         return Inertia::render('Incoming/Arrival/Form', [
             'arrival' => $arrival,
-            'suppliers' => Supplier::select('id', 'supplier_code', 'supplier_name')->orderBy('supplier_name')->get(),
+            'suppliers' => Supplier::select('id', 'supplier_code', 'supplier_name', 'source')->where('source', Supplier::SOURCE_IMPORT)->orderBy('supplier_name')->get(),
             'truckings' => TruckingCompany::select('id', 'company_code', 'company_name')->where('is_active', true)->orderBy('company_name')->get(),
             'materialOptions' => $this->materialOptions(),
             'purchaseOrders' => PurchaseOrder::select('id', 'po_no', 'supplier_id')->orderByDesc('created_at')->get(),
@@ -285,7 +285,7 @@ class IncomingArrivalController extends Controller
         $validated = $request->validate([
             'invoice_no' => ['nullable', 'string', 'max:255'],
             'invoice_date' => ['nullable', 'date'],
-            'supplier_id' => ['required', 'exists:suppliers,id'],
+            'supplier_id' => ['required', Rule::exists('suppliers', 'id')->where('source', Supplier::SOURCE_IMPORT)],
             'trucking_company_id' => ['nullable', 'exists:trucking_companies,id'],
             'purchase_order_id' => ['nullable', 'exists:purchase_orders,id'],
             'vessel' => ['nullable', 'string', 'max:255'],

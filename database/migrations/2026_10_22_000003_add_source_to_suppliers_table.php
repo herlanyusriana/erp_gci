@@ -1,6 +1,5 @@
 <?php
 
-use App\Models\Supplier;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -13,8 +12,6 @@ return new class extends Migration
             $table->string('source', 20)->nullable()->after('supplier_name');
             $table->index('source');
         });
-
-        Supplier::backfillSource();
     }
 
     public function down(): void

@@ -25,5 +25,11 @@ class DerivedDataSeeder extends Seeder
 
         // Klasifikasi source supplier lama; kategori yang sudah ada tidak diubah.
         Supplier::backfillSource();
+
+        // Supplier yang tersisa tanpa kategori adalah pemasok luar negeri pada
+        // data master. Keputusan pemilik produk: seluruhnya import.
+        Supplier::query()
+            ->whereNull('source')
+            ->update(['source' => Supplier::SOURCE_IMPORT]);
     }
 }

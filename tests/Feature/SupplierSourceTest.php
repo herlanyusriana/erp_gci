@@ -6,6 +6,7 @@ use App\Models\IncomingArrival;
 use App\Models\PurchaseOrder;
 use App\Models\Supplier;
 use App\Models\User;
+use Database\Seeders\DerivedDataSeeder;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -181,5 +182,18 @@ class SupplierSourceTest extends TestCase
                 ->component('Master/Supplier/Index')
                 ->where('suppliers.data.0.id', $supplier->id)
                 ->where('suppliers.data.0.source', 'local'));
+    }
+
+    public function test_seeder_leaves_no_supplier_without_a_source(): void
+    {
+        $this->seed(DerivedDataSeeder::class);
+
+        $this->assertSame(
+            0,
+            Supplier::whereNull('source')->count(),
+            'Setiap supplier harus punya kategori setelah seeding, agar form PO dan Arrival tidak kosong.',
+        );
+        $this->assertGreaterThan(0, Supplier::where('source', Supplier::SOURCE_IMPORT)->count());
+        $this->assertGreaterThan(0, Supplier::where('source', Supplier::SOURCE_LOCAL)->count());
     }
 }

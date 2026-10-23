@@ -9,6 +9,8 @@ use App\Models\Part;
 use App\Models\PartType;
 use App\Models\Process;
 use App\Models\User;
+use App\Models\WorkOrder;
+use App\Models\WorkOrderItem;
 use App\Services\WoService;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Database\QueryException;
@@ -480,5 +482,43 @@ class BomMaintenanceTest extends TestCase
             'version' => '1.0',
             'is_active' => true,
         ]);
+    }
+
+    public function test_editing_a_bom_does_not_corrupt_existing_work_orders(): void
+    {
+        $bom = $this->existingBom();
+
+        // WO menyalin item BOM saat dibuat; tidak ada FK ke bom_items.
+        $wo = WorkOrder::create([
+            'wo_no' => 'WO-SNAP-'.uniqid(),
+            'part_id' => $bom->part_id,
+            'qty' => 5,
+            'status' => 'planned',
+            'planned_date' => now()->toDateString(),
+        ]);
+
+        foreach ($bom->items()->get() as $item) {
+            WorkOrderItem::create([
+                'work_order_id' => $wo->id,
+                'sequence' => $item->sequence,
+                'child_part_id' => $item->child_part_id,
+                'child_qty' => $item->child_qty,
+                'uom_rm' => $item->uom_rm,
+            ]);
+        }
+
+        $before = WorkOrderItem::where('work_order_id', $wo->id)->count();
+        $this->assertGreaterThan(0, $before);
+
+        // Ganti seluruh isi BOM dengan satu baris berbeda.
+        $this->put(route('boms.update', $bom), $this->payload($bom->part, [
+            $this->item(['sequence' => 90, 'child_qty' => 7]),
+        ]))->assertSessionHasNoErrors();
+
+        $this->assertSame(
+            $before,
+            WorkOrderItem::where('work_order_id', $wo->id)->count(),
+            'Item Work Order adalah salinan saat dibuat dan tidak boleh ikut berubah saat BOM diedit.',
+        );
     }
 }

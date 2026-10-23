@@ -31,6 +31,7 @@ function doSearch() {
 const form = useForm({
     supplier_code: '',
     supplier_name: '',
+    source: '',
     address: '',
     phone: '',
     email: '',
@@ -55,6 +56,7 @@ function openEdit(s: Supplier) {
     form.clearErrors();
     form.supplier_code = s.supplier_code;
     form.supplier_name = s.supplier_name;
+    form.source = s.source ?? '';
     form.address = s.address ?? '';
     form.phone = s.phone ?? '';
     form.email = s.email ?? '';
@@ -118,6 +120,7 @@ function remove(s: Supplier) {
                         <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                             <th scope="col" class="px-4 py-3">{{ t('master.code') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('master.name') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.supplierSource') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('master.address') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('master.status') }}</th>
                             <th scope="col" class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
@@ -132,6 +135,10 @@ function remove(s: Supplier) {
                                     {{ [s.contact_person, s.phone].filter(Boolean).join(' · ') }}
                                 </div>
                             </td>
+                            <td class="px-4 py-3">
+                                <StatusBadge v-if="s.source" :tone="s.source === 'local' ? 'success' : 'info'">{{ s.source === 'local' ? t('master.sourceLocal') : t('master.sourceImport') }}</StatusBadge>
+                                <span v-else class="text-ink-secondary">—</span>
+                            </td>
                             <td class="px-4 py-3 text-ink-secondary">{{ s.address ?? '—' }}</td>
                             <td class="px-4 py-3">
                                 <StatusBadge :tone="s.is_active ? 'success' : 'warning'">{{ s.is_active ? t('master.active') : t('master.inactive') }}</StatusBadge>
@@ -144,7 +151,7 @@ function remove(s: Supplier) {
                             </td>
                         </tr>
                         <tr v-if="suppliers.data.length === 0">
-                            <td colspan="5" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.supplierEmpty') }}</td>
+                            <td colspan="6" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.supplierEmpty') }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -167,6 +174,15 @@ function remove(s: Supplier) {
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.name') }}</label>
                         <input :aria-label="t('master.name')" v-model="form.supplier_name" type="text" :placeholder="t('master.supplierName')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.supplier_name" class="mt-1" />
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('master.supplierSource') }}</label>
+                        <select :aria-label="t('master.supplierSource')" v-model="form.source" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                            <option value="">{{ t('master.selectSource') }}</option>
+                            <option value="local">{{ t('master.sourceLocal') }}</option>
+                            <option value="import">{{ t('master.sourceImport') }}</option>
+                        </select>
+                        <InputError :message="form.errors.source" class="mt-1" />
                     </div>
                 </div>
                 <div class="mt-4">

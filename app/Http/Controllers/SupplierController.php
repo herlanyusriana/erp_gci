@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -39,6 +40,7 @@ class SupplierController extends Controller
         $data = $request->validate([
             'supplier_code' => ['required', 'string', 'max:80', 'unique:suppliers,supplier_code'],
             'supplier_name' => ['required', 'string', 'max:255'],
+            'source' => ['required', Rule::in(Supplier::SOURCES)],
             'address' => ['nullable', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:60'],
             'email' => ['nullable', 'email', 'max:120'],
@@ -62,6 +64,7 @@ class SupplierController extends Controller
         $data = $request->validate([
             'supplier_code' => ['required', 'string', 'max:80', "unique:suppliers,supplier_code,{$supplier->id}"],
             'supplier_name' => ['required', 'string', 'max:255'],
+            'source' => ['required', Rule::in(Supplier::SOURCES)],
             'address' => ['nullable', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:60'],
             'email' => ['nullable', 'email', 'max:120'],

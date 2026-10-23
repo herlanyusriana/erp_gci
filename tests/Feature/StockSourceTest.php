@@ -91,6 +91,7 @@ class StockSourceTest extends TestCase
             ->post(route('suppliers.store'), [
                 'supplier_code' => 'SUP-CT-001',
                 'supplier_name' => 'PT Kontak Lengkap',
+                'source' => 'local',
                 'address' => 'Jl. Merdeka 10',
                 'phone' => '021-7000111',
                 'email' => 'info@kontak-lengkap.co.id',
@@ -133,6 +134,7 @@ class StockSourceTest extends TestCase
             ->put(route('suppliers.update', $supplier), [
                 'supplier_code' => 'SUP-CT-003',
                 'supplier_name' => 'PT Update Kontak',
+                'source' => 'local',
                 'address' => 'Jl. Baru 22',
                 'phone' => '022-888999',
                 'email' => 'baru@update.co.id',

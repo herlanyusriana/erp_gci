@@ -62,6 +62,7 @@ export interface Supplier {
     id: number;
     supplier_code: string;
     supplier_name: string;
+    source: 'local' | 'import' | null;
     address?: string | null;
     phone?: string | null;
     email?: string | null;

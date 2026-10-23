@@ -47,7 +47,7 @@ class PurchaseOrderController extends Controller
 
         return Inertia::render('Incoming/PurchaseOrder/Form', [
             'purchaseOrder' => null,
-            'suppliers' => Supplier::select('id', 'supplier_code', 'supplier_name')->orderBy('supplier_name')->get(),
+            'suppliers' => Supplier::select('id', 'supplier_code', 'supplier_name', 'source')->where('source', Supplier::SOURCE_IMPORT)->orderBy('supplier_name')->get(),
             'parts' => Part::select('id', 'part_number', 'part_name')
                 ->where('is_active', true)
                 ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))
@@ -77,7 +77,7 @@ class PurchaseOrderController extends Controller
 
         return Inertia::render('Incoming/PurchaseOrder/Form', [
             'purchaseOrder' => $purchaseOrder,
-            'suppliers' => Supplier::select('id', 'supplier_code', 'supplier_name')->orderBy('supplier_name')->get(),
+            'suppliers' => Supplier::select('id', 'supplier_code', 'supplier_name', 'source')->where('source', Supplier::SOURCE_IMPORT)->orderBy('supplier_name')->get(),
             'parts' => Part::select('id', 'part_number', 'part_name')
                 ->where('is_active', true)
                 ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))
@@ -92,7 +92,7 @@ class PurchaseOrderController extends Controller
     {
         $data = $request->validate([
             'po_no' => ['required', 'string', 'max:255', 'unique:purchase_orders,po_no'],
-            'supplier_id' => ['required', 'exists:suppliers,id'],
+            'supplier_id' => ['required', Rule::exists('suppliers', 'id')->where('source', Supplier::SOURCE_IMPORT)],
             'po_date' => ['nullable', 'date'],
             'expected_date' => ['nullable', 'date'],
             'notes' => ['nullable', 'string'],
@@ -137,7 +137,7 @@ class PurchaseOrderController extends Controller
     {
         $data = $request->validate([
             'po_no' => ['required', 'string', 'max:255', "unique:purchase_orders,po_no,{$purchaseOrder->id}"],
-            'supplier_id' => ['required', 'exists:suppliers,id'],
+            'supplier_id' => ['required', Rule::exists('suppliers', 'id')->where('source', Supplier::SOURCE_IMPORT)],
             'po_date' => ['nullable', 'date'],
             'expected_date' => ['nullable', 'date'],
             'notes' => ['nullable', 'string'],

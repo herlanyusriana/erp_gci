@@ -60,6 +60,7 @@ class PartTypeGuardTest extends TestCase
             ->firstOrFail();
 
         $supplier = Supplier::findOrFail($mapping->supplier_id);
+        $supplier->forceFill(['source' => Supplier::SOURCE_IMPORT])->saveQuietly();
         $material = Part::findOrFail($mapping->substitute_part_id);
 
         $this->post(route('purchase-orders.store'), [
@@ -91,6 +92,7 @@ class PartTypeGuardTest extends TestCase
             ->firstOrFail();
 
         $supplier = Supplier::findOrFail($mapping->supplier_id);
+        $supplier->forceFill(['source' => Supplier::SOURCE_LOCAL])->saveQuietly();
         $material = Part::findOrFail($mapping->substitute_part_id);
 
         $payload = fn ($partId) => [

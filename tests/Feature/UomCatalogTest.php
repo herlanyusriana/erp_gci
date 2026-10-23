@@ -56,6 +56,7 @@ class UomCatalogTest extends TestCase
         $this->actingAs(User::where('email', 'admin@geumcheon.local')->firstOrFail());
 
         $supplier = Supplier::firstOrFail();
+        $supplier->forceFill(['source' => Supplier::SOURCE_LOCAL])->saveQuietly();
         $part = Part::whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))->firstOrFail();
 
         $response = $this->post(route('local-pos.store'), [
@@ -86,6 +87,7 @@ class UomCatalogTest extends TestCase
             ->firstOrFail();
 
         $supplier = Supplier::findOrFail($mapping->supplier_id);
+        $supplier->forceFill(['source' => Supplier::SOURCE_LOCAL])->saveQuietly();
         $part = Part::findOrFail($mapping->substitute_part_id);
 
         $response = $this->post(route('local-pos.store'), [

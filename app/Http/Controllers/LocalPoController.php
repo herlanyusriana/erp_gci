@@ -74,7 +74,8 @@ class LocalPoController extends Controller
 
         return Inertia::render('Incoming/LocalPo/Form', [
             'arrival' => null,
-            'suppliers' => Supplier::select('id', 'supplier_code', 'supplier_name')
+            'suppliers' => Supplier::select('id', 'supplier_code', 'supplier_name', 'source')
+                ->where('source', Supplier::SOURCE_LOCAL)
                 ->where('is_active', true)->orderBy('supplier_name')->get(),
             'parts' => Part::select('id', 'part_number', 'part_name')
                 ->where('is_active', true)
@@ -98,7 +99,7 @@ class LocalPoController extends Controller
             'po_no' => ['required', 'string', 'max:255', Rule::unique('incoming_arrivals', 'po_no')],
             'invoice_no' => ['nullable', 'string', 'max:255'],
             'po_date' => ['required', 'date'],
-            'supplier_id' => ['required', 'exists:suppliers,id'],
+            'supplier_id' => ['required', Rule::exists('suppliers', 'id')->where('source', Supplier::SOURCE_LOCAL)],
             'currency' => ['nullable', 'string', 'max:10'],
             'notes' => ['nullable', 'string'],
             'items' => ['required', 'array', 'min:1'],
@@ -192,7 +193,8 @@ class LocalPoController extends Controller
 
         return Inertia::render('Incoming/LocalPo/Form', [
             'arrival' => $arrival,
-            'suppliers' => Supplier::select('id', 'supplier_code', 'supplier_name')
+            'suppliers' => Supplier::select('id', 'supplier_code', 'supplier_name', 'source')
+                ->where('source', Supplier::SOURCE_LOCAL)
                 ->where('is_active', true)->orderBy('supplier_name')->get(),
             'parts' => Part::select('id', 'part_number', 'part_name')
                 ->where('is_active', true)
@@ -217,7 +219,7 @@ class LocalPoController extends Controller
             'po_no' => ['required', 'string', 'max:255', Rule::unique('incoming_arrivals', 'po_no')->ignore($arrival->id)],
             'invoice_no' => ['nullable', 'string', 'max:255'],
             'po_date' => ['required', 'date'],
-            'supplier_id' => ['required', 'exists:suppliers,id'],
+            'supplier_id' => ['required', Rule::exists('suppliers', 'id')->where('source', Supplier::SOURCE_LOCAL)],
             'currency' => ['nullable', 'string', 'max:10'],
             'notes' => ['nullable', 'string'],
             'items' => ['required', 'array', 'min:1'],

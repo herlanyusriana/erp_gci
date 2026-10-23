@@ -26,8 +26,14 @@ class LocalPoTest extends TestCase
         PartSubstitute::firstOrCreate([
             'part_id' => Part::where('part_number', '4000W4A003A')->value('id'),
             'substitute_part_id' => Part::where('part_number', 'CBKG07256C')->value('id'),
-            'supplier_id' => Supplier::query()->value('id'),
+            'supplier_id' => $this->localSupplier()->id,
         ], ['is_active' => true]);
+    }
+
+    /** Local PO hanya menerima supplier berkategori local. */
+    private function localSupplier(): Supplier
+    {
+        return Supplier::where('source', Supplier::SOURCE_LOCAL)->orderBy('id')->firstOrFail();
     }
 
     private function payload(array $overrides = []): array
@@ -36,7 +42,7 @@ class LocalPoTest extends TestCase
             'po_no' => 'LPO-TEST-001',
             'invoice_no' => 'INV-LOCAL-001',
             'po_date' => now()->toDateString(),
-            'supplier_id' => Supplier::query()->value('id'),
+            'supplier_id' => $this->localSupplier()->id,
             'currency' => 'IDR',
             'items' => [[
                 'part_id' => Part::where('part_number', 'CBKG07256C')->value('id'),
@@ -92,6 +98,7 @@ class LocalPoTest extends TestCase
         $supplier = Supplier::create([
             'supplier_code' => 'SUP-LPO-GUARD',
             'supplier_name' => 'Local PO Guard Supplier',
+            'source' => Supplier::SOURCE_LOCAL,
             'is_active' => true,
         ]);
         $payload = $this->payload([

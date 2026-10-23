@@ -16,6 +16,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use Maatwebsite\Excel\Facades\Excel;
@@ -235,6 +236,12 @@ class LocalPoController extends Controller
             'items.*.price' => ['nullable', 'numeric', 'min:0'],
             'items.*.notes' => ['nullable', 'string'],
         ]);
+
+        if ((int) $validated['supplier_id'] !== (int) $arrival->supplier_id) {
+            throw ValidationException::withMessages([
+                'supplier_id' => __('Pemasok tidak dapat diubah setelah PO disimpan.'),
+            ]);
+        }
 
         $blocked = DB::transaction(function () use ($arrival, $validated) {
             $arrival->update([

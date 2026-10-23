@@ -16,6 +16,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -149,6 +150,12 @@ class PurchaseOrderController extends Controller
             'items.*.price' => ['nullable', 'numeric', 'min:0'],
             'items.*.notes' => ['nullable', 'string'],
         ]);
+
+        if ((int) $data['supplier_id'] !== (int) $purchaseOrder->supplier_id) {
+            throw ValidationException::withMessages([
+                'supplier_id' => __('Pemasok tidak dapat diubah setelah PO disimpan.'),
+            ]);
+        }
 
         DB::transaction(function () use ($purchaseOrder, $data, $request) {
             $purchaseOrder->update([

@@ -66,6 +66,8 @@ class PartSubstituteController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        Gate::authorize('create', PartSubstitute::class);
+
         $request->merge(['size' => $this->normalizeSize($request->input('size'))]);
         $request->merge(['packing_type' => $this->normalizePackingType($request->input('packing_type'))]);
 
@@ -95,6 +97,8 @@ class PartSubstituteController extends Controller
 
     public function update(Request $request, PartSubstitute $substitute): RedirectResponse
     {
+        Gate::authorize('update', $substitute);
+
         $request->merge(['size' => $this->normalizeSize($request->input('size'))]);
         $request->merge(['packing_type' => $this->normalizePackingType($request->input('packing_type'))]);
 
@@ -171,6 +175,8 @@ class PartSubstituteController extends Controller
 
     public function destroy(PartSubstitute $substitute): RedirectResponse
     {
+        Gate::authorize('delete', $substitute);
+
         $substitute->delete();
 
         return redirect()->route('substitutes.index')->with('success', __('Substitute dihapus.'));

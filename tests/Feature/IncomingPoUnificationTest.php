@@ -61,6 +61,27 @@ class IncomingPoUnificationTest extends TestCase
         return $part;
     }
 
+    /** Supplier baru + mapping part-nya, agar payload valid dan tidak bergantung seeder. */
+    private function freshSupplierWithPart(string $source): array
+    {
+        $supplier = Supplier::create([
+            'supplier_code' => 'SUP-UNI-'.strtoupper($source).'-'.uniqid(),
+            'supplier_name' => ($source === Supplier::SOURCE_LOCAL ? 'PT ' : '').'Uni '.ucfirst($source).' '.uniqid(),
+            'source' => $source,
+            'is_active' => true,
+        ]);
+
+        $part = Part::whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))->firstOrFail();
+
+        PartSubstitute::firstOrCreate([
+            'part_id' => Part::whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))->value('id'),
+            'substitute_part_id' => $part->id,
+            'supplier_id' => $supplier->id,
+        ], ['is_active' => true]);
+
+        return [$supplier, $part];
+    }
+
     private function poPayload(Supplier $supplier, Part $part): array
     {
         return [
@@ -199,5 +220,63 @@ class IncomingPoUnificationTest extends TestCase
         ])->assertSessionHasErrors('supplier_id');
 
         $this->assertSame($local->id, $localPo->fresh()->supplier_id, 'Local PO tidak boleh pindah ke supplier import.');
+    }
+
+    public function test_purchase_order_cannot_switch_to_another_import_supplier(): void
+    {
+        [$import, $part] = $this->freshSupplierWithPart(Supplier::SOURCE_IMPORT);
+
+        $this->post(route('purchase-orders.store'), $this->poPayload($import, $part))
+            ->assertSessionHasNoErrors();
+
+        $po = PurchaseOrder::where('supplier_id', $import->id)->latest('id')->firstOrFail();
+
+        [$other] = $this->freshSupplierWithPart(Supplier::SOURCE_IMPORT);
+
+        $this->put(route('purchase-orders.update', $po), [
+            'po_no' => $po->po_no,
+            'supplier_id' => $other->id,
+            'status' => 'draft',
+            'items' => [['part_id' => $part->id, 'qty' => 5]],
+        ])->assertSessionHasErrors('supplier_id');
+
+        $this->assertSame($import->id, $po->fresh()->supplier_id, 'Supplier terkunci setelah PO disimpan.');
+    }
+
+    public function test_local_po_cannot_switch_to_another_local_supplier(): void
+    {
+        [$local, $part] = $this->freshSupplierWithPart(Supplier::SOURCE_LOCAL);
+
+        $this->post(route('local-pos.store'), [
+            'po_no' => 'LPO-LOCK2-'.uniqid(),
+            'po_date' => now()->toDateString(),
+            'supplier_id' => $local->id,
+            'currency' => 'IDR',
+            'items' => [[
+                'part_id' => $part->id,
+                'qty_goods' => 5,
+                'unit_goods' => 'PCS',
+                'weight_nett' => 5,
+            ]],
+        ])->assertSessionHasNoErrors();
+
+        $localPo = IncomingArrival::where('is_local', true)->latest('id')->firstOrFail();
+
+        [$other] = $this->freshSupplierWithPart(Supplier::SOURCE_LOCAL);
+
+        $this->put(route('local-pos.update', $localPo), [
+            'po_no' => $localPo->po_no,
+            'po_date' => now()->toDateString(),
+            'supplier_id' => $other->id,
+            'currency' => 'IDR',
+            'items' => [[
+                'part_id' => $part->id,
+                'qty_goods' => 5,
+                'unit_goods' => 'PCS',
+                'weight_nett' => 5,
+            ]],
+        ])->assertSessionHasErrors('supplier_id');
+
+        $this->assertSame($local->id, $localPo->fresh()->supplier_id);
     }
 }

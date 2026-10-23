@@ -388,4 +388,45 @@ class PartSubstituteAttributeTest extends TestCase
             ])
             ->assertForbidden();
     }
+
+    public function test_store_update_and_destroy_require_the_substitute_permissions(): void
+    {
+        $outsider = User::create([
+            'name' => 'Outsider',
+            'email' => 'outsider-sub-'.uniqid().'@example.com',
+            'password' => bcrypt('password'),
+            'is_active' => true,
+        ]);
+
+        $part = $this->materialPart('4000W4A003A');
+        $substitutePart = $this->materialPart('CBKG07256C');
+        $supplier = $this->supplier('SUP-ATTR-AUTH');
+
+        PartPackingType::register($substitutePart->id, 'PALLET');
+
+        $relation = PartSubstitute::create([
+            'part_id' => $part->id,
+            'substitute_part_id' => $substitutePart->id,
+            'supplier_id' => $supplier->id,
+            'packing_type' => 'PALLET',
+            'is_active' => true,
+        ]);
+
+        $payload = [
+            'part_id' => $part->id,
+            'substitute_part_id' => $substitutePart->id,
+            'supplier_id' => $supplier->id,
+            'packing_type' => 'PALLET',
+            'size' => '5 mm',
+            'is_active' => true,
+        ];
+
+        $this->actingAs($outsider);
+
+        $this->post(route('substitutes.store'), $payload)->assertForbidden();
+        $this->put(route('substitutes.update', $relation), $payload)->assertForbidden();
+        $this->delete(route('substitutes.destroy', $relation))->assertForbidden();
+
+        $this->assertDatabaseHas('part_substitutes', ['id' => $relation->id]);
+    }
 }

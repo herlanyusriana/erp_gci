@@ -10,6 +10,7 @@ use App\Models\PurchaseOrderItem;
 use App\Models\Supplier;
 use App\Rules\PartTypeRule;
 use App\Rules\UomCode;
+use App\Support\RowErrorKeys;
 use App\Support\UomCatalog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -91,20 +92,7 @@ class PurchaseOrderController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $data = $request->validate([
-            'po_no' => ['required', 'string', 'max:255', 'unique:purchase_orders,po_no'],
-            'supplier_id' => ['required', Rule::exists('suppliers', 'id')->where('source', Supplier::SOURCE_IMPORT)],
-            'po_date' => ['nullable', 'date'],
-            'expected_date' => ['nullable', 'date'],
-            'notes' => ['nullable', 'string'],
-            'status' => ['required', 'in:draft,confirmed,cancelled'],
-            'items' => ['required', 'array', 'min:1'],
-            'items.*.part_id' => ['required', 'exists:parts,id', PartTypeRule::notFg(), Rule::exists('part_substitutes', 'substitute_part_id')->where(fn ($q) => $q->where('supplier_id', (int) $request->input('supplier_id'))->where('is_active', true))],
-            'items.*.qty' => ['required', 'numeric', 'min:0'],
-            'items.*.unit' => ['nullable', 'string', 'max:20', UomCode::optional()],
-            'items.*.price' => ['nullable', 'numeric', 'min:0'],
-            'items.*.notes' => ['nullable', 'string'],
-        ]);
+        $data = $this->validateOrRemap($request);
 
         $po = DB::transaction(function () use ($data, $request) {
             $po = PurchaseOrder::create([
@@ -136,20 +124,7 @@ class PurchaseOrderController extends Controller
 
     public function update(Request $request, PurchaseOrder $purchaseOrder): RedirectResponse
     {
-        $data = $request->validate([
-            'po_no' => ['required', 'string', 'max:255', "unique:purchase_orders,po_no,{$purchaseOrder->id}"],
-            'supplier_id' => ['required', Rule::exists('suppliers', 'id')->where('source', Supplier::SOURCE_IMPORT)],
-            'po_date' => ['nullable', 'date'],
-            'expected_date' => ['nullable', 'date'],
-            'notes' => ['nullable', 'string'],
-            'status' => ['required', 'in:draft,confirmed,cancelled'],
-            'items' => ['required', 'array', 'min:1'],
-            'items.*.part_id' => ['required', 'exists:parts,id', PartTypeRule::notFg(), Rule::exists('part_substitutes', 'substitute_part_id')->where(fn ($q) => $q->where('supplier_id', (int) $request->input('supplier_id'))->where('is_active', true))],
-            'items.*.qty' => ['required', 'numeric', 'min:0'],
-            'items.*.unit' => ['nullable', 'string', 'max:20', UomCode::optional()],
-            'items.*.price' => ['nullable', 'numeric', 'min:0'],
-            'items.*.notes' => ['nullable', 'string'],
-        ]);
+        $data = $this->validateOrRemap($request, $purchaseOrder);
 
         if ((int) $data['supplier_id'] !== (int) $purchaseOrder->supplier_id) {
             throw ValidationException::withMessages([
@@ -189,6 +164,50 @@ class PurchaseOrderController extends Controller
         $purchaseOrder->delete();
 
         return redirect()->route('purchase-orders.index')->with('success', __('Purchase order deleted.'));
+    }
+
+    /**
+     * Aturan validasi PO, dipakai bersama store/update.
+     *
+     * @return array<string, mixed>
+     */
+    private function rules(Request $request, ?PurchaseOrder $purchaseOrder = null): array
+    {
+        $unique = $purchaseOrder
+            ? Rule::unique('purchase_orders', 'po_no')->ignore($purchaseOrder->id)
+            : Rule::unique('purchase_orders', 'po_no');
+
+        $supplierId = (int) $request->input('supplier_id');
+
+        return [
+            'po_no' => ['required', 'string', 'max:255', $unique],
+            'supplier_id' => ['required', Rule::exists('suppliers', 'id')->where('source', Supplier::SOURCE_IMPORT)],
+            'po_date' => ['nullable', 'date'],
+            'expected_date' => ['nullable', 'date'],
+            'notes' => ['nullable', 'string'],
+            'status' => ['required', 'in:draft,confirmed,cancelled'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.uid' => RowErrorKeys::rules(),
+            'items.*.part_id' => ['required', 'exists:parts,id', PartTypeRule::notFg(), Rule::exists('part_substitutes', 'substitute_part_id')->where(fn ($q) => $q->where('supplier_id', $supplierId)->where('is_active', true))],
+            'items.*.qty' => ['required', 'numeric', 'min:0'],
+            'items.*.unit' => ['nullable', 'string', 'max:20', UomCode::optional()],
+            'items.*.price' => ['nullable', 'numeric', 'min:0'],
+            'items.*.notes' => ['nullable', 'string'],
+        ];
+    }
+
+    /**
+     * Validasi PO dengan key error per baris mengikuti `uid` baris.
+     *
+     * @return array<string, mixed>
+     */
+    private function validateOrRemap(Request $request, ?PurchaseOrder $purchaseOrder = null): array
+    {
+        try {
+            return $request->validate($this->rules($request, $purchaseOrder));
+        } catch (ValidationException $exception) {
+            RowErrorKeys::remap($exception, (array) $request->input('items', []));
+        }
     }
 
     /**

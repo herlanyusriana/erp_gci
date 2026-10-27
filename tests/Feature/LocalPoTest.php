@@ -143,4 +143,24 @@ class LocalPoTest extends TestCase
         $arrival = IncomingArrival::where('po_no', 'LPO-TEST-001')->firstOrFail();
         $this->assertNotNull($arrival->arrival_no);
     }
+
+    public function test_local_po_keys_row_errors_by_uid_not_payload_index(): void
+    {
+        $mapped = Part::where('part_number', 'CBKG07256C')->value('id');
+        $payload = $this->payload([
+            'po_no' => 'LPO-UID-001',
+            'items' => [
+                ['uid' => 4, 'part_id' => $mapped, 'size' => 'L', 'qty_goods' => 10, 'unit_goods' => 'BAG', 'weight_nett' => 100],
+                ['uid' => 21, 'part_id' => $mapped, 'size' => 'L', 'qty_goods' => 10, 'unit_goods' => 'BAG'],
+            ],
+        ]);
+
+        // Baris uid 21 tanpa net weight → error ber-key uid (21), bukan index 1.
+        $this->post(route('local-pos.store'), $payload)
+            ->assertSessionHasErrors('items.21.weight_nett')
+            ->assertSessionDoesntHaveErrors('items.1.weight_nett')
+            ->assertSessionDoesntHaveErrors('items.4.weight_nett');
+
+        $this->assertDatabaseMissing('incoming_arrivals', ['po_no' => 'LPO-UID-001']);
+    }
 }

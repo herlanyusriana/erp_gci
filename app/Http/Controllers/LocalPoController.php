@@ -10,6 +10,7 @@ use App\Models\PartSubstitute;
 use App\Models\Supplier;
 use App\Rules\PartTypeRule;
 use App\Rules\UomCode;
+use App\Support\RowErrorKeys;
 use App\Support\UomCatalog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -96,7 +97,7 @@ class LocalPoController extends Controller
         $request->merge(['po_no' => strtoupper(trim((string) $request->input('po_no', '')))]);
         $request->merge(['invoice_no' => strtoupper(trim((string) $request->input('invoice_no', ''))) ?: null]);
 
-        $validated = $request->validate([
+        $validated = $this->validateOrRemap($request, [
             'po_no' => ['required', 'string', 'max:255', Rule::unique('incoming_arrivals', 'po_no')],
             'invoice_no' => ['nullable', 'string', 'max:255'],
             'po_date' => ['required', 'date'],
@@ -104,6 +105,7 @@ class LocalPoController extends Controller
             'currency' => ['nullable', 'string', 'max:10'],
             'notes' => ['nullable', 'string'],
             'items' => ['required', 'array', 'min:1'],
+            'items.*.uid' => RowErrorKeys::rules(),
             'items.*.part_id' => ['required', 'exists:parts,id', PartTypeRule::notFg(), Rule::exists('part_substitutes', 'substitute_part_id')->where(fn ($q) => $q->where('supplier_id', (int) $request->input('supplier_id'))->where('is_active', true))],
             'items.*.size' => ['nullable', 'string', 'max:100'],
             'items.*.qty_goods' => ['required', 'numeric', 'min:0'],
@@ -162,6 +164,21 @@ class LocalPoController extends Controller
         return redirect()->route('local-pos.show', $arrival)->with('success', __('Local PO created. Silakan lakukan receive.'));
     }
 
+    /**
+     * Validasi Local PO dengan key error per baris mengikuti `uid` baris.
+     *
+     * @param  array<string, mixed>  $rules
+     * @return array<string, mixed>
+     */
+    private function validateOrRemap(Request $request, array $rules): array
+    {
+        try {
+            return $request->validate($rules);
+        } catch (ValidationException $exception) {
+            RowErrorKeys::remap($exception, (array) $request->input('items', []));
+        }
+    }
+
     public function show(IncomingArrival $localPo): Response
     {
         $arrival = $this->findLocalOrFail($localPo);
@@ -216,7 +233,7 @@ class LocalPoController extends Controller
         $request->merge(['po_no' => strtoupper(trim((string) $request->input('po_no', '')))]);
         $request->merge(['invoice_no' => strtoupper(trim((string) $request->input('invoice_no', ''))) ?: null]);
 
-        $validated = $request->validate([
+        $validated = $this->validateOrRemap($request, [
             'po_no' => ['required', 'string', 'max:255', Rule::unique('incoming_arrivals', 'po_no')->ignore($arrival->id)],
             'invoice_no' => ['nullable', 'string', 'max:255'],
             'po_date' => ['required', 'date'],
@@ -225,6 +242,7 @@ class LocalPoController extends Controller
             'notes' => ['nullable', 'string'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.id' => ['nullable', 'integer'],
+            'items.*.uid' => RowErrorKeys::rules(),
             'items.*.part_id' => ['required', 'exists:parts,id', PartTypeRule::notFg(), Rule::exists('part_substitutes', 'substitute_part_id')->where(fn ($q) => $q->where('supplier_id', (int) $request->input('supplier_id'))->where('is_active', true))],
             'items.*.size' => ['nullable', 'string', 'max:100'],
             'items.*.qty_goods' => ['required', 'numeric', 'min:0'],

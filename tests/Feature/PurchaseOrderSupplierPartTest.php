@@ -101,4 +101,39 @@ class PurchaseOrderSupplierPartTest extends TestCase
 
         $this->assertDatabaseMissing('purchase_orders', ['po_no' => 'PO-GUARD-001']);
     }
+
+    public function test_store_keys_row_errors_by_uid_not_payload_index(): void
+    {
+        $supplier = Supplier::create([
+            'supplier_code' => 'SUP-PO-UID',
+            'supplier_name' => 'PO UID Supplier',
+            'is_active' => true,
+        ]);
+        $mapped = Part::where('part_number', 'CBKG07256C')->firstOrFail();
+        $unmapped = Part::where('part_number', '4000W4A003A')->firstOrFail();
+
+        PartSubstitute::create([
+            'part_id' => $mapped->id,
+            'substitute_part_id' => $mapped->id,
+            'supplier_id' => $supplier->id,
+            'is_active' => true,
+        ]);
+
+        // Baris uid 3 valid; baris uid 12 memakai part di luar daftar supplier.
+        // Error harus ber-key uid baris (12), bukan index payload (1).
+        $this->post(route('purchase-orders.store'), [
+            'po_no' => 'PO-UID-001',
+            'supplier_id' => $supplier->id,
+            'status' => 'draft',
+            'items' => [
+                ['uid' => 3, 'part_id' => $mapped->id, 'qty' => 1, 'unit' => 'PCS'],
+                ['uid' => 12, 'part_id' => $unmapped->id, 'qty' => 1, 'unit' => 'PCS'],
+            ],
+        ])
+            ->assertSessionHasErrors('items.12.part_id')
+            ->assertSessionDoesntHaveErrors('items.1.part_id')
+            ->assertSessionDoesntHaveErrors('items.3.part_id');
+
+        $this->assertDatabaseMissing('purchase_orders', ['po_no' => 'PO-UID-001']);
+    }
 }

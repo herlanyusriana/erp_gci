@@ -5,11 +5,13 @@ import { Head, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import InputError from '@/Components/InputError.vue';
+import PartSelect from '@/Components/PartSelect.vue';
 import type { PurchaseOrder, Supplier, Part } from '@/types';
 
 const { t } = useI18n();
 
 interface ItemRow {
+    uid: number;
     part_id: number | '';
     qty: number | '';
     unit: string;
@@ -41,12 +43,15 @@ const props = defineProps<{
     activePrices: ActivePrice[];
 }>();
 
-const blankItem = (): ItemRow => ({ part_id: '', qty: '', unit: '', price: '', notes: '' });
+let rowUid = 0;
+
+const blankItem = (): ItemRow => ({ uid: ++rowUid, part_id: '', qty: '', unit: '', price: '', notes: '' });
 
 const isLocked = computed(() => props.purchaseOrder?.id != null);
 
 const rows = ref<ItemRow[]>(
     props.purchaseOrder?.items?.map((i) => ({
+        uid: ++rowUid,
         part_id: i.part_id ?? '',
         qty: i.qty,
         unit: i.unit ?? '',
@@ -119,13 +124,32 @@ function onPartChange(r: ItemRow) {
 function addRow() {
     rows.value.push(blankItem());
 }
+function rowHasData(r: ItemRow): boolean {
+    return r.part_id !== '' || r.qty !== '' || r.unit !== '' || r.price !== '' || r.notes !== '';
+}
+
 function removeRow(i: number) {
-    if (rows.value.length > 1) rows.value.splice(i, 1);
+    if (rows.value.length <= 1) return;
+
+    if (rowHasData(rows.value[i]) && !confirm(t('incoming.confirmRemoveRow'))) {
+        return;
+    }
+
+    rows.value.splice(i, 1);
+}
+
+/**
+ * Pesan validasi baris dikirim server dengan key `items.<uid>.<field>`,
+ * bukan index payload — baris kosong disaring sebelum submit.
+ */
+function rowError(r: ItemRow, field: string): string | undefined {
+    return (form.errors as Record<string, string | undefined>)[`items.${r.uid}.${field}`];
 }
 function submit() {
     form.items = rows.value
         .filter((r) => r.part_id !== '')
         .map((r) => ({
+            uid: r.uid,
             part_id: Number(r.part_id),
             qty: r.qty === '' ? 0 : Number(r.qty),
             unit: r.unit,
@@ -199,19 +223,27 @@ function submit() {
                 </div>
                 <InputError :message="form.errors.items" class="mb-3" />
 
-                <div v-for="(r, i) in rows" :key="i" class="grid gap-3 border-t border-borderline py-3 sm:grid-cols-12">
+                <div v-for="(r, i) in rows" :key="r.uid" class="grid gap-3 border-t border-borderline py-3 sm:grid-cols-12">
                     <div class="sm:col-span-4">
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.part') }}</label>
-                        <select :aria-label="t('incoming.part')" v-model="r.part_id" :disabled="!form.supplier_id" @change="onPartChange(r)" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary disabled:bg-background disabled:text-ink-secondary">
-                            <option value="">{{ t('incoming.choosePart') }}</option>
-                            <option v-for="p in partOptions" :key="p.id" :value="p.id">{{ p.part_number }} · {{ p.part_name }}</option>
-                        </select>
+                        <PartSelect
+                            :model-value="r.part_id"
+                            :options="partOptions"
+                            :list-id="`po-part-${r.uid}`"
+                            :aria-label="t('incoming.part')"
+                            :placeholder="t('incoming.searchPart')"
+                            :disabled="!form.supplier_id"
+                            @update:model-value="r.part_id = $event"
+                            @change="onPartChange(r)"
+                        />
                         <p v-if="isLocked" class="mt-1 text-xs text-ink-secondary">{{ t('incoming.supplierLocked') }}</p>
                         <p v-if="form.supplier_id && partOptions.length === 0" class="mt-1 text-xs text-warning">{{ t('incoming.supplierNoParts') }}</p>
+                        <InputError :message="rowError(r, 'part_id')" class="mt-1" />
                     </div>
                     <div class="sm:col-span-2">
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.qty') }}</label>
                         <input :aria-label="t('incoming.qty')" v-model="r.qty" type="number" step="0.0001" min="0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <InputError :message="rowError(r, 'qty')" class="mt-1" />
                     </div>
                     <div class="sm:col-span-2">
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.unit') }}</label>
@@ -219,11 +251,13 @@ function submit() {
                             <option value="">—</option>
                             <option v-for="code in uomCodes" :key="code" :value="code">{{ code }}</option>
                         </select>
+                        <InputError :message="rowError(r, 'unit')" class="mt-1" />
                     </div>
                     <div class="sm:col-span-2">
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.price') }}</label>
                         <input :aria-label="t('incoming.price')" v-model="r.price" type="number" step="0.0001" min="0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <p v-if="priceFor(r.part_id)" class="mt-1 text-xs text-ink-secondary">{{ t('incoming.priceFromMaster', { currency: priceFor(r.part_id)?.currency }) }}</p>
+                        <InputError :message="rowError(r, 'price')" class="mt-1" />
                     </div>
                     <div class="flex items-end sm:col-span-2">
                         <button type="button" @click="removeRow(i)" :disabled="rows.length <= 1" class="rounded-lg border border-borderline px-3 py-2 text-sm text-danger transition hover:bg-danger/10 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">{{ t('incoming.delete') }}</button>

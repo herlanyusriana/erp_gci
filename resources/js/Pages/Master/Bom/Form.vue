@@ -5,11 +5,13 @@ import { Head, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import InputError from '@/Components/InputError.vue';
+import PartSelect from '@/Components/PartSelect.vue';
 import type { Bom, BomItem, Machine, Part, Process } from '@/types';
 
 const { t } = useI18n();
 
 interface ItemRow {
+    uid: number;
     sequence: number | '';
     process_id: number | '';
     machine_id: number | '';
@@ -38,7 +40,10 @@ const props = defineProps<{
 
 const editing = computed(() => props.bom !== null);
 
+let rowUid = 0;
+
 const blankItem = (): ItemRow => ({
+    uid: ++rowUid,
     sequence: '',
     process_id: '',
     machine_id: '',
@@ -58,6 +63,7 @@ const blankItem = (): ItemRow => ({
 const seedItems = (): ItemRow[] => {
     if (props.items?.length) {
         return props.items.map((i) => ({
+            uid: ++rowUid,
             sequence: i.sequence ?? '',
             process_id: i.process?.id ?? '',
             machine_id: i.machine?.id ?? '',
@@ -90,8 +96,27 @@ function addRow() {
     rows.value.push(blankItem());
 }
 
+function rowHasData(r: ItemRow): boolean {
+    return r.child_part_id !== ''
+        || r.child_qty !== ''
+        || r.parent_part_id !== ''
+        || r.sequence !== ''
+        || r.process_id !== ''
+        || r.machine_id !== ''
+        || r.size !== ''
+        || r.uom_rm !== ''
+        || r.special_code !== ''
+        || r.source !== '';
+}
+
 function removeRow(i: number) {
-    if (rows.value.length > 1) rows.value.splice(i, 1);
+    if (rows.value.length === 1) return;
+
+    if (rowHasData(rows.value[i]) && !confirm(t('master.confirmRemoveItem'))) {
+        return;
+    }
+
+    rows.value.splice(i, 1);
 }
 
 /** Pilih child part → isi nama dan UOM bila belum diisi. */
@@ -181,7 +206,7 @@ const fieldClass = 'mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-
 
                 <InputError :message="form.errors.items" class="px-6 pt-4" />
 
-                <div v-for="(r, i) in rows" :key="i" class="border-b border-borderline px-6 py-4 last:border-b-0">
+                <div v-for="(r, i) in rows" :key="r.uid" class="border-b border-borderline px-6 py-4 last:border-b-0">
                     <div class="mb-3 flex items-center justify-between">
                         <span class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('master.bomItem') }} {{ i + 1 }}</span>
                         <button type="button" @click="removeRow(i)" :disabled="rows.length === 1" class="text-xs font-semibold text-danger transition hover:underline disabled:cursor-not-allowed disabled:opacity-40">{{ t('master.removeItem') }}</button>
@@ -212,10 +237,15 @@ const fieldClass = 'mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-
 
                         <div class="sm:col-span-6">
                             <label class="text-xs font-semibold text-ink-secondary">{{ t('master.parentPart') }}</label>
-                            <select :aria-label="t('master.parentPart')" v-model="r.parent_part_id" @change="onParentChange(r)" :class="fieldClass">
-                                <option value="">—</option>
-                                <option v-for="p in materials" :key="p.id" :value="p.id">{{ p.part_number }} · {{ p.part_name }}</option>
-                            </select>
+                            <PartSelect
+                                :model-value="r.parent_part_id"
+                                :options="materials"
+                                :list-id="`bom-parent-${r.uid}`"
+                                :aria-label="t('master.parentPart')"
+                                :placeholder="t('master.searchPart')"
+                                @update:model-value="r.parent_part_id = $event"
+                                @change="onParentChange(r)"
+                            />
                             <InputError :message="form.errors[`items.${i}.parent_part_id`]" class="mt-1" />
                         </div>
                         <div class="sm:col-span-3">
@@ -234,10 +264,15 @@ const fieldClass = 'mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-
 
                         <div class="sm:col-span-6">
                             <label class="text-xs font-semibold text-ink-secondary">{{ t('master.childPart') }} <span class="text-danger">*</span></label>
-                            <select :aria-label="t('master.childPart')" v-model="r.child_part_id" @change="onChildChange(r)" :class="fieldClass">
-                                <option value="">—</option>
-                                <option v-for="p in materials" :key="p.id" :value="p.id">{{ p.part_number }} · {{ p.part_name }}</option>
-                            </select>
+                            <PartSelect
+                                :model-value="r.child_part_id"
+                                :options="materials"
+                                :list-id="`bom-child-${r.uid}`"
+                                :aria-label="t('master.childPart')"
+                                :placeholder="t('master.searchPart')"
+                                @update:model-value="r.child_part_id = $event"
+                                @change="onChildChange(r)"
+                            />
                             <InputError :message="form.errors[`items.${i}.child_part_id`]" class="mt-1" />
                         </div>
                         <div class="sm:col-span-3">

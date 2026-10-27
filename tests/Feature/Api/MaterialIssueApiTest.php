@@ -1662,4 +1662,109 @@ class MaterialIssueApiTest extends TestCase
         $this->assertSame(0, WorkOrderMaterialBooking::where('work_order_id', $wo->id)->count());
         $this->assertEqualsWithDelta((float) $first['required'], $stock->fresh()->qty, 0.00000000001);
     }
+
+    public function test_work_order_can_release_directly_without_scans_when_wip_stock_is_available_at_machine(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->actingAsApi();
+
+        // Cari part WIP internal dari step pertama WO ini dan tambahkan stok WIP di mesin/gudang.
+        $firstStepItem = $wo->items()->whereNotNull('parent_part_id')
+            ->where('parent_part_id', '!=', $wo->part_id)
+            ->orderBy('sequence')
+            ->firstOrFail();
+
+        PartStock::create([
+            'part_id' => $firstStepItem->parent_part_id,
+            'tag' => 'WIP-READY-001',
+            'qty' => 5,
+            'qty_unit' => $firstStepItem->parent_uom ?: 'PCS',
+            'received_at' => now(),
+        ]);
+
+        $ctx = $this->getJson("/api/work-orders/{$wo->id}/release-context")
+            ->assertOk()
+            ->json('data');
+
+        $this->assertTrue($ctx['work_order']['can_release_with_wip'] ?? false);
+        $this->assertGreaterThan(0, (float) ($ctx['work_order']['wip_available_qty'] ?? 0));
+
+        // Release langsung tanpa scan tag RM karena masih ada WIP di mesin.
+        $this->postJson("/api/work-orders/{$wo->id}/release", [
+            'idempotency_key' => 'release-direct-with-wip',
+            'use_wip' => true,
+            'items' => [],
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'in_progress');
+
+        $this->assertSame('in_progress', $wo->fresh()->status);
+    }
+
+    public function test_production_result_can_proceed_after_main_part_issued_while_opp_material_is_still_pending_issue(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->actingAsApi();
+
+        // Tambahkan item material penunjang OPP pada step yang sama dengan item pertama.
+        $firstItem = $wo->items()->orderBy('sequence')->firstOrFail();
+        $oppPart = Part::where('part_number', 'like', 'OPT%')->first()
+            ?? Part::create([
+                'part_number' => 'OPTRL18-TEST',
+                'part_name' => 'OPP TRANS',
+                'part_type_id' => $firstItem->childPart->part_type_id,
+                'is_active' => true,
+            ]);
+
+        WorkOrderItem::create([
+            'work_order_id' => $wo->id,
+            'sequence' => $firstItem->sequence,
+            'process_id' => $firstItem->process_id,
+            'machine_id' => $firstItem->machine_id,
+            'parent_part_id' => $firstItem->parent_part_id,
+            'parent_part_name' => $firstItem->parent_part_name,
+            'parent_qty' => 1,
+            'parent_uom' => $firstItem->parent_uom ?: 'PCS',
+            'child_part_id' => $oppPart->id,
+            'selected_part_id' => $oppPart->id,
+            'child_part_name' => 'OPP TRANS -',
+            'child_qty' => 0.011,
+            'uom_rm' => 'ROLL',
+            'qty_required' => 0.11,
+        ]);
+
+        // Hanya issue & terima MAIN PART di mesin; OPP belum di-issue (menyusul).
+        $mainStock = PartStock::create([
+            'part_id' => $firstItem->child_part_id,
+            'tag' => 'MAIN-ONLY-001',
+            'qty' => (float) $firstItem->qty_required,
+            'qty_unit' => $firstItem->uom_rm ?: 'PCS',
+            'received_at' => now(),
+        ]);
+
+        $this->postJson("/api/work-orders/{$wo->id}/release", [
+            'idempotency_key' => 'issue-main-part-only',
+            'items' => [[
+                'work_order_item_id' => $firstItem->id,
+                'scans' => [[
+                    'tag' => $mainStock->tag,
+                    'qty' => (float) $firstItem->qty_required,
+                    'part_id' => (int) $firstItem->child_part_id,
+                ]],
+            ]],
+        ])->assertOk();
+
+        $issueItem = MaterialIssueItem::where('work_order_item_id', $firstItem->id)->firstOrFail();
+        $this->postJson('/api/receipts/confirm', [
+            'material_issue_item_id' => $issueItem->id,
+            'machine_id' => $firstItem->machine_id,
+        ])->assertOk();
+
+        // Pengerjaan produksi harus sudah bisa jalan walau OPP belum di-issue.
+        $this->postJson("/api/work-orders/{$wo->id}/results", [
+            'parent_part_id' => $firstItem->parent_part_id,
+            'qty_good' => 5,
+            'qty_reject' => 0,
+            'machine_id' => $firstItem->machine_id,
+        ])->assertOk();
+    }
 }

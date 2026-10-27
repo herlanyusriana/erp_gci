@@ -135,6 +135,7 @@ class MaterialIssueApiController extends Controller
         Gate::authorize('issue', $workOrder);
 
         $workOrder->load(['part:id,part_number,part_name,model']);
+        $wip = $this->releaseContextService->wipSummary($workOrder);
 
         return response()->json([
             'ok' => true,
@@ -144,6 +145,9 @@ class MaterialIssueApiController extends Controller
                     'wo_no' => $workOrder->wo_no,
                     'status' => $workOrder->status,
                     'qty' => (float) $workOrder->qty,
+                    'wip_available_qty' => $wip['wip_available_qty'],
+                    'can_release_with_wip' => $wip['can_release_with_wip'],
+                    'wip_stocks' => $wip['wip_stocks'],
                     'part' => $workOrder->part ? [
                         'id' => $workOrder->part->id,
                         'part_number' => $workOrder->part->part_number,
@@ -381,6 +385,9 @@ class MaterialIssueApiController extends Controller
     {
         Gate::authorize('issue', $workOrder);
 
+        $allowWipRelease = $request->boolean('use_wip')
+            && $this->releaseContextService->wipSummary($workOrder)['can_release_with_wip'];
+
         $data = $request->validate([
             'issue_date' => ['nullable', 'date'],
             'received_by' => ['nullable', 'string', 'max:255'],
@@ -390,7 +397,8 @@ class MaterialIssueApiController extends Controller
             // Wajib: mencegah Issue Out ganda saat APK retry setelah jaringan putus.
             'idempotency_key' => ['required', 'string', 'max:80'],
             'notes' => ['nullable', 'string', 'max:2000'],
-            'items' => ['required', 'array', 'min:1'],
+            'use_wip' => ['nullable', 'boolean'],
+            'items' => $allowWipRelease ? ['nullable', 'array'] : ['required', 'array', 'min:1'],
             'items.*.work_order_item_id' => ['required', 'integer'],
             'items.*.scans' => ['required', 'array', 'min:1'],
             'items.*.scans.*.tag' => ['required', 'string', 'max:255'],
@@ -400,7 +408,7 @@ class MaterialIssueApiController extends Controller
 
         [$wo, $shortages, $issue] = $this->woService->releaseWithScans(
             $workOrder,
-            $data['items'],
+            $data['items'] ?? [],
             [
                 'issue_date' => $data['issue_date'] ?? null,
                 'received_by' => $data['received_by'] ?? null,

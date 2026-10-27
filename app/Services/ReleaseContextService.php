@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Part;
 use App\Models\PartSubstitute;
 use App\Models\WorkOrder;
+use App\Models\WorkOrderItem;
 use App\Support\UomCatalog;
 use Illuminate\Support\Facades\DB;
 
@@ -173,6 +174,7 @@ class ReleaseContextService
                 'consumed' => round((float) $it->qty_consumed, 4),
                 'remaining' => round(max(0.0, (float) $it->qty_required - (float) $it->qty_consumed), 4),
                 'stock_state' => $materials->contains(fn (array $m) => $m['available_qty'] > 1e-9) ? 'available' : 'none',
+                'is_auxiliary' => self::isAuxiliaryItem($it),
                 'size' => $firstMaterial !== null ? $firstMaterial['size'] : $it->size,
                 'issued_qty' => round((float) $issuedForItem->sum('issued_qty'), 4),
                 'materials' => $materials->all(),
@@ -182,5 +184,76 @@ class ReleaseContextService
         }
 
         return $rows;
+    }
+
+    /**
+     * Apakah item WO merupakan material penunjang (mis. OPP tape) yang issue-nya
+     * boleh menyusul setelah main part jalan.
+     */
+    public static function isAuxiliaryItem(WorkOrderItem $item): bool
+    {
+        $partNo = strtoupper(trim((string) ($item->childPart?->part_number ?? '')));
+        $partName = strtoupper(trim((string) ($item->child_part_name ?? $item->childPart?->part_name ?? '')));
+
+        return str_starts_with($partNo, 'OPT')
+            || str_starts_with($partNo, 'OPO')
+            || str_contains($partName, 'OPP ')
+            || $partName === 'OPP';
+    }
+
+    /**
+     * Ringkasan ketersediaan stok WIP internal pada WO ini.
+     * Bila masih ada WIP di mesin/stok, WO planned boleh langsung di-release.
+     *
+     * @return array{wip_available_qty: float, can_release_with_wip: bool, wip_stocks: list<array<string, mixed>>}
+     */
+    public function wipSummary(WorkOrder $workOrder): array
+    {
+        $items = $workOrder->items()
+            ->with(['parentPart:id,part_number,part_name'])
+            ->get();
+
+        $wipItems = $items
+            ->filter(fn ($it) => strtoupper((string) $it->source) !== 'SUBCON'
+                && $it->parent_part_id !== null
+                && (int) $it->parent_part_id !== (int) $workOrder->part_id)
+            ->unique('parent_part_id')
+            ->values();
+
+        if ($wipItems->isEmpty()) {
+            return [
+                'wip_available_qty' => 0.0,
+                'can_release_with_wip' => false,
+                'wip_stocks' => [],
+            ];
+        }
+
+        $wipPartIds = $wipItems->pluck('parent_part_id')->map(fn ($id) => (int) $id)->all();
+        $stockByPart = $this->stockTags->forParts($wipPartIds, null);
+
+        $wipStocks = [];
+        $totalAvailable = 0.0;
+
+        foreach ($wipItems as $it) {
+            $pid = (int) $it->parent_part_id;
+            $avail = (float) ($stockByPart[$pid]['available_qty'] ?? 0.0);
+            if ($avail <= 1e-9) {
+                continue;
+            }
+            $totalAvailable += $avail;
+            $wipStocks[] = [
+                'part_id' => $pid,
+                'part_number' => $it->parentPart?->part_number,
+                'part_name' => $it->parentPart?->part_name ?? $it->parent_part_name,
+                'available_qty' => round($avail, 4),
+                'uom' => UomCatalog::normalize((string) $it->parent_uom) ?? UomCatalog::PIECE,
+            ];
+        }
+
+        return [
+            'wip_available_qty' => round($totalAvailable, 4),
+            'can_release_with_wip' => $workOrder->status === 'planned' && $totalAvailable > 1e-9,
+            'wip_stocks' => $wipStocks,
+        ];
     }
 }

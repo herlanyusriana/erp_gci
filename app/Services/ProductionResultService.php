@@ -111,7 +111,14 @@ class ProductionResultService
                         $available = $available->plus(BigDecimal::of($receipt->getRawOriginal('qty'))->minus($receipt->getRawOriginal('qty_consumed')));
                     }
                     if ($machineId === null || $available->isLessThan($need)) {
-                        throw ValidationException::withMessages(['qty_good' => __('Saldo material di mesin tidak mencukupi. Terima material untuk item WO ini terlebih dahulu.')]);
+                        if ($machineId !== null && $rows->count() > 1 && ReleaseContextService::isAuxiliaryItem($row)) {
+                            $need = $available;
+                        } else {
+                            throw ValidationException::withMessages(['qty_good' => __('Saldo material di mesin tidak mencukupi. Terima material untuk item WO ini terlebih dahulu.')]);
+                        }
+                    }
+                    if ($need->isLessThanOrEqualTo(0)) {
+                        continue;
                     }
                     $remaining = $need;
                     foreach ($receipts as $receipt) {

@@ -10,6 +10,7 @@ use App\Models\PartStock;
 use App\Models\WorkOrder;
 use App\Services\DailyScheduleService;
 use App\Services\ProductionResultService;
+use App\Services\ProductionSessionService;
 use App\Services\ReceiveMaterialService;
 use App\Services\ReleaseContextService;
 use App\Services\WipIdentityService;
@@ -34,6 +35,7 @@ class MaterialIssueApiController extends Controller
         private ReleaseContextService $releaseContextService,
         private DailyScheduleService $schedule,
         private WipIdentityService $wipIdentity,
+        private ProductionSessionService $sessionService,
     ) {}
 
     /**
@@ -258,6 +260,27 @@ class MaterialIssueApiController extends Controller
                 'machine_code' => $machine->machine_code,
                 'machine_name' => $machine->machine_name,
             ],
+        ]);
+    }
+
+    /**
+     * Konteks sesi produksi di sebuah mesin: shift berjalan, periode yang boleh
+     * dilaporkan, dan part hasil dari Production Plan.
+     */
+    public function productionSession(Machine $machine): JsonResponse
+    {
+        Gate::authorize('viewAny', WorkOrder::class);
+
+        if (! $machine->is_active) {
+            return response()->json([
+                'ok' => false,
+                'message' => __('Mesin tidak aktif.'),
+            ], 404);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'data' => $this->sessionService->context($machine),
         ]);
     }
 

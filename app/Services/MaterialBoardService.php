@@ -157,9 +157,12 @@ class MaterialBoardService
     /**
      * @return array{date: string, next_date: string, materials: list<array<string, mixed>>}
      */
-    public function board(): array
+    public function board(?string $planDate = null): array
     {
-        $today = $this->schedule->plantToday();
+        $base = $planDate !== null && $planDate !== ''
+            ? Carbon::parse($planDate)->toDateString()
+            : $this->schedule->plantToday();
+        $today = $base;
         $tomorrow = Carbon::parse($today)->addDay()->toDateString();
 
         $day = $this->requirementsFor($today, $today);

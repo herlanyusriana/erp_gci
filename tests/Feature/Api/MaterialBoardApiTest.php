@@ -659,4 +659,21 @@ class MaterialBoardApiTest extends TestCase
 
         $this->assertNotNull($this->boardRow($this->partId()), 'Baris carry-over dengan sequence harus muncul.');
     }
+
+    public function test_board_accepts_an_explicit_plan_date(): void
+    {
+        $today = $this->getJson('/api/material-board')->assertOk()->json('data');
+        $shifted = $this->getJson('/api/material-board?date=2026-10-30')->assertOk()->json('data');
+
+        $this->assertSame('2026-10-30', $shifted['date']);
+        $this->assertSame('2026-10-31', $shifted['next_date']);
+        $this->assertNotSame($today['date'], $shifted['date']);
+    }
+
+    public function test_board_rejects_an_invalid_plan_date(): void
+    {
+        $this->getJson('/api/material-board?date=30-10-2026')
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('date');
+    }
 }

@@ -23,16 +23,20 @@ class MaterialBoardApiController extends Controller
         private DailyScheduleService $schedule,
     ) {}
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         Gate::authorize('viewAny', WorkOrder::class);
+
+        $data = $request->validate([
+            'date' => ['nullable', 'date_format:Y-m-d'],
+        ]);
 
         $waiting = $this->schedule->waitingForPlan($this->schedule->plantToday());
 
         return response()->json([
             'ok' => true,
             'data' => [
-                ...$this->board->board(),
+                ...$this->board->board($data['date'] ?? null),
                 'waiting_for_plan' => $waiting->count(),
                 'waiting_work_orders' => $waiting->map(fn (WorkOrder $wo) => [
                     'id' => $wo->id,

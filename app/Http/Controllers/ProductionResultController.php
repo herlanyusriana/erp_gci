@@ -54,10 +54,86 @@ class ProductionResultController extends Controller
             return $wo;
         });
 
+        // Rincian per WO untuk modal "Details": hasil per step WIP, mesin,
+        // pencapaian terhadap target, dan tanggal produksi terakhir.
+        $details = $this->detailsByWorkOrder($workOrders->pluck('id')->all());
+
+        $workOrders->getCollection()->transform(function (WorkOrder $wo) use ($details) {
+            $wo->setAttribute('detail', $details[$wo->id] ?? null);
+
+            return $wo;
+        });
+
         return Inertia::render('Production/Result/Index', [
             'workOrders' => $workOrders,
             'filters' => $request->only('search'),
         ]);
+    }
+
+    /**
+     * Detail hasil produksi per WO, dikelompokkan per parent part (step WIP).
+     *
+     * @param  list<int>  $workOrderIds
+     * @return array<int, array<string, mixed>>
+     */
+    private function detailsByWorkOrder(array $workOrderIds): array
+    {
+        if ($workOrderIds === []) {
+            return [];
+        }
+
+        $rows = ProductionResult::query()
+            ->whereIn('work_order_id', $workOrderIds)
+            ->with([
+                'parentPart:id,part_number,part_name',
+                'machine:id,machine_code,machine_name',
+            ])
+            ->orderBy('result_date')
+            ->orderBy('id')
+            ->get([
+                'id', 'work_order_id', 'parent_part_id', 'machine_id',
+                'qty_good', 'qty_reject', 'result_date', 'shift',
+            ]);
+
+        $workOrderQty = WorkOrder::query()
+            ->whereIn('id', $workOrderIds)
+            ->pluck('qty', 'id');
+
+        return $rows
+            ->groupBy('work_order_id')
+            ->map(function ($group, $woId) use ($workOrderQty): array {
+                $target = (float) ($workOrderQty[$woId] ?? 0);
+                $good = (float) $group->sum('qty_good');
+                $reject = (float) $group->sum('qty_reject');
+
+                $steps = $group
+                    ->groupBy('parent_part_id')
+                    ->map(function ($stepRows, $parentId): array {
+                        $good = (float) $stepRows->sum('qty_good');
+
+                        return [
+                            'parent_part_id' => (int) $parentId,
+                            'part_number' => $stepRows->first()->parentPart?->part_number,
+                            'part_name' => $stepRows->first()->parentPart?->part_name,
+                            'qty_good' => round($good, 4),
+                            'qty_reject' => round((float) $stepRows->sum('qty_reject'), 4),
+                            'machines' => $stepRows->pluck('machine.machine_name')->filter()->unique()->values()->all(),
+                            'last_date' => $stepRows->max(fn ($r) => $r->result_date?->toDateString()),
+                        ];
+                    })
+                    ->sortBy('parent_part_id')
+                    ->values()
+                    ->all();
+
+                return [
+                    'qty_good' => round($good, 4),
+                    'qty_reject' => round($reject, 4),
+                    'performance_pct' => $target > 0 ? round(($good / $target) * 100, 2) : null,
+                    'last_produced_date' => $group->max(fn ($r) => $r->result_date?->toDateString()),
+                    'steps' => $steps,
+                ];
+            })
+            ->all();
     }
 
     public function create(WorkOrder $workOrder): Response

@@ -11,6 +11,7 @@ use App\Services\DailyScheduleService;
 use App\Services\ProductionResultService;
 use App\Services\ReceiveMaterialService;
 use App\Services\ReleaseContextService;
+use App\Services\WipIdentityService;
 use App\Services\WoService;
 use App\Support\UomCatalog;
 use Illuminate\Http\JsonResponse;
@@ -30,6 +31,7 @@ class MaterialIssueApiController extends Controller
         private ReceiveMaterialService $stockService,
         private ReleaseContextService $releaseContextService,
         private DailyScheduleService $schedule,
+        private WipIdentityService $wipIdentity,
     ) {}
 
     /**
@@ -253,6 +255,31 @@ class MaterialIssueApiController extends Controller
                 'id' => (int) $machine->id,
                 'machine_code' => $machine->machine_code,
                 'machine_name' => $machine->machine_name,
+            ],
+        ]);
+    }
+
+    /**
+     * Kandidat WO yang menyediakan WIP berstok untuk sebuah part.
+     *
+     * Dipakai APK sebagai pengaman FIFO: bila hanya satu kandidat, konsumsi
+     * berjalan otomatis; bila lebih dari satu, operator harus memilih WO.
+     */
+    public function wipCandidates(Request $request): JsonResponse
+    {
+        Gate::authorize('viewAny', WorkOrder::class);
+
+        $data = $request->validate([
+            'part_id' => ['required', 'integer', 'exists:parts,id'],
+        ]);
+
+        $candidates = $this->wipIdentity->candidatesForPart((int) $data['part_id']);
+
+        return response()->json([
+            'ok' => true,
+            'data' => [
+                'candidates' => $candidates,
+                'is_ambiguous' => count($candidates) > 1,
             ],
         ]);
     }

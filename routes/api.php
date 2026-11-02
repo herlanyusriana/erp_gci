@@ -36,6 +36,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::post('/receipts/confirm', [ProductionReceiptController::class, 'confirm']);
     Route::post('/receipts/resolve', [ProductionReceiptController::class, 'resolve']);
     Route::get('/receipts', [ProductionReceiptController::class, 'index']);
+    Route::get('/wip-candidates', [MaterialIssueApiController::class, 'wipCandidates']);
     Route::get('/wip-board', [WipBoardApiController::class, 'index']);
 
     Route::get('/user', function (Request $request) {

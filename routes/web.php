@@ -15,6 +15,7 @@ use App\Http\Controllers\PartPriceController;
 use App\Http\Controllers\PartStockController;
 use App\Http\Controllers\PartSubstituteController;
 use App\Http\Controllers\ProcessController;
+use App\Http\Controllers\ProductionLabelController;
 use App\Http\Controllers\ProductionPlanController;
 use App\Http\Controllers\ProductionReceiptController;
 use App\Http\Controllers\ProductionResultController;
@@ -141,6 +142,11 @@ Route::middleware(['auth'])->group(function () {
     Route::post('work-orders/{workOrder}/complete', [WorkOrderController::class, 'complete'])->name('work-orders.complete');
     Route::post('work-orders/{workOrder}/cancel', [WorkOrderController::class, 'cancel'])->name('work-orders.cancel');
     Route::delete('work-orders/{workOrder}', [WorkOrderController::class, 'destroy'])->name('work-orders.destroy');
+
+    // Antrean cetak label WIP (dicetak petugas gudang, bukan dari APK)
+    Route::get('production-labels', [ProductionLabelController::class, 'index'])->name('production-labels.index');
+    Route::get('production-labels/{result}/{kind}/print', [ProductionLabelController::class, 'printLabel'])->name('production-labels.print');
+    Route::post('production-labels/{result}/deliver', [ProductionLabelController::class, 'deliver'])->name('production-labels.deliver');
 
     // Penerimaan Material Production (monitoring)
     Route::get('production-receipts', [ProductionReceiptController::class, 'index'])->name('production-receipts.index');

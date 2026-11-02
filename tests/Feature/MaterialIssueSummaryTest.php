@@ -176,4 +176,25 @@ class MaterialIssueSummaryTest extends TestCase
         $this->assertEqualsWithDelta(15.0, (float) $details[0]['qty'], 1e-6);
         $this->assertSame('INV-T12', $details[0]['invoice']);
     }
+
+    public function test_row_for_work_order_returns_a_single_summary_row(): void
+    {
+        $this->issue('MI-J', '2026-10-29', [[$this->mainItem, $this->mainPart, 25, 'KGM', 'T14']]);
+
+        $row = app(MaterialIssueSummaryService::class)
+            ->rowForWorkOrder($this->wo->id, '2026-10-29', '2026-10-29');
+
+        $this->assertNotNull($row);
+        $this->assertSame($this->wo->id, $row['work_order_id']);
+        $this->assertSame(1, $row['slip_count']);
+    }
+
+    public function test_row_for_work_order_is_null_when_the_work_order_has_no_issue_in_range(): void
+    {
+        $this->issue('MI-K', '2026-10-29', [[$this->mainItem, $this->mainPart, 5, 'KGM', 'T15']]);
+
+        $this->assertNull(
+            app(MaterialIssueSummaryService::class)->rowForWorkOrder($this->wo->id, '2026-11-01', '2026-11-01'),
+        );
+    }
 }

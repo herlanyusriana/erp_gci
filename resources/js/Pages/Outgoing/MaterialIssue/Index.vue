@@ -2,9 +2,11 @@
 import { useI18n } from 'vue-i18n';
 import { computed, ref, watch } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
+import { useConnectionStatus, useEcho } from '@laravel/echo-vue';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import Modal from '@/Components/Modal.vue';
+import type { MaterialIssuePostedEvent } from '@/types';
 
 const { t, locale } = useI18n();
 
@@ -70,6 +72,70 @@ const itemLabel = (row: WoRow): string =>
     row.materials.length === 0
         ? '—'
         : row.materials.map((m) => m.part_number ?? '—').join(', ');
+
+// ── Realtime: penyegaran per WO ──
+//
+// Event issue memuat work_order_id, bukan agregat per WO. Menghitung ulang
+// rasio issued/required di klien akan menyimpang dari definisi backend, jadi
+// event hanya menandai WO sebagai "kotor" lalu barisnya diambil ulang dari
+// server. Beberapa event dalam 2 detik digabung menjadi satu permintaan.
+const staleWorkOrders = new Set<number>();
+const highlightedWorkOrders = ref<Set<number>>(new Set());
+let flushTimer: ReturnType<typeof setTimeout> | undefined;
+let highlightTimer: ReturnType<typeof setTimeout> | undefined;
+
+const connectionStatus = useConnectionStatus();
+const connectionLabel = computed(() => t(`outgoing.connection${connectionStatus.value.charAt(0).toUpperCase()}${connectionStatus.value.slice(1)}`));
+
+function flushStaleRows() {
+    const ids = [...staleWorkOrders];
+    staleWorkOrders.clear();
+    if (ids.length === 0) return;
+
+    const params = new URLSearchParams();
+    if (dateFrom.value) params.set('date_from', dateFrom.value);
+    if (dateTo.value) params.set('date_to', dateTo.value);
+    const query = params.toString() ? `?${params}` : '';
+
+    Promise.all(ids.map(async (id) => {
+        try {
+            const res = await fetch(`${route('material-issues.row', id)}${query}`, { headers: { Accept: 'application/json' } });
+            if (!res.ok) return null;
+            const body = await res.json();
+            return body.data as WoRow | null;
+        } catch {
+            return null;
+        }
+    })).then((results) => {
+        const changed: number[] = [];
+        for (const fresh of results) {
+            if (fresh === null) continue;
+            const index = props.rows.findIndex((row) => row.work_order_id === fresh.work_order_id);
+            if (index >= 0) {
+                props.rows[index] = fresh;
+            } else {
+                props.rows.unshift(fresh);
+            }
+            changed.push(fresh.work_order_id);
+        }
+        if (changed.length === 0) return;
+
+        highlightedWorkOrders.value = new Set(changed);
+        clearTimeout(highlightTimer);
+        highlightTimer = setTimeout(() => { highlightedWorkOrders.value = new Set(); }, 5000);
+    });
+}
+
+function handleIssuePosted(payload: { issue: MaterialIssuePostedEvent }) {
+    const woId = payload.issue.work_order_id;
+    if (!woId) return;
+
+    staleWorkOrders.add(woId);
+    clearTimeout(flushTimer);
+    flushTimer = setTimeout(flushStaleRows, 2000);
+}
+
+useEcho<{ issue: MaterialIssuePostedEvent }>('issue-out-monitoring', '.material-issue.posted', handleIssuePosted);
 
 // ── Modal detail ──
 const detailOpen = ref(false);
@@ -150,6 +216,11 @@ function closeDetail() {
             </div>
         </div>
 
+        <div class="mb-3 flex items-center gap-2 text-sm text-ink-secondary" role="status" aria-live="polite">
+            <span class="h-2 w-2 rounded-full" :class="connectionStatus === 'connected' ? 'bg-success' : 'bg-warning'"></span>
+            <span>{{ connectionLabel }}</span>
+        </div>
+
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-borderline text-sm">
@@ -164,7 +235,11 @@ function closeDetail() {
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-borderline">
-                        <tr v-for="row in rows" :key="row.work_order_id" class="hover:bg-primary-light/40">
+                        <tr
+                            v-for="row in rows"
+                            :key="row.work_order_id"
+                            :class="['hover:bg-primary-light/40', highlightedWorkOrders.has(row.work_order_id) ? 'bg-success/10' : '']"
+                        >
                             <td class="px-4 py-3">
                                 <div class="font-semibold text-ink-primary">{{ row.wo_no }}</div>
                                 <div class="text-xs text-ink-secondary">{{ row.fg_part_number ?? '' }} {{ row.fg_part_name ?? '' }}</div>

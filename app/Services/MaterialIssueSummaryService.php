@@ -112,7 +112,26 @@ final class MaterialIssueSummaryService
     }
 
     /**
-     * Baris detail per slip untuk modal satu WO.
+     * Satu baris ringkasan untuk satu WO (dipakai realtime monitoring agar
+     * event issue hanya menyegarkan WO terkait, bukan seluruh tabel).
+     *
+     * @return array<string, mixed>|null
+     */
+    public function rowForWorkOrder(int $workOrderId, ?string $dateFrom = null, ?string $dateTo = null): ?array
+    {
+        $rows = $this->byWorkOrder($dateFrom, $dateTo);
+
+        foreach ($rows as $row) {
+            if ($row['work_order_id'] === $workOrderId) {
+                return $row;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Detail per slip untuk modal satu WO.
      *
      * @return list<array<string, mixed>>
      */

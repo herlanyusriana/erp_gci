@@ -56,6 +56,26 @@ class MaterialIssueController extends Controller
         ]);
     }
 
+    /** Satu baris ringkasan WO untuk penyegaran realtime. */
+    public function row(Request $request, int $workOrder): JsonResponse
+    {
+        Gate::authorize('viewAny', MaterialIssue::class);
+
+        $validated = $request->validate([
+            'date_from' => ['nullable', 'date'],
+            'date_to' => ['nullable', 'date'],
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'data' => $this->summaryService->rowForWorkOrder(
+                $workOrder,
+                $validated['date_from'] ?? null,
+                $validated['date_to'] ?? null,
+            ),
+        ]);
+    }
+
     /** Detail slip per WO untuk modal (dipanggil lewat JSON). */
     public function detail(Request $request, int $workOrder): JsonResponse
     {

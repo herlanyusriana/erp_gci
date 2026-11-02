@@ -61,6 +61,7 @@ Route::middleware(['auth'])->group(function () {
     // Outgoing — pengeluaran material ke produksi
     Route::get('material-issues', [MaterialIssueController::class, 'index'])->name('material-issues.index');
     Route::get('material-issues/work-order/{workOrder}', [MaterialIssueController::class, 'detail'])->name('material-issues.detail');
+    Route::get('material-issues/work-order/{workOrder}/row', [MaterialIssueController::class, 'row'])->name('material-issues.row');
     Route::get('material-issues/{materialIssue}', [MaterialIssueController::class, 'show'])->name('material-issues.show');
     Route::get('material-issues/{materialIssue}/print', [MaterialIssueController::class, 'print'])->name('material-issues.print');
 

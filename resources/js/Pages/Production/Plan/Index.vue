@@ -55,6 +55,7 @@ const props = defineProps<{
 
 const date = ref(props.date);
 const search = ref('');
+const machineFilter = ref('');
 
 function applyDate() {
     router.get(route('production-plans.index'), { date: date.value || undefined }, { preserveState: true, replace: true });
@@ -267,6 +268,9 @@ function saveAllTargets() {
  * Grup mesin mengikuti URUTAN MASTER MESIN (`props.machines` sudah diurut
  * `sequence` lalu nama) — semua mesin tampil walau tanpa WO; saat mencari,
  * hanya mesin yang punya baris cocok.
+ *
+ * `machineFilter` menyaring berdasarkan NAMA mesin (ketikan bebas), terpisah
+ * dari `search` yang mencocokkan isi baris (WO, part, proses).
  */
 const groups = computed(() => {
     const byMachine = new Map<number, ProductionPlanItem[]>();
@@ -283,18 +287,27 @@ const groups = computed(() => {
         rows.slice().sort((a, b) => (a.sequence - b.sequence) || (a.id - b.id));
 
     const searching = search.value.trim() !== '';
+    const machineQuery = machineFilter.value.trim().toLowerCase();
+
+    const matchesMachine = (machine: MachineOpt): boolean =>
+        machineQuery === ''
+        || `${machine.machine_name} ${machine.machine_code}`.toLowerCase().includes(machineQuery);
 
     const result: Array<{ machine: MachineOpt | null; rows: ProductionPlanItem[] }> = props.machines
+        .filter(matchesMachine)
         .map((machine) => ({
             machine,
             rows: sortRows(byMachine.get(machine.id) ?? []),
         }))
         .filter((group) => !searching || group.rows.length > 0);
 
-    // Baris dengan mesin di luar master (mis. mesin dihapus) tetap ditampilkan.
-    const orphanRows = filteredItems.value.filter(
-        (item) => !props.machines.some((m) => m.id === item.machine_id),
-    );
+    // Baris dengan mesin di luar master (mis. mesin dihapus) tetap ditampilkan,
+    // kecuali saat filter mesin aktif karena tidak ada nama yang bisa dicocokkan.
+    const orphanRows = machineQuery === ''
+        ? filteredItems.value.filter(
+            (item) => !props.machines.some((m) => m.id === item.machine_id),
+        )
+        : [];
     if (orphanRows.length > 0) {
         result.push({ machine: null, rows: sortRows(orphanRows) });
     }
@@ -434,6 +447,15 @@ function submitEdit() {
                     class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary placeholder-ink-secondary focus:border-primary focus:ring-primary"
                 />
             </div>
+            <div class="min-w-48">
+                <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('production.machineFilter') }}</label>
+                <input :aria-label="t('production.machineFilter')"
+                    v-model="machineFilter"
+                    type="search"
+                    :placeholder="t('production.machineFilterPlaceholder')"
+                    class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary placeholder-ink-secondary focus:border-primary focus:ring-primary"
+                />
+            </div>
             <div>
                 <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('production.startDate') }}</label>
                 <input :aria-label="t('production.startDate')"
@@ -570,7 +592,7 @@ function submitEdit() {
                     </thead>
                     <tbody>
                         <template v-for="(group, gi) in groups" :key="group.machine?.id ?? 'none'">
-                            <tr v-if="group.rows.length === 0" class="group border-t border-borderline" :class="gi > 0 ? 'border-t-2 !border-t-borderline' : ''">
+                            <tr v-if="group.rows.length === 0" class="group border-t border-borderline" :class="gi > 0 ? 'border-t-2 !border-t-ink-secondary/30' : ''">
                                 <td class="sticky left-0 z-10 border-r border-borderline bg-surface px-3 py-2.5 align-top group-hover:bg-primary-light/40">
                                     <div class="flex flex-col items-start gap-1">
                                         <span class="font-semibold leading-tight text-ink-primary">{{ group.machine?.machine_name ?? t('production.noMachine') }}</span>
@@ -595,7 +617,7 @@ function submitEdit() {
                                 v-for="(row, index) in group.rows"
                                 :key="row.id"
                                 class="group border-t border-borderline transition hover:bg-primary-light/40"
-                                :class="[index === 0 && gi > 0 ? 'border-t-2 !border-t-borderline' : '', row.avail_qty < 0 ? 'bg-danger/5' : '']"
+                                :class="[index === 0 && gi > 0 ? 'border-t-2 !border-t-ink-secondary/30' : '', row.avail_qty < 0 ? 'bg-danger/5' : '']"
                             >
                                 <td v-if="index === 0" class="sticky left-0 z-10 border-r border-borderline bg-surface px-3 py-2.5 align-top group-hover:bg-primary-light/40" :rowspan="group.rows.length">
                                     <div class="flex flex-col items-start gap-1">

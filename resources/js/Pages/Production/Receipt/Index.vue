@@ -2,42 +2,40 @@
 import { useI18n } from 'vue-i18n';
 import { Head, router } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
-import { useConnectionStatus, useEcho } from '@laravel/echo-vue';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import type { Machine } from '@/types';
 
 const { t, locale } = useI18n();
 
-interface ReceiptRow {
-    id: number;
-    tag: string;
-    part: { part_number: string | null; part_name: string | null; model: string | null; size: string | null } | null;
+interface WipRow {
+    machine_id: number;
+    machine_name: string;
+    machine_code: string | null;
+    part_id: number;
+    part_number: string | null;
+    part_name: string | null;
+    model: string | null;
+    size: string | null;
     invoice: string | null;
     supplier: string | null;
-    receiver_name: string | null;
-    received_at: string | null;
-    notes: string | null;
-}
-
-interface ReceiptPostedPayload {
-    receipt: ReceiptRow;
+    uom: string | null;
+    beginning_qty: number;
+    received_qty: number;
+    issued_qty: number;
+    ending_qty: number;
 }
 
 const props = defineProps<{
     machines: Machine[];
     selectedMachineId: number | null;
     date: string;
-    receipts: ReceiptRow[];
+    rows: WipRow[];
     timezone: string;
 }>();
 
 const machineId = ref(props.selectedMachineId ?? '');
 const date = ref(props.date);
-const rows = ref<ReceiptRow[]>([...props.receipts]);
-const connectionStatus = useConnectionStatus();
-
-const connectionLabel = computed(() => t(`outgoing.connection${connectionStatus.value.charAt(0).toUpperCase()}${connectionStatus.value.slice(1)}`));
 
 function applyFilters() {
     router.get(route('production-receipts.index'), {
@@ -48,88 +46,87 @@ function applyFilters() {
 
 watch([machineId, date], applyFilters);
 
-/** Terima receipt baru via Echo */
-function handleReceiptPosted(payload: { receipt: ReceiptRow }) {
-    const row = payload.receipt;
-    if (rows.value.some((r) => r.id === row.id)) return;
-    rows.value = [row, ...rows.value];
-}
+const total = computed(() => props.rows.length);
 
-useEcho<{ receipt: ReceiptRow }>('production-receipt-monitoring', '.production-receipt.posted', handleReceiptPosted);
-
-const total = computed(() => rows.value.length);
-
-const fmt = (n: number | null | undefined) => n == null ? '—' : Number(n).toLocaleString(locale.value, { maximumFractionDigits: 2 });
+const fmt = (n: number | null | undefined) =>
+    n == null ? '—' : Number(n).toLocaleString(locale.value, { maximumFractionDigits: 4 });
 </script>
 
 <template>
     <AppLayout>
-        <Head :title="t('production.receipt')" />
+        <Head :title="t('production.wipInventory')" />
         <BackButton :href="route('production-data')" class="mb-4" />
 
         <div class="mb-5 flex flex-wrap items-end justify-between gap-4">
             <div>
-                <h1 class="text-2xl font-bold tracking-tight text-ink-primary">{{ t('production.receipt') }}</h1>
-                <p class="mt-1 text-sm text-ink-secondary">{{ t('production.receiptDescription') }}</p>
+                <h1 class="text-2xl font-bold tracking-tight text-ink-primary">{{ t('production.wipInventory') }}</h1>
+                <p class="mt-1 text-sm text-ink-secondary">{{ t('production.wipInventoryDescription') }}</p>
             </div>
-            <!-- Statistik realtime -->
             <div class="flex items-center gap-3 rounded-xl border border-borderline bg-surface px-4 py-2 text-sm">
-                <div class="flex items-center gap-1.5">
-                    <span class="h-2 w-2 rounded-full" :class="connectionStatus === 'connected' ? 'bg-success' : 'bg-warning'"></span>
-                    <span class="text-ink-secondary">{{ connectionLabel }}</span>
-                </div>
-                <span class="text-ink-secondary">|</span>
                 <span class="font-semibold tabular-nums text-ink-primary">{{ total }}</span>
-                <span class="text-ink-secondary">{{ t('production.receiptItems') }}</span>
+                <span class="text-ink-secondary">{{ t('production.wipRows') }}</span>
             </div>
         </div>
 
-        <!-- Filter: mesin + tanggal -->
-        <div class="mb-4 flex flex-wrap gap-3">
-            <select v-model="machineId" :aria-label="t('production.selectMachine')" class="rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-64">
-                <option value="">{{ t('production.selectMachine') }}</option>
-                <option v-for="m in machines" :key="m.id" :value="m.id">{{ m.machine_code }} · {{ m.machine_name }}</option>
-            </select>
-            <input v-model="date" type="date" :aria-label="t('production.receiptDate')" class="rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+        <!-- Filter: tanggal transaksi (wajib tampil) + mesin -->
+        <div class="mb-4 flex flex-wrap items-end gap-3 rounded-xl border border-borderline bg-surface p-3">
+            <div>
+                <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('production.receiptDate') }}</label>
+                <input v-model="date" type="date" :aria-label="t('production.receiptDate')" class="rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+            </div>
+            <div>
+                <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('production.machine') }}</label>
+                <select v-model="machineId" :aria-label="t('production.selectMachine')" class="rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-64">
+                    <option value="">{{ t('production.allMachines') }}</option>
+                    <option v-for="m in machines" :key="m.id" :value="m.id">{{ m.machine_code }} · {{ m.machine_name }}</option>
+                </select>
+            </div>
+            <p class="text-xs text-ink-secondary sm:ml-auto">{{ timezone }}</p>
         </div>
 
         <div class="overflow-x-auto rounded-xl border border-borderline bg-surface">
             <table class="min-w-full divide-y divide-borderline text-sm">
                 <thead class="bg-background">
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                        <th scope="col" class="px-4 py-3">{{ t('incoming.tag') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('production.part') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('production.model') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('incoming.invoice') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('incoming.supplier') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('production.receivedBy') }}</th>
-                        <th scope="col" class="px-4 py-3">{{ t('production.receivedAt') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('production.machineName') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('production.materialInfo') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('production.invoiceSupplier') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('production.beginningStock') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('production.receivedQty') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('production.issuedQty') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('production.endingStock') }}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-borderline">
-                    <tr v-for="r in rows" :key="r.id" class="hover:bg-primary-light/40">
-                        <td class="px-4 py-3 font-mono font-medium text-ink-primary">{{ r.tag }}</td>
-                        <td class="px-4 py-3 text-ink-primary">
-                            <div class="font-medium">{{ r.part?.part_number ?? '—' }}</div>
-                            <div class="text-xs text-ink-secondary">{{ r.part?.part_name ?? '' }}</div>
+                    <tr v-for="r in rows" :key="`${r.machine_id}-${r.part_id}-${r.uom}`" class="hover:bg-primary-light/40">
+                        <td class="px-4 py-3 align-top">
+                            <div class="font-semibold text-ink-primary">{{ r.machine_name }}</div>
+                            <div class="text-xs text-ink-secondary">{{ r.machine_code ?? '—' }}</div>
                         </td>
-                        <td class="px-4 py-3">
-                            <span v-if="r.part?.model" class="rounded-md bg-background px-1.5 py-0.5 text-xs text-ink-secondary">{{ r.part.model }}</span>
-                            <span v-else class="text-ink-secondary">—</span>
+                        <td class="px-4 py-3 align-top">
+                            <div class="font-medium text-ink-primary">{{ r.part_number ?? '—' }}</div>
+                            <div class="text-xs text-ink-secondary">{{ r.part_name ?? '' }}</div>
+                            <div class="mt-0.5 flex flex-wrap gap-1 text-[11px] text-ink-secondary">
+                                <span v-if="r.model" class="rounded bg-background px-1.5 py-0.5">{{ r.model }}</span>
+                                <span v-if="r.size" class="rounded bg-background px-1.5 py-0.5">{{ r.size }}</span>
+                            </div>
                         </td>
-                        <td class="px-4 py-3 text-ink-primary">{{ r.invoice ?? '—' }}</td>
-                        <td class="px-4 py-3 text-ink-primary">{{ r.supplier ?? '—' }}</td>
-                        <td class="px-4 py-3 text-ink-primary">{{ r.receiver_name ?? '—' }}</td>
-                        <td class="px-4 py-3 tabular-nums text-ink-primary">{{ r.received_at ?? '—' }}</td>
+                        <td class="px-4 py-3 align-top">
+                            <div class="text-ink-primary">{{ r.invoice ?? '—' }}</div>
+                            <div class="text-xs text-ink-secondary">{{ r.supplier ?? '—' }}</div>
+                        </td>
+                        <td class="px-4 py-3 text-right align-top tabular-nums text-ink-primary">{{ fmt(r.beginning_qty) }}</td>
+                        <td class="px-4 py-3 text-right align-top tabular-nums text-success">{{ fmt(r.received_qty) }}</td>
+                        <td class="px-4 py-3 text-right align-top tabular-nums text-warning">{{ fmt(r.issued_qty) }}</td>
+                        <td class="px-4 py-3 text-right align-top tabular-nums font-semibold" :class="r.ending_qty < 0 ? 'text-danger' : 'text-ink-primary'">
+                            {{ fmt(r.ending_qty) }} <span class="text-xs font-normal text-ink-secondary">{{ r.uom ?? '' }}</span>
+                        </td>
                     </tr>
                     <tr v-if="rows.length === 0">
                         <td colspan="7" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('production.noReceipt') }}</td>
                     </tr>
                 </tbody>
             </table>
-            <div class="border-t border-borderline bg-background px-4 py-2 text-right text-xs text-ink-secondary">
-                {{ t('incoming.total') }} {{ total }} {{ t('production.receiptItems') }}
-            </div>
         </div>
     </AppLayout>
 </template>

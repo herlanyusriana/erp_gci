@@ -34,8 +34,12 @@ final class MaterialIssueSummaryService
             ->when($search, function ($q, $term) {
                 $like = '%'.$term.'%';
                 $q->where(function ($inner) use ($like) {
-                    $inner->whereHas('workOrder', fn ($w) => $w->where('wo_no', 'ilike', $like))
-                        ->orWhere('issue_no', 'ilike', $like);
+                    // Gunakan subquery eksplisit: query builder ini mengagregasi
+                    // per work_order_id, jadi `whereHas` tidak bisa dipakai.
+                    $inner->where('issue_no', 'ilike', $like)
+                        ->orWhereIn('work_order_id', DB::table('work_orders')
+                            ->where('wo_no', 'ilike', $like)
+                            ->select('id'));
                 });
             })
             ->selectRaw('work_order_id, COUNT(*) AS slip_count')

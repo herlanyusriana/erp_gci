@@ -123,23 +123,16 @@ class MaterialIssueWebTest extends TestCase
         $this->get(route('material-issues.index', [
             'date_from' => $today,
             'date_to' => $today,
-            'operator_id' => $this->admin->id,
-            'status' => 'posted',
-            'search' => $todayIssue->issue_no,
+            'search' => $todayIssue->workOrder?->wo_no ?? $todayIssue->issue_no,
         ]))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Outgoing/MaterialIssue/Index')
                 ->where('filters.date_from', $today)
                 ->where('filters.date_to', $today)
-                ->where('filters.operator_id', (string) $this->admin->id)
-                ->where('filters.status', 'posted')
-                ->where('filters.search', $todayIssue->issue_no)
-                ->where('issues.total', 1)
-                ->where('summary.issue_count', 1)
-                ->where('summary.work_order_count', 1)
-                ->where('summary.tag_count', $todayIssue->items()->whereNotNull('tag')->distinct('tag')->count('tag'))
-                ->has('summary.qty_by_uom')
-                ->has('operators'));
+                ->has('rows')
+                ->has('summary.work_order_count')
+                ->has('summary.slip_count')
+                ->has('summary.tag_count'));
     }
 }

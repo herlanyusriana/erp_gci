@@ -1061,7 +1061,7 @@ class MaterialIssueApiTest extends TestCase
             ->get(route('material-issues.index'))
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Outgoing/MaterialIssue/Index')
-                ->where('issues.data.0.id', $issue->id));
+                ->where('rows.0.work_order_id', $issue->work_order_id));
     }
 
     public function test_release_dispatches_one_safe_issue_event_after_commit(): void

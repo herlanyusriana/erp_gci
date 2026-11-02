@@ -13,6 +13,7 @@ class ProductionResult extends Model
     protected $fillable = [
         'work_order_id', 'parent_part_id', 'process_id', 'machine_id',
         'result_date', 'shift', 'qty_good', 'qty_reject', 'uom',
+        'period_start', 'period_end', 'is_backfilled', 'label_status',
         'reported_by', 'notes', 'created_by', 'updated_by',
         'output_part_stock_id', 'reversed_by',
     ];
@@ -21,7 +22,16 @@ class ProductionResult extends Model
         'result_date' => 'date',
         'qty_good' => 'float',
         'qty_reject' => 'float',
+        'is_backfilled' => 'boolean',
     ];
+
+    public const LABEL_PENDING = 'pending';
+
+    public const LABEL_PRINTED = 'printed';
+
+    public const LABEL_DELIVERED = 'delivered';
+
+    public const LABEL_NONE = 'none';
 
     public function workOrder(): BelongsTo
     {

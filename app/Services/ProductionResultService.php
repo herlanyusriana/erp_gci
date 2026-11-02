@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\ConfigMaster;
 use App\Models\Machine;
 use App\Models\PartStock;
 use App\Models\ProductionMaterialReceipt;
@@ -69,10 +70,30 @@ class ProductionResultService
             $uom = $parentPartId === (int) $workOrder->part_id
                 ? UomCatalog::PIECE
                 : (UomCatalog::normalize((string) $first->parent_uom) ?? UomCatalog::PIECE);
+            // Periode jam: laporan yang diisi setelah periodenya lewat ditandai
+            // susulan, agar supervisor bisa membedakannya dari laporan tepat waktu.
+            $periodStart = $data['period_start'] ?? null;
+            $periodEnd = $data['period_end'] ?? null;
+            $backfilled = false;
+
+            if ($periodStart !== null && $periodEnd !== null) {
+                $zone = (string) ConfigMaster::getValue('SYSTEM', 'timezone', 'Asia/Jakarta');
+
+                // Bandingkan di zona pabrik: jam periode dibaca sebagai jam lokal,
+                // bukan jam UTC. Laporan dianggap susulan bila waktu lapor melewati
+                // akhir periode pada tanggal laporan itu.
+                $reportedLocal = $reportedAt->copy()->setTimezone($zone);
+                $endOfPeriod = $reportedLocal->copy()->setTimeFromTimeString($periodEnd);
+
+                $backfilled = $reportedLocal->greaterThan($endOfPeriod);
+            }
+
             $result = ProductionResult::create([
                 'work_order_id' => $workOrder->id, 'parent_part_id' => $parentPartId,
                 'process_id' => $first->process_id, 'machine_id' => $machineId,
                 'result_date' => $reportedAt->toDateString(), 'shift' => $data['shift'] ?? null,
+                'period_start' => $periodStart, 'period_end' => $periodEnd,
+                'is_backfilled' => $backfilled, 'label_status' => 'pending',
                 'qty_good' => (string) $goodDecimal, 'qty_reject' => (string) $rejectDecimal, 'uom' => $uom,
                 'reported_by' => $actorId, 'notes' => $data['notes'] ?? null,
                 'created_by' => $actorId, 'updated_by' => $actorId,

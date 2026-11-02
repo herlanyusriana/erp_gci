@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\ConfigMaster;
 use App\Models\Machine;
 use App\Models\Part;
 use App\Models\PartStock;
@@ -18,6 +19,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 /**
  * API mobile "issue out to production" — release WO lewat scan label.
@@ -362,9 +364,28 @@ class MaterialIssueApiController extends Controller
             'qty_reject' => ['nullable', 'numeric', 'min:0'],
             'result_date' => ['nullable', 'date'],
             'shift' => ['nullable', 'string', 'max:20'],
+            'period_start' => ['nullable', 'date_format:H:i', 'required_with:period_end'],
+            'period_end' => ['nullable', 'date_format:H:i', 'required_with:period_start', 'after:period_start'],
             'machine_id' => ['nullable', 'integer', 'exists:machines,id'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
+
+        // Periode tidak boleh berada di masa depan: laporan hanya untuk jam yang
+        // sudah terjadi. Baris tanpa periode (data lama) tidak terkena aturan ini.
+        if (! empty($data['period_start']) && ! empty($data['period_end'])) {
+            $zone = (string) ConfigMaster::getValue('SYSTEM', 'timezone', 'Asia/Jakarta');
+
+            // Bandingkan di zona pabrik: jam periode adalah jam lokal, sedangkan
+            // now() berjalan di zona aplikasi (UTC).
+            $nowLocal = now()->setTimezone($zone);
+            $endToday = $nowLocal->copy()->setTimeFromTimeString($data['period_end']);
+
+            if ($endToday->greaterThan($nowLocal)) {
+                throw ValidationException::withMessages([
+                    'period_start' => __('Periode ini belum terjadi.'),
+                ]);
+            }
+        }
 
         $result = $this->resultService->report(
             $workOrder,

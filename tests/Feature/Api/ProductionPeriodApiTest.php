@@ -121,4 +121,47 @@ class ProductionPeriodApiTest extends TestCase
         $this->assertNull($result->period_start);
         $this->assertFalse((bool) $result->is_backfilled);
     }
+
+    public function test_result_context_flags_a_wip_step_whose_label_is_not_delivered(): void
+    {
+        // 09:30 WIB = 02:30 UTC: periode 08:30-09:30 baru saja berakhir.
+        $this->travelTo(Carbon::parse('2026-01-15 02:30:00', 'UTC'));
+
+        $payload = $this->payload(['qty_good' => 3, 'qty_reject' => 0]);
+        $this->postJson("/api/work-orders/{$this->wo()->id}/results", $payload)->assertOk();
+
+        $steps = $this->getJson("/api/work-orders/{$this->wo()->id}/result-context")->assertOk()->json('data.steps');
+
+        $step = collect($steps)->firstWhere('parent_part_id', $this->fixture['fg']->id);
+
+        // Label masih pending -> belum diantar.
+        $this->assertFalse($step['label_delivered']);
+    }
+
+    public function test_result_context_reports_delivered_label_as_true(): void
+    {
+        $this->travelTo(Carbon::parse('2026-01-15 02:30:00', 'UTC'));
+
+        $this->postJson("/api/work-orders/{$this->wo()->id}/results", $this->payload(['qty_good' => 3, 'qty_reject' => 0]))->assertOk();
+
+        ProductionResult::where('work_order_id', $this->wo()->id)->update(['label_status' => 'delivered']);
+
+        $steps = $this->getJson("/api/work-orders/{$this->wo()->id}/result-context")->assertOk()->json('data.steps');
+        $step = collect($steps)->firstWhere('parent_part_id', $this->fixture['fg']->id);
+
+        $this->assertTrue($step['label_delivered']);
+    }
+
+    public function test_result_context_leaves_label_flag_null_without_a_period(): void
+    {
+        $payload = $this->payload(['qty_good' => 3, 'qty_reject' => 0]);
+        unset($payload['period_start'], $payload['period_end']);
+
+        $this->postJson("/api/work-orders/{$this->wo()->id}/results", $payload)->assertOk();
+
+        $steps = $this->getJson("/api/work-orders/{$this->wo()->id}/result-context")->assertOk()->json('data.steps');
+        $step = collect($steps)->firstWhere('parent_part_id', $this->fixture['fg']->id);
+
+        $this->assertNull($step['label_delivered']);
+    }
 }

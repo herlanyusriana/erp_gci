@@ -323,6 +323,14 @@ class MaterialIssueApiController extends Controller
             ], 422);
         }
 
+        // Status label per part hasil: dipakai APK untuk menandai WIP yang
+        // labelnya belum diantar ke mesin (peringatan, bukan blokir).
+        $labelStatus = $workOrder->results()
+            ->selectRaw("parent_part_id, MIN(CASE WHEN label_status = 'delivered' THEN 1 ELSE 0 END) AS all_delivered")
+            ->whereNotNull('period_start')
+            ->groupBy('parent_part_id')
+            ->pluck('all_delivered', 'parent_part_id');
+
         $produced = $workOrder->results()
             ->selectRaw('parent_part_id, SUM(qty_good) AS good, SUM(qty_reject) AS reject')
             ->groupBy('parent_part_id')
@@ -340,7 +348,7 @@ class MaterialIssueApiController extends Controller
 
         $steps = $items
             ->groupBy('parent_part_id')
-            ->map(function ($rows, $parentId) use ($workOrder, $produced) {
+            ->map(function ($rows, $parentId) use ($workOrder, $produced, $labelStatus) {
                 $first = $rows->sortBy(fn ($r) => [$r->sequence ?? 0, $r->id])->first();
                 $done = $produced[$parentId] ?? null;
 
@@ -355,6 +363,9 @@ class MaterialIssueApiController extends Controller
                     'target_qty' => (float) $workOrder->qty,
                     'produced_qty' => (float) ($done->good ?? 0),
                     'reject_qty' => (float) ($done->reject ?? 0),
+                    'label_delivered' => $labelStatus->has($parentId)
+                        ? (bool) $labelStatus[$parentId]
+                        : null,
                 ];
             })
             ->sortBy(fn ($s) => [$s['sequence'] ?? 0, $s['parent_part_id']])

@@ -69,10 +69,14 @@ class ProductionSessionApiTest extends TestCase
 
         $this->assertSame($this->machine->id, $data['machine']['id']);
         $this->assertSame('1', $data['shift']);
-        $this->assertNotEmpty($data['periods']);
+        // Seluruh 7 periode shift selalu dikirim agar operator melihat shift
+        // utuh; status tiap periode menentukan mana yang boleh dilaporkan.
+        $this->assertCount(7, $data['periods']);
         $this->assertSame('07:30 - 08:30', $data['periods'][0]['label']);
         $this->assertSame('08:30 - 09:30', $data['periods'][1]['label']);
-        $this->assertCount(2, $data['periods']);
+        $this->assertTrue($data['periods'][0]['can_report']);
+        $this->assertTrue($data['periods'][1]['can_report']);
+        $this->assertFalse($data['periods'][2]['can_report']);
 
         $this->assertNotEmpty($data['parts']);
         $this->assertSame($this->parentPart->id, $data['parts'][0]['part_id']);
@@ -100,15 +104,25 @@ class ProductionSessionApiTest extends TestCase
         $this->assertSame('3', $data['shift']);
     }
 
-    public function test_only_periods_that_already_ended_are_offered(): void
+    public function test_periods_that_have_not_ended_are_flagged_not_reportable(): void
     {
-        // 08:00 WIB = 01:00 UTC: belum ada periode yang selesai di shift 1.
+        // 08:00 WIB = 01:00 UTC: belum ada periode yang selesai di shift 1, dan
+        // periode 07:30-08:30 sedang berjalan.
         $this->travelTo(Carbon::parse('2026-01-15 01:00:00', 'UTC'));
 
         $data = $this->getJson("/api/machines/{$this->machine->id}/production-session")->assertOk()->json('data');
 
         $this->assertSame('1', $data['shift']);
-        $this->assertSame([], $data['periods']);
+        // Semua periode tetap dikirim supaya operator melihat shift utuh.
+        $this->assertCount(7, $data['periods']);
+        $this->assertFalse($data['periods'][0]['can_report']);
+        $this->assertTrue($data['periods'][0]['in_progress']);
+        // Periode yang belum mulai: belum bisa dilapor dan bukan sedang berjalan.
+        $this->assertFalse($data['periods'][6]['can_report']);
+        $this->assertFalse($data['periods'][6]['in_progress']);
+
+        $reportable = array_values(array_filter($data['periods'], fn (array $p): bool => $p['can_report']));
+        $this->assertSame([], $reportable);
     }
 
     public function test_unknown_machine_returns_not_found(): void
@@ -127,7 +141,7 @@ class ProductionSessionApiTest extends TestCase
         $this->assertSame('2', $data['shift']);
     }
 
-    public function test_chosen_shift_still_only_offers_periods_that_have_ended(): void
+    public function test_chosen_shift_holds_no_reportable_period_while_running(): void
     {
         // 16:00 WIB: di shift 2, periode 15:30-16:30 belum selesai.
         $this->travelTo(Carbon::parse('2026-01-15 09:00:00', 'UTC'));
@@ -136,7 +150,9 @@ class ProductionSessionApiTest extends TestCase
             ->assertOk()->json('data');
 
         $this->assertSame('2', $data['shift']);
-        $this->assertSame([], $data['periods']);
+        $this->assertCount(7, $data['periods']);
+        $this->assertFalse($data['periods'][0]['can_report']);
+        $this->assertTrue($data['periods'][0]['in_progress']);
     }
 
     public function test_an_unknown_shift_is_rejected(): void

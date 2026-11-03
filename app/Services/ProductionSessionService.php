@@ -89,7 +89,10 @@ final class ProductionSessionService
             ],
             'shift' => $shift,
             'shifts' => array_map('strval', array_keys(ProductionPeriods::SHIFTS)),
-            'periods' => ProductionPeriods::reportableForShift($shift, now(), $zone),
+            // Semua periode dikirim beserta statusnya. Layar menampilkan 7
+            // periode penuh agar operator melihat shift utuh dan tahu mana yang
+            // belum boleh dilaporkan, alih-alih melihat daftar yang terpotong.
+            'periods' => ProductionPeriods::withStatusForShift($shift, now(), $zone),
             'parts' => $parts,
         ];
     }

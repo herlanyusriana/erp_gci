@@ -159,6 +159,35 @@ final class ProductionPeriods
     }
 
     /**
+     * Semua periode satu shift beserta statusnya pada waktu tertentu.
+     *
+     * Dipakai layar operator agar seluruh 7 periode tetap terlihat: yang sudah
+     * tutup boleh dilaporkan (`can_report`), yang sedang berjalan atau belum
+     * mulai ditandai agar operator paham kenapa belum bisa dipilih, bukan
+     * sekadar menghilang dari daftar.
+     *
+     * @return list<array{start: string, end: string, label: string, minutes: int, can_report: bool, in_progress: bool}>
+     */
+    public static function withStatusForShift(string $shift, Carbon $now, string $zone): array
+    {
+        $local = $now->copy()->setTimezone($zone);
+
+        return array_map(function (array $period) use ($shift, $local, $zone): array {
+            $startAt = self::periodEndAt($shift, $period['start'], $local, $zone);
+            $endAt = self::periodEndAt($shift, $period['end'], $local, $zone);
+
+            $ended = $endAt !== null && $local->greaterThanOrEqualTo($endAt);
+            // Sedang berjalan: sudah mulai tapi belum tutup.
+            $running = ! $ended && $startAt !== null && $local->greaterThanOrEqualTo($startAt);
+
+            return $period + [
+                'can_report' => $ended,
+                'in_progress' => $running,
+            ];
+        }, self::forShift($shift));
+    }
+
+    /**
      * Periode yang sudah berakhir dan boleh dilaporkan, untuk sebuah shift.
      *
      * @return list<array{start: string, end: string, label: string, minutes: int}>

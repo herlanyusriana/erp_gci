@@ -115,4 +115,42 @@ class ProductionSessionApiTest extends TestCase
     {
         $this->getJson('/api/machines/999999/production-session')->assertNotFound();
     }
+
+    public function test_shift_can_be_chosen_explicitly(): void
+    {
+        // 09:30 WIB: shift berjalan = 1, tetapi operator memilih shift 2.
+        $this->travelTo(Carbon::parse('2026-01-15 02:30:00', 'UTC'));
+
+        $data = $this->getJson("/api/machines/{$this->machine->id}/production-session?shift=2")
+            ->assertOk()->json('data');
+
+        $this->assertSame('2', $data['shift']);
+    }
+
+    public function test_chosen_shift_still_only_offers_periods_that_have_ended(): void
+    {
+        // 16:00 WIB: di shift 2, periode 15:30-16:30 belum selesai.
+        $this->travelTo(Carbon::parse('2026-01-15 09:00:00', 'UTC'));
+
+        $data = $this->getJson("/api/machines/{$this->machine->id}/production-session?shift=2")
+            ->assertOk()->json('data');
+
+        $this->assertSame('2', $data['shift']);
+        $this->assertSame([], $data['periods']);
+    }
+
+    public function test_an_unknown_shift_is_rejected(): void
+    {
+        $this->getJson("/api/machines/{$this->machine->id}/production-session?shift=9")
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('shift');
+    }
+
+    public function test_all_shifts_are_returned_so_the_app_can_offer_a_chooser(): void
+    {
+        $data = $this->getJson("/api/machines/{$this->machine->id}/production-session")
+            ->assertOk()->json('data');
+
+        $this->assertSame(['1', '2', '3'], $data['shifts']);
+    }
 }

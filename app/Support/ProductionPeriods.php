@@ -82,13 +82,80 @@ final class ProductionPeriods
         return $periods;
     }
 
-    /** Apakah sebuah periode sudah berakhir pada waktu tertentu (zona pabrik). */
-    public static function hasEnded(string $periodEnd, Carbon $now, string $zone): bool
+    /**
+     * Apakah shift melewati tengah malam (mis. shift 3: 23:30-07:30).
+     *
+     * Pada shift seperti ini jam akhir periode boleh lebih kecil daripada jam
+     * mulainya, karena periode dinihari jatuh di hari berikutnya.
+     */
+    public static function crossesMidnight(string $shift): bool
     {
-        $local = $now->copy()->setTimezone($zone);
-        $end = $local->copy()->setTimeFromTimeString($periodEnd);
+        $config = self::SHIFTS[$shift] ?? null;
+        if ($config === null) {
+            return false;
+        }
 
-        return $local->greaterThanOrEqualTo($end);
+        return self::minutes($config['end']) <= self::minutes($config['start']);
+    }
+
+    /**
+     * Tanggal (di zona pabrik) dimulainya sesi shift terakhir yang sudah mulai.
+     *
+     * Satu shift berlangsung sekali per hari, mulai dari jam `start`. Untuk
+     * menentukan sesi mana yang sedang dibicarakan pada waktu `$now`:
+     * - bila jam sekarang sudah lewat jam mulai, sesi shift dimulai hari ini;
+     * - bila belum, sesi terakhir dimulai kemarin.
+     *
+     * Aturan ini berlaku sama untuk shift biasa maupun shift lintas tengah malam
+     * (shift 3), sehingga tidak perlu cabang khusus per shift.
+     */
+    public static function sessionDate(string $shift, Carbon $now, string $zone): ?Carbon
+    {
+        $config = self::SHIFTS[$shift] ?? null;
+        if ($config === null) {
+            return null;
+        }
+
+        $local = $now->copy()->setTimezone($zone);
+        $nowMinutes = ($local->hour * 60) + $local->minute;
+        $startMinutes = self::minutes($config['start']);
+
+        $day = $local->copy()->startOfDay();
+
+        return $nowMinutes < $startMinutes ? $day->subDay() : $day;
+    }
+
+    /**
+     * Waktu berakhirnya sebuah periode pada sesi shift yang berjalan, di zona pabrik.
+     *
+     * Jam periode dihitung relatif terhadap jam mulai shift dengan pembungkusan
+     * 24 jam, sehingga periode dinihari shift 3 otomatis jatuh di hari berikutnya.
+     * Menempelkan jam periode ke tanggal hari ini (perilaku lama) membuat semua
+     * periode dinihari shift 3 tampak sudah lewat.
+     */
+    public static function periodEndAt(string $shift, string $periodEnd, Carbon $now, string $zone): ?Carbon
+    {
+        $config = self::SHIFTS[$shift] ?? null;
+        $start = self::sessionDate($shift, $now, $zone);
+        if ($config === null || $start === null) {
+            return null;
+        }
+
+        $startMinutes = self::minutes($config['start']);
+        $offset = (self::minutes($periodEnd) - $startMinutes + (24 * 60)) % (24 * 60);
+
+        return $start->copy()->addMinutes($startMinutes + $offset);
+    }
+
+    /** Apakah sebuah periode sudah berakhir pada waktu tertentu (zona pabrik). */
+    public static function hasEnded(string $shift, string $periodEnd, Carbon $now, string $zone): bool
+    {
+        $end = self::periodEndAt($shift, $periodEnd, $now, $zone);
+        if ($end === null) {
+            return false;
+        }
+
+        return $now->copy()->setTimezone($zone)->greaterThanOrEqualTo($end);
     }
 
     /**
@@ -100,7 +167,7 @@ final class ProductionPeriods
     {
         return array_values(array_filter(
             self::forShift($shift),
-            fn (array $period): bool => self::hasEnded($period['end'], $now, $zone),
+            fn (array $period): bool => self::hasEnded($shift, $period['end'], $now, $zone),
         ));
     }
 

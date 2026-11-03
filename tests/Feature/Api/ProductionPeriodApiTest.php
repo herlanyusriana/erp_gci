@@ -74,6 +74,32 @@ class ProductionPeriodApiTest extends TestCase
         ]))->assertStatus(422)->assertJsonValidationErrors('period_start');
     }
 
+    public function test_rejects_a_shift_three_period_that_has_not_happened_yet(): void
+    {
+        // 23:45 WIB hari ini: shift 3 baru 15 menit. Periode dinihari 06:30-07:30
+        // belum terjadi (besok pagi), jadi harus ditolak. Sebelum diperbaiki,
+        // jam periode ditempel ke tanggal hari ini sehingga lolos ke database.
+        $this->travelTo(Carbon::parse('2026-11-03 23:45:00', 'Asia/Jakarta'));
+
+        $this->postJson("/api/work-orders/{$this->wo()->id}/results", $this->payload([
+            'shift' => '3',
+            'period_start' => '06:30',
+            'period_end' => '07:30',
+        ]))->assertStatus(422)->assertJsonValidationErrors('period_start');
+    }
+
+    public function test_accepts_a_shift_three_period_that_already_ended_across_midnight(): void
+    {
+        // 01:00 WIB: periode 23:30-00:30 milik shift 3 sudah tutup, boleh dilapor.
+        $this->travelTo(Carbon::parse('2026-11-04 01:00:00', 'Asia/Jakarta'));
+
+        $this->postJson("/api/work-orders/{$this->wo()->id}/results", $this->payload([
+            'shift' => '3',
+            'period_start' => '23:30',
+            'period_end' => '00:30',
+        ]))->assertOk();
+    }
+
     public function test_rejects_a_period_whose_end_is_not_after_its_start(): void
     {
         $this->postJson("/api/work-orders/{$this->wo()->id}/results", $this->payload([

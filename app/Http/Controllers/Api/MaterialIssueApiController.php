@@ -14,6 +14,7 @@ use App\Services\ProductionSessionService;
 use App\Services\ReceiveMaterialService;
 use App\Services\ReleaseContextService;
 use App\Services\WipIdentityService;
+use App\Support\ProductionPeriods;
 use App\Services\WoService;
 use App\Support\UomCatalog;
 use Illuminate\Http\JsonResponse;
@@ -267,7 +268,7 @@ class MaterialIssueApiController extends Controller
      * Konteks sesi produksi di sebuah mesin: shift berjalan, periode yang boleh
      * dilaporkan, dan part hasil dari Production Plan.
      */
-    public function productionSession(Machine $machine): JsonResponse
+    public function productionSession(Request $request, Machine $machine): JsonResponse
     {
         Gate::authorize('viewAny', WorkOrder::class);
 
@@ -278,9 +279,13 @@ class MaterialIssueApiController extends Controller
             ], 404);
         }
 
+        $data = $request->validate([
+            'shift' => ['nullable', 'string', 'in:1,2,3'],
+        ]);
+
         return response()->json([
             'ok' => true,
-            'data' => $this->sessionService->context($machine),
+            'data' => $this->sessionService->context($machine, $data['shift'] ?? null),
         ]);
     }
 
@@ -399,7 +404,10 @@ class MaterialIssueApiController extends Controller
             'result_date' => ['nullable', 'date'],
             'shift' => ['nullable', 'string', 'max:20'],
             'period_start' => ['nullable', 'date_format:H:i', 'required_with:period_end'],
-            'period_end' => ['nullable', 'date_format:H:i', 'required_with:period_start', 'after:period_start'],
+            // `after:period_start` tidak dipakai: shift 3 melewati tengah malam,
+            // sehingga 00:30 sah sebagai akhir dari periode 23:30. Urutan jam
+            // divalidasi setelah shift diketahui (lihat di bawah).
+            'period_end' => ['nullable', 'date_format:H:i', 'required_with:period_start'],
             'machine_id' => ['nullable', 'integer', 'exists:machines,id'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
@@ -408,13 +416,33 @@ class MaterialIssueApiController extends Controller
         // sudah terjadi. Baris tanpa periode (data lama) tidak terkena aturan ini.
         if (! empty($data['period_start']) && ! empty($data['period_end'])) {
             $zone = (string) ConfigMaster::getValue('SYSTEM', 'timezone', 'Asia/Jakarta');
+            $shift = isset($data['shift']) && array_key_exists((string) $data['shift'], ProductionPeriods::SHIFTS)
+                ? (string) $data['shift']
+                : null;
 
-            // Bandingkan di zona pabrik: jam periode adalah jam lokal, sedangkan
-            // now() berjalan di zona aplikasi (UTC).
-            $nowLocal = now()->setTimezone($zone);
-            $endToday = $nowLocal->copy()->setTimeFromTimeString($data['period_end']);
+            // Urutan jam: akhir harus setelah mulai. Untuk shift yang melewati
+            // tengah malam (mulai > selesai), akhir boleh lebih kecil dari mulai.
+            $start = substr((string) $data['period_start'], 0, 5);
+            $end = substr((string) $data['period_end'], 0, 5);
+            $crossesMidnight = ProductionPeriods::crossesMidnight($shift ?? '');
+            $ordered = $crossesMidnight ? $start !== $end : strcmp($end, $start) > 0;
 
-            if ($endToday->greaterThan($nowLocal)) {
+            if (! $ordered) {
+                throw ValidationException::withMessages([
+                    'period_end' => __('period end harus berupa tanggal setelah period start.'),
+                ]);
+            }
+
+            // Shift 3 melewati tengah malam, jadi jam periode dinihari berada di
+            // hari berikutnya dan tidak boleh dinilai dengan tanggal hari ini.
+            if ($shift !== null) {
+                $ended = ProductionPeriods::hasEnded($shift, $data['period_end'], now(), $zone);
+            } else {
+                $nowLocal = now()->setTimezone($zone);
+                $ended = $nowLocal->gte($nowLocal->copy()->setTimeFromTimeString($data['period_end']));
+            }
+
+            if (! $ended) {
                 throw ValidationException::withMessages([
                     'period_start' => __('Periode ini belum terjadi.'),
                 ]);

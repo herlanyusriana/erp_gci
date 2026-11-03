@@ -50,13 +50,18 @@ final class ProductionSessionService
     }
 
     /**
-     * @return array{machine: array<string, mixed>, shift: string, periods: list<array<string, mixed>>, parts: list<array<string, mixed>>}
+     * @return array{machine: array<string, mixed>, shift: string, shifts: list<string>, periods: list<array<string, mixed>>, parts: list<array<string, mixed>>}
      */
-    public function context(Machine $machine): array
+    public function context(Machine $machine, ?string $shift = null): array
     {
         $zone = (string) ConfigMaster::getValue('SYSTEM', 'timezone', 'Asia/Jakarta');
         $nowLocal = $this->plantNow();
-        $shift = $this->currentShift($nowLocal);
+
+        // Operator boleh memilih shift (mis. mengisi laporan susulan shift
+        // sebelumnya); tanpa pilihan, pakai shift yang sedang berjalan.
+        $shift = $shift !== null && array_key_exists($shift, ProductionPeriods::SHIFTS)
+            ? $shift
+            : $this->currentShift($nowLocal);
 
         $parts = WorkOrderItem::query()
             ->where('machine_id', $machine->id)
@@ -83,6 +88,7 @@ final class ProductionSessionService
                 'machine_name' => $machine->machine_name,
             ],
             'shift' => $shift,
+            'shifts' => array_map('strval', array_keys(ProductionPeriods::SHIFTS)),
             'periods' => ProductionPeriods::reportableForShift($shift, now(), $zone),
             'parts' => $parts,
         ];

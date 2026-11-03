@@ -56,8 +56,76 @@ test('a period that is still running is not reportable yet', function () {
         ->toHaveCount(1);
 });
 
-test('no period is reportable before the shift starts', function () {
-    $now = Carbon::parse('2026-01-15 23:00:00', 'UTC');
+test('a shift that has not started yet has no reportable period', function () {
+    // 15:35 WIB: shift 2 baru mulai 5 menit lalu, belum ada periode yang tutup.
+    expect(ProductionPeriods::reportableForShift('2', Carbon::parse('2026-11-03 15:35:00', 'Asia/Jakarta'), 'Asia/Jakarta'))
+        ->toBe([]);
+});
 
-    expect(ProductionPeriods::reportableForShift('1', $now, 'Asia/Jakarta'))->toBe([]);
+test('shift 3 does not report future periods right after it starts', function () {
+    // 23:45 WIB: shift 3 baru berjalan 15 menit, belum ada periode yang tutup.
+    // Sebelum diperbaiki, semua 7 periode tampak sudah berakhir karena jam
+    // periode dinihari ditempel ke tanggal hari ini.
+    $now = Carbon::parse('2026-11-03 23:45:00', 'Asia/Jakarta');
+
+    expect(ProductionPeriods::reportableForShift('3', $now, 'Asia/Jakarta'))->toBe([]);
+});
+
+test('shift 3 reports periods across midnight as the night advances', function () {
+    // 01:00 WIB: hanya 23:30-00:30 yang sudah tutup.
+    $atOne = Carbon::parse('2026-11-04 01:00:00', 'Asia/Jakarta');
+    expect(ProductionPeriods::reportableForShift('3', $atOne, 'Asia/Jakarta'))
+        ->toHaveCount(1)
+        ->and(ProductionPeriods::reportableForShift('3', $atOne, 'Asia/Jakarta')[0]['start'])->toBe('23:30');
+
+    // 05:00 WIB: empat periode tutup, termasuk periode istirahat 03:30-05:30 belum.
+    expect(ProductionPeriods::reportableForShift('3', Carbon::parse('2026-11-04 05:00:00', 'Asia/Jakarta'), 'Asia/Jakarta'))
+        ->toHaveCount(4);
+
+    // 07:35 WIB: shift 3 baru saja selesai, semua periode tutup.
+    expect(ProductionPeriods::reportableForShift('3', Carbon::parse('2026-11-04 07:35:00', 'Asia/Jakarta'), 'Asia/Jakarta'))
+        ->toHaveCount(7);
+});
+
+test('the plant timezone argument decides the result, not the app timezone', function () {
+    // Jam yang sama, dikirim dalam UTC. Zona pabrik harus tetap menentukan.
+    // Sebelum diperbaiki, argumen $zone diabaikan dan hasilnya ikut zona app.
+    $now = Carbon::parse('2026-11-04 01:00:00', 'Asia/Jakarta')->utc();
+
+    expect(ProductionPeriods::reportableForShift('3', $now, 'Asia/Jakarta'))->toHaveCount(1);
+
+    // Shift 1 juga harus konsisten: 09:30 WIB = dua periode tutup.
+    $shiftOne = Carbon::parse('2026-11-03 09:30:00', 'Asia/Jakarta')->utc();
+    expect(ProductionPeriods::reportableForShift('1', $shiftOne, 'Asia/Jakarta'))->toHaveCount(2);
+});
+
+test('shift 1 keeps the last period open until the shift really ends', function () {
+    // 14:45 WIB: 14:30-15:30 masih berjalan, jadi hanya 6 periode yang tutup.
+    expect(ProductionPeriods::reportableForShift('1', Carbon::parse('2026-11-03 14:45:00', 'Asia/Jakarta'), 'Asia/Jakarta'))
+        ->toHaveCount(6);
+
+    // 15:35 WIB: shift 1 selesai, periode 14:30-15:30 ikut muncul.
+    $after = ProductionPeriods::reportableForShift('1', Carbon::parse('2026-11-03 15:35:00', 'Asia/Jakarta'), 'Asia/Jakarta');
+    expect($after)->toHaveCount(7)
+        ->and($after[6]['start'])->toBe('14:30')
+        ->and($after[6]['end'])->toBe('15:30');
+});
+
+test('the session date follows the shift start, not the calendar day', function () {
+    // Shift 3 sudah berjalan lewat tengah malam: sesinya tetap milik kemarin.
+    expect(ProductionPeriods::sessionDate('3', Carbon::parse('2026-11-04 01:00:00', 'Asia/Jakarta'), 'Asia/Jakarta')->toDateString())
+        ->toBe('2026-11-03')
+        ->and(ProductionPeriods::sessionDate('3', Carbon::parse('2026-11-04 07:35:00', 'Asia/Jakarta'), 'Asia/Jakarta')->toDateString())
+        ->toBe('2026-11-03')
+        // Setelah jam mulai hari ini, sesi shift 3 pindah ke hari ini.
+        ->and(ProductionPeriods::sessionDate('3', Carbon::parse('2026-11-04 23:45:00', 'Asia/Jakarta'), 'Asia/Jakarta')->toDateString())
+        ->toBe('2026-11-04')
+        // Shift biasa sebelum jam mulai masih menunjuk sesi kemarin.
+        ->and(ProductionPeriods::sessionDate('1', Carbon::parse('2026-11-03 07:00:00', 'Asia/Jakarta'), 'Asia/Jakarta')->toDateString())
+        ->toBe('2026-11-02')
+        ->and(ProductionPeriods::sessionDate('1', Carbon::parse('2026-11-03 07:35:00', 'Asia/Jakarta'), 'Asia/Jakarta')->toDateString())
+        ->toBe('2026-11-03')
+        // Shift yang tidak dikenal tidak punya sesi.
+        ->and(ProductionPeriods::sessionDate('9', Carbon::parse('2026-11-03 07:35:00', 'Asia/Jakarta'), 'Asia/Jakarta'))
+        ->toBeNull();
 });

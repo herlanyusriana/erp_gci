@@ -10,6 +10,7 @@ use App\Models\PartStock;
 use App\Models\ProductionMaterialReceipt;
 use App\Models\User;
 use App\Models\WorkOrder;
+use App\Models\WorkOrderConsumption;
 use App\Models\WorkOrderMaterialBooking;
 use App\Services\ProductionReceiptService;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfInterceptor;
@@ -276,5 +277,32 @@ class ProductionResultTest extends TestCase
         $consumed = (float) ProductionMaterialReceipt::where('work_order_id', $wo->id)
             ->where('part_id', $rmId)->sum('qty_consumed');
         $this->assertEqualsWithDelta(10.9, $consumed, 0.001);
+    }
+
+    public function test_consumption_records_the_source_invoice_for_traceability(): void
+    {
+        $wo = $this->releasedWorkOrder(true);
+
+        // Beri invoice pada semua penerimaan material di mesin.
+        ProductionMaterialReceipt::where('work_order_id', $wo->id)->update([
+            'invoice' => 'HCGCI 26-0901',
+            'supplier' => 'YONGXIN METAL',
+        ]);
+
+        $first = $this->stepIds($wo)->first()['parent_part_id'];
+
+        $this->post(route('production-results.store', $wo), [
+            'parent_part_id' => $first,
+            'qty_good' => 10,
+        ])->assertSessionHasNoErrors();
+
+        $consumptions = WorkOrderConsumption::where('work_order_id', $wo->id)->get();
+
+        $this->assertNotEmpty($consumptions);
+        foreach ($consumptions as $row) {
+            $this->assertSame('HCGCI 26-0901', $row->invoice_no);
+            $this->assertSame('YONGXIN METAL', $row->supplier_name);
+            $this->assertNotNull($row->source_tag);
+        }
     }
 }

@@ -6,6 +6,8 @@ use App\Models\Part;
 use App\Models\ProductionResult;
 use App\Models\User;
 use App\Models\WorkOrder;
+use App\Models\WorkOrderConsumption;
+use App\Models\WorkOrderItem;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
@@ -33,6 +35,24 @@ class ProductionLabelQueueTest extends TestCase
             'qty' => 1000,
             'status' => 'in_progress',
         ]);
+    }
+
+    private function woItemId(): int
+    {
+        return (int) WorkOrderItem::firstOrCreate(
+            [
+                'work_order_id' => $this->wo->id,
+                'parent_part_id' => $this->part->id,
+                'sequence' => 99,
+            ],
+            [
+                'child_part_name' => 'COIL',
+                'uom_rm' => 'KGM',
+                'qty_required' => 1000,
+                'qty_consumed' => 0,
+                'source' => 'Vendor',
+            ],
+        )->id;
     }
 
     private function makeResult(float $good, float $reject, string $status = 'pending', bool $backfilled = false): ProductionResult
@@ -145,6 +165,49 @@ class ProductionLabelQueueTest extends TestCase
         $this->post(route('production-labels.deliver', $result))->assertSessionHasErrors('label_status');
 
         $this->assertSame('pending', $result->fresh()->label_status);
+    }
+
+    public function test_label_lists_every_invoice_consumed_by_the_period(): void
+    {
+        $result = $this->makeResult(352, 0);
+
+        WorkOrderConsumption::create([
+            'work_order_id' => $this->wo->id, 'work_order_item_id' => $this->woItemId(),
+            'part_stock_id' => 1, 'part_id' => $this->part->id,
+            'qty' => 260, 'uom' => 'KGM',
+            'invoice_no' => 'HCGCI 26-0901', 'supplier_name' => 'YONGXIN METAL',
+            'production_result_id' => $result->id,
+        ]);
+        WorkOrderConsumption::create([
+            'work_order_id' => $this->wo->id, 'work_order_item_id' => $this->woItemId(),
+            'part_stock_id' => 2, 'part_id' => $this->part->id,
+            'qty' => 92, 'uom' => 'KGM',
+            'invoice_no' => 'HCGCI 26-0902', 'supplier_name' => 'TAIZHOU',
+            'production_result_id' => $result->id,
+        ]);
+
+        $this->get(route('production-labels.print', [$result, 'good']))
+            ->assertOk()
+            ->assertSee('HCGCI 26-0901')
+            ->assertSee('HCGCI 26-0902');
+    }
+
+    public function test_label_shows_a_single_invoice_without_listing_when_only_one_source(): void
+    {
+        $result = $this->makeResult(120, 0);
+
+        WorkOrderConsumption::create([
+            'work_order_id' => $this->wo->id, 'work_order_item_id' => $this->woItemId(),
+            'part_stock_id' => 1, 'part_id' => $this->part->id,
+            'qty' => 120, 'uom' => 'KGM',
+            'invoice_no' => 'HCGCI 26-0901', 'supplier_name' => 'YONGXIN METAL',
+            'production_result_id' => $result->id,
+        ]);
+
+        $this->get(route('production-labels.print', [$result, 'good']))
+            ->assertOk()
+            ->assertSee('HCGCI 26-0901')
+            ->assertDontSee('SUMBER:');
     }
 
     public function test_queue_requires_permission(): void

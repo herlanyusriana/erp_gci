@@ -2,10 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\MaterialIssueItem;
-use App\Models\ProductionMaterialReceipt;
 use App\Models\ProductionResult;
 use App\Models\WorkOrder;
+use App\Models\WorkOrderConsumption;
 use App\Support\QrSvg;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -108,15 +107,29 @@ class ProductionLabelController extends Controller
             ? ($stepIndex + 1).'/'.$uniqueStepParentIds->count()
             : null;
 
-        $invoiceNo = ProductionMaterialReceipt::query()
-            ->where('work_order_id', $result->work_order_id)
-            ->whereNotNull('invoice')
-            ->value('invoice')
-            ?? MaterialIssueItem::query()
-                ->whereHas('materialIssue', fn ($q) => $q->where('work_order_id', $result->work_order_id))
-                ->whereNotNull('invoice')
-                ->value('invoice')
-            ?? '-';
+        // Asal bahan: ambil nota yang BENAR-BENAR terpakai oleh laporan periode
+        // ini, bukan sembarang nota milik WO. Satu periode bisa memakai beberapa
+        // nota sekaligus, jadi semuanya didaftar — bukan diambil satu asal-asalan.
+        $consumedInvoices = WorkOrderConsumption::query()
+            ->where('production_result_id', $result->id)
+            ->whereNotNull('invoice_no')
+            ->pluck('invoice_no')
+            ->unique()
+            ->values();
+
+        $invoiceLabel = match (true) {
+            $consumedInvoices->isEmpty() => '-',
+            $consumedInvoices->count() === 1 => (string) $consumedInvoices->first(),
+            default => $consumedInvoices->implode(', '),
+        };
+
+        $supplierLabel = WorkOrderConsumption::query()
+            ->where('production_result_id', $result->id)
+            ->whereNotNull('supplier_name')
+            ->pluck('supplier_name')
+            ->unique()
+            ->values()
+            ->implode(', ');
 
         $tagSeq = ProductionResult::query()
             ->where('work_order_id', $result->work_order_id)
@@ -136,7 +149,9 @@ class ProductionLabelController extends Controller
             'partName' => $result->parentPart?->part_name,
             'processName' => $result->process?->process_name ?? $result->parentPart?->part_name,
             'stepFraction' => $stepFraction,
-            'invoiceNo' => $invoiceNo,
+            'invoiceNo' => $invoiceLabel,
+            'supplierName' => $supplierLabel !== '' ? $supplierLabel : null,
+            'invoiceCount' => $consumedInvoices->count(),
             'tagSeq' => $tagSeq,
             'operatorName' => $result->reporter?->name ?? '#OPERATOR NAME#',
             'foremanName' => '#FOREMAN NAME#',

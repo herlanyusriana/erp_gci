@@ -13,6 +13,7 @@ class WorkOrderConsumption extends Model
     protected $fillable = [
         'work_order_id', 'work_order_item_id', 'part_stock_id', 'part_id',
         'qty', 'uom',
+        'invoice_no', 'supplier_name', 'source_tag',
         'production_result_id', 'production_material_receipt_id', 'reversed_by',
     ];
 

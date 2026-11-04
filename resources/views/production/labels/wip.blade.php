@@ -200,6 +200,9 @@
                         {{ $partNumber ?? '-' }}@if(!empty($stepFraction)) {{ $stepFraction }}@endif - {{ $processName ?? $partName ?? '-' }}
                     </div>
                     <div class="batch-invoice">{{ $invoiceNo ?? '-' }}</div>
+                    @if (!empty($supplierName) && ($invoiceCount ?? 0) > 1)
+                        <div class="part-process">SUMBER: {{ $supplierName }}</div>
+                    @endif
                     <div class="tag-no">TAG # : {{ $tagSeq ?? 1 }}</div>
                 </div>
 

@@ -172,6 +172,10 @@ class ProductionResultService
                             'work_order_id' => $workOrder->id, 'work_order_item_id' => $row->id,
                             'part_stock_id' => $receipt->part_stock_id, 'part_id' => $receipt->part_id,
                             'qty' => (string) $take, 'uom' => $receipt->uom,
+                            // Simpan asal bahan supaya FG bisa ditelusuri ke notanya.
+                            'invoice_no' => $receipt->invoice,
+                            'supplier_name' => $receipt->supplier,
+                            'source_tag' => $receipt->tag,
                         ]);
                         $remaining = $remaining->minus($take);
                     }
@@ -350,6 +354,10 @@ class ProductionResultService
                     'part_id' => $receipt->part_id,
                     'qty' => (string) $take,
                     'uom' => $receipt->uom,
+                    // Simpan asal bahan supaya FG bisa ditelusuri ke notanya.
+                    'invoice_no' => $receipt->invoice,
+                    'supplier_name' => $receipt->supplier,
+                    'source_tag' => $receipt->tag,
                 ]);
                 $remaining = $remaining->minus($take);
             }

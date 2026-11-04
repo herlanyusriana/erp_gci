@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 14mm 13mm 16mm 13mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "DejaVu Sans", Arial, sans-serif; color: #17202A; font-size: 10pt; line-height: 1.38; margin: 0; }
+  h1 { font-size: 19pt; margin: 0 0 2mm; color: #24106C; letter-spacing: -.2px; }
+  h2 { font-size: 12.5pt; margin: 4.5mm 0 2mm; color: #24106C; border-bottom: 2px solid #EEEBF6; padding-bottom: 1.5mm; }
+  h3 { font-size: 10.6pt; margin: 3mm 0 1.5mm; color: #17202A; }
+  p { margin: 0 0 2mm; }
+  .sub { color: #64748B; font-size: 9.4pt; margin-bottom: 4mm; }
+  .cover { border-left: 5px solid #24106C; padding: 3mm 0 3mm 5mm; margin-bottom: 5mm; background: #F7F9FC; }
+  table { width: 100%; border-collapse: collapse; margin: 2mm 0 3mm; font-size: 9.4pt; }
+  th { background: #24106C; color: #fff; text-align: left; padding: 2mm 2.5mm; font-weight: 600; }
+  td { padding: 1.8mm 2.5mm; border-bottom: 1px solid #D9E2EC; vertical-align: top; }
+  tr:nth-child(even) td { background: #F7F9FC; }
+  .center { text-align: center; }
+  .break { background: #FFF7ED !important; font-weight: 600; }
+  ol, ul { margin: 0 0 2.5mm; padding-left: 6mm; }
+  li { margin-bottom: 1.4mm; }
+  .step { display: flex; gap: 3mm; margin-bottom: 2.4mm; page-break-inside: avoid; }
+  .num { flex: 0 0 7mm; height: 7mm; border-radius: 50%; background: #24106C; color: #fff; font-weight: 700;
+         display: flex; align-items: center; justify-content: center; font-size: 10pt; }
+  .stepbody { flex: 1; }
+  .stepbody strong { color: #24106C; }
+  .tip { background: #F0F9FF; border-left: 4px solid #0369A1; padding: 2.5mm 3mm; margin: 2.5mm 0; font-size: 9.6pt; border-radius: 0 4px 4px 0; }
+  .warn { background: #FFFBEB; border-left: 4px solid #B45309; padding: 2.5mm 3mm; margin: 2.5mm 0; font-size: 9.6pt; border-radius: 0 4px 4px 0; }
+  .danger { background: #FEF2F2; border-left: 4px solid #B91C1C; padding: 2.5mm 3mm; margin: 2.5mm 0; font-size: 9.6pt; border-radius: 0 4px 4px 0; }
+  .flow { border: 1px solid #D9E2EC; border-radius: 6px; padding: 4mm; margin: 3mm 0; background: #F7F9FC; }
+  .flowrow { display: flex; align-items: center; gap: 2mm; margin-bottom: 2mm; flex-wrap: wrap; }
+  .box { background: #fff; border: 1.5px solid #24106C; border-radius: 5px; padding: 2mm 3mm; font-size: 8.8pt; font-weight: 600; color: #24106C; }
+  .box.gray { border-color: #64748B; color: #64748B; }
+  .box.green { border-color: #15803D; color: #15803D; }
+  .arrow { color: #64748B; font-weight: 700; }
+  .pagebreak { page-break-before: always; }
+  .footer { position: fixed; bottom: 6mm; left: 13mm; right: 13mm; font-size: 8pt; color: #94A3B8;
+            border-top: 1px solid #D9E2EC; padding-top: 2mm; display: flex; justify-content: space-between; }
+  kbd { background: #EEEBF6; border: 1px solid #D9E2EC; border-radius: 3px; padding: 0.4mm 1.6mm; font-size: 9pt; font-weight: 600; color:#24106C; }
+  .badge { display: inline-block; padding: .6mm 2mm; border-radius: 10px; font-size: 8.4pt; font-weight: 600; }
+  .badge.ok { background: #DCFCE7; color: #15803D; }
+  .badge.lock { background: #F1F5F9; color: #64748B; }
+  .badge.run { background: #FEF3C7; color: #B45309; }
+</style>
+</head>
+<body>
+
+<div class="footer">
+  <span>Panduan Operator — Material Tracker (Produksi)</span>
+  <span>Versi APK 1.0.7+18</span>
+</div>
+
+<div class="cover">
+  <h1>Panduan Operator Produksi</h1>
+  <p class="sub">Aplikasi <strong>Material Tracker</strong> &middot; Melapor hasil produksi per periode shift</p>
+  <p style="margin:0;font-size:9.6pt">Dokumen ini untuk operator di lantai produksi. Isinya langkah-langkah dari membuka aplikasi
+  sampai laporan hasil produksi tersimpan, daftar jam setiap periode shift, dan penjelasan pesan yang sering muncul.</p>
+</div>
+
+<h2>1. Gambaran Singkat</h2>
+<p>Setiap shift dibagi menjadi <strong>7 periode</strong>. Operator melaporkan jumlah barang <strong>Good</strong> dan
+<strong>NG</strong> (reject) untuk setiap periode yang sudah selesai. Satu laporan = satu part = satu periode.</p>
+
+<div class="flow">
+  <div class="flowrow">
+    <span class="box">Buka Aplikasi</span><span class="arrow">&rarr;</span>
+    <span class="box">Pilih Peran Produksi</span><span class="arrow">&rarr;</span>
+    <span class="box">Menu Hasil Produksi</span><span class="arrow">&rarr;</span>
+    <span class="box">Scan QR Mesin</span>
+  </div>
+  <div class="flowrow">
+    <span class="box">Pilih Shift (bila perlu)</span><span class="arrow">&rarr;</span>
+    <span class="box">Pilih Part Hasil</span><span class="arrow">&rarr;</span>
+    <span class="box">Pilih Periode</span><span class="arrow">&rarr;</span>
+    <span class="box">Isi Good &amp; NG</span><span class="arrow">&rarr;</span>
+    <span class="box green">Simpan Laporan</span>
+  </div>
+</div>
+
+<h2>2. Langkah Demi Langkah</h2>
+
+<div class="step"><div class="num">1</div><div class="stepbody">
+  <strong>Buka aplikasi dan login.</strong> Setelah login, layar meminta Anda memilih peran. Tekan kartu
+  <em>Produksi</em>. Jika kartu peran tidak muncul, berarti Anda sudah login — aplikasi langsung masuk ke menu.
+</div></div>
+
+<div class="step"><div class="num">2</div><div class="stepbody">
+  <strong>Di menu Produksi, tekan “Hasil Produksi”.</strong> Menu ini berisi tiga tombol:
+  <em>Terima Material</em> (untuk menerima material dari gudang), <em>Hasil Produksi</em> (untuk melapor hasil),
+  dan <em>Papan WIP</em> (melihat barang setengah jadi).
+</div></div>
+
+<div class="step"><div class="num">3</div><div class="stepbody">
+  <strong>Scan QR yang menempel di mesin.</strong> Pastikan Anda memindai mesin yang benar — part yang bisa dilaporkan
+  mengikuti mesin yang dipindai. QR berisi kode mesin; jika QR salah atau mesin tidak terdaftar, muncul pesan merah
+  dan Anda diminta memindai ulang.
+  <div class="tip">Scan mesin <strong>selalu</strong> dilakukan lebih dulu. Laporan tidak bisa dibuat tanpa memilih mesin.</div>
+</div></div>
+
+<div class="step"><div class="num">4</div><div class="stepbody">
+  <strong>Pilih Shift.</strong> Biasanya aplikasi otomatis memakai shift yang sedang berjalan, jadi langkah ini boleh
+  dilewati. Pilih shift lain hanya bila Anda mengisi laporan susulan untuk shift sebelumnya.
+</div></div>
+
+<div class="step"><div class="num">5</div><div class="stepbody">
+  <strong>Pilih Part Hasil.</strong>
+  <ul style="margin-top:1.5mm;margin-bottom:0">
+    <li>Jika mesin hanya mengerjakan <strong>satu</strong> part, part terkunci otomatis (ada ikon gembok).</li>
+    <li>Jika mesin mengerjakan <strong>lebih dari satu</strong> part, part wajib dipilih dari daftar.</li>
+  </ul>
+</div></div>
+
+<div class="step"><div class="num">6</div><div class="stepbody">
+  <strong>Pilih Periode.</strong> Daftar berisi 7 periode shift. Hanya periode yang <strong>sudah selesai</strong>
+  yang bisa dipilih. Periode yang masih berjalan atau belum mulai tetap terlihat, tetapi berwarna abu-abu dan
+  bertanda <span class="badge run">sedang berjalan</span> atau <span class="badge lock">belum mulai</span>.
+</div></div>
+
+<div class="step"><div class="num">7</div><div class="stepbody">
+  <strong>Isi jumlah Good dan NG.</strong> Good <strong>wajib diisi</strong> dan harus lebih dari 0. NG boleh dikosongkan
+  (dianggap 0). Angka desimal boleh memakai koma, misalnya <kbd>12,5</kbd>.
+</div></div>
+
+<div class="step"><div class="num">8</div><div class="stepbody">
+  <strong>Tekan “Simpan Laporan”.</strong> Jika berhasil, muncul pesan hijau <em>“Hasil produksi tersimpan.”</em>
+  Formulir Good dan NG otomatis dikosongkan dan Anda tetap di layar yang sama, siap mengisi periode berikutnya.
+</div></div>
+
+<div class="warn"><strong>Penting:</strong> laporan produksi <strong>butuh jaringan internet</strong>. Belum ada mode offline
+untuk pelaporan hasil produksi. Jika sinyal hilang, laporan tidak tersimpan — tunggu sinyal kembali lalu simpan ulang.</div>
+
+
+<h2>3. Jam 7 Periode Setiap Shift</h2>
+<p>Setiap shift punya 7 periode dengan pola sama. Satu periode berdurasi 1 jam, kecuali periode yang memuat
+<strong>jam istirahat</strong> yang digabung menjadi 2 jam (ditandai latar jingga).</p>
+
+<table>
+  <thead><tr><th style="width:12mm" class="center">#</th><th>Shift 1 &middot; 07:30–15:30</th><th>Shift 2 &middot; 15:30–23:30</th><th>Shift 3 &middot; 23:30–07:30</th></tr></thead>
+  <tbody>
+    <tr><td class="center">1</td><td>07:30 – 08:30</td><td>15:30 – 16:30</td><td>23:30 – 00:30</td></tr>
+    <tr><td class="center">2</td><td>08:30 – 09:30</td><td>16:30 – 17:30</td><td>00:30 – 01:30</td></tr>
+    <tr><td class="center">3</td><td>09:30 – 10:30</td><td class="break">17:30 – 19:30 (istirahat)</td><td>01:30 – 02:30</td></tr>
+    <tr><td class="center">4</td><td>10:30 – 11:30</td><td>19:30 – 20:30</td><td>02:30 – 03:30</td></tr>
+    <tr><td class="center">5</td><td class="break">11:30 – 13:30 (istirahat)</td><td>20:30 – 21:30</td><td class="break">03:30 – 05:30 (istirahat)</td></tr>
+    <tr><td class="center">6</td><td>13:30 – 14:30</td><td>21:30 – 22:30</td><td>05:30 – 06:30</td></tr>
+    <tr><td class="center">7</td><td>14:30 – 15:30</td><td>22:30 – 23:30</td><td>06:30 – 07:30</td></tr>
+  </tbody>
+</table>
+
+<div class="tip">Jam istirahat: Shift 1 pukul 12:00–13:00, Shift 2 pukul 18:00–19:00, Shift 3 pukul 04:00–05:00.
+Periode istirahat dihitung <strong>satu periode 2 jam</strong>, jadi jumlah periode tetap 7 di semua shift.</div>
+
+<h3>Shift 3 melewati tengah malam</h3>
+<p>Shift 3 mulai 23:30 dan berakhir <strong>besok pagi</strong> pukul 07:30. Contoh: jika Anda mulai kerja
+Selasa malam, maka periode 1 (23:30–00:30) sampai periode 7 (06:30–07:30) adalah bagian dari shift Selasa tersebut.
+Saat mengisi laporan susulan shift 3 pada Rabu pagi, pilih shift <strong>3</strong> — aplikasi sudah mengerti bahwa
+jam 00:30 dan seterusnya milik malam sebelumnya.</p>
+
+<h2>4. Arti Pesan yang Sering Muncul</h2>
+<table>
+  <thead><tr><th style="width:62mm">Pesan</th><th>Artinya &amp; yang harus dilakukan</th></tr></thead>
+  <tbody>
+    <tr><td><em>“Periode 11:30 - 13:30 masih berjalan. Laporan dibuat setelah periodenya tutup.”</em></td>
+        <td>Periode itu belum selesai. Tunggu sampai jam selesainya lewat, lalu simpan laporan.</td></tr>
+    <tr><td><em>“Shift ini belum mulai. Periode pertama ………”</em></td>
+        <td>Anda memilih shift yang belum dimulai. Pilih shift yang sedang berjalan, atau tunggu jam mulai shift.</td></tr>
+    <tr><td><em>“Periode ini belum terjadi.”</em></td>
+        <td>Server menolak karena jam periode belum lewat. Periksa jam periode yang dipilih.</td></tr>
+    <tr><td><em>“Qty Good wajib diisi dan lebih dari 0.”</em></td>
+        <td>Kolom Good kosong atau berisi 0. Isi jumlah barang bagus yang dihasilkan.</td></tr>
+    <tr><td><em>“Mesin tidak ditemukan.”</em></td>
+        <td>QR tidak cocok dengan data mesin. Pastikan memindai QR mesin, bukan QR lain, dan mesin masih aktif.</td></tr>
+    <tr><td><em>“Hasil produksi tersimpan.”</em> (hijau)</td>
+        <td>Berhasil. Lanjutkan dengan periode berikutnya.</td></tr>
+  </tbody>
+</table>
+
+<h2>5. Menerima Material dari Gudang</h2>
+<p>Selain melapor hasil, operator juga mencatat material yang datang ke mesin. Alurnya:</p>
+<ol>
+  <li>Di menu Produksi, tekan <em>Terima Material</em>.</li>
+  <li><strong>Scan Tag Material</strong> yang menempel pada material dari gudang.</li>
+  <li>Jika satu tag berisi beberapa pengiriman, pilih baris yang sesuai pada daftar yang muncul.</li>
+  <li><strong>Scan QR Mesin</strong> tujuan.</li>
+  <li>Tekan <strong>KONFIRMASI PENERIMAAN</strong>. Tombol baru aktif setelah tag dan mesin selesai dipindai.</li>
+</ol>
+<div class="tip">Setelah konfirmasi muncul pesan hijau <em>“Material diterima di mesin.”</em> Gunakan tombol
+<em>Lihat daftar penerimaan</em> untuk memeriksa riwayat material yang sudah diterima mesin.</div>
+
+<h2>6. Aturan Penting</h2>
+<ul>
+  <li><strong>Lapor setelah periode selesai.</strong> Contoh: periode 07:30–08:30 baru bisa dilaporkan setelah jam 08:30.</li>
+  <li><strong>Satu laporan untuk satu part dan satu periode.</strong> Jika mesin mengerjakan beberapa part, ulangi
+      langkah 5–8 untuk setiap part.</li>
+  <li><strong>Jangan menunda sampai shift beralih.</strong> Laporan lebih rapi bila diisi setiap periode selesai.</li>
+  <li><strong>Shift mengikuti jam pabrik</strong>, bukan jam handphone. Jika jam HP berbeda, aplikasi tetap memakai jam pabrik.</li>
+  <li><strong>Scan mesin sebelum melapor.</strong> Jika salah mesin, daftar part yang muncul akan salah.</li>
+</ul>
+
+<div class="danger"><strong>Jika laporan gagal tersimpan:</strong> jangan menekan tombol berulang kali dengan cepat.
+Periksa pesan error di layar, pastikan sinyal tersedia, lalu simpan sekali lagi. Catat jumlah produksi Anda di kertas
+sebagai cadangan sampai laporan berhasil masuk.</div>
+
+<h2>7. Ringkasan Satu Baris</h2>
+<p style="background:#EEEBF6;padding:3mm;border-radius:5px;margin:0">
+<strong>Login &rarr; Produksi &rarr; Hasil Produksi &rarr; Scan QR Mesin &rarr; pilih Part &rarr; pilih Periode
+&rarr; isi Good &amp; NG &rarr; Simpan Laporan.</strong></p>
+
+</body>
+</html>

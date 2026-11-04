@@ -39,3 +39,31 @@ test('users can logout', function () {
     $this->assertGuest();
     $response->assertRedirect('/');
 });
+
+test('apk_only users are blocked from web login', function () {
+    $user = User::factory()->create([
+        'email' => 'suharja.test@geumcheon.local',
+        'password' => bcrypt('gci2026'),
+        'apk_only' => true,
+    ]);
+
+    $response = $this->post('/login', [
+        'email' => $user->email,
+        'password' => 'gci2026',
+    ]);
+
+    $this->assertGuest();
+    $response->assertSessionHasErrors('email');
+});
+
+test('apk_only users can login to mobile api using short username or full email', function () {
+    $this->postJson('/api/auth/login', [
+        'email' => 'suharja',
+        'password' => 'gci2026',
+    ])->assertOk()->assertJsonPath('user.name', 'SUHARJA');
+
+    $this->postJson('/api/auth/login', [
+        'email' => 'teguh.heru.susanto@geumcheon.local',
+        'password' => 'gci2026',
+    ])->assertOk()->assertJsonPath('user.name', 'TEGUH HERU SUSANTO');
+});

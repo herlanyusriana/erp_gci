@@ -9,11 +9,13 @@ const props = withDefaults(
         variant?: 'edit' | 'delete' | 'view' | 'power' | 'print';
         type?: 'button' | 'submit';
         disabled?: boolean;
+        newTab?: boolean;
     }>(),
     {
         variant: 'edit',
         type: 'button',
         disabled: false,
+        newTab: false,
     },
 );
 
@@ -68,8 +70,35 @@ const base =
 </script>
 
 <template>
+    <a
+        v-if="href && (variant === 'print' || newTab)"
+        :href="href"
+        target="_blank"
+        rel="noopener"
+        :title="label"
+        :aria-label="label"
+        :class="[base, tone]"
+    >
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            class="h-[18px] w-[18px]"
+        >
+            <path
+                v-for="(d, i) in paths"
+                :key="i"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                :d="d"
+            />
+        </svg>
+    </a>
+
     <Link
-        v-if="href"
+        v-else-if="href"
         :href="href"
         :title="label"
         :aria-label="label"

@@ -18,10 +18,9 @@ class AuthController extends Controller
             'password' => ['required', 'string'],
         ]);
 
-        $email = strtolower(trim((string) $request->input('email')));
+        $input = strtolower(trim((string) $request->input('email')));
 
-        /** @var User|null $user */
-        $user = User::query()->where('email', $email)->first();
+        $user = $this->resolveLoginUser($input);
 
         if (! $user || ($user->is_active ?? true) === false || ! Hash::check((string) $request->input('password'), (string) $user->password)) {
             throw ValidationException::withMessages([
@@ -53,5 +52,48 @@ class AuthController extends Controller
         $request->user()?->currentAccessToken()?->delete();
 
         return response()->json(['ok' => true]);
+    }
+
+    private function resolveLoginUser(string $input): ?User
+    {
+        if ($input === '') {
+            return null;
+        }
+
+        $exact = User::query()->where('email', $input)->first();
+        if ($exact) {
+            return $exact;
+        }
+
+        if (str_contains($input, '@')) {
+            return null;
+        }
+
+        $slug = implode('.', array_filter(explode(' ', preg_replace('/[^a-z0-9]+/', ' ', $input) ?? '')));
+
+        $byLocalDomain = User::query()
+            ->whereIn('email', array_unique([
+                "{$input}@geumcheon.local",
+                "{$slug}@geumcheon.local",
+            ]))
+            ->orWhereRaw('LOWER(name) = ?', [$input])
+            ->first();
+
+        if ($byLocalDomain) {
+            return $byLocalDomain;
+        }
+
+        if ($slug !== '') {
+            $prefixMatches = User::query()
+                ->where('email', 'like', "{$slug}.%@geumcheon.local")
+                ->limit(2)
+                ->get();
+
+            if ($prefixMatches->count() === 1) {
+                return $prefixMatches->first();
+            }
+        }
+
+        return null;
     }
 }

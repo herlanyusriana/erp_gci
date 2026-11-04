@@ -214,4 +214,68 @@ class ProductionSessionApiTest extends TestCase
         $this->assertSame($wip3->id, $parts[0]['part_id']);
         $this->assertSame('AGU30018303-WIP3', $parts[0]['part_number']);
     }
+
+    public function test_stores_lists_and_deletes_qdc_and_downtime_for_a_machine_session(): void
+    {
+        $this->travelTo(Carbon::parse('2026-01-15 03:00:00', 'UTC')); // 10:00 WIB -> shift 1
+
+        $res = $this->postJson("/api/machines/{$this->machine->id}/downtimes", [
+            'shift' => '1',
+            'category' => 'qdc',
+            'start_time' => '08:40',
+            'end_time' => '09:15',
+            'work_order_id' => $this->wo->id,
+            'part_id' => $this->parentPart->id,
+            'notes' => 'Ganti dies PINCB01',
+        ])->assertOk();
+
+        $downtimeId = $res->json('data.id');
+        $this->assertSame(35, $res->json('data.duration_minutes'));
+        $this->assertSame('qdc', $res->json('data.category'));
+        $this->assertSame('qdc', $res->json('data.reason'));
+
+        $session = $this->getJson("/api/machines/{$this->machine->id}/production-session?shift=1")
+            ->assertOk()
+            ->json('data');
+
+        $this->assertCount(1, $session['downtimes']);
+        $this->assertSame($downtimeId, $session['downtimes'][0]['id']);
+        $this->assertSame('08:40', $session['downtimes'][0]['start_time']);
+        $this->assertSame('09:15', $session['downtimes'][0]['end_time']);
+        $this->assertSame(35, $session['downtimes'][0]['duration_minutes']);
+
+        $this->deleteJson("/api/machines/{$this->machine->id}/downtimes/{$downtimeId}")
+            ->assertOk();
+
+        $afterDelete = $this->getJson("/api/machines/{$this->machine->id}/production-session?shift=1")
+            ->assertOk()
+            ->json('data');
+        $this->assertSame([], $afterDelete['downtimes']);
+    }
+
+    public function test_shift_3_downtime_supports_crossing_midnight_and_rejects_invalid_range(): void
+    {
+        $this->travelTo(Carbon::parse('2026-01-14 18:00:00', 'UTC')); // 01:00 WIB -> shift 3
+
+        $res = $this->postJson("/api/machines/{$this->machine->id}/downtimes", [
+            'shift' => '3',
+            'category' => 'downtime',
+            'reason' => 'die_trouble',
+            'start_time' => '23:50',
+            'end_time' => '00:25',
+            'notes' => 'Sensor die macet',
+        ])->assertOk();
+
+        $this->assertSame(35, $res->json('data.duration_minutes'));
+        $this->assertSame('die_trouble', $res->json('data.reason'));
+
+        // Di shift 1, jam selesai sebelum jam mulai harus ditolak.
+        $this->postJson("/api/machines/{$this->machine->id}/downtimes", [
+            'shift' => '1',
+            'category' => 'downtime',
+            'reason' => 'machine_breakdown',
+            'start_time' => '10:30',
+            'end_time' => '09:30',
+        ])->assertStatus(422)->assertJsonValidationErrors('end_time');
+    }
 }

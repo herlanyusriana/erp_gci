@@ -28,6 +28,11 @@
         .code { font-size: 18px; font-weight: 900; word-break: break-all; }
         .name { font-size: 11px; margin-top: 1mm; word-break: break-word; }
         footer { border-top: 1px solid #000; height: 9mm; display: flex; align-items: center; padding: 0 3mm; font-size: 9px; }
+        .no-print { position: fixed; bottom: 20px; right: 20px; background: #000; color: #fff; padding: 10px 20px; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; }
+        @media print {
+            body { background: #fff; }
+            .no-print { display: none; }
+        }
     </style>
 </head>
 <body>
@@ -45,6 +50,8 @@
         </main>
         <footer>Scan untuk memilih mesin di Material Tracker</footer>
     </div>
+
+    <button class="no-print" onclick="window.print()">CETAK LABEL</button>
 
     <script>
         window.addEventListener('load', function () { window.print(); });

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\ConfigMaster;
 use App\Models\Machine;
+use App\Models\MachineDowntime;
 use App\Models\Part;
 use App\Models\PartStock;
 use App\Models\WorkOrder;
@@ -14,8 +15,8 @@ use App\Services\ProductionSessionService;
 use App\Services\ReceiveMaterialService;
 use App\Services\ReleaseContextService;
 use App\Services\WipIdentityService;
-use App\Support\ProductionPeriods;
 use App\Services\WoService;
+use App\Support\ProductionPeriods;
 use App\Support\UomCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -286,6 +287,103 @@ class MaterialIssueApiController extends Controller
         return response()->json([
             'ok' => true,
             'data' => $this->sessionService->context($machine, $data['shift'] ?? null),
+        ]);
+    }
+
+    /**
+     * Catat kejadian QDC atau Downtime mesin dari rentang jam mulai-selesai.
+     */
+    public function storeDowntime(Request $request, Machine $machine): JsonResponse
+    {
+        Gate::authorize('viewAny', WorkOrder::class);
+
+        if (! $machine->is_active) {
+            return response()->json([
+                'ok' => false,
+                'message' => __('Mesin tidak aktif.'),
+            ], 404);
+        }
+
+        $data = $request->validate([
+            'shift' => ['nullable', 'string', 'in:1,2,3'],
+            'category' => ['required', 'string', Rule::in(MachineDowntime::CATEGORIES)],
+            'reason' => ['nullable', 'string', Rule::in(MachineDowntime::REASONS)],
+            'start_time' => ['required', 'date_format:H:i'],
+            'end_time' => ['required', 'date_format:H:i'],
+            'work_order_id' => ['nullable', 'integer', 'exists:work_orders,id'],
+            'part_id' => ['nullable', 'integer', 'exists:parts,id'],
+            'notes' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $zone = (string) ConfigMaster::getValue('SYSTEM', 'timezone', 'Asia/Jakarta');
+        $nowLocal = $this->sessionService->plantNow();
+        $shift = $data['shift'] ?? $this->sessionService->currentShift($nowLocal);
+
+        $duration = MachineDowntime::calculateDurationMinutes(
+            (string) $data['start_time'],
+            (string) $data['end_time'],
+            (string) $shift,
+        );
+
+        if ($duration <= 0 || $duration > 480) {
+            throw ValidationException::withMessages([
+                'end_time' => __('Jam selesai harus setelah jam mulai dalam shift yang dipilih.'),
+            ]);
+        }
+
+        $sessionDate = ProductionPeriods::sessionDate((string) $shift, now(), $zone)?->toDateString()
+            ?? $nowLocal->toDateString();
+
+        $reason = $data['category'] === MachineDowntime::CATEGORY_QDC
+            ? 'qdc'
+            : ($data['reason'] ?? 'other');
+
+        $downtime = MachineDowntime::create([
+            'machine_id' => $machine->id,
+            'work_order_id' => $data['work_order_id'] ?? null,
+            'part_id' => $data['part_id'] ?? null,
+            'downtime_date' => $sessionDate,
+            'shift' => (string) $shift,
+            'category' => $data['category'],
+            'reason' => $reason,
+            'start_time' => $data['start_time'],
+            'end_time' => $data['end_time'],
+            'duration_minutes' => $duration,
+            'notes' => $data['notes'] ?? null,
+            'reported_by' => $request->user()?->id,
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'message' => __('Catatan QDC / Downtime tersimpan.'),
+            'data' => [
+                'id' => (int) $downtime->id,
+                'category' => (string) $downtime->category,
+                'reason' => (string) $downtime->reason,
+                'start_time' => substr((string) $downtime->start_time, 0, 5),
+                'end_time' => substr((string) $downtime->end_time, 0, 5),
+                'duration_minutes' => (int) $downtime->duration_minutes,
+                'notes' => $downtime->notes,
+                'work_order_id' => $downtime->work_order_id !== null ? (int) $downtime->work_order_id : null,
+                'part_id' => $downtime->part_id !== null ? (int) $downtime->part_id : null,
+            ],
+        ]);
+    }
+
+    /**
+     * Hapus catatan QDC / Downtime mesin.
+     */
+    public function destroyDowntime(Request $request, Machine $machine, MachineDowntime $downtime): JsonResponse
+    {
+        Gate::authorize('viewAny', WorkOrder::class);
+
+        abort_if((int) $downtime->machine_id !== (int) $machine->id, 404);
+
+        $downtime->delete();
+
+        return response()->json([
+            'ok' => true,
+            'message' => __('Catatan QDC / Downtime dihapus.'),
         ]);
     }
 

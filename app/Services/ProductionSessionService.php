@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\ConfigMaster;
 use App\Models\Machine;
+use App\Models\MachineDowntime;
 use App\Models\WorkOrderItem;
 use App\Support\MachineRouting;
 use App\Support\ProductionPeriods;
@@ -51,7 +52,7 @@ final class ProductionSessionService
     }
 
     /**
-     * @return array{machine: array<string, mixed>, shift: string, shifts: list<string>, periods: list<array<string, mixed>>, parts: list<array<string, mixed>>}
+     * @return array{machine: array<string, mixed>, shift: string, shifts: list<string>, periods: list<array<string, mixed>>, parts: list<array<string, mixed>>, downtimes: list<array<string, mixed>>}
      */
     public function context(Machine $machine, ?string $shift = null): array
     {
@@ -96,6 +97,30 @@ final class ProductionSessionService
             ->values()
             ->all();
 
+        $sessionDate = ProductionPeriods::sessionDate($shift, now(), $zone)?->toDateString()
+            ?? $nowLocal->toDateString();
+
+        $downtimes = MachineDowntime::query()
+            ->where('machine_id', $machine->id)
+            ->whereDate('downtime_date', $sessionDate)
+            ->where('shift', $shift)
+            ->orderBy('start_time')
+            ->orderBy('id')
+            ->get()
+            ->map(fn (MachineDowntime $row): array => [
+                'id' => (int) $row->id,
+                'category' => (string) $row->category,
+                'reason' => (string) $row->reason,
+                'start_time' => substr((string) $row->start_time, 0, 5),
+                'end_time' => substr((string) $row->end_time, 0, 5),
+                'duration_minutes' => (int) $row->duration_minutes,
+                'notes' => $row->notes,
+                'work_order_id' => $row->work_order_id !== null ? (int) $row->work_order_id : null,
+                'part_id' => $row->part_id !== null ? (int) $row->part_id : null,
+            ])
+            ->values()
+            ->all();
+
         return [
             'machine' => [
                 'id' => (int) $machine->id,
@@ -109,6 +134,7 @@ final class ProductionSessionService
             // belum boleh dilaporkan, alih-alih melihat daftar yang terpotong.
             'periods' => ProductionPeriods::withStatusForShift($shift, now(), $zone),
             'parts' => $parts,
+            'downtimes' => $downtimes,
         ];
     }
 

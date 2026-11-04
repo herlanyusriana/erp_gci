@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\MaterialIssueItem;
+use App\Models\ProductionMaterialReceipt;
 use App\Models\ProductionResult;
 use App\Models\WorkOrder;
 use App\Support\QrSvg;
@@ -81,33 +83,78 @@ class ProductionLabelController extends Controller
         $qty = $kind === 'good' ? (float) $result->qty_good : (float) $result->qty_reject;
         abort_if($qty <= 0, 404, __('Tidak ada kuantitas untuk jenis label ini.'));
 
-        $result->load(['workOrder:id,wo_no', 'parentPart:id,part_number,part_name', 'machine:id,machine_code,machine_name']);
+        $result->load([
+            'workOrder.part:id,part_number,part_name',
+            'workOrder.items:id,work_order_id,parent_part_id,process_id,sequence',
+            'parentPart:id,part_number,part_name',
+            'process:id,process_name',
+            'machine:id,machine_code,machine_name',
+            'reporter:id,name',
+        ]);
 
         // Status bergerak pending -> printed; delivered tidak pernah mundur.
         if ($result->label_status === ProductionResult::LABEL_PENDING) {
             $result->update(['label_status' => ProductionResult::LABEL_PRINTED]);
         }
 
+        $uniqueStepParentIds = collect($result->workOrder?->items ?? [])
+            ->whereNotNull('parent_part_id')
+            ->sortBy('sequence')
+            ->pluck('parent_part_id')
+            ->unique()
+            ->values();
+        $stepIndex = $uniqueStepParentIds->search((int) $result->parent_part_id);
+        $stepFraction = ($stepIndex !== false && $uniqueStepParentIds->count() > 0)
+            ? ($stepIndex + 1).'/'.$uniqueStepParentIds->count()
+            : null;
+
+        $invoiceNo = ProductionMaterialReceipt::query()
+            ->where('work_order_id', $result->work_order_id)
+            ->whereNotNull('invoice')
+            ->value('invoice')
+            ?? MaterialIssueItem::query()
+                ->whereHas('materialIssue', fn ($q) => $q->where('work_order_id', $result->work_order_id))
+                ->whereNotNull('invoice')
+                ->value('invoice')
+            ?? '-';
+
+        $tagSeq = ProductionResult::query()
+            ->where('work_order_id', $result->work_order_id)
+            ->where('parent_part_id', $result->parent_part_id)
+            ->where('id', '<=', $result->id)
+            ->count() ?: 1;
+
+        $monthBox = str_pad((string) (($result->result_date ?? now())->format('m')), 2, '0', STR_PAD_LEFT);
+
         return view('production.labels.wip', [
             'kind' => $kind,
             'qty' => $qty,
-            'uom' => $result->uom,
+            'uom' => $result->uom ?: 'EA',
             'woNo' => $result->workOrder?->wo_no,
+            'fgPartName' => $result->workOrder?->part?->part_name ?? $result->parentPart?->part_name,
             'partNumber' => $result->parentPart?->part_number,
             'partName' => $result->parentPart?->part_name,
+            'processName' => $result->process?->process_name ?? $result->parentPart?->part_name,
+            'stepFraction' => $stepFraction,
+            'invoiceNo' => $invoiceNo,
+            'tagSeq' => $tagSeq,
+            'operatorName' => $result->reporter?->name ?? '#OPERATOR NAME#',
+            'foremanName' => '#FOREMAN NAME#',
+            'monthBox' => $monthBox,
             'machineName' => $result->machine?->machine_name,
             'shift' => $result->shift,
             'periodStart' => (string) $result->period_start,
             'periodEnd' => (string) $result->period_end,
             'resultDate' => $result->result_date?->toDateString(),
             'isBackfilled' => (bool) $result->is_backfilled,
+            'locationCode' => '# LOCATION #',
             'qr' => QrSvg::make((string) json_encode([
                 'type' => 'wip',
                 'wo_id' => (int) $result->work_order_id,
                 'part_id' => (int) $result->parent_part_id,
                 'result_id' => (int) $result->id,
                 'kind' => $kind,
-            ])),
+            ]), 340, 0),
         ]);
     }
 

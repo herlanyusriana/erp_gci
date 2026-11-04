@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import StatusBadge from '@/Components/StatusBadge.vue';
 import { useI18n } from 'vue-i18n';
+import { computed } from 'vue';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import ActionButton from '@/Components/ActionButton.vue';
 import { Head, Link } from '@inertiajs/vue3';
-import type { IncomingArrival } from '@/types';
+import type { IncomingArrival, IncomingReceive } from '@/types';
 
 const { t } = useI18n();
 
@@ -15,10 +16,21 @@ interface PendingRow {
     remaining: number;
 }
 
-defineProps<{
+interface ReceiveRow {
+    item: PendingRow['item'];
+    receive: IncomingReceive;
+}
+
+const props = defineProps<{
     arrival: IncomingArrival;
     pending: PendingRow[];
 }>();
+
+const receiveRows = computed<ReceiveRow[]>(() =>
+    (props.arrival.items ?? []).flatMap((item) =>
+        (item.receives ?? []).map((receive) => ({ item, receive })),
+    ),
+);
 
 </script>
 
@@ -104,6 +116,45 @@ defineProps<{
                         </tr>
                         <tr v-if="!pending.length">
                             <td colspan="8" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noItems') }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <h2 class="mb-3 mt-8 text-base font-semibold text-ink-primary">{{ t('incoming.receiveTag') }}</h2>
+        <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-borderline text-sm">
+                    <thead class="bg-background">
+                        <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
+                            <th scope="col" class="px-4 py-3">{{ t('incoming.part') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('incoming.tag') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.qty') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.netUnit', { unit: 'KGM' }) }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('incoming.date') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.actions') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-borderline">
+                        <tr v-for="r in receiveRows" :key="r.receive.id" class="hover:bg-primary-light/40">
+                            <td class="px-4 py-3 font-medium text-ink-primary">
+                                {{ r.item.part?.part_number ?? '—' }}
+                                <div class="text-xs text-ink-secondary">{{ r.item.part?.part_name ?? '' }}</div>
+                            </td>
+                            <td class="px-4 py-3 text-ink-primary">{{ r.receive.tag ?? '—' }}</td>
+                            <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ r.receive.qty }}</td>
+                            <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ r.receive.net_weight }}</td>
+                            <td class="px-4 py-3 text-ink-primary">{{ r.receive.ata_date ?? '—' }}</td>
+                            <td class="px-4 py-3">
+                                <div class="flex justify-end gap-1.5">
+                                    <a :href="route('receive.label', r.receive.id)" target="_blank" rel="noopener" class="rounded-md border border-borderline px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">{{ t('incoming.label') }}</a>
+                                    <ActionButton :href="route('receive.edit', r.receive.id)" :label="t('incoming.edit')" variant="edit" />
+                                </div>
+                            </td>
+                        </tr>
+                        <tr v-if="!receiveRows.length">
+                            <td colspan="6" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noReceipts') }}</td>
                         </tr>
                     </tbody>
                 </table>

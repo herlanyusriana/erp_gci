@@ -93,7 +93,13 @@ class ProductionLabelQueueTest extends TestCase
     {
         $result = $this->makeResult(500, 12);
 
-        $this->get(route('production-labels.print', [$result, 'good']))->assertOk();
+        $this->get(route('production-labels.print', [$result, 'good']))
+            ->assertOk()
+            ->assertSee('LABEL WIP')
+            ->assertSee($this->wo->wo_no)
+            ->assertSee('TAG # :')
+            ->assertSee('QUANTITY (PCS)')
+            ->assertSee('window.print()', false);
 
         $this->assertSame('printed', $result->fresh()->label_status);
     }

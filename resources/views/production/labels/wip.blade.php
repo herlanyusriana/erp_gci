@@ -2,64 +2,231 @@
 <html lang="id">
 <head>
     <meta charset="utf-8">
-    <title>Label {{ strtoupper($kind) }} · {{ $woNo }}</title>
+    <title>LABEL WIP {{ $kind === 'ng' ? '(NG) ' : '' }}· {{ $woNo }}</title>
     <style>
-        @page { size: 100mm 50mm; margin: 0; }
-        * { box-sizing: border-box; }
+        @page { size: 150mm 100mm; margin: 0; }
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         body {
-            margin: 0;
-            font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-            color: #17202a;
-        }
-        .label {
-            width: 100mm;
-            height: 50mm;
-            padding: 3mm;
+            font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+            background: #eee;
+            color: #000;
             display: flex;
-            gap: 3mm;
-            border: 1px solid #d9e2ec;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
         }
-        .body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-        .kind {
-            font-size: 11pt;
+        .label-card {
+            width: 148mm;
+            height: 98mm;
+            background: #fff;
+            border: 2px solid #000;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .header-bar {
+            height: 17mm;
+            border-bottom: 2px solid #000;
+            display: flex;
+        }
+        .header-title {
+            width: 78%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 26pt;
             font-weight: 800;
-            letter-spacing: .04em;
-            padding: 1mm 2mm;
-            display: inline-block;
-            border-radius: 1mm;
-            margin-bottom: 1.5mm;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            border-right: 2px solid #000;
         }
-        .kind.good { background: #dcfce7; color: #15803d; }
-        .kind.ng { background: #fee2e2; color: #b91c1c; }
-        .wo { font-size: 11pt; font-weight: 700; margin-bottom: .5mm; }
-        .part { font-size: 9pt; color: #17202a; margin-bottom: .5mm; }
-        .meta { font-size: 8pt; color: #64748b; line-height: 1.35; }
-        .qty {
-            font-size: 13pt;
+        .header-month {
+            width: 22%;
+            background: #000;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 30pt;
             font-weight: 800;
-            margin: .5mm 0;
         }
-        .backfill { color: #b45309; font-weight: 700; }
-        .qr { width: 26mm; display: flex; align-items: center; justify-content: center; }
-        .qr svg { width: 26mm; height: 26mm; }
+        .main-body {
+            flex: 1;
+            display: flex;
+            min-height: 0;
+        }
+        .left-col {
+            width: 58%;
+            border-right: 2px solid #000;
+            padding: 3.5mm 4mm;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .top-group {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5mm;
+        }
+        .wo-no {
+            font-size: 16pt;
+            font-weight: 800;
+            text-transform: uppercase;
+            line-height: 1.15;
+        }
+        .part-desc {
+            font-size: 15pt;
+            font-weight: 800;
+            text-transform: uppercase;
+            line-height: 1.15;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .part-process {
+            font-size: 10.5pt;
+            font-weight: 400;
+            padding-left: 4mm;
+            margin-top: 0.5mm;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .batch-invoice {
+            font-size: 17pt;
+            font-weight: 800;
+            text-transform: uppercase;
+            margin-top: 1.5mm;
+            line-height: 1.15;
+        }
+        .tag-no {
+            font-size: 10.5pt;
+            font-weight: 400;
+            text-transform: uppercase;
+            padding-left: 10mm;
+        }
+        .personnel-group {
+            display: flex;
+            flex-direction: column;
+            gap: 1mm;
+            margin-top: 2mm;
+        }
+        .person-line {
+            font-size: 10.5pt;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+        .date-shift-line {
+            font-size: 10pt;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+        .right-col {
+            width: 42%;
+            display: flex;
+            flex-direction: column;
+        }
+        .qr-cell {
+            height: 46%;
+            border-bottom: 1.5px solid #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2mm;
+        }
+        .qr-cell svg {
+            width: 33mm !important;
+            height: 33mm !important;
+        }
+        .qty-header {
+            height: 8%;
+            border-bottom: 1.5px solid #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9.5pt;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .qty-value {
+            height: 38%;
+            border-bottom: 1.5px solid #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24pt;
+            font-weight: 800;
+        }
+        .location-footer {
+            height: 8%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9.5pt;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .no-print {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #000;
+            color: #fff;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        @media print {
+            body { background: #fff; }
+            .no-print { display: none; }
+        }
     </style>
 </head>
-<body onload="window.print()">
-    <div class="label">
-        <div class="body">
-            <span class="kind {{ $kind }}">{{ strtoupper($kind) }}</span>
-            <div class="wo">{{ $woNo }}</div>
-            <div class="part">{{ $partNumber }} · {{ $partName }}</div>
-            <div class="qty">{{ rtrim(rtrim(number_format($qty, 4, '.', ','), '0'), '.') }} {{ $uom }}</div>
-            <div class="meta">
-                Shift {{ $shift }} · {{ substr($periodStart, 0, 5) }}-{{ substr($periodEnd, 0, 5) }}<br>
-                {{ $resultDate }} · {{ $machineName ?? '—' }}
-                @if ($isBackfilled)
-                    <br><span class="backfill">SUSULAN</span>
-                @endif
+<body>
+    <div class="label-card">
+        <div class="header-bar">
+            <div class="header-title">LABEL WIP{{ $kind === 'ng' ? ' (NG)' : '' }}</div>
+            <div class="header-month">{{ $monthBox ?? '01' }}</div>
+        </div>
+
+        <div class="main-body">
+            <div class="left-col">
+                <div class="top-group">
+                    <div class="wo-no">{{ $woNo ?? '-' }}</div>
+                    <div class="part-desc">{{ $fgPartName ?? $partName ?? '-' }}</div>
+                    <div class="part-process">
+                        {{ $partNumber ?? '-' }}@if(!empty($stepFraction)) {{ $stepFraction }}@endif - {{ $processName ?? $partName ?? '-' }}
+                    </div>
+                    <div class="batch-invoice">{{ $invoiceNo ?? '-' }}</div>
+                    <div class="tag-no">TAG # : {{ $tagSeq ?? 1 }}</div>
+                </div>
+
+                <div class="personnel-group">
+                    <div class="person-line">{{ $operatorName ?? '#OPERATOR NAME#' }}</div>
+                    <div class="person-line">{{ $foremanName ?? '#FOREMAN NAME#' }}</div>
+                </div>
+
+                <div class="date-shift-line">
+                    {{ $resultDate ?? '-' }} / SHIFT {{ $shift ?? '-' }}@if(!empty($periodStart)) ({{ substr($periodStart, 0, 5) }}-{{ substr($periodEnd, 0, 5) }})@endif
+                    @if(!empty($isBackfilled)) · SUSULAN @endif
+                </div>
+            </div>
+
+            <div class="right-col">
+                <div class="qr-cell">{!! $qr !!}</div>
+                <div class="qty-header">QUANTITY ({{ $uom ?: 'EA' }})</div>
+                <div class="qty-value">{{ rtrim(rtrim(number_format($qty, 4, '.', ','), '0'), '.') }}</div>
+                <div class="location-footer">{{ $locationCode ?? '# LOCATION #' }}</div>
             </div>
         </div>
-        <div class="qr">{!! $qr !!}</div>
     </div>
+
+    <button class="no-print" onclick="window.print()">CETAK LABEL</button>
+
+    <script>
+        window.addEventListener('load', function () { window.print(); });
+    </script>
 </body>
 </html>

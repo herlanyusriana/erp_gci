@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Auth;
 
+use App\Models\User;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -41,6 +42,15 @@ class LoginRequest extends FormRequest
     public function authenticate(): void
     {
         $this->ensureIsNotRateLimited();
+
+        $email = strtolower(trim($this->string('email')->toString()));
+        $candidate = User::query()->where('email', $email)->first();
+
+        if ($candidate && ($candidate->apk_only ?? false)) {
+            throw ValidationException::withMessages([
+                'email' => __('Akun ini khusus untuk aplikasi mobile (APK).'),
+            ]);
+        }
 
         if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey());

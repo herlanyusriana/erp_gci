@@ -107,5 +107,9 @@
     </div>
 
     <button class="no-print" onclick="window.print()">CETAK LABEL</button>
+
+    <script>
+        window.addEventListener('load', function () { window.print(); });
+    </script>
 </body>
 </html>

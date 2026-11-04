@@ -37,6 +37,8 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::post('/receipts/resolve', [ProductionReceiptController::class, 'resolve']);
     Route::get('/receipts', [ProductionReceiptController::class, 'index']);
     Route::get('/machines/{machine}/production-session', [MaterialIssueApiController::class, 'productionSession']);
+    Route::post('/machines/{machine}/downtimes', [MaterialIssueApiController::class, 'storeDowntime']);
+    Route::delete('/machines/{machine}/downtimes/{downtime}', [MaterialIssueApiController::class, 'destroyDowntime']);
     Route::get('/wip-candidates', [MaterialIssueApiController::class, 'wipCandidates']);
     Route::get('/wip-board', [WipBoardApiController::class, 'index']);
 

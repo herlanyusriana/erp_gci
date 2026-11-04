@@ -152,6 +152,30 @@ class ProductionReceiptService
     }
 
     /**
+     * Catat penerimaan beberapa tag material sekaligus ke satu mesin.
+     *
+     * @param  list<array{tag?: string|null, material_issue_item_id?: int|null}>  $items
+     * @return list<ProductionMaterialReceipt>
+     */
+    public function confirmBatch(array $items, int $machineId, ?int $userId = null, ?string $notes = null): array
+    {
+        return DB::transaction(function () use ($items, $machineId, $userId, $notes) {
+            $receipts = [];
+            foreach ($items as $item) {
+                $receipts[] = $this->confirm(
+                    tag: $item['tag'] ?? null,
+                    machineId: $machineId,
+                    userId: $userId,
+                    notes: $notes,
+                    materialIssueItemId: isset($item['material_issue_item_id']) ? (int) $item['material_issue_item_id'] : null,
+                );
+            }
+
+            return $receipts;
+        });
+    }
+
+    /**
      * Daftar penerimaan untuk sebuah mesin pada tanggal tertentu.
      *
      * @return list<ProductionMaterialReceipt>

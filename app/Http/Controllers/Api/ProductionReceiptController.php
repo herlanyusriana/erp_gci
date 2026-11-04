@@ -30,13 +30,58 @@ class ProductionReceiptController extends Controller
         );
 
         $data = $request->validate([
-            'tag' => ['nullable', 'required_without:material_issue_item_id', 'string', 'max:255'],
-            'material_issue_item_id' => ['nullable', 'integer', 'exists:material_issue_items,id'],
             'machine_id' => ['required', 'integer', 'exists:machines,id'],
             'notes' => ['nullable', 'string', 'max:2000'],
+            'tag' => ['nullable', 'string', 'max:255'],
+            'material_issue_item_id' => ['nullable', 'integer', 'exists:material_issue_items,id'],
+            'items' => ['nullable', 'array', 'min:1'],
+            'items.*.material_issue_item_id' => ['nullable', 'integer', 'exists:material_issue_items,id'],
+            'items.*.tag' => ['nullable', 'string', 'max:255'],
         ]);
 
+        if (empty($data['items']) && empty($data['material_issue_item_id']) && empty($data['tag'])) {
+            throw ValidationException::withMessages([
+                'items' => __('Pilih minimal satu tag material untuk diterima.'),
+            ]);
+        }
+
         try {
+            if (! empty($data['items'])) {
+                $receipts = $this->receiptService->confirmBatch(
+                    items: $data['items'],
+                    machineId: (int) $data['machine_id'],
+                    userId: (int) $request->user()->id,
+                    notes: $data['notes'] ?? null,
+                );
+
+                $first = $receipts[0];
+                $first->loadMissing(['part:id,part_number,part_name,model,size']);
+
+                return response()->json([
+                    'ok' => true,
+                    'message' => __(':count material diterima di mesin.', ['count' => count($receipts)]),
+                    'data' => [
+                        'id' => $first->id,
+                        'count' => count($receipts),
+                        'machine_id' => (int) $data['machine_id'],
+                        'tag' => implode(', ', array_map(fn ($r) => $r->tag, $receipts)),
+                        'part_id' => $first->part_id,
+                        'part' => $first->part ? [
+                            'part_number' => $first->part->part_number,
+                            'part_name' => $first->part->part_name,
+                            'model' => $first->part->model,
+                            'size' => $first->part->size,
+                        ] : null,
+                        'receipts' => array_map(fn ($r) => [
+                            'id' => $r->id,
+                            'material_issue_item_id' => $r->material_issue_item_id,
+                            'tag' => $r->tag,
+                            'part_id' => $r->part_id,
+                        ], $receipts),
+                    ],
+                ]);
+            }
+
             $receipt = $this->receiptService->confirm(
                 tag: $data['tag'] ?? null,
                 machineId: (int) $data['machine_id'],

@@ -307,4 +307,48 @@ class ProductionReceiptApiTest extends TestCase
         $this->postJson('/api/receipts/resolve', ['tag' => 'FILTERED'])->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.material_issue_item_id', $pending->id);
         $this->postJson('/api/receipts/resolve', ['tag' => 'UNKNOWN'])->assertOk()->assertJsonCount(0, 'data');
     }
+
+    public function test_confirm_batch_creates_multiple_receipts_atomically(): void
+    {
+        $item1 = $this->seedReceiptFixture('BATCH-TAG-1');
+        $item2 = $this->seedReceiptFixture('BATCH-TAG-2');
+
+        $response = $this->postJson('/api/receipts/confirm', [
+            'machine_id' => $this->machine->id,
+            'items' => [
+                ['material_issue_item_id' => $item1->id],
+                ['material_issue_item_id' => $item2->id],
+            ],
+        ])->assertOk();
+
+        $response->assertJsonPath('data.count', 2);
+        $this->assertDatabaseHas('production_material_receipts', [
+            'material_issue_item_id' => $item1->id,
+            'machine_id' => $this->machine->id,
+            'tag' => 'BATCH-TAG-1',
+        ]);
+        $this->assertDatabaseHas('production_material_receipts', [
+            'material_issue_item_id' => $item2->id,
+            'machine_id' => $this->machine->id,
+            'tag' => 'BATCH-TAG-2',
+        ]);
+    }
+
+    public function test_confirm_batch_rolls_back_if_any_item_fails(): void
+    {
+        $validItem = $this->seedReceiptFixture('BATCH-VALID');
+
+        $response = $this->postJson('/api/receipts/confirm', [
+            'machine_id' => $this->machine->id,
+            'items' => [
+                ['material_issue_item_id' => $validItem->id],
+                ['material_issue_item_id' => 999999], // id invalid
+            ],
+        ])->assertStatus(422);
+
+        // Seluruh transaksi harus rollback, validItem tidak boleh tersimpan
+        $this->assertDatabaseMissing('production_material_receipts', [
+            'material_issue_item_id' => $validItem->id,
+        ]);
+    }
 }

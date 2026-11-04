@@ -15,6 +15,24 @@ class MachineRouting
         return $name !== '' ? substr($name, 0, 3) : ($machineId !== null ? 'id:'.$machineId : 'none');
     }
 
+    /**
+     * Cek apakah mesin merupakan lini Tandem Press Line (TPL) yang menggabungkan
+     * beberapa step berurutan (mis. WIP1 -> WIP2 -> WIP3) menjadi satu kali jalan.
+     * Khusus untuk TPL DONGSHIN dan TPL KUKIL.
+     */
+    public static function isTplPressLine(?Machine $machine): bool
+    {
+        if ($machine === null) {
+            return false;
+        }
+
+        $name = strtoupper(trim((string) $machine->machine_name));
+        $code = strtoupper(trim((string) $machine->machine_code));
+
+        return in_array($name, ['TPL DONGSHIN', 'TPL KUKIL'], true)
+            || in_array($code, ['TPL_DONGSHIN', 'TPL_KUKIL'], true);
+    }
+
     public static function assertEligible(?Machine $machine, WorkOrderItem $item): void
     {
         if ($machine === null || ! $machine->is_active) {

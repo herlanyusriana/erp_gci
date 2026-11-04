@@ -169,4 +169,49 @@ class ProductionSessionApiTest extends TestCase
 
         $this->assertSame(['1', '2', '3'], $data['shifts']);
     }
+
+    public function test_tpl_machine_only_returns_final_wip_part_and_excludes_intermediate_steps(): void
+    {
+        $tpl = Machine::create([
+            'machine_code' => 'TPL-DONGSHIN-'.uniqid(),
+            'machine_name' => 'TPL DONGSHIN',
+            'is_active' => true,
+        ]);
+
+        $wip1 = Part::where('part_number', 'AGU30018303-WIP1')->firstOrFail();
+        $wip2 = Part::where('part_number', 'AGU30018303-WIP2')->firstOrFail();
+        $wip3 = Part::where('part_number', 'AGU30018303-WIP3')->firstOrFail();
+        $rm = Part::where('part_number', 'BPSH0257021487')->firstOrFail();
+
+        $wo = WorkOrder::create([
+            'wo_no' => 'WO-TPL-'.uniqid(),
+            'part_id' => Part::where('part_number', 'AGU30018303')->value('id'),
+            'qty' => 500,
+            'status' => 'in_progress',
+        ]);
+
+        // Step 1: RM -> WIP1 di TPL
+        WorkOrderItem::create([
+            'work_order_id' => $wo->id, 'sequence' => 1, 'machine_id' => $tpl->id,
+            'parent_part_id' => $wip1->id, 'child_part_id' => $rm->id, 'uom_rm' => 'SHEET', 'qty_required' => 500,
+        ]);
+        // Step 2: WIP1 -> WIP2 di TPL
+        WorkOrderItem::create([
+            'work_order_id' => $wo->id, 'sequence' => 2, 'machine_id' => $tpl->id,
+            'parent_part_id' => $wip2->id, 'child_part_id' => $wip1->id, 'uom_rm' => 'PCS', 'qty_required' => 500,
+        ]);
+        // Step 3: WIP2 -> WIP3 di TPL (Final step pada TPL ini)
+        WorkOrderItem::create([
+            'work_order_id' => $wo->id, 'sequence' => 3, 'machine_id' => $tpl->id,
+            'parent_part_id' => $wip3->id, 'child_part_id' => $wip2->id, 'uom_rm' => 'PCS', 'qty_required' => 500,
+        ]);
+
+        $response = $this->getJson("/api/machines/{$tpl->id}/production-session")->assertOk();
+        $parts = $response->json('data.parts');
+
+        // Dropdown APK harus HANYA berisi WIP3 (final WIP), WIP1 dan WIP2 harus otomatis tersembunyi
+        $this->assertCount(1, $parts);
+        $this->assertSame($wip3->id, $parts[0]['part_id']);
+        $this->assertSame('AGU30018303-WIP3', $parts[0]['part_number']);
+    }
 }

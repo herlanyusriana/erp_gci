@@ -238,4 +238,43 @@ class ProductionResultTest extends TestCase
             'qty_good' => 1,
         ])->assertSessionHasErrors('qty_good');
     }
+
+    public function test_tpl_press_line_reports_final_wip_directly_consuming_raw_material(): void
+    {
+        $wo = $this->releasedWorkOrder(true);
+        $wip5 = Part::where('part_number', 'AAN30056405-WIP5')->firstOrFail();
+        $rmId = (int) Part::where('part_number', 'CBKG07256C')->value('id');
+
+        // Belum ada laporan WIP1, WIP2, WIP3, maupun WIP4.
+        // Di mesin TPL KUKIL, operator langsung melapor WIP5 (final WIP).
+        $this->post(route('production-results.store', $wo), [
+            'parent_part_id' => $wip5->id,
+            'qty_good' => 8,
+            'qty_reject' => 2,
+        ])->assertSessionHasNoErrors();
+
+        // Hasil produksi WIP5 tersimpan
+        $this->assertDatabaseHas('production_results', [
+            'work_order_id' => $wo->id,
+            'parent_part_id' => $wip5->id,
+            'qty_good' => 8,
+            'qty_reject' => 2,
+        ]);
+
+        // Stok fisik langsung tercipta untuk WIP5 sebesar 8 pcs
+        $wip5Stock = (float) PartStock::where('part_id', $wip5->id)->where('qty', '>', 0)->sum('qty');
+        $this->assertEqualsWithDelta(8.0, $wip5Stock, 0.001);
+
+        // Intermediate WIP (WIP1..WIP4) TIDAK memiliki stok fisik sama sekali
+        foreach (['AAN30056405-WIP1', 'AAN30056405-WIP2', 'AAN30056405-WIP3', 'AAN30056405-WIP4'] as $pn) {
+            $wipId = Part::where('part_number', $pn)->value('id');
+            $stock = (float) PartStock::where('part_id', $wipId)->where('qty', '>', 0)->sum('qty');
+            $this->assertEqualsWithDelta(0.0, $stock, 0.001);
+        }
+
+        // Raw Material (CBKG07256C) di mesin TPL terpotong sebesar (8+2) * 1.09 = 10.9 KG
+        $consumed = (float) ProductionMaterialReceipt::where('work_order_id', $wo->id)
+            ->where('part_id', $rmId)->sum('qty_consumed');
+        $this->assertEqualsWithDelta(10.9, $consumed, 0.001);
+    }
 }

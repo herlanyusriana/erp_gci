@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ConfigMaster;
 use App\Models\Machine;
 use App\Models\WorkOrderItem;
+use App\Support\MachineRouting;
 use App\Support\ProductionPeriods;
 use Illuminate\Support\Carbon;
 
@@ -63,12 +64,26 @@ final class ProductionSessionService
             ? $shift
             : $this->currentShift($nowLocal);
 
-        $parts = WorkOrderItem::query()
+        $partsQuery = WorkOrderItem::query()
             ->where('machine_id', $machine->id)
             ->whereNotNull('parent_part_id')
             ->with(['parentPart:id,part_number,part_name', 'workOrder:id,wo_no,status'])
             ->whereHas('workOrder', fn ($q) => $q->whereIn('status', ['in_progress']))
-            ->get()
+            ->get();
+
+        // Khusus untuk TPL DONGSHIN dan TPL KUKIL: lini tandem continuous
+        // menghasilkan output langsung pada WIP paling akhir. Step perantara
+        // (WIP1, WIP2, dst.) tidak dilaporkan terpisah, sehingga disembunyikan
+        // dari dropdown part operator.
+        if (MachineRouting::isTplPressLine($machine)) {
+            $partsQuery = $partsQuery->groupBy('work_order_id')->flatMap(function ($woItems) {
+                $childIdsOnMachine = $woItems->pluck('child_part_id')->filter()->unique()->all();
+
+                return $woItems->reject(fn ($item) => in_array($item->parent_part_id, $childIdsOnMachine, true));
+            });
+        }
+
+        $parts = $partsQuery
             ->unique('parent_part_id')
             ->map(fn (WorkOrderItem $item): array => [
                 'part_id' => (int) $item->parent_part_id,

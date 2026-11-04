@@ -107,6 +107,21 @@ class ProductionResultService
                     continue;
                 }
                 if (in_array($childId, $internalParents, true)) {
+                    // Khusus TPL DONGSHIN dan TPL KUKIL:
+                    // Step perantara (WIP1, WIP2, dst.) tidak dilaporkan terpisah dan tidak
+                    // memegang stok fisik. Bila yang dilaporkan adalah step akhir TPL dan
+                    // stok perantara tidak ada, langsung konsumsi Raw Material di stasiun 1 TPL.
+                    if ($machine !== null
+                        && MachineRouting::isTplPressLine($machine)
+                        && $this->isFinalTplStep($workOrder, $machine, $row)
+                        && $this->isIntermediateTplChild($workOrder, $machine, (int) $childId)
+                        && $this->stockService->availableFifo((int) $childId, $row->uom_rm) < $need->toFloat()
+                    ) {
+                        $this->consumeTplRootInputs($workOrder, $row, $machine, $result, $goodDecimal->plus($rejectDecimal));
+
+                        continue;
+                    }
+
                     $taken = BigDecimal::zero();
                     foreach ($this->stockService->consumeFifoByUom((int) $childId, (string) $need, $row->uom_rm, $workOrder->id) as $allocation) {
                         $taken = $taken->plus($allocation['take_qty']);
@@ -255,5 +270,135 @@ class ProductionResultService
             ->where('work_order_id', $workOrder->id)
             ->where('parent_part_id', $workOrder->part_id)
             ->sum('qty_good');
+    }
+
+    /**
+     * Cek apakah item merupakan step akhir pada mesin TPL (tidak menjadi child
+     * bagi step lain di mesin TPL yang sama).
+     */
+    private function isFinalTplStep(WorkOrder $workOrder, Machine $machine, WorkOrderItem $item): bool
+    {
+        return ! $workOrder->items()
+            ->where('machine_id', $machine->id)
+            ->where('child_part_id', $item->parent_part_id)
+            ->exists();
+    }
+
+    /**
+     * Cek apakah childPartId merupakan step perantara di mesin TPL yang sama.
+     */
+    private function isIntermediateTplChild(WorkOrder $workOrder, Machine $machine, int $childPartId): bool
+    {
+        return $workOrder->items()
+            ->where('machine_id', $machine->id)
+            ->where('parent_part_id', $childPartId)
+            ->exists();
+    }
+
+    /**
+     * Konsumsi raw material di stasiun awal mesin TPL (Tandem Press Line) secara langsung.
+     */
+    private function consumeTplRootInputs(WorkOrder $workOrder, WorkOrderItem $finalItem, Machine $machine, ProductionResult $result, BigDecimal $totalQty): void
+    {
+        $inputs = $this->resolveTplInputs($workOrder, $finalItem, $machine, $totalQty);
+
+        foreach ($inputs as $input) {
+            $rootItem = $input['item'];
+            $need = $input['need'];
+
+            if ($need->isLessThanOrEqualTo(0)) {
+                continue;
+            }
+
+            $receipts = ProductionMaterialReceipt::query()
+                ->where('work_order_id', $workOrder->id)
+                ->where('work_order_item_id', $rootItem->id)
+                ->where('machine_id', $machine->id)
+                ->where('transfer_status', 'transferred')
+                ->where('uom', UomCatalog::normalize((string) $rootItem->uom_rm))
+                ->orderBy('received_at')->orderBy('id')->lockForUpdate()->get();
+
+            $available = BigDecimal::zero();
+            foreach ($receipts as $receipt) {
+                $receipt->assertValidBalance();
+                $available = $available->plus(BigDecimal::of($receipt->getRawOriginal('qty'))->minus($receipt->getRawOriginal('qty_consumed')));
+            }
+
+            if ($available->isLessThan($need)) {
+                throw ValidationException::withMessages([
+                    'qty_good' => __('Saldo material di mesin tidak mencukupi. Terima material untuk item WO ini terlebih dahulu.'),
+                ]);
+            }
+
+            $remaining = $need;
+            foreach ($receipts as $receipt) {
+                if ($remaining->isZero()) {
+                    break;
+                }
+                $balance = BigDecimal::of($receipt->getRawOriginal('qty'))->minus($receipt->getRawOriginal('qty_consumed'));
+                $take = $remaining->isLessThan($balance) ? $remaining : $balance;
+                if ($take->isZero()) {
+                    continue;
+                }
+                $receipt->increment('qty_consumed', (string) $take);
+                WorkOrderConsumption::create([
+                    'production_result_id' => $result->id,
+                    'production_material_receipt_id' => $receipt->id,
+                    'work_order_id' => $workOrder->id,
+                    'work_order_item_id' => $rootItem->id,
+                    'part_stock_id' => $receipt->part_stock_id,
+                    'part_id' => $receipt->part_id,
+                    'qty' => (string) $take,
+                    'uom' => $receipt->uom,
+                ]);
+                $remaining = $remaining->minus($take);
+            }
+
+            $rootItem->increment('qty_consumed', (string) $need);
+        }
+    }
+
+    /**
+     * Cari baris-baris input awal untuk step di mesin TPL (Tandem Press Line).
+     *
+     * @return list<array{item: WorkOrderItem, need: BigDecimal}>
+     */
+    private function resolveTplInputs(WorkOrder $workOrder, WorkOrderItem $finalItem, Machine $machine, BigDecimal $totalQty): array
+    {
+        $tplItems = $workOrder->items()
+            ->where('machine_id', $machine->id)
+            ->with(['parentPart', 'childPart'])
+            ->get()
+            ->keyBy('parent_part_id');
+
+        $inputs = [];
+        $visited = [];
+
+        $trace = function (WorkOrderItem $item, BigDecimal $ratio) use (&$trace, &$inputs, &$visited, $tplItems, $totalQty) {
+            $childId = $item->child_part_id;
+            if ($childId === null) {
+                return;
+            }
+
+            $itemQty = BigDecimal::of($item->getRawOriginal('child_qty') ?? 1);
+            $currentRatio = $ratio->multipliedBy($itemQty);
+
+            // Jika child_part_id merupakan parent step lain di mesin TPL yang sama, telusuri ke hulu
+            if ($tplItems->has($childId) && ! in_array($childId, $visited, true)) {
+                $visited[] = $childId;
+                $upstreamItem = $tplItems->get($childId);
+                $trace($upstreamItem, $currentRatio);
+            } else {
+                // Sampai di input awal (Raw Material) di stasiun 1 TPL
+                $inputs[] = [
+                    'item' => $item,
+                    'need' => $currentRatio->multipliedBy($totalQty)->toScale(10),
+                ];
+            }
+        };
+
+        $trace($finalItem, BigDecimal::one());
+
+        return $inputs;
     }
 }

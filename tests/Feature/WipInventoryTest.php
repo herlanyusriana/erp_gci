@@ -332,4 +332,40 @@ class WipInventoryTest extends TestCase
                 ->has('detail.received')
                 ->has('detail.issued'));
     }
+
+    public function test_backfill_fills_invoice_on_consumptions_that_predate_the_fix(): void
+    {
+        $fg = Part::where('part_number', 'AAN30056405')->firstOrFail();
+
+        // Konsumsi lama: punya receipt, tapi invoice belum tersalin.
+        $receipt = ProductionMaterialReceipt::create([
+            'material_issue_item_id' => MaterialIssueItem::create([
+                'material_issue_id' => MaterialIssue::create([
+                    'issue_no' => 'MI-BF-'.uniqid(), 'work_order_id' => $this->wo->id,
+                    'issue_date' => now()->toDateString(), 'status' => 'posted',
+                ])->id,
+                'work_order_item_id' => $this->item->id, 'part_id' => $this->part->id,
+                'tag' => 'BF-1', 'qty' => 100, 'uom' => 'KGM',
+            ])->id,
+            'work_order_id' => $this->wo->id, 'work_order_item_id' => $this->item->id,
+            'part_id' => $this->part->id, 'part_stock_id' => 1, 'machine_id' => $this->machine->id,
+            'qty' => 100, 'qty_consumed' => 40, 'uom' => 'KGM', 'transfer_status' => 'transferred',
+            'invoice' => 'HCGCI 26-0901', 'supplier' => 'YONGXIN', 'received_at' => now(),
+        ]);
+
+        $consumption = WorkOrderConsumption::create([
+            'work_order_id' => $this->wo->id, 'work_order_item_id' => $this->item->id,
+            'part_stock_id' => 1, 'part_id' => $this->part->id, 'qty' => 40, 'uom' => 'KGM',
+            'production_material_receipt_id' => $receipt->id,
+        ]);
+        $this->assertNull($consumption->fresh()->invoice_no, 'Awalnya kosong, seperti data lama');
+
+        // Jalankan ulang backfill (idempoten).
+        $migration = require database_path('migrations/2026_11_05_090000_backfill_invoice_on_old_consumptions.php');
+        $migration->up();
+
+        $fresh = $consumption->fresh();
+        $this->assertSame('HCGCI 26-0901', $fresh->invoice_no);
+        $this->assertSame('YONGXIN', $fresh->supplier_name);
+    }
 }

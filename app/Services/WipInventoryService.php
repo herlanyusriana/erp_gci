@@ -143,8 +143,8 @@ final class WipInventoryService
             ->whereDate('work_order_consumptions.created_at', $date)
             ->groupBy('woi.machine_id', 'work_order_consumptions.part_id', 'work_order_consumptions.uom')
             ->selectRaw('woi.machine_id, work_order_consumptions.part_id, work_order_consumptions.uom, SUM(work_order_consumptions.qty) AS qty')
-            ->selectRaw('STRING_AGG(DISTINCT work_order_consumptions.invoice_no, \', \') AS invoice')
-            ->selectRaw('STRING_AGG(DISTINCT work_order_consumptions.supplier_name, \', \') AS supplier')
+            ->selectRaw('STRING_AGG(DISTINCT work_order_consumptions.invoice_no, \' | \') AS invoice')
+            ->selectRaw('STRING_AGG(DISTINCT work_order_consumptions.supplier_name, \' | \') AS supplier')
             ->get();
 
         $buckets = [];
@@ -240,7 +240,8 @@ final class WipInventoryService
             ->whereNotNull('woi.machine_id')
             ->when($machineId !== null, fn ($q) => $q->where('woi.machine_id', $machineId))
             ->when($partId !== null, fn ($q) => $q->where('work_order_consumptions.part_id', $partId))
-            ->whereNull('work_order_consumptions.deleted_at');
+            ->whereNull('work_order_consumptions.deleted_at')
+            ->whereNull('work_order_consumptions.reversed_by');
     }
 
     /**

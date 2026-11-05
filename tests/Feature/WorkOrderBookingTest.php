@@ -139,14 +139,40 @@ class WorkOrderBookingTest extends TestCase
         $this->assertEqualsWithDelta(4.0, (float) $free->fresh()->qty, 0.001);
     }
 
-    public function test_apk_scan_cannot_exceed_the_allocated_share_of_a_part(): void
+    public function test_resolve_tag_rejects_ambiguous_tag_shared_across_parts(): void
     {
-        $fg = Part::where('part_number', 'AAN30056405')->firstOrFail();
         $main = Part::where('part_number', 'CBKG07256C')->firstOrFail();
         $sub = Part::where('part_number', 'CMMGI250S')->firstOrFail();
 
-        PartStock::create(['part_id' => $main->id, 'tag' => '13', 'qty' => 4000, 'qty_unit' => 'KGM', 'received_at' => now()]);
-        PartStock::create(['part_id' => $sub->id, 'tag' => '16', 'qty' => 1600, 'qty_unit' => 'KGM', 'received_at' => now()]);
+        // Dua part berbeda memakai nomor tag yang sama: "TAG-SHARED-16".
+        PartStock::create(['part_id' => $main->id, 'tag' => 'TAG-SHARED-16', 'qty' => 800, 'qty_unit' => 'KGM', 'received_at' => now()]);
+        PartStock::create(['part_id' => $sub->id, 'tag' => 'TAG-SHARED-16', 'qty' => 800, 'qty_unit' => 'KGM', 'received_at' => now()]);
+
+        // Tanpa part_id: server menolak 409 (ambigu) dan mengembalikan daftar kandidat,
+        // BUKAN menebak salah satu dan membooking part yang salah.
+        $res = $this->postJson('/api/stock-tags/resolve', ['tag' => 'TAG-SHARED-16'])
+            ->assertStatus(409);
+        $this->assertCount(2, $res->json('candidates'));
+
+        // Dengan part_id eksplisit: langsung ter-resolve ke part yang diminta.
+        $this->postJson('/api/stock-tags/resolve', ['tag' => 'TAG-SHARED-16', 'part_id' => $main->id])
+            ->assertOk()
+            ->assertJsonPath('data.part_id', $main->id);
+
+        $this->postJson('/api/stock-tags/resolve', ['tag' => 'TAG-SHARED-16', 'part_id' => $sub->id])
+            ->assertOk()
+            ->assertJsonPath('data.part_id', $sub->id);
+    }
+
+    public function test_full_pack_may_exceed_remaining_share_when_closing_demand(): void
+    {
+        $fg = Part::where('part_number', 'AAN30056405')->firstOrFail();
+        $main = Part::where('part_number', 'CBKG07256C')->firstOrFail();
+
+        // Kebutuhan WO 100 kg. Alokasi 60 + 40 ke dua part.
+        // Satu kemasan fisik utuh 100 kg dari part main di-scan sekaligus.
+        // Aturan lama (:636): kemasan utuh boleh keluar penuh, TIDAK ditolak.
+        PartStock::create(['part_id' => $main->id, 'tag' => 'PACK-FULL-100', 'qty' => 100, 'qty_unit' => 'KGM', 'received_at' => now()]);
 
         $this->post(route('work-orders.store'), [
             'part_id' => $fg->id, 'qty' => 100, 'planned_date' => now()->toDateString(),
@@ -154,21 +180,18 @@ class WorkOrderBookingTest extends TestCase
         $wo = WorkOrder::latest('id')->firstOrFail();
         $item = $wo->items()->where('child_part_id', $main->id)->firstOrFail();
 
-        // Alokasi: 60 main + 40 sub.
-        $item->allocations()->create(['part_id' => $main->id, 'qty' => 60]);
-        $item->allocations()->create(['part_id' => $sub->id, 'qty' => 40]);
-
-        // Scan 100 dari part main (alokasinya hanya 60) -> harus ditolak.
+        // Release lewat APK dengan 1 kemasan utuh 100 kg: harus diterima (200),
+        // bukan 422 karena melebihi alokasi part.
         $this->postJson("/api/work-orders/{$wo->id}/release", [
-            'idempotency_key' => 'test-overalloc-'.uniqid(),
+            'idempotency_key' => 'pack-full-'.uniqid(),
             'items' => [[
                 'work_order_item_id' => $item->id,
-                'scans' => [['tag' => '13', 'part_id' => $main->id, 'qty' => 100]],
+                'scans' => [['tag' => 'PACK-FULL-100', 'part_id' => $main->id, 'qty' => 100]],
             ]],
-        ])->assertStatus(422);
+        ])->assertOk();
 
-        $bookedMain = (float) WorkOrderMaterialBooking::where('work_order_item_id', $item->id)
-            ->where('part_id', $main->id)->where('status', 'booked')->sum('qty');
-        $this->assertLessThanOrEqual(60.0 + 1e-6, $bookedMain, 'Scan melebihi alokasi harus ditolak');
+        $this->assertDatabaseHas('work_order_material_bookings', [
+            'work_order_id' => $wo->id, 'tag' => 'PACK-FULL-100', 'status' => 'booked',
+        ]);
     }
 }

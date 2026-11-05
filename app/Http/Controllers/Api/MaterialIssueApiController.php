@@ -185,28 +185,53 @@ class MaterialIssueApiController extends Controller
             'part_id' => ['nullable', 'integer', 'exists:parts,id'],
         ]);
 
-        $stock = PartStock::query()
+        $candidates = PartStock::query()
             ->whereRaw('LOWER(COALESCE(tag, \'\')) = ?', [mb_strtolower(trim($data['tag']))])
             ->where('qty', '>', 0)
             ->when(isset($data['part_id']), fn ($q) => $q->where('part_id', (int) $data['part_id']))
             ->orderByRaw('received_at ASC NULLS LAST')
             ->orderBy('id')
-            ->first();
+            ->get();
 
-        // Tag yang stoknya habis ter-book WO lain dianggap tidak tersedia.
-        if ($stock !== null) {
-            $booked = (float) ($this->stockService->bookedQtyByStock([$stock->id])[$stock->id] ?? 0);
-            if ((float) $stock->qty - $booked <= 1e-9) {
-                $stock = null;
-            }
-        }
+        // Nomor tag tidak unik antar part (mis. tag 16 dipakai dua substitusi).
+        // Menebak satu baris bisa membooking part yang salah, jadi tag yang
+        // ambigu dikembalikan sebagai kandidat untuk dipilih operator.
+        $available = $candidates
+            ->filter(function (PartStock $stock): bool {
+                $booked = (float) ($this->stockService->bookedQtyByStock([$stock->id])[$stock->id] ?? 0);
 
-        if ($stock === null) {
+                return (float) $stock->qty - $booked > 1e-9;
+            })
+            ->values();
+
+        if ($available->isEmpty()) {
             return response()->json([
                 'ok' => false,
                 'message' => __('Tag tidak ditemukan atau stok habis.'),
             ], 404);
         }
+
+        if ($available->count() > 1) {
+            return response()->json([
+                'ok' => false,
+                'message' => __('Tag ini dipakai beberapa part. Pilih part yang benar.'),
+                'candidates' => $available->map(function (PartStock $stock): array {
+                    $part = Part::find($stock->part_id);
+
+                    return [
+                        'part_stock_id' => (int) $stock->id,
+                        'part_id' => (int) $stock->part_id,
+                        'part_number' => $part?->part_number,
+                        'part_name' => $part?->part_name,
+                        'qty' => (float) $stock->qty,
+                        'uom' => UomCatalog::normalize((string) $stock->qty_unit),
+                        'tag' => $stock->tag,
+                    ];
+                })->all(),
+            ], 409);
+        }
+
+        $stock = $available->first();
 
         $part = Part::find($stock->part_id);
         $receive = $stock->receive;

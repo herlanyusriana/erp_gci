@@ -26,6 +26,8 @@ return new class extends Migration
             WHERE c.production_material_receipt_id = r.id
               AND c.invoice_no IS NULL
               AND r.invoice IS NOT NULL
+              AND c.deleted_at IS NULL
+              AND c.reversed_by IS NULL
         ');
 
         // Jalur 2: konsumsi hanya punya part_stock_id (mis. konsumsi WIP internal).
@@ -49,7 +51,7 @@ return new class extends Migration
         DB::statement('
             UPDATE work_order_consumptions c
             SET invoice_no = src.invoice_no,
-                supplier_name = src.supplier_name
+                supplier_name = COALESCE(c.supplier_name, src.supplier_name)
             FROM (
                 SELECT ps.id AS part_stock_id,
                        r.invoice_no,

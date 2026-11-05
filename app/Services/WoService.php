@@ -543,6 +543,15 @@ class WoService
                 }
             }
 
+            // Porsi alokasi per (item, part) — dipakai membatasi scan per part.
+            $allocationsByItem = [];
+            foreach ($items as $it) {
+                foreach ($it->allocations as $a) {
+                    $allocationsByItem[$it->id][(int) $a->part_id] =
+                        ($allocationsByItem[$it->id][(int) $a->part_id] ?? 0.0) + (float) $a->qty;
+                }
+            }
+
             $itemsById = $items->keyBy('id');
             $issuedByItem = MaterialIssueItem::query()->whereHas('materialIssue', fn ($query) => $query
                 ->where('work_order_id', $workOrder->id)->where('status', 'posted'))
@@ -581,6 +590,7 @@ class WoService
                 $allowed = $this->allowedPartIdsForItem($item);
                 $scans = [];
                 $total = 0.0;
+                $scannedByPart = [];
                 foreach (($row['scans'] ?? []) as $i => $scan) {
                     $tag = trim((string) ($scan['tag'] ?? ''));
                     if ($tag === '') {
@@ -600,6 +610,23 @@ class WoService
                     }
                     $total += $qty;
                     $scans[] = ['tag' => $tag, 'part_id' => $partId, 'qty' => $qty];
+
+                    // Batasi per part: satu part tidak boleh di-scan melebihi porsi
+                    // alokasinya. Tanpa ini, tag dari part A bisa memakan porsi
+                    // part B yang kebetulan punya nomor tag sama.
+                    if ($partId !== null) {
+                        $scannedByPart[$partId] = ($scannedByPart[$partId] ?? 0.0) + $qty;
+                        $allocated = (float) ($allocationsByItem[$itemId][$partId] ?? 0.0);
+
+                        if ($allocated > 0 && $scannedByPart[$partId] > $allocated + 1e-6) {
+                            throw ValidationException::withMessages([
+                                "items.$itemId.scans.$i.qty" => __('Scan part :part melebihi alokasinya (:allocated).', [
+                                    'part' => $partId,
+                                    'allocated' => rtrim(rtrim(number_format($allocated, 4, '.', ''), '0'), '.'),
+                                ]),
+                            ]);
+                        }
+                    }
                 }
 
                 $qtyRequired = (float) $item->qty_required;

@@ -138,4 +138,37 @@ class WorkOrderBookingTest extends TestCase
         $this->assertEqualsWithDelta(10.0, (float) $booked->fresh()->qty, 0.001);
         $this->assertEqualsWithDelta(4.0, (float) $free->fresh()->qty, 0.001);
     }
+
+    public function test_apk_scan_cannot_exceed_the_allocated_share_of_a_part(): void
+    {
+        $fg = Part::where('part_number', 'AAN30056405')->firstOrFail();
+        $main = Part::where('part_number', 'CBKG07256C')->firstOrFail();
+        $sub = Part::where('part_number', 'CMMGI250S')->firstOrFail();
+
+        PartStock::create(['part_id' => $main->id, 'tag' => '13', 'qty' => 4000, 'qty_unit' => 'KGM', 'received_at' => now()]);
+        PartStock::create(['part_id' => $sub->id, 'tag' => '16', 'qty' => 1600, 'qty_unit' => 'KGM', 'received_at' => now()]);
+
+        $this->post(route('work-orders.store'), [
+            'part_id' => $fg->id, 'qty' => 100, 'planned_date' => now()->toDateString(),
+        ])->assertRedirect();
+        $wo = WorkOrder::latest('id')->firstOrFail();
+        $item = $wo->items()->where('child_part_id', $main->id)->firstOrFail();
+
+        // Alokasi: 60 main + 40 sub.
+        $item->allocations()->create(['part_id' => $main->id, 'qty' => 60]);
+        $item->allocations()->create(['part_id' => $sub->id, 'qty' => 40]);
+
+        // Scan 100 dari part main (alokasinya hanya 60) -> harus ditolak.
+        $this->postJson("/api/work-orders/{$wo->id}/release", [
+            'idempotency_key' => 'test-overalloc-'.uniqid(),
+            'items' => [[
+                'work_order_item_id' => $item->id,
+                'scans' => [['tag' => '13', 'part_id' => $main->id, 'qty' => 100]],
+            ]],
+        ])->assertStatus(422);
+
+        $bookedMain = (float) WorkOrderMaterialBooking::where('work_order_item_id', $item->id)
+            ->where('part_id', $main->id)->where('status', 'booked')->sum('qty');
+        $this->assertLessThanOrEqual(60.0 + 1e-6, $bookedMain, 'Scan melebihi alokasi harus ditolak');
+    }
 }

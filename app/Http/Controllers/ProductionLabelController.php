@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ConfigMaster;
 use App\Models\ProductionResult;
+use App\Models\User;
 use App\Models\WorkOrder;
 use App\Models\WorkOrderConsumption;
 use App\Support\QrSvg;
@@ -36,7 +37,7 @@ class ProductionLabelController extends Controller
         $date = $request->input('date') ?: now($timezone)->toDateString();
 
         $rows = ProductionResult::query()
-            ->with(['workOrder:id,wo_no', 'parentPart:id,part_number,part_name', 'machine:id,machine_code,machine_name'])
+            ->with(['workOrder:id,wo_no', 'parentPart:id,part_number,part_name', 'machine:id,machine_code,machine_name', 'reporter:id,name'])
             ->whereDate('result_date', $date)
             ->when($status !== null && $status !== '', fn ($q) => $q->where('label_status', $status))
             ->where(function ($q) {
@@ -71,10 +72,23 @@ class ProductionLabelController extends Controller
                     'carry_over_in' => round($carryOverIn, 4),
                     'uom' => $row->uom,
                     'label_status' => (string) $row->label_status,
+                    'reporter_id' => $row->reported_by ? (int) $row->reported_by : null,
+                    'reporter_name' => $row->reporter?->name,
                 ];
             })
             ->values()
             ->all();
+
+        // Daftar operator produksi dari tabel users (role production atau akun APK)
+        // untuk dipilih pada modal cetak label WIP.
+        $operators = User::query()
+            ->where('is_active', true)
+            ->where(function ($q) {
+                $q->where('apk_only', true)
+                    ->orWhereHas('roles', fn ($r) => $r->whereIn('name', ['production', 'foreman']));
+            })
+            ->orderBy('name')
+            ->get(['id', 'name']);
 
         return Inertia::render('Production/Label/Index', [
             'rows' => $rows,
@@ -84,6 +98,7 @@ class ProductionLabelController extends Controller
                 ProductionResult::LABEL_PRINTED,
                 ProductionResult::LABEL_DELIVERED,
             ],
+            'operators' => $operators,
             'timezone' => $timezone,
         ]);
     }
@@ -250,6 +265,11 @@ class ProductionLabelController extends Controller
 
         $monthBox = str_pad((string) (($result->result_date ?? now())->format('m')), 2, '0', STR_PAD_LEFT);
 
+        $selectedOperatorName = trim((string) $request->input('operator_name', ''));
+        $operatorName = $selectedOperatorName !== ''
+            ? $selectedOperatorName
+            : ($result->reporter?->name ?? '-');
+
         return view('production.labels.wip', [
             'kind' => $kind,
             'qty' => $effectiveQty,
@@ -266,7 +286,7 @@ class ProductionLabelController extends Controller
             'supplierName' => $supplierLabel !== '' ? $supplierLabel : null,
             'invoiceCount' => $consumedInvoices->count(),
             'tagNo' => $tagNo,
-            'operatorName' => $result->reporter?->name ?? '-',
+            'operatorName' => $operatorName,
             'foremanName' => '-',
             'monthBox' => $monthBox,
             'machineName' => $result->machine?->machine_name,

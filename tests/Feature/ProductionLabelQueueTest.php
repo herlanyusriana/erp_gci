@@ -307,4 +307,26 @@ class ProductionLabelQueueTest extends TestCase
             ->assertSee('AKUMULASI NG')
             ->assertSee('8'); // 3 + 5
     }
+
+    public function test_queue_provides_operator_list_from_users(): void
+    {
+        $this->get(route('production-labels.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('operators')
+                ->where('operators', fn ($ops) => collect($ops)->contains('name', 'SUHARJA')));
+    }
+
+    public function test_printing_uses_selected_operator_name(): void
+    {
+        $result = $this->makeResult(100, 0);
+
+        $this->get(route('production-labels.print', [
+            'result' => $result,
+            'kind' => 'good',
+            'operator_name' => 'SUHARJA',
+        ]))
+            ->assertOk()
+            ->assertSee('OPERATOR: SUHARJA');
+    }
 }

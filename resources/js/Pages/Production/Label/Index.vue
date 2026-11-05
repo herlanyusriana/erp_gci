@@ -26,12 +26,15 @@ interface LabelRow {
     carry_over_in?: number;
     uom: string | null;
     label_status: string;
+    reporter_id?: number | null;
+    reporter_name?: string | null;
 }
 
 const props = defineProps<{
     rows: LabelRow[];
     filters: { date?: string; status?: string };
     statuses: string[];
+    operators?: Array<{ id: number; name: string }>;
     timezone?: string;
 }>();
 
@@ -59,12 +62,32 @@ const packingType = ref<'BOX' | 'TROLI' | 'PALLET'>('BOX');
 const packingQty = ref<number | ''>('');
 const includeRemainder = ref(true);
 
+const selectedOperatorName = ref('');
+const operatorSearch = ref('');
+const showOperatorList = ref(false);
+
+const filteredOperators = computed(() => {
+    const q = operatorSearch.value.trim().toLowerCase();
+    const list = props.operators ?? [];
+    if (!q) return list;
+    return list.filter((op) => op.name.toLowerCase().includes(q));
+});
+
+function selectOperator(name: string) {
+    selectedOperatorName.value = name;
+    operatorSearch.value = '';
+    showOperatorList.value = false;
+}
+
 function openPackagingModal(row: LabelRow) {
     selectedRow.value = row;
     packingType.value = 'BOX';
     const total = (row.qty_good ?? 0) + (row.carry_over_in ?? 0);
     packingQty.value = total >= 100 ? 100 : Math.max(1, Math.round(total));
     includeRemainder.value = true;
+    selectedOperatorName.value = row.reporter_name ?? (props.operators?.[0]?.name ?? '');
+    operatorSearch.value = '';
+    showOperatorList.value = false;
     showPackagingModal.value = true;
 }
 
@@ -102,6 +125,7 @@ function confirmPrintGood() {
         packing_qty: capacity,
         defer_remainder: defer,
         remainder_qty: remainder,
+        operator_name: selectedOperatorName.value || undefined,
     });
 
     window.open(url, '_blank', 'noopener');
@@ -259,6 +283,45 @@ const canDeliver = (row: LabelRow) => row.label_status === 'printed';
                 </p>
 
                 <div class="mt-4 space-y-4">
+                    <!-- Pilihan Operator (Searchable dari daftar User) -->
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <label class="block text-xs font-semibold uppercase tracking-wide text-ink-secondary">
+                                {{ t('production.operator') }}
+                            </label>
+                            <span v-if="selectedOperatorName" class="text-xs font-bold text-primary">
+                                {{ selectedOperatorName }}
+                            </span>
+                        </div>
+                        <div class="relative mt-1">
+                            <input
+                                v-model="operatorSearch"
+                                type="text"
+                                :placeholder="selectedOperatorName || t('production.searchOperator')"
+                                @focus="showOperatorList = true"
+                                class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                            />
+                            <div
+                                v-if="showOperatorList"
+                                class="absolute left-0 right-0 z-20 mt-1 max-h-48 overflow-y-auto rounded-lg border border-borderline bg-surface shadow-lg"
+                            >
+                                <button
+                                    v-for="op in filteredOperators"
+                                    :key="op.id"
+                                    type="button"
+                                    class="w-full px-3 py-2 text-left text-xs font-medium text-ink-primary transition hover:bg-primary-light flex items-center justify-between"
+                                    @click="selectOperator(op.name)"
+                                >
+                                    <span>{{ op.name }}</span>
+                                    <span v-if="selectedOperatorName === op.name" class="text-primary font-bold">✓</span>
+                                </button>
+                                <div v-if="filteredOperators.length === 0" class="px-3 py-3 text-center text-xs text-ink-secondary">
+                                    Tidak ditemukan
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Dropdown Tipe Kemasan -->
                     <div>
                         <label class="block text-xs font-semibold uppercase tracking-wide text-ink-secondary">

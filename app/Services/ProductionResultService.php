@@ -115,7 +115,7 @@ class ProductionResultService
                         && MachineRouting::isTplPressLine($machine)
                         && $this->isFinalTplStep($workOrder, $machine, $row)
                         && $this->isIntermediateTplChild($workOrder, $machine, (int) $childId)
-                        && $this->stockService->availableFifo((int) $childId, $row->uom_rm) < $need->toFloat()
+                        && $this->stockService->availableFifo((int) $childId) < $need->toFloat()
                     ) {
                         $this->consumeTplRootInputs($workOrder, $row, $machine, $result, $goodDecimal->plus($rejectDecimal));
 
@@ -123,13 +123,26 @@ class ProductionResultService
                     }
 
                     $taken = BigDecimal::zero();
-                    foreach ($this->stockService->consumeFifoByUom((int) $childId, (string) $need, $row->uom_rm, $workOrder->id) as $allocation) {
+                    // Untuk WIP internal, jangan filter UOM dengan uom_rm BOM (karena di BOM
+                    // sering tertulis SHEET padahal WIP fisiknya ber-UOM PCS).
+                    // part_id WIP sudah spesifik dan unik untuk part tersebut.
+                    foreach ($this->stockService->consumeFifoByUom((int) $childId, (string) $need, null, $workOrder->id) as $allocation) {
                         $taken = $taken->plus($allocation['take_qty']);
+
+                        // Wariskan nota & supplier asal dari konsumsi yang menghasilkan WIP ini
+                        $sourceInv = WorkOrderConsumption::query()
+                            ->whereHas('productionResult', fn ($q) => $q->where('output_part_stock_id', $allocation['part_stock_id']))
+                            ->whereNotNull('invoice_no')
+                            ->first();
+
                         WorkOrderConsumption::create([
                             'production_result_id' => $result->id,
                             'work_order_id' => $workOrder->id, 'work_order_item_id' => $row->id,
                             'part_stock_id' => $allocation['part_stock_id'], 'part_id' => $childId,
                             'qty' => $allocation['take_qty'], 'uom' => $allocation['uom'],
+                            'invoice_no' => $sourceInv?->invoice_no,
+                            'supplier_name' => $sourceInv?->supplier_name,
+                            'source_tag' => $sourceInv?->source_tag ?? ($allocation['tag'] ?? null),
                         ]);
                     }
                     if ($taken->isLessThan($need)) {

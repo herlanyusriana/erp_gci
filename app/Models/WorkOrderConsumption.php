@@ -35,4 +35,9 @@ class WorkOrderConsumption extends Model
     {
         return $this->belongsTo(Part::class);
     }
+
+    public function productionResult(): BelongsTo
+    {
+        return $this->belongsTo(ProductionResult::class);
+    }
 }

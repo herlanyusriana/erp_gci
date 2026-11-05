@@ -305,4 +305,35 @@ class ProductionResultTest extends TestCase
             $this->assertNotNull($row->source_tag);
         }
     }
+
+    public function test_consuming_wip_step_ignores_uom_rm_mismatch_in_bom(): void
+    {
+        $wo = $this->releasedWorkOrder(true);
+        $steps = $this->stepIds($wo);
+
+        $wip1 = $steps[0]['parent_part_id'];
+        $wip2 = $steps[1]['parent_part_id'];
+
+        // Lapor step 1 -> menghasilkan stok WIP1 bersatuan PCS
+        $this->post(route('production-results.store', $wo), [
+            'parent_part_id' => $wip1,
+            'qty_good' => 10,
+        ])->assertSessionHasNoErrors();
+
+        // Sengaja ubah uom_rm pada item step 2 menjadi 'SHEET' (simulasi ketidaksesuaian data legacy)
+        $step2Item = $wo->items()->where('parent_part_id', $wip2)->where('child_part_id', $wip1)->firstOrFail();
+        $step2Item->update(['uom_rm' => 'SHEET']);
+
+        // Lapor step 2: harus sukses mengonsumsi WIP1 (PCS) tanpa melempar error 'Stok WIP tidak mencukupi'
+        $this->post(route('production-results.store', $wo), [
+            'parent_part_id' => $wip2,
+            'qty_good' => 10,
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('production_results', [
+            'work_order_id' => $wo->id,
+            'parent_part_id' => $wip2,
+            'qty_good' => 10,
+        ]);
+    }
 }

@@ -4,12 +4,21 @@ import { Head } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import LauncherTile from '@/Components/LauncherTile.vue';
+import { computed } from 'vue';
+import { hasAnyPermission } from '@/utils/permissions';
 
 const { t } = useI18n();
 
-const items = [
-    { href: route('material-issues.index'), title: 'outgoing.monitoringIssueOut', subtitle: 'outgoing.monitoringIssueOutTile' },
-];
+const items = computed(() =>
+    [
+        {
+            href: route('material-issues.index'),
+            title: 'outgoing.monitoringIssueOut',
+            subtitle: 'outgoing.monitoringIssueOutTile',
+            permission: ['stock.issue'],
+        },
+    ].filter((it) => hasAnyPermission(it.permission)),
+);
 </script>
 
 <template>

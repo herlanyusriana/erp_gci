@@ -4,14 +4,32 @@ import { useI18n } from 'vue-i18n';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import LauncherTile from '@/Components/LauncherTile.vue';
+import { hasAnyPermission, hasAnyRole, ADMIN_ROLES } from '@/utils/permissions';
 
 const { t } = useI18n();
 
-const items = computed(() => [
-    { href: '/config', title: t('account.configMaster'), subtitle: t('account.configTileHelp') },
-    { href: '/roles', title: t('account.rolesPermissions'), subtitle: t('account.rolesTileHelp') },
-    { href: '/users', title: t('account.userManagement'), subtitle: t('account.usersTileHelp') },
-]);
+const items = computed(() =>
+    [
+        {
+            href: '/config',
+            title: t('account.configMaster'),
+            subtitle: t('account.configTileHelp'),
+            allowed: hasAnyPermission(['config.update']) || hasAnyRole(ADMIN_ROLES),
+        },
+        {
+            href: '/roles',
+            title: t('account.rolesPermissions'),
+            subtitle: t('account.rolesTileHelp'),
+            allowed: hasAnyPermission(['role.update']) || hasAnyRole(ADMIN_ROLES),
+        },
+        {
+            href: '/users',
+            title: t('account.userManagement'),
+            subtitle: t('account.usersTileHelp'),
+            allowed: hasAnyPermission(['user.update']) || hasAnyRole(ADMIN_ROLES),
+        },
+    ].filter((it) => it.allowed),
+);
 </script>
 
 <template>

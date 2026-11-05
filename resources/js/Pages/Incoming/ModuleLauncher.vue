@@ -4,16 +4,20 @@ import { Head } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import LauncherTile from '@/Components/LauncherTile.vue';
+import { computed } from 'vue';
+import { hasAnyPermission } from '@/utils/permissions';
 
 const { t } = useI18n();
 
-const items = [
-    { href: '/purchase-orders', title: 'incoming.purchaseOrder', subtitle: 'incoming.poTile' },
-    { href: '/incoming-arrivals', title: 'incoming.arrival', subtitle: 'incoming.arrivalTile' },
-    { href: '/local-pos', title: 'incoming.localPo', subtitle: 'incoming.localTile' },
-    { href: '/receive', title: 'incoming.receive', subtitle: 'incoming.receiveTile' },
-    { href: '/stocks', title: 'incoming.stock', subtitle: 'incoming.stockTile' },
-];
+const items = computed(() =>
+    [
+        { href: '/purchase-orders', title: 'incoming.purchaseOrder', subtitle: 'incoming.poTile', permission: ['purchase_order.view'] },
+        { href: '/incoming-arrivals', title: 'incoming.arrival', subtitle: 'incoming.arrivalTile', permission: ['incoming.view'] },
+        { href: '/local-pos', title: 'incoming.localPo', subtitle: 'incoming.localTile', permission: ['purchase_order.view'] },
+        { href: '/receive', title: 'incoming.receive', subtitle: 'incoming.receiveTile', permission: ['receive.view'] },
+        { href: '/stocks', title: 'incoming.stock', subtitle: 'incoming.stockTile', permission: ['stock.view', 'incoming.view', 'receive.view'] },
+    ].filter((it) => hasAnyPermission(it.permission)),
+);
 </script>
 
 <template>

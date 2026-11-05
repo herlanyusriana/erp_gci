@@ -37,6 +37,12 @@ class AuthController extends Controller
         }
         $deviceName = mb_substr($deviceName, 0, 100);
 
+        // Satu perangkat hanya boleh memegang satu token aktif. Tanpa ini,
+        // login berulang (app reinstall, HP berpindah operator, logout yang
+        // gagal karena sinyal putus) menumpuk token hidup selama masa berlaku,
+        // sehingga sesi lama yang seharusnya mati tetap bisa dipakai.
+        $user->tokens()->where('name', $deviceName)->delete();
+
         return response()->json([
             'token' => $user->createToken($deviceName)->plainTextToken,
             'user' => [

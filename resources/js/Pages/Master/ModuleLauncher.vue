@@ -3,22 +3,26 @@ import { useI18n } from 'vue-i18n';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import LauncherTile from '@/Components/LauncherTile.vue';
+import { computed } from 'vue';
+import { hasAnyPermission } from '@/utils/permissions';
 
 const { t } = useI18n();
 
-const items = [
-    { href: '/parts', title: 'master.part', subtitle: 'master.launcherPartSubtitle' },
-    { href: '/boms', title: 'master.bom', subtitle: 'master.launcherBomSubtitle' },
-    { href: '/suppliers', title: 'master.supplier', subtitle: 'master.supplierTitle' },
-    { href: '/trucking-companies', title: 'master.trucking', subtitle: 'master.truckingTitle' },
-    { href: '/substitutes', title: 'master.substituteTitle', subtitle: 'master.launcherSubstituteSubtitle' },
-    { href: '/machines', title: 'master.machine', subtitle: 'master.machineTitle' },
-    { href: '/locations', title: 'master.location', subtitle: 'master.locationTitle' },
-    { href: '/cycle-times', title: 'master.cycleTimeTitle', subtitle: 'master.launcherCycleTimeSubtitle' },
-    { href: '/prices', title: 'master.priceMaster', subtitle: 'master.launcherPriceSubtitle' },
-    { href: '/processes', title: 'master.process', subtitle: 'master.processTitle' },
-    { href: '/uoms', title: 'master.uom', subtitle: 'master.unitOfMeasure' },
-];
+const items = computed(() =>
+    [
+        { href: '/parts', title: 'master.part', subtitle: 'master.launcherPartSubtitle', permission: ['part.view'] },
+        { href: '/boms', title: 'master.bom', subtitle: 'master.launcherBomSubtitle', permission: ['bom.view'] },
+        { href: '/suppliers', title: 'master.supplier', subtitle: 'master.supplierTitle', permission: ['supplier.view'] },
+        { href: '/trucking-companies', title: 'master.trucking', subtitle: 'master.truckingTitle', permission: ['trucking.view'] },
+        { href: '/substitutes', title: 'master.substituteTitle', subtitle: 'master.launcherSubstituteSubtitle', permission: ['part_substitute.view'] },
+        { href: '/machines', title: 'master.machine', subtitle: 'master.machineTitle', permission: ['machine.view'] },
+        { href: '/locations', title: 'master.location', subtitle: 'master.locationTitle', permission: ['location.view'] },
+        { href: '/cycle-times', title: 'master.cycleTimeTitle', subtitle: 'master.launcherCycleTimeSubtitle', permission: ['machine.view', 'process.view'] },
+        { href: '/prices', title: 'master.priceMaster', subtitle: 'master.launcherPriceSubtitle', permission: ['part.view'] },
+        { href: '/processes', title: 'master.process', subtitle: 'master.processTitle', permission: ['process.view'] },
+        { href: '/uoms', title: 'master.uom', subtitle: 'master.unitOfMeasure', permission: ['uom.view'] },
+    ].filter((it) => hasAnyPermission(it.permission)),
+);
 </script>
 
 <template>

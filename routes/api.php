@@ -15,8 +15,16 @@ Route::post('/auth/login', [AuthController::class, 'login'])->middleware('thrott
 // Flutter "Material Tracker" — incoming receiving (JSON)
 Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
-    Route::get('/incoming/departures', [IncomingApiController::class, 'departures']);
-    Route::post('/incoming/arrival-items/{arrivalItem}/receive', [IncomingApiController::class, 'receive']);
+    // Gudang: penerimaan material. Dijaga di level route karena `Gate::authorize`
+    // di controller hanya memakai IncomingArrivalPolicy, sedangkan peran
+    // produksi juga memegang `incoming.view`/`receive.view` (keduanya ikut
+    // `$viewAll` di RolesAndPermissionsSeeder) sehingga lolos `viewAny`.
+    // Daftar permission di bawah sama dengan aturan policy `receive` +
+    // `create`: warehouse, purchasing & QC tetap boleh, produksi ditolak.
+    Route::get('/incoming/departures', [IncomingApiController::class, 'departures'])
+        ->middleware('permission:receive.create,incoming.update');
+    Route::post('/incoming/arrival-items/{arrivalItem}/receive', [IncomingApiController::class, 'receive'])
+        ->middleware('permission:receive.create,incoming.update');
 
     // Papan material harian (berbasis material, bukan WO).
     Route::get('/material-board', [MaterialBoardApiController::class, 'index']);

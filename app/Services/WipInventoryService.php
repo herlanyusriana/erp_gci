@@ -257,4 +257,105 @@ final class WipInventoryService
             ]])
             ->all();
     }
+
+    /**
+     * Rincian per nota untuk satu kombinasi mesin + part pada satu tanggal.
+     *
+     * Tiga bagian dipisah karena sumbernya berbeda: stok awal (penerimaan
+     * sebelum tanggal), penerimaan hari itu, dan pemakaian hari itu. Kalau
+     * digabung, barang yang masuk kemarin lalu dipakai hari ini terhitung dua
+     * kali dan angkanya menyesatkan.
+     *
+     * @return array{
+     *     machine: array{id: int, name: string, code: string|null},
+     *     part: array{id: int, number: string|null, name: string|null, model: string|null, size: string|null},
+     *     uom: string|null,
+     *     date: string,
+     *     beginning: list<array<string, mixed>>,
+     *     received: list<array<string, mixed>>,
+     *     issued: list<array<string, mixed>>,
+     *     totals: array{beginning: float, received: float, issued: float, ending: float},
+     * }
+     */
+    public function detail(int $machineId, int $partId, string $date): array
+    {
+        $machine = DB::table('machines')->where('id', $machineId)->first(['id', 'machine_name', 'machine_code']);
+        $part = Part::query()->find($partId, ['id', 'part_number', 'part_name', 'model', 'size', 'uom_id']);
+
+        $beginning = DB::table('production_material_receipts as r')
+            ->leftJoin('material_issue_items as mii', 'mii.id', '=', 'r.material_issue_item_id')
+            ->where('r.transfer_status', 'transferred')
+            ->where('r.machine_id', $machineId)
+            ->where('r.part_id', $partId)
+            ->whereDate('r.received_at', '<', $date)
+            ->groupBy('r.uom', 'r.invoice', 'r.supplier', 'mii.uom', 'mii.invoice', 'mii.supplier')
+            ->selectRaw('COALESCE(mii.uom, r.uom) AS uom')
+            ->selectRaw('COALESCE(mii.invoice, r.invoice) AS invoice')
+            ->selectRaw('COALESCE(mii.supplier, r.supplier) AS supplier')
+            ->selectRaw('SUM(r.qty) AS qty')
+            ->get();
+
+        $received = DB::table('production_material_receipts as r')
+            ->leftJoin('material_issue_items as mii', 'mii.id', '=', 'r.material_issue_item_id')
+            ->where('r.transfer_status', 'transferred')
+            ->where('r.machine_id', $machineId)
+            ->where('r.part_id', $partId)
+            ->whereDate('r.received_at', $date)
+            ->groupBy('r.uom', 'r.invoice', 'r.supplier', 'mii.uom', 'mii.invoice', 'mii.supplier')
+            ->selectRaw('COALESCE(mii.uom, r.uom) AS uom')
+            ->selectRaw('COALESCE(mii.invoice, r.invoice) AS invoice')
+            ->selectRaw('COALESCE(mii.supplier, r.supplier) AS supplier')
+            ->selectRaw('SUM(r.qty) AS qty')
+            ->get();
+
+        $issued = $this->issuedQuery()
+            ->where('woi.machine_id', $machineId)
+            ->where('work_order_consumptions.part_id', $partId)
+            ->whereDate('work_order_consumptions.created_at', $date)
+            ->groupBy('work_order_consumptions.uom', 'work_order_consumptions.invoice_no', 'work_order_consumptions.supplier_name')
+            ->selectRaw('work_order_consumptions.uom AS uom')
+            ->selectRaw('work_order_consumptions.invoice_no AS invoice')
+            ->selectRaw('work_order_consumptions.supplier_name AS supplier')
+            ->selectRaw('SUM(work_order_consumptions.qty) AS qty')
+            ->get();
+
+        $map = fn ($rows): array => collect($rows)->map(fn ($row): array => [
+            'invoice' => $row->invoice,
+            'supplier' => $row->supplier,
+            'uom' => $row->uom,
+            'qty' => round((float) $row->qty, 4),
+        ])->sortBy([['invoice', 'asc']])->values()->all();
+
+        $beginningRows = $map($beginning);
+        $receivedRows = $map($received);
+        $issuedRows = $map($issued);
+
+        $sum = fn (array $rows): float => round(array_sum(array_column($rows, 'qty')), 4);
+
+        return [
+            'machine' => [
+                'id' => (int) $machineId,
+                'name' => $machine->machine_name ?? '—',
+                'code' => $machine->machine_code ?? null,
+            ],
+            'part' => [
+                'id' => (int) $partId,
+                'number' => $part?->part_number,
+                'name' => $part?->part_name,
+                'model' => $part?->model,
+                'size' => $part?->size,
+            ],
+            'uom' => $issuedRows[0]['uom'] ?? $receivedRows[0]['uom'] ?? $beginningRows[0]['uom'] ?? null,
+            'date' => $date,
+            'beginning' => $beginningRows,
+            'received' => $receivedRows,
+            'issued' => $issuedRows,
+            'totals' => [
+                'beginning' => $sum($beginningRows),
+                'received' => $sum($receivedRows),
+                'issued' => $sum($issuedRows),
+                'ending' => round($sum($beginningRows) + $sum($receivedRows) - $sum($issuedRows), 4),
+            ],
+        ];
+    }
 }

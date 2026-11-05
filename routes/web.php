@@ -150,6 +150,8 @@ Route::middleware(['auth'])->group(function () {
 
     // Penerimaan Material Production (monitoring)
     Route::get('production-receipts', [ProductionReceiptController::class, 'index'])->name('production-receipts.index');
+    Route::get('production-receipts/{machine}/{part}', [ProductionReceiptController::class, 'detail'])
+        ->whereNumber(['machine', 'part'])->name('production-receipts.detail');
 
     // Administration
     Route::resource('config', ConfigMasterController::class)->except(['show', 'create', 'edit']);

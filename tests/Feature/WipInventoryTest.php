@@ -16,6 +16,7 @@ use App\Models\WorkOrderItem;
 use App\Services\WipInventoryService;
 use App\Services\WipStockService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
 class WipInventoryTest extends TestCase
@@ -294,5 +295,41 @@ class WipInventoryTest extends TestCase
         $this->assertNotNull($row, 'Konsumsi hari ini harus muncul di tab pergerakan');
         $this->assertSame('HCGCI 26-0903', $row['invoice']);
         $this->assertSame('YONGXIN', $row['supplier']);
+    }
+
+    public function test_detail_page_breaks_movement_down_per_invoice(): void
+    {
+        $fg = Part::where('part_number', 'AAN30056405')->firstOrFail();
+
+        // Dua penerimaan di hari berbeda -> dua nota berbeda di stok awal.
+        $this->receipt(now()->subDays(3)->toDateString(), 500);
+        $this->receipt(now()->subDays(2)->toDateString(), 300);
+
+        $detail = app(WipInventoryService::class)
+            ->detail($this->machine->id, $this->part->id, now()->toDateString());
+
+        $this->assertEqualsWithDelta(800.0, $detail['totals']['beginning'], 0.001);
+        $this->assertCount(2, $detail['beginning'], 'Stok awal harus terpecah per nota');
+
+        $invoices = collect($detail['beginning'])->pluck('invoice')->sort()->values()->all();
+        $this->assertSame([
+            now()->subDays(3)->toDateString(),
+            now()->subDays(2)->toDateString(),
+        ], array_map(fn ($i) => substr((string) $i, -10), $invoices));
+    }
+
+    public function test_detail_page_is_reachable_and_shows_the_part(): void
+    {
+        $this->get(route('production-receipts.detail', [
+            'machine' => $this->machine->id,
+            'part' => $this->part->id,
+            'date' => now()->toDateString(),
+        ]))->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('Production/Receipt/Detail')
+                ->where('detail.part.id', $this->part->id)
+                ->has('detail.beginning')
+                ->has('detail.received')
+                ->has('detail.issued'));
     }
 }

@@ -4,6 +4,7 @@ import { Head, router } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
+import ActionButton from '@/Components/ActionButton.vue';
 import type { Machine } from '@/types';
 
 const { t, locale } = useI18n();
@@ -186,6 +187,7 @@ function age(iso: string | null): string {
                             <th scope="col" class="px-4 py-3 text-right">{{ t('production.receivedQty') }}</th>
                             <th scope="col" class="px-4 py-3 text-right">{{ t('production.issuedQty') }}</th>
                             <th scope="col" class="px-4 py-3 text-right">{{ t('production.endingStock') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('production.actions') }}</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-borderline">
@@ -212,9 +214,18 @@ function age(iso: string | null): string {
                             <td class="px-4 py-3 text-right align-top tabular-nums font-semibold" :class="r.ending_qty < 0 ? 'text-danger' : 'text-ink-primary'">
                                 {{ fmt(r.ending_qty) }} <span class="text-xs font-normal text-ink-secondary">{{ r.uom ?? '' }}</span>
                             </td>
+                            <td class="px-4 py-3 text-right align-top">
+                                <div class="flex justify-end">
+                                    <ActionButton
+                                        :href="route('production-receipts.detail', { machine: r.machine_id, part: r.part_id, date })"
+                                        :label="t('production.detail')"
+                                        variant="view"
+                                    />
+                                </div>
+                            </td>
                         </tr>
                         <tr v-if="rows.length === 0">
-                            <td colspan="7" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('production.noReceipt') }}</td>
+                            <td colspan="8" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('production.noReceipt') }}</td>
                         </tr>
                     </tbody>
                 </table>

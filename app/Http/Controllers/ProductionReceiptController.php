@@ -56,4 +56,21 @@ class ProductionReceiptController extends Controller
             'timezone' => $timezone,
         ]);
     }
+
+    /**
+     * Rincian pergerakan satu mesin + part pada satu tanggal, dipecah per nota.
+     */
+    public function detail(Request $request, int $machine, int $part): Response
+    {
+        Gate::authorize('viewAny', WorkOrder::class);
+
+        $timezone = (string) ConfigMaster::getValue('SYSTEM', 'timezone', 'Asia/Jakarta');
+        $date = (string) ($request->input('date') ?: now($timezone)->toDateString());
+
+        return Inertia::render('Production/Receipt/Detail', [
+            'detail' => $this->wipInventory->detail($machine, $part, $date),
+            'date' => $date,
+            'timezone' => $timezone,
+        ]);
+    }
 }

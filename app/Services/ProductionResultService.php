@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\ConfigMaster;
 use App\Models\Machine;
+use App\Models\Part;
 use App\Models\PartStock;
 use App\Models\ProductionMaterialReceipt;
 use App\Models\ProductionResult;
@@ -28,7 +29,7 @@ class ProductionResultService
         return DB::transaction(function () use ($workOrder, $parentPartId, $data, $actorId) {
             $workOrder = WorkOrder::query()->lockForUpdate()->findOrFail($workOrder->id);
             abort_if($workOrder->status !== 'in_progress', 422, __('WO belum di-release.'));
-            $rows = $workOrder->items()->with(['parentPart:id,part_number', 'childPart:id,part_number'])
+            $rows = $workOrder->items()->with(['parentPart:id,part_number,part_name', 'childPart:id,part_number,part_name'])
                 ->where('parent_part_id', $parentPartId)->lockForUpdate()->get();
             if ($rows->isEmpty()) {
                 throw ValidationException::withMessages(['parent_part_id' => __('Step ini tidak ada di WO.')]);
@@ -146,7 +147,17 @@ class ProductionResultService
                         ]);
                     }
                     if ($taken->isLessThan($need)) {
-                        throw ValidationException::withMessages(['qty_good' => __('Stok WIP tidak mencukupi. Selesaikan step sebelumnya.')]);
+                        $wipNumber = Part::find($childId)?->part_number ?? 'WIP';
+                        $needStr = rtrim(rtrim((string) $need, '0'), '.');
+                        $availStr = rtrim(rtrim((string) $taken, '0'), '.');
+                        throw ValidationException::withMessages([
+                            'qty_good' => __('Stok :wip belum mencukupi. Butuh :need :uom (stok tersedia :avail :uom). Selesaikan dan laporkan proses sebelumnya terlebih dahulu.', [
+                                'wip' => $wipNumber,
+                                'need' => $needStr,
+                                'avail' => $availStr,
+                                'uom' => $row->uom_rm ?? 'PCS',
+                            ]),
+                        ]);
                     }
                 } else {
                     $receipts = ProductionMaterialReceipt::query()
@@ -163,7 +174,18 @@ class ProductionResultService
                         if ($machineId !== null && $rows->count() > 1 && ReleaseContextService::isAuxiliaryItem($row)) {
                             $need = $available;
                         } else {
-                            throw ValidationException::withMessages(['qty_good' => __('Saldo material di mesin tidak mencukupi. Terima material untuk item WO ini terlebih dahulu.')]);
+                            $matNumber = $row->childPart?->part_number ?? $row->child_part_name ?? 'material';
+                            $uomStr = UomCatalog::normalize((string) $row->uom_rm) ?? $row->uom_rm ?? '';
+                            $needStr = rtrim(rtrim((string) $need, '0'), '.');
+                            $availStr = rtrim(rtrim((string) $available, '0'), '.');
+                            throw ValidationException::withMessages([
+                                'qty_good' => __('Material :part belum diterima di mesin ini. Butuh :need :uom (di mesin baru ada :avail :uom). Silakan terima material terlebih dahulu di menu Terima Material.', [
+                                    'part' => $matNumber,
+                                    'need' => $needStr,
+                                    'avail' => $availStr,
+                                    'uom' => $uomStr,
+                                ]),
+                            ]);
                         }
                     }
                     if ($need->isLessThanOrEqualTo(0)) {
@@ -342,8 +364,17 @@ class ProductionResultService
             }
 
             if ($available->isLessThan($need)) {
+                $matNumber = $rootItem->childPart?->part_number ?? $rootItem->child_part_name ?? 'material';
+                $uomStr = UomCatalog::normalize((string) $rootItem->uom_rm) ?? $rootItem->uom_rm ?? '';
+                $needStr = rtrim(rtrim((string) $need, '0'), '.');
+                $availStr = rtrim(rtrim((string) $available, '0'), '.');
                 throw ValidationException::withMessages([
-                    'qty_good' => __('Saldo material di mesin tidak mencukupi. Terima material untuk item WO ini terlebih dahulu.'),
+                    'qty_good' => __('Material :part belum diterima di mesin ini. Butuh :need :uom (di mesin baru ada :avail :uom). Silakan terima material terlebih dahulu di menu Terima Material.', [
+                        'part' => $matNumber,
+                        'need' => $needStr,
+                        'avail' => $availStr,
+                        'uom' => $uomStr,
+                    ]),
                 ]);
             }
 

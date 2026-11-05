@@ -145,6 +145,7 @@ Route::middleware(['auth'])->group(function () {
 
     // Antrean cetak label WIP (dicetak petugas gudang, bukan dari APK)
     Route::get('production-labels', [ProductionLabelController::class, 'index'])->name('production-labels.index');
+    Route::get('production-labels/accumulated-ng/print', [ProductionLabelController::class, 'printAccumulatedNg'])->name('production-labels.print-accumulated-ng');
     Route::get('production-labels/{result}/{kind}/print', [ProductionLabelController::class, 'printLabel'])->name('production-labels.print');
     Route::post('production-labels/{result}/deliver', [ProductionLabelController::class, 'deliver'])->name('production-labels.deliver');
 

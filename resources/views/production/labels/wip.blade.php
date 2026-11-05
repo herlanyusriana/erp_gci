@@ -10,10 +10,13 @@
             font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
             background: #eee;
             color: #000;
+        }
+        .sheet-container {
             display: flex;
-            justify-content: center;
+            flex-direction: column;
             align-items: center;
-            min-height: 100vh;
+            gap: 10px;
+            padding: 10px 0;
         }
         .label-card {
             width: 148mm;
@@ -23,6 +26,12 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            page-break-after: always;
+            break-after: page;
+        }
+        .label-card:last-child {
+            page-break-after: auto;
+            break-after: auto;
         }
         .header-bar {
             height: 17mm;
@@ -144,8 +153,8 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 9.5pt;
-            font-weight: 600;
+            font-size: 9pt;
+            font-weight: 700;
             text-transform: uppercase;
         }
         .qty-value {
@@ -162,8 +171,9 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 9.5pt;
-            font-weight: 600;
+            font-size: 10pt;
+            font-weight: 800;
+            letter-spacing: 0.5px;
             text-transform: uppercase;
         }
         .no-print {
@@ -177,53 +187,65 @@
             border-radius: 8px;
             font-weight: 700;
             cursor: pointer;
+            z-index: 999;
         }
         @media print {
             body { background: #fff; }
+            .sheet-container { padding: 0; gap: 0; }
             .no-print { display: none; }
         }
     </style>
 </head>
 <body>
-    <div class="label-card">
-        <div class="header-bar">
-            <div class="header-title">LABEL WIP{{ $kind === 'ng' ? ' (NG)' : '' }}</div>
-            <div class="header-month">{{ $monthBox ?? '01' }}</div>
-        </div>
+    <div class="sheet-container">
+        @foreach ($labelSheets as $sheet)
+            <div class="label-card">
+                <div class="header-bar">
+                    <div class="header-title">LABEL WIP{{ $kind === 'ng' ? ' (NG)' : '' }}</div>
+                    <div class="header-month">{{ $monthBox ?? '01' }}</div>
+                </div>
 
-        <div class="main-body">
-            <div class="left-col">
-                <div class="top-group">
-                    <div class="wo-no">{{ $woNo ?? '-' }}</div>
-                    <div class="part-desc">{{ $fgPartName ?? $partName ?? '-' }}</div>
-                    <div class="part-process">
-                        {{ $partNumber ?? '-' }}@if(!empty($stepFraction)) {{ $stepFraction }}@endif - {{ $processName ?? $partName ?? '-' }}
+                <div class="main-body">
+                    <div class="left-col">
+                        <div class="top-group">
+                            <div class="wo-no">{{ $woNo ?? '-' }}</div>
+                            <div class="part-desc">{{ $fgPartName ?? $partName ?? '-' }}</div>
+                            <div class="part-process">
+                                {{ $partNumber ?? '-' }}@if(!empty($stepFraction)) {{ $stepFraction }}@endif - {{ $processName ?? $partName ?? '-' }}
+                            </div>
+                            <div class="batch-invoice">{{ $invoiceNo ?? '-' }}</div>
+                            @if (!empty($supplierName) && ($invoiceCount ?? 0) > 1)
+                                <div class="part-process">SUMBER: {{ $supplierName }}</div>
+                            @endif
+                            <div class="tag-no">TAG # : {{ $tagSeq ?? 1 }}</div>
+                        </div>
+
+                        <div class="personnel-group">
+                            <div class="person-line">{{ $operatorName ?? '#OPERATOR NAME#' }}</div>
+                            <div class="person-line">{{ $foremanName ?? '#FOREMAN NAME#' }}</div>
+                        </div>
+
+                        <div class="date-shift-line">
+                            {{ $resultDate ?? '-' }} / SHIFT {{ $shift ?? '-' }}@if(!empty($periodStart)) ({{ substr($periodStart, 0, 5) }}-{{ substr($periodEnd, 0, 5) }})@endif
+                            @if(!empty($isBackfilled)) · SUSULAN @endif
+                        </div>
                     </div>
-                    <div class="batch-invoice">{{ $invoiceNo ?? '-' }}</div>
-                    @if (!empty($supplierName) && ($invoiceCount ?? 0) > 1)
-                        <div class="part-process">SUMBER: {{ $supplierName }}</div>
-                    @endif
-                    <div class="tag-no">TAG # : {{ $tagSeq ?? 1 }}</div>
-                </div>
 
-                <div class="personnel-group">
-                    <div class="person-line">{{ $operatorName ?? '#OPERATOR NAME#' }}</div>
-                    <div class="person-line">{{ $foremanName ?? '#FOREMAN NAME#' }}</div>
-                </div>
-
-                <div class="date-shift-line">
-                    {{ $resultDate ?? '-' }} / SHIFT {{ $shift ?? '-' }}@if(!empty($periodStart)) ({{ substr($periodStart, 0, 5) }}-{{ substr($periodEnd, 0, 5) }})@endif
-                    @if(!empty($isBackfilled)) · SUSULAN @endif
+                    <div class="right-col">
+                        <div class="qr-cell">{!! $qr !!}</div>
+                        <div class="qty-header">
+                            QUANTITY ({{ $uom ?: 'EA' }} - {{ strtoupper($sheet['packing_type']) }})
+                        </div>
+                        <div class="qty-value">
+                            {{ rtrim(rtrim(number_format($sheet['qty'], 4, '.', ','), '0'), '.') }}
+                        </div>
+                        <div class="location-footer">
+                            LABEL {{ $sheet['label_number'] }} / {{ $sheet['total_labels'] }}
+                        </div>
+                    </div>
                 </div>
             </div>
-
-            <div class="right-col">
-                <div class="qr-cell">{!! $qr !!}</div>
-                <div class="qty-header">QUANTITY ({{ $uom ?: 'EA' }})</div>
-                <div class="qty-value">{{ rtrim(rtrim(number_format($qty, 4, '.', ','), '0'), '.') }}</div>
-                <div class="location-footer">{{ $locationCode ?? '# LOCATION #' }}</div>
-            </div>
-        </div>
+        @endforeach
     </div>
 
     <button class="no-print" onclick="window.print()">CETAK LABEL</button>

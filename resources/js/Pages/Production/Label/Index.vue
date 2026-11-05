@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
-import { ref, watch } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
+import Modal from '@/Components/Modal.vue';
 
 const { t, locale } = useI18n();
 
@@ -21,6 +22,8 @@ interface LabelRow {
     is_backfilled: boolean;
     qty_good: number;
     qty_reject: number;
+    label_carried_over_qty?: number;
+    carry_over_in?: number;
     uom: string | null;
     label_status: string;
 }
@@ -29,6 +32,7 @@ const props = defineProps<{
     rows: LabelRow[];
     filters: { date?: string; status?: string };
     statuses: string[];
+    timezone?: string;
 }>();
 
 const date = ref(props.filters.date ?? '');
@@ -48,10 +52,75 @@ watch([date, status], () => {
 const fmt = (n: number | null | undefined) =>
     n == null ? '—' : Number(n).toLocaleString(locale.value, { maximumFractionDigits: 4 });
 
-function printLabel(row: LabelRow, kind: 'good' | 'ng') {
-    window.open(route('production-labels.print', [row.id, kind]), '_blank', 'noopener');
-    // Status bergerak pending -> printed di server; muat ulang agar badge ikut.
+// Modal Packaging
+const showPackagingModal = ref(false);
+const selectedRow = ref<LabelRow | null>(null);
+const packingType = ref<'BOX' | 'TROLI' | 'PALLET'>('BOX');
+const packingQty = ref<number | ''>('');
+const includeRemainder = ref(true);
+
+function openPackagingModal(row: LabelRow) {
+    selectedRow.value = row;
+    packingType.value = 'BOX';
+    const total = (row.qty_good ?? 0) + (row.carry_over_in ?? 0);
+    packingQty.value = total >= 100 ? 100 : Math.max(1, Math.round(total));
+    includeRemainder.value = true;
+    showPackagingModal.value = true;
+}
+
+const totalQtyToPack = computed(() => {
+    if (!selectedRow.value) return 0;
+    return (selectedRow.value.qty_good ?? 0) + (selectedRow.value.carry_over_in ?? 0);
+});
+
+const packCalculations = computed(() => {
+    const total = totalQtyToPack.value;
+    const capacity = Number(packingQty.value) > 0 ? Number(packingQty.value) : 1;
+    const fullPacks = Math.floor(total / capacity);
+    const remainder = Math.round((total % capacity) * 10000) / 10000;
+    const totalLabels = fullPacks + (remainder > 0 && includeRemainder.value ? 1 : 0);
+
+    return {
+        fullPacks,
+        capacity,
+        remainder,
+        totalLabels: Math.max(1, totalLabels),
+    };
+});
+
+function confirmPrintGood() {
+    if (!selectedRow.value) return;
+    const row = selectedRow.value;
+    const capacity = Number(packingQty.value) > 0 ? Number(packingQty.value) : totalQtyToPack.value;
+    const defer = !includeRemainder.value && packCalculations.value.remainder > 0;
+    const remainder = packCalculations.value.remainder;
+
+    const url = route('production-labels.print', {
+        result: row.id,
+        kind: 'good',
+        packing_type: packingType.value,
+        packing_qty: capacity,
+        defer_remainder: defer,
+        remainder_qty: remainder,
+    });
+
+    window.open(url, '_blank', 'noopener');
+    showPackagingModal.value = false;
     setTimeout(() => router.reload({ only: ['rows'] }), 800);
+}
+
+function printNgDirect(row: LabelRow) {
+    window.open(route('production-labels.print', [row.id, 'ng']), '_blank', 'noopener');
+    setTimeout(() => router.reload({ only: ['rows'] }), 800);
+}
+
+const hasNgRows = computed(() => props.rows.some((r) => r.qty_reject > 0));
+
+function printAccumulatedNg() {
+    const url = route('production-labels.print-accumulated-ng', {
+        date: date.value || undefined,
+    });
+    window.open(url, '_blank', 'noopener');
 }
 
 function deliver(row: LabelRow) {
@@ -67,9 +136,21 @@ const canDeliver = (row: LabelRow) => row.label_status === 'printed';
     <AppLayout>
         <BackButton :href="route('production-data')" class="mb-4" />
 
-        <div class="mb-5">
-            <h1 class="text-2xl font-bold tracking-tight text-ink-primary">{{ t('production.labelQueue') }}</h1>
-            <p class="mt-1 text-sm text-ink-secondary">{{ t('production.labelQueueDescription') }}</p>
+        <div class="mb-5 flex flex-wrap items-end justify-between gap-4">
+            <div>
+                <h1 class="text-2xl font-bold tracking-tight text-ink-primary">{{ t('production.labelQueue') }}</h1>
+                <p class="mt-1 text-sm text-ink-secondary">{{ t('production.labelQueueDescription') }}</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <button
+                    v-if="hasNgRows"
+                    type="button"
+                    class="rounded-md border border-danger px-3 py-1.5 text-xs font-semibold text-danger transition hover:bg-danger/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger"
+                    @click="printAccumulatedNg"
+                >
+                    {{ t('production.printAccumulatedNg') }}
+                </button>
+            </div>
         </div>
 
         <div class="mb-4 flex flex-wrap items-end gap-3 rounded-xl border border-borderline bg-surface p-3">
@@ -119,7 +200,15 @@ const canDeliver = (row: LabelRow) => row.label_status === 'printed';
                             <div class="text-ink-primary">{{ row.part_number ?? '—' }}</div>
                             <div class="text-xs text-ink-secondary">{{ row.part_name ?? '' }}</div>
                         </td>
-                        <td class="px-4 py-3 text-right tabular-nums text-success">{{ fmt(row.qty_good) }}</td>
+                        <td class="px-4 py-3 text-right tabular-nums text-success">
+                            {{ fmt(row.qty_good) }}
+                            <div v-if="(row.carry_over_in ?? 0) > 0" class="text-[11px] font-normal text-ink-secondary">
+                                +{{ fmt(row.carry_over_in) }} carry-over
+                            </div>
+                            <div v-if="(row.label_carried_over_qty ?? 0) > 0" class="text-[11px] font-normal text-warning">
+                                ({{ fmt(row.label_carried_over_qty) }} ditunda)
+                            </div>
+                        </td>
                         <td class="px-4 py-3 text-right tabular-nums text-danger">{{ fmt(row.qty_reject) }}</td>
                         <td class="px-4 py-3">
                             <StatusBadge :status="row.label_status">{{ t(`production.label_${row.label_status}`) }}</StatusBadge>
@@ -130,7 +219,7 @@ const canDeliver = (row: LabelRow) => row.label_status === 'printed';
                                     type="button"
                                     :disabled="!canPrint(row) || row.qty_good <= 0"
                                     class="rounded-md border border-primary px-2.5 py-1 text-xs font-semibold text-primary transition hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                                    @click="printLabel(row, 'good')"
+                                    @click="openPackagingModal(row)"
                                 >
                                     {{ t('production.printGood') }}
                                 </button>
@@ -138,7 +227,7 @@ const canDeliver = (row: LabelRow) => row.label_status === 'printed';
                                     type="button"
                                     :disabled="!canPrint(row) || row.qty_reject <= 0"
                                     class="rounded-md border border-danger px-2.5 py-1 text-xs font-semibold text-danger transition hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger"
-                                    @click="printLabel(row, 'ng')"
+                                    @click="printNgDirect(row)"
                                 >
                                     {{ t('production.printNg') }}
                                 </button>
@@ -159,5 +248,104 @@ const canDeliver = (row: LabelRow) => row.label_status === 'printed';
                 </tbody>
             </table>
         </div>
+
+        <!-- Modal Pengaturan Kemasan & Cetak Label Multi-Container -->
+        <Modal :show="showPackagingModal" @close="showPackagingModal = false" max-width="md">
+            <div class="p-5" v-if="selectedRow">
+                <h2 class="text-base font-bold text-ink-primary">{{ t('production.packagingModalTitle') }}</h2>
+                <p class="mt-1 text-xs text-ink-secondary">
+                    {{ selectedRow.wo_no }} · {{ selectedRow.part_number }}
+                    <span v-if="(selectedRow.carry_over_in ?? 0) > 0"> (termasuk carry-over {{ fmt(selectedRow.carry_over_in) }})</span>
+                </p>
+
+                <div class="mt-4 space-y-4">
+                    <!-- Dropdown Tipe Kemasan -->
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wide text-ink-secondary">
+                            {{ t('production.packingType') }}
+                        </label>
+                        <select
+                            v-model="packingType"
+                            class="mt-1 w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                        >
+                            <option value="BOX">{{ t('production.box') }}</option>
+                            <option value="TROLI">{{ t('production.troli') }}</option>
+                            <option value="PALLET">{{ t('production.pallet') }}</option>
+                        </select>
+                    </div>
+
+                    <!-- Input Kapasitas Kemasan -->
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wide text-ink-secondary">
+                            {{ t('production.packingQty') }}
+                        </label>
+                        <input
+                            v-model.number="packingQty"
+                            type="number"
+                            min="1"
+                            class="mt-1 w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                            placeholder="100"
+                        />
+                    </div>
+
+                    <!-- Ringkasan Kalkulasi -->
+                    <div class="rounded-lg border border-borderline bg-background p-3 text-xs space-y-1.5">
+                        <div class="flex justify-between font-semibold text-ink-primary">
+                            <span>Total Qty:</span>
+                            <span>{{ fmt(totalQtyToPack) }} {{ selectedRow.uom ?? 'EA' }}</span>
+                        </div>
+                        <div class="flex justify-between text-ink-secondary">
+                            <span>Kemasan Penuh:</span>
+                            <span>{{ packCalculations.fullPacks }} {{ packingType.toLowerCase() }} (@ {{ packCalculations.capacity }} EA)</span>
+                        </div>
+                        <div v-if="packCalculations.remainder > 0" class="flex justify-between text-warning font-medium">
+                            <span>Sisa Ganjil:</span>
+                            <span>{{ fmt(packCalculations.remainder) }} EA</span>
+                        </div>
+                    </div>
+
+                    <!-- Checkbox Sisa Ganjil -->
+                    <div v-if="packCalculations.remainder > 0" class="rounded-lg border border-warning/30 bg-warning/5 p-3">
+                        <label class="flex items-start gap-2 text-xs text-ink-primary cursor-pointer">
+                            <input
+                                type="checkbox"
+                                v-model="includeRemainder"
+                                class="mt-0.5 rounded border-borderline text-primary focus:ring-primary"
+                            />
+                            <span>
+                                <span class="font-semibold" v-if="includeRemainder">
+                                    {{ t('production.printRemainderNow') }}
+                                </span>
+                                <span class="font-semibold text-warning" v-else>
+                                    {{ t('production.deferRemainder') }}
+                                </span>
+                            </span>
+                        </label>
+                    </div>
+
+                    <!-- Notifikasi Jumlah Label -->
+                    <div class="rounded-lg bg-primary-light px-3 py-2 text-xs font-medium text-primary text-center">
+                        {{ t('production.printSummaryNotice', { count: packCalculations.totalLabels }) }}
+                    </div>
+                </div>
+
+                <div class="mt-5 flex justify-end gap-2">
+                    <button
+                        type="button"
+                        class="rounded-md border border-borderline px-4 py-2 text-xs font-medium text-ink-secondary transition hover:bg-background"
+                        @click="showPackagingModal = false"
+                    >
+                        {{ t('common.back') }}
+                    </button>
+                    <button
+                        type="button"
+                        class="rounded-md bg-primary px-4 py-2 text-xs font-semibold text-white transition hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                        @click="confirmPrintGood"
+                    >
+                        {{ t('production.printLabelsButton', { count: packCalculations.totalLabels }) }}
+                    </button>
+                </div>
+            </div>
+        </Modal>
     </AppLayout>
 </template>

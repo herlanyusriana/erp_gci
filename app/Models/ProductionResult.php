@@ -14,6 +14,7 @@ class ProductionResult extends Model
         'work_order_id', 'parent_part_id', 'process_id', 'machine_id',
         'result_date', 'shift', 'qty_good', 'qty_reject', 'uom',
         'period_start', 'period_end', 'is_backfilled', 'label_status',
+        'label_carried_over_qty', 'label_carry_over_source_id',
         'reported_by', 'notes', 'created_by', 'updated_by',
         'output_part_stock_id', 'reversed_by',
     ];
@@ -22,6 +23,7 @@ class ProductionResult extends Model
         'result_date' => 'date',
         'qty_good' => 'float',
         'qty_reject' => 'float',
+        'label_carried_over_qty' => 'float',
         'is_backfilled' => 'boolean',
     ];
 
@@ -56,5 +58,10 @@ class ProductionResult extends Model
     public function reporter(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reported_by');
+    }
+
+    public function carryOverSource(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'label_carry_over_source_id');
     }
 }

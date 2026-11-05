@@ -124,7 +124,7 @@ class ProductionLabelQueueTest extends TestCase
             ->assertSee('LABEL WIP')
             ->assertSee($this->wo->wo_no)
             ->assertSee('TAG # :')
-            ->assertSee('QUANTITY (PCS)')
+            ->assertSee('QUANTITY (PCS - BOX)')
             ->assertSee('window.print()', false);
 
         $this->assertSame('printed', $result->fresh()->label_status);
@@ -228,5 +228,83 @@ class ProductionLabelQueueTest extends TestCase
         $this->actingAs($stranger);
 
         $this->get(route('production-labels.index'))->assertForbidden();
+    }
+
+    public function test_multi_container_printing_generates_numbered_label_sheets(): void
+    {
+        $result = $this->makeResult(352, 0);
+
+        // 352 pcs kemasan BOX @ 100 dengan sisa dicetak sekarang -> 4 label
+        $this->get(route('production-labels.print', [
+            'result' => $result,
+            'kind' => 'good',
+            'packing_type' => 'BOX',
+            'packing_qty' => 100,
+            'defer_remainder' => false,
+        ]))
+            ->assertOk()
+            ->assertSee('LABEL 1 / 4')
+            ->assertSee('LABEL 2 / 4')
+            ->assertSee('LABEL 3 / 4')
+            ->assertSee('LABEL 4 / 4')
+            ->assertSee('QUANTITY (PCS - BOX)');
+    }
+
+    public function test_deferring_remainder_records_carry_over_qty_and_prints_only_full_packs(): void
+    {
+        $result = $this->makeResult(352, 0);
+
+        // 352 pcs kemasan BOX @ 100 dengan sisa ditunda -> hanya 3 label @ 100
+        $this->get(route('production-labels.print', [
+            'result' => $result,
+            'kind' => 'good',
+            'packing_type' => 'BOX',
+            'packing_qty' => 100,
+            'defer_remainder' => true,
+        ]))
+            ->assertOk()
+            ->assertSee('LABEL 1 / 3')
+            ->assertSee('LABEL 3 / 3')
+            ->assertDontSee('LABEL 4 /');
+
+        $this->assertEqualsWithDelta(52.0, (float) $result->fresh()->label_carried_over_qty, 0.001);
+    }
+
+    public function test_next_period_absorbs_carried_over_qty_from_previous_period(): void
+    {
+        $p1 = $this->makeResult(352, 0);
+        $p1->update(['label_carried_over_qty' => 52]);
+
+        $p2 = $this->makeResult(248, 0);
+
+        // Periode 2 (248 pcs) menyerap sisa 52 pcs dari periode 1 -> total 300 pcs @ 100 = 3 label pas
+        $this->get(route('production-labels.print', [
+            'result' => $p2,
+            'kind' => 'good',
+            'packing_type' => 'BOX',
+            'packing_qty' => 100,
+        ]))
+            ->assertOk()
+            ->assertSee('LABEL 1 / 3')
+            ->assertSee('LABEL 3 / 3')
+            ->assertSee('100');
+
+        $this->assertEqualsWithDelta(0.0, (float) $p1->fresh()->label_carried_over_qty, 0.001);
+        $this->assertSame($p1->id, $p2->fresh()->label_carry_over_source_id);
+    }
+
+    public function test_accumulated_ng_prints_total_rejects_across_periods(): void
+    {
+        $this->makeResult(100, 3);
+        $this->makeResult(120, 5);
+
+        $this->get(route('production-labels.print-accumulated-ng', [
+            'date' => now()->toDateString(),
+            'work_order_id' => $this->wo->id,
+        ]))
+            ->assertOk()
+            ->assertSee('LABEL WIP (NG)')
+            ->assertSee('AKUMULASI NG')
+            ->assertSee('8'); // 3 + 5
     }
 }

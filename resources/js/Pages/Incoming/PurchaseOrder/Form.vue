@@ -186,7 +186,7 @@ function submit() {
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.supplier') }}</label>
                         <select :aria-label="t('incoming.supplier')" v-model="form.supplier_id" @change="onSupplierChange" :disabled="isLocked" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary disabled:bg-background disabled:text-ink-secondary">
                             <option value="">{{ t('incoming.chooseSupplier') }}</option>
-                            <option v-for="s in suppliers" :key="s.id" :value="s.id">{{ s.supplier_code }} · {{ s.supplier_name }}</option>
+                            <option v-for="s in suppliers" :key="s.id" :value="s.id">{{ s.supplier_name }}</option>
                         </select>
                         <InputError :message="form.errors.supplier_id" class="mt-1" />
                     </div>

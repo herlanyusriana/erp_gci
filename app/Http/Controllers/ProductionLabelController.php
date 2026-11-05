@@ -217,6 +217,13 @@ class ProductionLabelController extends Controller
             ->unique()
             ->values();
 
+        $consumedTags = WorkOrderConsumption::query()
+            ->where('production_result_id', $result->id)
+            ->whereNotNull('source_tag')
+            ->pluck('source_tag')
+            ->unique()
+            ->values();
+
         $invoiceLabel = match (true) {
             $consumedInvoices->isEmpty() => '-',
             $consumedInvoices->count() === 1 => (string) $consumedInvoices->first(),
@@ -237,6 +244,10 @@ class ProductionLabelController extends Controller
             ->where('id', '<=', $result->id)
             ->count() ?: 1;
 
+        $tagNo = $consumedTags->isNotEmpty()
+            ? $consumedTags->implode(', ')
+            : (string) $tagSeq;
+
         $monthBox = str_pad((string) (($result->result_date ?? now())->format('m')), 2, '0', STR_PAD_LEFT);
 
         return view('production.labels.wip', [
@@ -254,9 +265,9 @@ class ProductionLabelController extends Controller
             'invoiceNo' => $invoiceLabel,
             'supplierName' => $supplierLabel !== '' ? $supplierLabel : null,
             'invoiceCount' => $consumedInvoices->count(),
-            'tagSeq' => $tagSeq,
-            'operatorName' => $result->reporter?->name ?? '#OPERATOR NAME#',
-            'foremanName' => '#FOREMAN NAME#',
+            'tagNo' => $tagNo,
+            'operatorName' => $result->reporter?->name ?? '-',
+            'foremanName' => '-',
             'monthBox' => $monthBox,
             'machineName' => $result->machine?->machine_name,
             'shift' => $result->shift,
@@ -331,9 +342,9 @@ class ProductionLabelController extends Controller
             'invoiceNo' => 'AKUMULASI NG',
             'supplierName' => null,
             'invoiceCount' => 1,
-            'tagSeq' => 1,
-            'operatorName' => $first->reporter?->name ?? '#OPERATOR NAME#',
-            'foremanName' => '#FOREMAN NAME#',
+            'tagNo' => '1',
+            'operatorName' => $first->reporter?->name ?? '-',
+            'foremanName' => '-',
             'monthBox' => $monthBox,
             'machineName' => $first->machine?->machine_name,
             'shift' => $shift ?? $first->shift,

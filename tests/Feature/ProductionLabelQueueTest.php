@@ -123,7 +123,7 @@ class ProductionLabelQueueTest extends TestCase
             ->assertOk()
             ->assertSee('LABEL WIP')
             ->assertSee($this->wo->wo_no)
-            ->assertSee('TAG # :')
+            ->assertSee('TAG:')
             ->assertSee('QUANTITY (PCS - BOX)')
             ->assertSee('window.print()', false);
 

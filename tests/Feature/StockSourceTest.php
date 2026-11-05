@@ -183,4 +183,39 @@ class StockSourceTest extends TestCase
             ->assertSee(strtoupper('Jl. Industri Raya No. 7'))
             ->assertSee('021-5551234');
     }
+
+    public function test_stock_page_separates_material_from_wip(): void
+    {
+        $this->actingAs($this->admin());
+
+        $material = Part::whereRaw('UPPER(part_number) NOT LIKE ?', ['%-WIP%'])
+            ->whereHas('partType', fn ($q) => $q->whereRaw('UPPER(code) <> ?', ['WIP']))
+            ->firstOrFail();
+        $wip = Part::whereRaw('UPPER(part_number) LIKE ?', ['%-WIP%'])->firstOrFail();
+
+        PartStock::create([
+            'part_id' => $material->id, 'tag' => 'MAT-TAB-1',
+            'qty' => 10, 'qty_unit' => 'PCS', 'received_at' => now(),
+        ]);
+        PartStock::create([
+            'part_id' => $wip->id, 'tag' => 'WO-TAB#WIP#R1',
+            'qty' => 352, 'qty_unit' => 'PCS', 'received_at' => now(),
+        ]);
+
+        // Tab material: WIP tidak boleh ikut.
+        $this->get(route('stocks.index', ['tab' => 'material']))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('tab', 'material')
+                ->where('stocks.data', fn ($rows) => collect($rows)
+                    ->every(fn ($r) => strtoupper((string) ($r['part']['part_type']['code'] ?? '')) !== 'WIP')));
+
+        // Tab WIP: hanya WIP.
+        $this->get(route('stocks.index', ['tab' => 'wip']))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('tab', 'wip')
+                ->where('stocks.data', fn ($rows) => collect($rows)
+                    ->every(fn ($r) => strtoupper((string) ($r['part']['part_type']['code'] ?? '')) === 'WIP')));
+    }
 }

@@ -11,11 +11,23 @@ use Inertia\Response;
 
 class PartStockController extends Controller
 {
+    /** Tipe part yang dipisah ke tab masing-masing. */
+    public const TABS = ['material', 'wip'];
+
     public function index(Request $request): Response
     {
         Gate::authorize('viewAny', PartStock::class);
 
+        // Stok WIP tidak boleh tercampur dengan material: WIP lahir dari mesin,
+        // tidak punya invoice/supplier/lokasi, sehingga mencampurnya membuat
+        // tabel penuh kolom kosong dan menyulitkan pembacaan.
+        $tab = (string) $request->input('tab', 'material');
+        $tab = in_array($tab, self::TABS, true) ? $tab : 'material';
+
         $stocks = PartStock::query()
+            ->whereHas('part.partType', fn ($q) => $tab === 'wip'
+                ? $q->whereRaw('UPPER(code) = ?', ['WIP'])
+                : $q->whereRaw('UPPER(code) <> ?', ['WIP']))
             ->with([
                 'part:id,part_number,part_name,part_type_id',
                 'part.partType:id,code,name',
@@ -50,6 +62,7 @@ class PartStockController extends Controller
 
         return Inertia::render('Incoming/Stock/Index', [
             'stocks' => $stocks,
+            'tab' => $tab,
             'filters' => $request->only('search'),
         ]);
     }

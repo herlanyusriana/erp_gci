@@ -3,9 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Part;
-use App\Models\PartStock;
-use App\Support\UomCatalog;
+use App\Services\WipStockService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -18,6 +16,8 @@ use Illuminate\Http\Request;
  */
 class WipBoardApiController extends Controller
 {
+    public function __construct(private WipStockService $wipStock) {}
+
     public function index(Request $request): JsonResponse
     {
         abort_unless(
@@ -30,36 +30,8 @@ class WipBoardApiController extends Controller
 
         $type = strtoupper((string) $request->input('type', 'WIP'));
 
-        // Part dengan stok > 0 yang bertipe WIP (atau FG bila diminta).
-        $stocks = PartStock::query()
-            ->where('qty', '>', 0)
-            ->whereNotNull('tag')
-            ->with(['part:id,part_number,part_name,model,size,part_type_id', 'part.partType:id,code,name'])
-            ->get()
-            ->filter(fn (PartStock $s) => strtoupper((string) $s->part?->partType?->code) === $type)
-            ->groupBy('part_id');
-
-        $rows = $stocks->map(function ($group, $partId) {
-            /** @var PartStock $first */
-            $first = $group->first();
-            $qty = (float) $group->sum('qty');
-            $uom = UomCatalog::normalize((string) $first->qty_unit);
-
-            return [
-                'part_id' => (int) $partId,
-                'part_number' => $first->part?->part_number,
-                'part_name' => $first->part?->part_name,
-                'model' => $first->part?->model,
-                'size' => $first->part?->size,
-                'uom' => $uom,
-                'qty' => round($qty, 4),
-                'tags' => $group->map(fn (PartStock $s) => [
-                    'tag' => $s->tag,
-                    'qty' => round((float) $s->qty, 4),
-                    'received_at' => $s->received_at?->toIso8601String(),
-                ])->values()->all(),
-            ];
-        })->values()->all();
+        // Sumber tunggal bersama halaman WIP Inventory di Web.
+        $rows = $this->wipStock->current($type);
 
         return response()->json([
             'ok' => true,

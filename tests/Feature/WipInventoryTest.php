@@ -6,12 +6,14 @@ use App\Models\Machine;
 use App\Models\MaterialIssue;
 use App\Models\MaterialIssueItem;
 use App\Models\Part;
+use App\Models\PartStock;
 use App\Models\ProductionMaterialReceipt;
 use App\Models\User;
 use App\Models\WorkOrder;
 use App\Models\WorkOrderConsumption;
 use App\Models\WorkOrderItem;
 use App\Services\WipInventoryService;
+use App\Services\WipStockService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
@@ -189,5 +191,31 @@ class WipInventoryTest extends TestCase
         foreach ($rows as $row) {
             $this->assertSame($this->machine->id, $row['machine_id']);
         }
+    }
+
+    public function test_web_stock_rows_match_the_apk_wip_board_exactly(): void
+    {
+        $wipPart = Part::whereRaw('UPPER(part_number) LIKE ?', ['%-WIP%'])->firstOrFail();
+
+        // Stok WIP fisik hasil produksi.
+        PartStock::create([
+            'part_id' => $wipPart->id,
+            'tag' => 'WO-TEST#'.$wipPart->part_number.'#R1',
+            'qty' => 352, 'qty_unit' => 'PCS', 'received_at' => now()->subDay(),
+        ]);
+
+        $webRows = app(WipStockService::class)->current('WIP');
+
+        $webRow = collect($webRows)->firstWhere('part_id', $wipPart->id);
+        $this->assertNotNull($webRow, 'Part WIP harus muncul di stok Web');
+        $this->assertEqualsWithDelta(352.0, $webRow['qty'], 0.001);
+
+        // Papan WIP di APK memakai service yang sama -> nilainya wajib identik.
+        $api = $this->getJson('/api/wip-board')->assertOk()->json('data.parts');
+        $apiRow = collect($api)->firstWhere('part_id', $wipPart->id);
+
+        $this->assertNotNull($apiRow, 'Part WIP harus muncul di Papan WIP APK');
+        $this->assertEqualsWithDelta($webRow['qty'], (float) $apiRow['qty'], 0.001);
+        $this->assertSame($webRow['uom'], $apiRow['uom']);
     }
 }

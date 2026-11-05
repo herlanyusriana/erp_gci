@@ -6,6 +6,7 @@ use App\Models\ConfigMaster;
 use App\Models\Machine;
 use App\Models\WorkOrder;
 use App\Services\WipInventoryService;
+use App\Services\WipStockService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
@@ -19,7 +20,10 @@ use Inertia\Response;
  */
 class ProductionReceiptController extends Controller
 {
-    public function __construct(private WipInventoryService $wipInventory) {}
+    public function __construct(
+        private WipInventoryService $wipInventory,
+        private WipStockService $wipStock,
+    ) {}
 
     public function index(Request $request): Response
     {
@@ -39,11 +43,16 @@ class ProductionReceiptController extends Controller
 
         $rows = $this->wipInventory->forDate($date, $machineId);
 
+        // Stok WIP fisik saat ini — sumbernya sama dengan Papan WIP di APK,
+        // supaya angka di Web dan APK tidak pernah berbeda.
+        $stockRows = $this->wipStock->current('WIP');
+
         return Inertia::render('Production/Receipt/Index', [
             'machines' => $machines,
             'selectedMachineId' => $machineId,
             'date' => $date,
             'rows' => $rows,
+            'stockRows' => $stockRows,
             'timezone' => $timezone,
         ]);
     }

@@ -64,7 +64,7 @@ function remove(id: number, no: string | null) {
             <input v-model="search" @input="doSearch" type="search" :placeholder="t('incoming.searchLocal')" :aria-label="t('incoming.searchLocal')" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
             <select :aria-label="t('incoming.allSuppliers')" v-model="supplierId" @change="doSearch" class="rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                 <option value="">{{ t('incoming.allSuppliers') }}</option>
-                <option v-for="s in suppliers" :key="s.id" :value="s.id">{{ s.supplier_code ? `${s.supplier_code} — ` : '' }}{{ s.supplier_name }}</option>
+                <option v-for="s in suppliers" :key="s.id" :value="s.id">{{ s.supplier_name }}</option>
             </select>
         </div>
 

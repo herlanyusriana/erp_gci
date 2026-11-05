@@ -49,7 +49,8 @@ class PurchaseOrderController extends Controller
 
         return Inertia::render('Incoming/PurchaseOrder/Form', [
             'purchaseOrder' => null,
-            'suppliers' => Supplier::select('id', 'supplier_code', 'supplier_name', 'source')->where('source', Supplier::SOURCE_IMPORT)->orderBy('supplier_name')->get(),
+            'suppliers' => Supplier::select('id', 'supplier_code', 'supplier_name', 'source')
+                ->where('is_active', true)->orderBy('supplier_name')->get(),
             'parts' => Part::select('id', 'part_number', 'part_name')
                 ->where('is_active', true)
                 ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))
@@ -79,7 +80,8 @@ class PurchaseOrderController extends Controller
 
         return Inertia::render('Incoming/PurchaseOrder/Form', [
             'purchaseOrder' => $purchaseOrder,
-            'suppliers' => Supplier::select('id', 'supplier_code', 'supplier_name', 'source')->where('source', Supplier::SOURCE_IMPORT)->orderBy('supplier_name')->get(),
+            'suppliers' => Supplier::select('id', 'supplier_code', 'supplier_name', 'source')
+                ->where('is_active', true)->orderBy('supplier_name')->get(),
             'parts' => Part::select('id', 'part_number', 'part_name')
                 ->where('is_active', true)
                 ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))
@@ -181,7 +183,7 @@ class PurchaseOrderController extends Controller
 
         return [
             'po_no' => ['required', 'string', 'max:255', $unique],
-            'supplier_id' => ['required', Rule::exists('suppliers', 'id')->where('source', Supplier::SOURCE_IMPORT)],
+            'supplier_id' => ['required', Rule::exists('suppliers', 'id')->where('is_active', true)],
             'po_date' => ['nullable', 'date'],
             'expected_date' => ['nullable', 'date'],
             'notes' => ['nullable', 'string'],

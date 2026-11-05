@@ -92,14 +92,18 @@ class IncomingPoUnificationTest extends TestCase
         ];
     }
 
-    public function test_purchase_order_form_only_offers_import_suppliers(): void
+    public function test_purchase_order_form_offers_local_and_import_suppliers(): void
     {
+        $this->supplier(Supplier::SOURCE_LOCAL);
+        $this->supplier(Supplier::SOURCE_IMPORT);
+
         $this->get(route('purchase-orders.create'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Incoming/PurchaseOrder/Form')
                 ->has('suppliers')
-                ->where('suppliers', fn ($suppliers) => collect($suppliers)->every(fn ($s) => ($s['source'] ?? null) === 'import')));
+                ->where('suppliers', fn ($suppliers) => collect($suppliers)->contains(fn ($s) => ($s['source'] ?? null) === 'local')
+                    && collect($suppliers)->contains(fn ($s) => ($s['source'] ?? null) === 'import')));
     }
 
     public function test_local_po_form_only_offers_local_suppliers(): void
@@ -112,13 +116,15 @@ class IncomingPoUnificationTest extends TestCase
                 ->where('suppliers', fn ($suppliers) => collect($suppliers)->every(fn ($s) => ($s['source'] ?? null) === 'local')));
     }
 
-    public function test_purchase_order_rejects_a_local_supplier(): void
+    public function test_purchase_order_accepts_a_local_supplier(): void
     {
         $local = $this->supplier(Supplier::SOURCE_LOCAL);
         $part = $this->materialFor($local);
 
         $this->post(route('purchase-orders.store'), $this->poPayload($local, $part))
-            ->assertSessionHasErrors('supplier_id');
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('purchase_orders', ['supplier_id' => $local->id]);
     }
 
     public function test_local_po_rejects_an_import_supplier(): void
@@ -164,7 +170,7 @@ class IncomingPoUnificationTest extends TestCase
         $this->assertStringContainsString("href: '/incoming-arrivals'", $source);
     }
 
-    public function test_update_cannot_move_a_purchase_order_to_a_local_supplier(): void
+    public function test_purchase_order_keeps_its_supplier_on_update(): void
     {
         $import = $this->supplier(Supplier::SOURCE_IMPORT);
         $part = $this->materialFor($import);
@@ -175,14 +181,10 @@ class IncomingPoUnificationTest extends TestCase
         $po = PurchaseOrder::where('supplier_id', $import->id)->latest('id')->firstOrFail();
         $local = $this->supplier(Supplier::SOURCE_LOCAL);
 
-        $this->put(route('purchase-orders.update', $po), [
-            'po_no' => $po->po_no,
-            'supplier_id' => $local->id,
-            'status' => 'draft',
-            'items' => [['part_id' => $part->id, 'qty' => 5]],
-        ])->assertSessionHasErrors('supplier_id');
+        $this->put(route('purchase-orders.update', $po), $this->poPayload($local, $part))
+            ->assertSessionHasErrors('items.0.part_id');
 
-        $this->assertSame($import->id, $po->fresh()->supplier_id, 'Supplier tidak boleh berpindah source.');
+        $this->assertSame($import->id, $po->fresh()->supplier_id, 'Supplier tidak boleh diubah setelah PO disimpan.');
     }
 
     public function test_local_po_update_cannot_move_to_an_import_supplier(): void

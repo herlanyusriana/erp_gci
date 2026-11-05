@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ConfigMaster;
 use App\Models\ProductionResult;
 use App\Models\WorkOrder;
 use App\Models\WorkOrderConsumption;
@@ -28,9 +29,11 @@ class ProductionLabelController extends Controller
     {
         Gate::authorize('viewAny', WorkOrder::class);
 
-        // Default ke laporan yang belum dicetak: itulah pekerjaan petugas gudang.
+        $timezone = (string) ConfigMaster::getValue('SYSTEM', 'timezone', 'Asia/Jakarta');
+        // Default ke laporan yang belum dicetak (pending). Petugas dapat memilih
+        // 'Semua Status' untuk mencetak ulang label yang sudah berstatus printed.
         $status = $request->input('status', ProductionResult::LABEL_PENDING);
-        $date = $request->input('date') ?: now()->toDateString();
+        $date = $request->input('date') ?: now($timezone)->toDateString();
 
         $rows = ProductionResult::query()
             ->with(['workOrder:id,wo_no', 'parentPart:id,part_number,part_name', 'machine:id,machine_code,machine_name'])
@@ -70,6 +73,7 @@ class ProductionLabelController extends Controller
                 ProductionResult::LABEL_PRINTED,
                 ProductionResult::LABEL_DELIVERED,
             ],
+            'timezone' => $timezone,
         ]);
     }
 

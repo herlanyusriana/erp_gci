@@ -77,14 +77,20 @@ class ProductionLabelQueueTest extends TestCase
         $this->makeResult(500, 12);
         $this->makeResult(300, 0, status: 'delivered');
 
+        // Default menampilkan seluruh baris hari itu agar data yang sudah
+        // pernah dibuka cetak tidak mendadak hilang dari pandangan pengguna.
         $this->get(route('production-labels.index'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Production/Label/Index')
+                ->has('rows', 2));
+
+        $this->get(route('production-labels.index', ['status' => 'pending']))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
                 ->has('rows', 1)
                 ->where('rows.0.wo_no', $this->wo->wo_no)
                 ->where('rows.0.qty_good', 500)
-                ->where('rows.0.qty_reject', 12)
                 ->where('rows.0.label_status', 'pending'));
     }
 

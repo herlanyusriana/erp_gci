@@ -30,9 +30,9 @@ class ProductionLabelController extends Controller
         Gate::authorize('viewAny', WorkOrder::class);
 
         $timezone = (string) ConfigMaster::getValue('SYSTEM', 'timezone', 'Asia/Jakarta');
-        // Default ke laporan yang belum dicetak (pending). Petugas dapat memilih
-        // 'Semua Status' untuk mencetak ulang label yang sudah berstatus printed.
-        $status = $request->input('status', ProductionResult::LABEL_PENDING);
+        // Default menampilkan seluruh status pada tanggal tersebut, agar baris
+        // yang sudah pernah dibuka/dicetak tidak langsung menghilang dari tabel.
+        $status = $request->input('status', '');
         $date = $request->input('date') ?: now($timezone)->toDateString();
 
         $rows = ProductionResult::query()

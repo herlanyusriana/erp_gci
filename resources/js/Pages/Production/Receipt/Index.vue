@@ -27,6 +27,7 @@ interface WipRow {
 }
 
 interface WipStockRow {
+    invoices: Array<{ invoice: string; supplier: string | null }>;
     part_id: number;
     part_number: string | null;
     part_name: string | null;
@@ -117,6 +118,7 @@ function age(iso: string | null): string {
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                         <th scope="col" class="px-4 py-3">{{ t('production.wipPart') }}</th>
                         <th scope="col" class="px-4 py-3">{{ t('production.materialInfo') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('production.invoiceSupplier') }}</th>
                         <th scope="col" class="px-4 py-3 text-right">{{ t('production.wipQty') }}</th>
                         <th scope="col" class="px-4 py-3 text-right">{{ t('production.wipTagCount') }}</th>
                         <th scope="col" class="px-4 py-3 text-right">{{ t('production.wipOldest') }}</th>
@@ -134,6 +136,15 @@ function age(iso: string | null): string {
                                 <span v-if="r.size" class="rounded bg-background px-1.5 py-0.5">{{ r.size }}</span>
                             </div>
                         </td>
+                        <td class="px-4 py-3 align-top">
+                            <div v-if="r.invoices.length === 0" class="text-ink-secondary">—</div>
+                            <template v-else>
+                                <div v-for="inv in r.invoices" :key="inv.invoice" class="leading-tight">
+                                    <div class="font-medium text-ink-primary">{{ inv.invoice }}</div>
+                                    <div class="text-xs text-ink-secondary">{{ inv.supplier ?? '—' }}</div>
+                                </div>
+                            </template>
+                        </td>
                         <td class="px-4 py-3 text-right align-top tabular-nums text-lg font-bold text-success">
                             {{ fmt(r.qty) }} <span class="text-xs font-normal text-ink-secondary">{{ r.uom ?? '' }}</span>
                         </td>
@@ -141,7 +152,7 @@ function age(iso: string | null): string {
                         <td class="px-4 py-3 text-right align-top tabular-nums text-ink-secondary">{{ age(r.oldest_received_at) }}</td>
                     </tr>
                     <tr v-if="stockRows.length === 0">
-                        <td colspan="5" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('production.wipNoStock') }}</td>
+                        <td colspan="6" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('production.wipNoStock') }}</td>
                     </tr>
                 </tbody>
             </table>

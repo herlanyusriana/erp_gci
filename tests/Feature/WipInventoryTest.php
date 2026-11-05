@@ -8,6 +8,7 @@ use App\Models\MaterialIssueItem;
 use App\Models\Part;
 use App\Models\PartStock;
 use App\Models\ProductionMaterialReceipt;
+use App\Models\ProductionResult;
 use App\Models\User;
 use App\Models\WorkOrder;
 use App\Models\WorkOrderConsumption;
@@ -217,5 +218,81 @@ class WipInventoryTest extends TestCase
         $this->assertNotNull($apiRow, 'Part WIP harus muncul di Papan WIP APK');
         $this->assertEqualsWithDelta($webRow['qty'], (float) $apiRow['qty'], 0.001);
         $this->assertSame($webRow['uom'], $apiRow['uom']);
+    }
+
+    public function test_wip_stock_shows_the_invoices_that_produced_it(): void
+    {
+        $wipPart = Part::whereRaw('UPPER(part_number) LIKE ?', ['%-WIP%'])->firstOrFail();
+        $fg = Part::where('part_number', 'AAN30056405')->firstOrFail();
+
+        $wo = WorkOrder::create([
+            'wo_no' => 'WO-INV-'.uniqid(), 'part_id' => $fg->id,
+            'qty' => 500, 'status' => 'in_progress',
+        ]);
+        $woItem = WorkOrderItem::create([
+            'work_order_id' => $wo->id, 'sequence' => 1, 'parent_part_id' => $wipPart->id,
+            'child_part_id' => $fg->id, 'uom_rm' => 'KGM', 'qty_required' => 500,
+            'qty_consumed' => 0, 'source' => 'Vendor',
+        ]);
+
+        $stock = PartStock::create([
+            'part_id' => $wipPart->id, 'tag' => 'WO-INV#TEST#R1',
+            'qty' => 352, 'qty_unit' => 'PCS', 'received_at' => now(),
+        ]);
+
+        $result = ProductionResult::create([
+            'work_order_id' => $wo->id, 'parent_part_id' => $wipPart->id,
+            'result_date' => now()->toDateString(), 'shift' => '1',
+            'qty_good' => 352, 'qty_reject' => 0, 'uom' => 'PCS',
+            'label_status' => 'pending', 'output_part_stock_id' => $stock->id,
+        ]);
+
+        // Dua nota bahan yang dipakai laporan itu.
+        foreach (['HCGCI 26-0901' => 'YONGXIN', 'HCGCI 26-0902' => 'TAIZHOU'] as $inv => $sup) {
+            WorkOrderConsumption::create([
+                'work_order_id' => $wo->id, 'work_order_item_id' => $woItem->id,
+                'part_stock_id' => $stock->id, 'part_id' => $fg->id,
+                'qty' => 100, 'uom' => 'KGM', 'production_result_id' => $result->id,
+                'invoice_no' => $inv, 'supplier_name' => $sup,
+            ]);
+        }
+
+        $row = collect(app(WipStockService::class)->current('WIP'))
+            ->firstWhere('part_id', $wipPart->id);
+
+        $this->assertNotNull($row);
+        $invoices = collect($row['invoices'])->pluck('invoice')->sort()->values()->all();
+        $this->assertSame(['HCGCI 26-0901', 'HCGCI 26-0902'], $invoices);
+    }
+
+    public function test_movement_tab_keeps_invoice_for_material_consumed_on_a_later_day(): void
+    {
+        $wipPart = Part::whereRaw('UPPER(part_number) LIKE ?', ['%-WIP%'])->firstOrFail();
+        $fg = Part::where('part_number', 'AAN30056405')->firstOrFail();
+
+        $wo = WorkOrder::create([
+            'wo_no' => 'WO-LATE-'.uniqid(), 'part_id' => $fg->id,
+            'qty' => 500, 'status' => 'in_progress',
+        ]);
+        $woItem = WorkOrderItem::create([
+            'work_order_id' => $wo->id, 'sequence' => 1, 'machine_id' => $this->machine->id,
+            'parent_part_id' => $wipPart->id, 'child_part_id' => $fg->id, 'uom_rm' => 'KGM',
+            'qty_required' => 500, 'qty_consumed' => 0, 'source' => 'Vendor',
+        ]);
+
+        // Konsumsi terjadi hari ini, nota tersimpan di konsumsi (bukan di penerimaan hari ini).
+        $consumption = WorkOrderConsumption::create([
+            'work_order_id' => $wo->id, 'work_order_item_id' => $woItem->id,
+            'part_stock_id' => 1, 'part_id' => $fg->id, 'qty' => 40, 'uom' => 'KGM',
+            'invoice_no' => 'HCGCI 26-0903', 'supplier_name' => 'YONGXIN',
+        ]);
+        $consumption->forceFill(['created_at' => now()])->saveQuietly();
+
+        $rows = app(WipInventoryService::class)->forDate(now()->toDateString(), $this->machine->id);
+        $row = collect($rows)->firstWhere('part_id', $fg->id);
+
+        $this->assertNotNull($row, 'Konsumsi hari ini harus muncul di tab pergerakan');
+        $this->assertSame('HCGCI 26-0903', $row['invoice']);
+        $this->assertSame('YONGXIN', $row['supplier']);
     }
 }

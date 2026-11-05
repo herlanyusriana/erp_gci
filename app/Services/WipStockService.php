@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\Part;
 use App\Models\PartStock;
+use App\Models\ProductionResult;
+use App\Models\WorkOrderConsumption;
 use App\Support\UomCatalog;
 use Illuminate\Support\Collection;
 
@@ -34,7 +36,74 @@ final class WipStockService
             ->get(['id', 'part_id', 'tag', 'qty', 'qty_unit', 'received_at'])
             ->filter(fn (PartStock $stock): bool => strtoupper((string) $stock->part?->partType?->code) === $type);
 
-        return $this->groupByPart($stocks);
+        $rows = $this->groupByPart($stocks);
+
+        return $this->attachSourceInvoices($rows);
+    }
+
+    /**
+     * Tempelkan nota asal ke setiap baris WIP.
+     *
+     * Rantainya: stok WIP -> laporan produksi pembuatnya -> konsumsi material
+     * laporan itu (yang kini menyimpan invoice_no). WIP tidak punya nota sendiri
+     * karena lahir dari mesin, jadi notanya diambil dari bahan yang dipakai.
+     *
+     * @param  list<array<string, mixed>>  $rows
+     * @return list<array<string, mixed>>
+     */
+    private function attachSourceInvoices(array $rows): array
+    {
+        if ($rows === []) {
+            return [];
+        }
+
+        $stockToResult = [];
+
+        ProductionResult::query()
+            ->whereIn('parent_part_id', array_column($rows, 'part_id'))
+            ->whereNotNull('output_part_stock_id')
+            ->get(['id', 'parent_part_id', 'output_part_stock_id'])
+            ->each(function (ProductionResult $result) use (&$stockToResult): void {
+                $stockToResult[(int) $result->output_part_stock_id] = (int) $result->id;
+            });
+
+        if ($stockToResult === []) {
+            foreach ($rows as &$row) {
+                $row['invoices'] = [];
+            }
+
+            return $rows;
+        }
+
+        $invoicesByResult = WorkOrderConsumption::query()
+            ->whereIn('production_result_id', array_values($stockToResult))
+            ->whereNotNull('invoice_no')
+            ->get(['production_result_id', 'invoice_no', 'supplier_name'])
+            ->groupBy('production_result_id');
+
+        foreach ($rows as &$row) {
+            $invoices = [];
+
+            foreach ($row['tags'] as $tag) {
+                $resultId = $stockToResult[(int) ($tag['part_stock_id'] ?? 0)] ?? null;
+                if ($resultId === null) {
+                    continue;
+                }
+
+                foreach ($invoicesByResult->get($resultId, []) as $consumption) {
+                    $label = (string) $consumption->invoice_no;
+                    $invoices[$label] = [
+                        'invoice' => $label,
+                        'supplier' => $consumption->supplier_name,
+                    ];
+                }
+            }
+
+            $row['invoices'] = array_values($invoices);
+        }
+        unset($row);
+
+        return $rows;
     }
 
     /**
@@ -67,6 +136,7 @@ final class WipStockService
                     'oldest_received_at' => $oldest?->received_at?->toIso8601String(),
                     'tags' => $group
                         ->map(fn (PartStock $s): array => [
+                            'part_stock_id' => (int) $s->id,
                             'tag' => $s->tag,
                             'qty' => round((float) $s->qty, 4),
                             'received_at' => $s->received_at?->toIso8601String(),

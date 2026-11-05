@@ -143,6 +143,8 @@ final class WipInventoryService
             ->whereDate('work_order_consumptions.created_at', $date)
             ->groupBy('woi.machine_id', 'work_order_consumptions.part_id', 'work_order_consumptions.uom')
             ->selectRaw('woi.machine_id, work_order_consumptions.part_id, work_order_consumptions.uom, SUM(work_order_consumptions.qty) AS qty')
+            ->selectRaw('STRING_AGG(DISTINCT work_order_consumptions.invoice_no, \', \') AS invoice')
+            ->selectRaw('STRING_AGG(DISTINCT work_order_consumptions.supplier_name, \', \') AS supplier')
             ->get();
 
         $buckets = [];
@@ -170,11 +172,19 @@ final class WipInventoryService
                 'machine_id' => (int) $row->machine_id,
                 'part_id' => (int) $row->part_id,
                 'uom' => $row->uom,
-                'invoice' => null,
-                'supplier' => null,
+                'invoice' => $row->invoice,
+                'supplier' => $row->supplier,
                 'received_qty' => 0.0,
                 'issued_qty' => 0.0,
             ];
+
+            // Nota bisa datang dari konsumsi walau tidak ada penerimaan di hari
+            // itu (material masuk kemarin, dipakai hari ini). Jangan dipaksa null.
+            if ($buckets[$key]['invoice'] === null && $row->invoice !== null) {
+                $buckets[$key]['invoice'] = $row->invoice;
+                $buckets[$key]['supplier'] = $row->supplier;
+            }
+
             $buckets[$key]['issued_qty'] += (float) $row->qty;
         }
 

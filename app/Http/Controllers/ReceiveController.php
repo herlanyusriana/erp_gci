@@ -52,8 +52,12 @@ class ReceiveController extends Controller
 
         $arrivalItem->load(['part', 'arrival.supplier', 'receives']);
 
-        if ($arrivalItem->arrival && $arrivalItem->arrival->iqc_status === 'rejected') {
-            abort(422, __('Material kedatangan ini ditolak oleh tim Quality.'));
+        if ($arrivalItem->iqc_status === 'rejected' || $arrivalItem->arrival?->iqc_status === 'rejected') {
+            abort(422, __('Material ini ditolak oleh tim Quality.'));
+        }
+
+        if ($arrivalItem->iqc_status === 'pending' && $arrivalItem->arrival?->iqc_status === 'pending') {
+            // Ditandai untuk info, tetap izinkan receive pada alur development/legacy test
         }
 
         $remaining = $this->receiveService->remainingQty($arrivalItem);
@@ -78,9 +82,9 @@ class ReceiveController extends Controller
         $arrivalItem->loadMissing(['arrival', 'part']);
         Gate::authorize('create', IncomingReceive::class);
 
-        if ($arrivalItem->arrival && $arrivalItem->arrival->iqc_status === 'rejected') {
+        if ($arrivalItem->iqc_status === 'rejected' || $arrivalItem->arrival?->iqc_status === 'rejected') {
             return back()->withInput()->withErrors([
-                'tags' => __('Material kedatangan ini ditolak oleh tim Quality.'),
+                'tags' => __('Material ini ditolak oleh tim Quality.'),
             ]);
         }
 

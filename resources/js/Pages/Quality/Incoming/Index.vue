@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
 import { ref } from 'vue';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import Pagination from '@/Components/Pagination.vue';
-import StatusBadge from '@/Components/StatusBadge.vue';
 import type { Paginated } from '@/types';
 
 const { t } = useI18n();
@@ -15,7 +14,9 @@ interface PartItem {
     part_id: number | null;
     qty_goods: number;
     unit_goods: string | null;
+    iqc_status: string;
     part?: { id: number; part_number: string; part_name: string };
+    iqc_inspector?: { id: number; name: string };
 }
 
 interface ArrivalRow {
@@ -28,11 +29,9 @@ interface ArrivalRow {
     created_at: string;
     is_local: boolean;
     iqc_status: string;
-    iqc_passed_at: string | null;
     supplier?: { id: number; supplier_code: string; supplier_name: string };
     purchase_order?: { id: number; po_no: string };
     items?: PartItem[];
-    iqc_inspector?: { id: number; name: string };
 }
 
 const props = defineProps<{
@@ -55,12 +54,13 @@ function doFilter() {
     }, 300);
 }
 
-function pass(row: ArrivalRow) {
-    router.post(route('incoming-quality.pass', row.id), {}, { preserveScroll: true });
+function itemsPassedCount(items?: PartItem[]): number {
+    if (!items || items.length === 0) return 0;
+    return items.filter((it) => it.iqc_status === 'passed').length;
 }
 
-function revert(row: ArrivalRow) {
-    router.post(route('incoming-quality.revert', row.id), {}, { preserveScroll: true });
+function passAll(row: ArrivalRow) {
+    router.post(route('incoming-quality.pass-all', row.id), {}, { preserveScroll: true });
 }
 </script>
 
@@ -117,7 +117,7 @@ function revert(row: ArrivalRow) {
             </div>
         </div>
 
-        <!-- Tabel ringkas: Tanggal Arrival | Supp Name | PO No | Item List | Ceklis IQC Pass -->
+        <!-- Tabel ringkas: Tanggal Arrival | Supp Name | PO No | Item List & Status | Aksi Detail -->
         <div class="overflow-x-auto rounded-xl border border-borderline bg-surface">
             <table class="min-w-full divide-y divide-borderline text-sm">
                 <thead class="bg-background">
@@ -154,61 +154,61 @@ function revert(row: ArrivalRow) {
                             </span>
                         </td>
 
-                        <!-- Item List -->
+                        <!-- Item List with per-material status badges -->
                         <td class="px-4 py-3 align-top">
-                            <div class="space-y-1">
-                                <div v-for="(it, i) in a.items ?? []" :key="i" class="text-xs leading-tight">
-                                    <span class="font-semibold text-ink-primary">{{ it.part?.part_number ?? '—' }}</span>
-                                    <span class="text-ink-secondary"> ({{ it.qty_goods }} {{ it.unit_goods ?? '' }})</span>
-                                    <span v-if="it.part?.part_name" class="block text-[11px] text-ink-secondary/80">{{ it.part.part_name }}</span>
+                            <div class="space-y-1.5">
+                                <div v-for="it in a.items ?? []" :key="it.id" class="flex items-center justify-between gap-3 text-xs leading-tight">
+                                    <div>
+                                        <span class="font-semibold text-ink-primary">{{ it.part?.part_number ?? '—' }}</span>
+                                        <span class="text-ink-secondary"> ({{ it.qty_goods }} {{ it.unit_goods ?? '' }})</span>
+                                        <span v-if="it.part?.part_name" class="block text-[11px] text-ink-secondary/80">{{ it.part.part_name }}</span>
+                                    </div>
+                                    <span
+                                        v-if="it.iqc_status === 'passed'"
+                                        class="shrink-0 rounded bg-success/15 px-1.5 py-0.5 text-[10px] font-bold text-success"
+                                    >
+                                        ✓ PASS
+                                    </span>
+                                    <span
+                                        v-else
+                                        class="shrink-0 rounded bg-warning/15 px-1.5 py-0.5 text-[10px] font-semibold text-warning"
+                                    >
+                                        PENDING
+                                    </span>
                                 </div>
-                                <div v-if="!a.items || a.items.length === 0" class="text-xs text-ink-secondary">
-                                    —
-                                </div>
+                                <div v-if="!a.items || a.items.length === 0" class="text-xs text-ink-secondary">—</div>
                             </div>
                         </td>
 
-                        <!-- Status IQC -->
+                        <!-- Status Ringkasan Kedatangan -->
                         <td class="px-4 py-3 align-top text-center whitespace-nowrap">
-                            <span
-                                v-if="a.iqc_status === 'passed'"
-                                class="inline-flex items-center gap-1 rounded-full bg-success/15 px-2.5 py-0.5 text-xs font-bold text-success"
+                            <div
+                                class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold"
+                                :class="itemsPassedCount(a.items) === (a.items?.length ?? 0) && (a.items?.length ?? 0) > 0 ? 'bg-success/15 text-success' : 'bg-warning/15 text-warning'"
                             >
-                                ✓ IQC PASS
-                            </span>
-                            <span
-                                v-else
-                                class="inline-flex items-center gap-1 rounded-full bg-warning/15 px-2.5 py-0.5 text-xs font-semibold text-warning"
-                            >
-                                ● PENDING
-                            </span>
-                            <div v-if="a.iqc_inspector" class="mt-1 text-[11px] text-ink-secondary">
-                                by {{ a.iqc_inspector.name }}
+                                {{ t('quality.materialItemsCount', { passed: itemsPassedCount(a.items), total: a.items?.length ?? 0 }) }}
                             </div>
                         </td>
 
-                        <!-- Aksi / Ceklis IQC Pass -->
+                        <!-- Aksi Detail & Pass All -->
                         <td class="px-4 py-3 align-top text-right whitespace-nowrap">
-                            <button
-                                v-if="a.iqc_status !== 'passed'"
-                                type="button"
-                                class="inline-flex items-center gap-1.5 rounded-lg bg-success px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-success/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-success"
-                                @click="pass(a)"
-                            >
-                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                                </svg>
-                                {{ t('quality.passButton') }}
-                            </button>
-                            <button
-                                v-else
-                                type="button"
-                                class="inline-flex items-center gap-1 rounded-md border border-borderline px-2.5 py-1 text-xs text-ink-secondary transition hover:bg-background hover:text-danger"
-                                :title="t('quality.revertTitle')"
-                                @click="revert(a)"
-                            >
-                                ✕ Batal Pass
-                            </button>
+                            <div class="flex items-center justify-end gap-1.5">
+                                <Link
+                                    :href="route('incoming-quality.show', a.id)"
+                                    class="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                                >
+                                    {{ t('quality.inspectButton') }}
+                                </Link>
+                                <button
+                                    v-if="itemsPassedCount(a.items) < (a.items?.length ?? 0)"
+                                    type="button"
+                                    class="inline-flex items-center rounded-md border border-success bg-surface px-2.5 py-1.5 text-xs font-semibold text-success transition hover:bg-success-light"
+                                    :title="t('quality.passAllButton')"
+                                    @click="passAll(a)"
+                                >
+                                    ✓ Pass All
+                                </button>
+                            </div>
                         </td>
                     </tr>
                     <tr v-if="arrivals.data.length === 0">

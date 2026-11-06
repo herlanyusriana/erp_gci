@@ -18,6 +18,7 @@ class IncomingArrivalItem extends Model
         'weight_nett', 'unit_weight', 'weight_gross',
         'price', 'total_price',
         'is_foc', 'notes',
+        'iqc_status', 'iqc_passed_at', 'iqc_passed_by',
     ];
 
     protected $casts = [
@@ -28,7 +29,13 @@ class IncomingArrivalItem extends Model
         'price' => 'float',
         'total_price' => 'float',
         'is_foc' => 'boolean',
+        'iqc_passed_at' => 'datetime',
     ];
+
+    public function iqcInspector(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'iqc_passed_by');
+    }
 
     public function arrival(): BelongsTo
     {

@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\IncomingArrival;
+use App\Models\IncomingArrivalItem;
+use App\Models\Part;
 use App\Models\PurchaseOrder;
 use App\Models\Supplier;
 use App\Models\User;
@@ -36,7 +38,6 @@ class IncomingQualityTest extends TestCase
             'po_no' => $po->po_no,
             'purchase_order_id' => $po->id,
             'supplier_id' => $supplier->id,
-            'iqc_status' => 'pending',
             'status' => 'pending',
         ]);
 
@@ -45,41 +46,99 @@ class IncomingQualityTest extends TestCase
         $response->assertSee('PO-QC-TEST-01');
     }
 
-    public function test_pass_button_marks_arrival_as_iqc_pass(): void
+    public function test_pass_item_marks_single_material_as_iqc_pass(): void
     {
         $supplier = Supplier::where('is_active', true)->firstOrFail();
+        $part = Part::whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))->firstOrFail();
+
         $arrival = IncomingArrival::create([
-            'arrival_no' => 'ARV-QC-PASS-01',
+            'arrival_no' => 'ARV-QC-ITEM-01',
             'supplier_id' => $supplier->id,
-            'iqc_status' => 'pending',
             'status' => 'pending',
         ]);
 
-        $this->post(route('incoming-quality.pass', $arrival->id))->assertRedirect();
+        $item1 = IncomingArrivalItem::create([
+            'arrival_id' => $arrival->id,
+            'part_id' => $part->id,
+            'qty_goods' => 50,
+            'unit_goods' => 'PCS',
+            'iqc_status' => 'pending',
+        ]);
 
-        $fresh = $arrival->fresh();
-        $this->assertSame('passed', $fresh->iqc_status);
-        $this->assertNotNull($fresh->iqc_passed_at);
-        $this->assertSame($this->admin->id, $fresh->iqc_passed_by);
+        $item2 = IncomingArrivalItem::create([
+            'arrival_id' => $arrival->id,
+            'part_id' => $part->id,
+            'qty_goods' => 30,
+            'unit_goods' => 'PCS',
+            'iqc_status' => 'pending',
+        ]);
+
+        // Loloskan item 1 saja
+        $this->post(route('incoming-quality.items.pass', $item1->id))->assertRedirect();
+
+        $this->assertSame('passed', $item1->fresh()->iqc_status);
+        $this->assertNotNull($item1->fresh()->iqc_passed_at);
+        $this->assertSame($this->admin->id, $item1->fresh()->iqc_passed_by);
+
+        // Item 2 harus tetap pending
+        $this->assertSame('pending', $item2->fresh()->iqc_status);
     }
 
-    public function test_revert_button_reverts_iqc_pass_to_pending(): void
+    public function test_pass_all_marks_all_materials_in_arrival_as_iqc_pass(): void
     {
         $supplier = Supplier::where('is_active', true)->firstOrFail();
+        $part = Part::whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))->firstOrFail();
+
         $arrival = IncomingArrival::create([
-            'arrival_no' => 'ARV-QC-REVERT-01',
+            'arrival_no' => 'ARV-QC-ALL-01',
             'supplier_id' => $supplier->id,
-            'iqc_status' => 'passed',
-            'iqc_passed_at' => now(),
-            'iqc_passed_by' => $this->admin->id,
             'status' => 'pending',
         ]);
 
-        $this->post(route('incoming-quality.revert', $arrival->id))->assertRedirect();
+        $item1 = IncomingArrivalItem::create([
+            'arrival_id' => $arrival->id,
+            'part_id' => $part->id,
+            'qty_goods' => 10,
+            'unit_goods' => 'PCS',
+            'iqc_status' => 'pending',
+        ]);
 
-        $fresh = $arrival->fresh();
-        $this->assertSame('pending', $fresh->iqc_status);
-        $this->assertNull($fresh->iqc_passed_at);
-        $this->assertNull($fresh->iqc_passed_by);
+        $item2 = IncomingArrivalItem::create([
+            'arrival_id' => $arrival->id,
+            'part_id' => $part->id,
+            'qty_goods' => 20,
+            'unit_goods' => 'PCS',
+            'iqc_status' => 'pending',
+        ]);
+
+        $this->post(route('incoming-quality.pass-all', $arrival->id))->assertRedirect();
+
+        $this->assertSame('passed', $item1->fresh()->iqc_status);
+        $this->assertSame('passed', $item2->fresh()->iqc_status);
+        $this->assertSame('passed', $arrival->fresh()->iqc_status);
+    }
+
+    public function test_detail_page_loads_and_displays_individual_materials(): void
+    {
+        $supplier = Supplier::where('is_active', true)->firstOrFail();
+        $part = Part::whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))->firstOrFail();
+
+        $arrival = IncomingArrival::create([
+            'arrival_no' => 'ARV-QC-DETAIL-01',
+            'supplier_id' => $supplier->id,
+            'status' => 'pending',
+        ]);
+
+        IncomingArrivalItem::create([
+            'arrival_id' => $arrival->id,
+            'part_id' => $part->id,
+            'qty_goods' => 100,
+            'unit_goods' => 'PCS',
+            'iqc_status' => 'pending',
+        ]);
+
+        $response = $this->get(route('incoming-quality.show', $arrival->id))->assertOk();
+        $response->assertSee($arrival->arrival_no);
+        $response->assertSee($part->part_number);
     }
 }

@@ -103,8 +103,10 @@ Route::middleware(['auth'])->group(function () {
 
     // Quality module - Incoming Quality (IQC Pass)
     Route::get('incoming-quality', [IncomingQualityController::class, 'index'])->name('incoming-quality.index');
-    Route::post('incoming-quality/{arrival}/pass', [IncomingQualityController::class, 'pass'])->name('incoming-quality.pass');
-    Route::post('incoming-quality/{arrival}/revert', [IncomingQualityController::class, 'revert'])->name('incoming-quality.revert');
+    Route::get('incoming-quality/{arrival}', [IncomingQualityController::class, 'show'])->name('incoming-quality.show');
+    Route::post('incoming-quality/{arrival}/pass-all', [IncomingQualityController::class, 'passAll'])->name('incoming-quality.pass-all');
+    Route::post('incoming-quality/items/{item}/pass', [IncomingQualityController::class, 'passItem'])->name('incoming-quality.items.pass');
+    Route::post('incoming-quality/items/{item}/revert', [IncomingQualityController::class, 'revertItem'])->name('incoming-quality.items.revert');
 
     // Legacy Local PO redirect/fallback untuk kompatibilitas test suite & data lama
     Route::get('local-pos/export', [LocalPoController::class, 'export'])->name('local-pos.export');

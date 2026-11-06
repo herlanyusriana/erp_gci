@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n';
 import { Head, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
+import { formatDate } from '@/utils/date';
 
 const { t } = useI18n();
 
@@ -92,7 +93,7 @@ function passAll() {
             </div>
             <div class="rounded-xl border border-borderline bg-surface p-4">
                 <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('quality.arrivalDate') }}</div>
-                <div class="mt-1 text-ink-primary">{{ arrival.invoice_date ?? '—' }}</div>
+                <div class="mt-1 font-semibold text-ink-primary">{{ formatDate(arrival.invoice_date) }}</div>
             </div>
         </div>
 

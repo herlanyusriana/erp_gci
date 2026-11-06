@@ -26,8 +26,6 @@ function doSearch() {
     clearTimeout(timer);
     timer = setTimeout(() => navigate(props.tab), 300);
 }
-
-const totalQty = () => props.stocks.data.reduce((s, st) => s + Number(st.qty ?? 0), 0);
 </script>
 
 <template>
@@ -40,9 +38,8 @@ const totalQty = () => props.stocks.data.reduce((s, st) => s + Number(st.qty ?? 
                 <h1 class="text-2xl font-bold tracking-tight text-ink-primary">{{ t('incoming.stock') }}</h1>
                 <p class="mt-1 text-sm text-ink-secondary">{{ t('incoming.stockDescription') }}</p>
             </div>
-            <div class="rounded-xl border border-borderline bg-surface px-4 py-2 text-sm">
-                <span class="text-ink-secondary">{{ t('incoming.total') }} </span>
-                <span class="font-semibold tabular-nums text-ink-primary">{{ totalQty() }}</span>
+            <div class="rounded-xl border border-borderline bg-surface px-4 py-2 text-sm text-ink-secondary">
+                Total: <span class="font-semibold tabular-nums text-ink-primary">{{ stocks.total }}</span> baris
             </div>
         </div>
 

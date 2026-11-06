@@ -8,6 +8,7 @@ import BackButton from '@/Components/BackButton.vue';
 import ActionButton from '@/Components/ActionButton.vue';
 import Pagination from '@/Components/Pagination.vue';
 import { Link } from '@inertiajs/vue3';
+import { formatDate } from '@/utils/date';
 import type { PurchaseOrder, Paginated } from '@/types';
 
 const { t } = useI18n();
@@ -71,7 +72,7 @@ function remove(po: PurchaseOrder) {
                             </td>
                             <td class="px-4 py-3 text-ink-primary">{{ po.supplier?.supplier_name ?? '—' }}</td>
                             <td class="px-4 py-3 text-ink-primary">{{ po.items_count ?? 0 }}</td>
-                            <td class="px-4 py-3 text-ink-primary">{{ po.expected_date ?? '—' }}</td>
+                            <td class="px-4 py-3 text-ink-primary whitespace-nowrap">{{ formatDate(po.expected_date) }}</td>
                             <td class="px-4 py-3">
                                 <StatusBadge uppercase :status="po.status">{{ t('incoming.status_' + po.status) }}</StatusBadge>
                             </td>

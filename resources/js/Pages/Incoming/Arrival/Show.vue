@@ -6,6 +6,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import ActionButton from '@/Components/ActionButton.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
+import { formatDate } from '@/utils/date';
 import type { IncomingArrival, IncomingReceive } from '@/types';
 
 const { t } = useI18n();
@@ -71,7 +72,7 @@ function removeItem(id: number) {
             </div>
             <div class="rounded-xl border border-borderline bg-surface p-4">
                 <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('incoming.etaGci') }}</div>
-                <div class="mt-1 text-ink-primary">{{ arrival.eta_gci ?? arrival.eta ?? '—' }}</div>
+                <div class="mt-1 font-semibold text-ink-primary">{{ formatDate(arrival.eta_gci ?? arrival.eta) }}</div>
             </div>
             <div class="rounded-xl border border-borderline bg-surface p-4">
                 <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('incoming.billOfLading') }}</div>
@@ -148,7 +149,7 @@ function removeItem(id: number) {
                             <td class="px-4 py-3 text-ink-primary">{{ r.receive.tag ?? '—' }}</td>
                             <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ r.receive.qty }}</td>
                             <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ r.receive.net_weight }}</td>
-                            <td class="px-4 py-3 text-ink-primary">{{ r.receive.ata_date ?? '—' }}</td>
+                            <td class="px-4 py-3 text-ink-primary whitespace-nowrap">{{ formatDate(r.receive.ata_date) }}</td>
                             <td class="px-4 py-3">
                                 <div class="flex justify-end gap-1.5">
                                     <a :href="route('receive.label', r.receive.id)" target="_blank" rel="noopener" class="rounded-md border border-borderline px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">{{ t('incoming.label') }}</a>

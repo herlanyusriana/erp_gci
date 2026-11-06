@@ -5,6 +5,7 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import Pagination from '@/Components/Pagination.vue';
+import { formatDate } from '@/utils/date';
 import type { Paginated } from '@/types';
 
 const { t } = useI18n();
@@ -134,7 +135,7 @@ function passAll(row: ArrivalRow) {
                     <tr v-for="a in arrivals.data" :key="a.id" class="hover:bg-primary-light/40">
                         <!-- Tanggal Arrival -->
                         <td class="px-4 py-3 align-top whitespace-nowrap">
-                            <div class="font-medium text-ink-primary">{{ a.invoice_date ?? a.created_at.slice(0, 10) }}</div>
+                            <div class="font-semibold text-ink-primary">{{ formatDate(a.invoice_date ?? a.created_at) }}</div>
                             <div class="text-xs text-ink-secondary">{{ a.arrival_no }}</div>
                         </td>
 

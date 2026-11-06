@@ -6,6 +6,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
 import Modal from '@/Components/Modal.vue';
+import { formatPeriod } from '@/utils/date';
 
 const { t, locale } = useI18n();
 
@@ -213,7 +214,7 @@ const canDeliver = (row: LabelRow) => row.label_status === 'printed';
                     <tr v-for="row in rows" :key="row.id" class="hover:bg-primary-light/40">
                         <td class="px-4 py-3 text-ink-primary">{{ row.shift ?? '—' }}</td>
                         <td class="px-4 py-3">
-                            <div class="tabular-nums text-ink-primary">{{ row.period_label }}</div>
+                            <div class="tabular-nums font-medium text-ink-primary">{{ formatPeriod(row.period_label) }}</div>
                             <span v-if="row.is_backfilled" class="mt-1 inline-flex rounded bg-warning/15 px-1.5 py-0.5 text-[11px] font-semibold text-warning">
                                 {{ t('production.backfilled') }}
                             </span>

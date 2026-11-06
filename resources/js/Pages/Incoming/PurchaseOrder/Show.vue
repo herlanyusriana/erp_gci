@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import { Head, Link } from '@inertiajs/vue3';
+import { formatDate } from '@/utils/date';
 import type { PurchaseOrder } from '@/types';
 
 const { t } = useI18n();
@@ -38,11 +39,11 @@ defineProps<{
         <div class="mb-6 grid gap-4 sm:grid-cols-3">
             <div class="rounded-xl border border-borderline bg-surface p-4">
                 <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('incoming.poDate') }}</div>
-                <div class="mt-1 text-ink-primary">{{ purchaseOrder.po_date ?? '—' }}</div>
+                <div class="mt-1 font-semibold text-ink-primary">{{ formatDate(purchaseOrder.po_date) }}</div>
             </div>
             <div class="rounded-xl border border-borderline bg-surface p-4">
                 <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('incoming.expected') }}</div>
-                <div class="mt-1 text-ink-primary">{{ purchaseOrder.expected_date ?? '—' }}</div>
+                <div class="mt-1 font-semibold text-ink-primary">{{ formatDate(purchaseOrder.expected_date) }}</div>
             </div>
             <div class="rounded-xl border border-borderline bg-surface p-4">
                 <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('incoming.notes') }}</div>

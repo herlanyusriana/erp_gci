@@ -9,7 +9,9 @@ use App\Models\MachineDowntime;
 use App\Models\Part;
 use App\Models\PartStock;
 use App\Models\WorkOrder;
+use App\Models\WorkOrderItem;
 use App\Services\DailyScheduleService;
+use App\Services\MaterialIssueBundleService;
 use App\Services\ProductionResultService;
 use App\Services\ProductionSessionService;
 use App\Services\ReceiveMaterialService;
@@ -38,6 +40,7 @@ class MaterialIssueApiController extends Controller
         private DailyScheduleService $schedule,
         private WipIdentityService $wipIdentity,
         private ProductionSessionService $sessionService,
+        private MaterialIssueBundleService $bundleService,
     ) {}
 
     /**
@@ -254,6 +257,59 @@ class MaterialIssueApiController extends Controller
                 'location_code' => $receive?->location_code,
                 'received_at' => $stock->received_at?->toIso8601String(),
             ],
+        ]);
+    }
+
+    /**
+     * Rencana issue satu tag: daftar bundle, packing qty per bundle, kebutuhan
+     * bersih item WO, dan bundle yang otomatis dicentang.
+     *
+     * Dipanggil tepat setelah operator memindai tag material.
+     */
+    public function issuePlan(Request $request, WorkOrder $workOrder, WorkOrderItem $item): JsonResponse
+    {
+        Gate::authorize('issue', $workOrder);
+
+        abort_unless((int) $item->work_order_id === (int) $workOrder->id, 404);
+
+        $data = $request->validate([
+            'tag' => ['nullable', 'string', 'max:255'],
+            'part_stock_id' => ['nullable', 'integer', 'exists:part_stocks,id'],
+        ]);
+
+        $item->loadMissing(['childPart', 'allocations']);
+
+        if (! empty($data['part_stock_id'])) {
+            $plan = $this->bundleService->forStock($item, $workOrder, (int) $data['part_stock_id']);
+
+            if ($plan === null) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => __('Tag tidak ditemukan atau bukan material untuk item ini.'),
+                ], 404);
+            }
+        } else {
+            $plan = $this->bundleService->forTag($item, $workOrder, (string) $data['tag']);
+        }
+
+        return response()->json(['ok' => true, 'data' => $plan]);
+    }
+
+    /**
+     * Sisa qty yang boleh di-issue untuk satu item WO (dipakai layar bundle
+     * untuk memperingatkan kelebihan sebelum Confirm).
+     */
+    public function issueRemaining(WorkOrder $workOrder, WorkOrderItem $item): JsonResponse
+    {
+        Gate::authorize('issue', $workOrder);
+
+        abort_unless((int) $item->work_order_id === (int) $workOrder->id, 404);
+
+        $item->loadMissing(['childPart', 'allocations']);
+
+        return response()->json([
+            'ok' => true,
+            'data' => $this->bundleService->netRequirement($item),
         ]);
     }
 
@@ -637,6 +693,8 @@ class MaterialIssueApiController extends Controller
             'items.*.scans.*.tag' => ['required', 'string', 'max:255'],
             'items.*.scans.*.qty' => ['required', 'numeric', 'gt:0'],
             'items.*.scans.*.part_id' => ['nullable', 'integer', 'exists:parts,id'],
+            // Penanda dari layar bundle: total issue harus ≤ kebutuhan bersih.
+            'items.*.bundle_plan' => ['nullable', 'boolean'],
         ]);
 
         [$wo, $shortages, $issue] = $this->woService->releaseWithScans(

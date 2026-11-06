@@ -8,6 +8,7 @@ use App\Models\IncomingReceive;
 use App\Models\Location;
 use App\Rules\UomCode;
 use App\Services\ReceiveMaterialService;
+use App\Support\PurchaseOrderLimit;
 use App\Support\QrSvg;
 use App\Support\UomCatalog;
 use Illuminate\Http\RedirectResponse;
@@ -62,10 +63,14 @@ class ReceiveController extends Controller
 
         $remaining = $this->receiveService->remainingQty($arrivalItem);
         $totalReceived = $this->receiveService->receivedQuantity($arrivalItem);
+        $poLimit = PurchaseOrderLimit::receiveLimit($arrivalItem);
+        $maxReceivable = $poLimit === null ? $remaining : min($remaining, $poLimit['remaining']);
 
         return Inertia::render('Incoming/Receive/Form', [
             'arrivalItem' => $arrivalItem,
             'remainingQty' => $remaining,
+            'poLimit' => $poLimit,
+            'maxReceivable' => $maxReceivable,
             'totalPlanned' => $this->receiveService->plannedQuantity($arrivalItem),
             'totalReceived' => $totalReceived,
             'weightBasis' => $this->receiveService->usesWeightBasis($arrivalItem),
@@ -120,6 +125,18 @@ class ReceiveController extends Controller
         if ($totalRequested > $remainingQty + 1e-9) {
             return back()->withInput()->withErrors([
                 'tags' => __('Total (:total :unit) melebihi sisa (:remaining :unit).', ['total' => $totalRequested, 'unit' => $unitLabel, 'remaining' => $remainingQty]),
+            ]);
+        }
+
+        $poLimit = PurchaseOrderLimit::receiveLimit($arrivalItem);
+        if ($poLimit !== null && $totalRequested > $poLimit['remaining'] + 1e-9) {
+            return back()->withInput()->withErrors([
+                'tags' => __('Total (:total :unit) melebihi qty PO (:po :unit). Sisa yang boleh diterima :remaining :unit.', [
+                    'total' => $totalRequested,
+                    'unit' => $unitLabel,
+                    'po' => $poLimit['po_qty'],
+                    'remaining' => $poLimit['remaining'],
+                ]),
             ]);
         }
 
@@ -273,6 +290,19 @@ class ReceiveController extends Controller
 
         $receiveAt = Carbon::parse($validated['receive_date'])->setTimeFromTimeString(now()->format('H:i:s'));
         $netWeight = $weightBasis ? (float) ($validated['net_weight'] ?? $validated['qty']) : null;
+
+        $requestedQty = $weightBasis ? (float) $netWeight : (float) $validated['qty'];
+        $poLimit = PurchaseOrderLimit::receiveLimit($arrivalItem, (int) $receive->id);
+        if ($poLimit !== null && $requestedQty > $poLimit['remaining'] + 1e-9) {
+            return back()->withInput()->withErrors([
+                'qty' => __('Total (:total :unit) melebihi qty PO (:po :unit). Sisa yang boleh diterima :remaining :unit.', [
+                    'total' => $requestedQty,
+                    'unit' => $weightBasis ? UomCatalog::WEIGHT : $goodsUnit,
+                    'po' => $poLimit['po_qty'],
+                    'remaining' => $poLimit['remaining'],
+                ]),
+            ]);
+        }
 
         DB::transaction(function () use ($receive, $validated, $tag, $goodsUnit, $receiveAt, $netWeight) {
             // Reverse old stock contribution before mutating.

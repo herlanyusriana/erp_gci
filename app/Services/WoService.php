@@ -615,11 +615,17 @@ class WoService
                     ]);
                 }
 
-                if ($total > $required + $qtyRequired + 1e-9) {
+                // Tanpa penanda `bundle_plan` klien lama tetap memakai batas 2x
+                // supaya kemasan utuh masih bisa keluar. Dengan penanda, batasnya
+                // tegas: total issue tidak boleh melebihi kebutuhan bersih.
+                $enforcesNet = ! empty($row['bundle_plan']);
+                $maxAllowed = $enforcesNet ? $required : $required + $qtyRequired;
+
+                if ($total > $maxAllowed + 1e-9) {
                     throw ValidationException::withMessages([
-                        "items.$itemId" => __('Total scan (:total) melebihi batas (:max).', [
+                        "items.$itemId" => __('Total issue (:total) melebihi kebutuhan bersih (:max).', [
                             'total' => round($total, 4),
-                            'max' => round($required + $qtyRequired, 4),
+                            'max' => round($maxAllowed, 4),
                         ]),
                     ]);
                 }

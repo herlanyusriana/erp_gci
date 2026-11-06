@@ -33,6 +33,11 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     // Issue out to production — release WO lewat scan label.
     Route::get('/work-orders', [MaterialIssueApiController::class, 'workOrders']);
     Route::get('/work-orders/{workOrder}/release-context', [MaterialIssueApiController::class, 'releaseContext']);
+    // Layar bundle setelah scan tag: packing qty, daftar bundle, auto-centang.
+    Route::get('/work-orders/{workOrder}/items/{item}/issue-plan', [MaterialIssueApiController::class, 'issuePlan'])
+        ->middleware('permission:stock.issue,work_order.update,production.update');
+    Route::get('/work-orders/{workOrder}/items/{item}/issue-remaining', [MaterialIssueApiController::class, 'issueRemaining'])
+        ->middleware('permission:stock.issue,work_order.update,production.update');
     Route::post('/stock-tags/resolve', [MaterialIssueApiController::class, 'resolveTag']);
     Route::post('/machines/resolve', [MaterialIssueApiController::class, 'resolveMachine']);
     Route::post('/locations/resolve', [LocationApiController::class, 'resolve']);

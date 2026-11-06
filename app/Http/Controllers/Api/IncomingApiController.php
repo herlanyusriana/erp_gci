@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\IncomingArrival as Arrival;
 use App\Models\IncomingArrivalItem as ArrivalItem;
 use App\Services\ReceiveMaterialService;
+use App\Support\PurchaseOrderLimit;
 use App\Support\UomCatalog;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
@@ -88,6 +89,19 @@ class IncomingApiController extends Controller
             return response()->json([
                 'ok' => false,
                 'message' => __('Qty melebihi sisa (:remaining :unit).', ['remaining' => $remainingQty, 'unit' => $goodsUnit]),
+            ], 422);
+        }
+
+        $poLimit = PurchaseOrderLimit::receiveLimit($arrivalItem);
+        if ($poLimit !== null && $totalRequested > $poLimit['remaining'] + 1e-9) {
+            return response()->json([
+                'ok' => false,
+                'message' => __('Total (:total :unit) melebihi qty PO (:po :unit). Sisa yang boleh diterima :remaining :unit.', [
+                    'total' => $totalRequested,
+                    'unit' => $goodsUnit,
+                    'po' => $poLimit['po_qty'],
+                    'remaining' => $poLimit['remaining'],
+                ]),
             ], 422);
         }
 

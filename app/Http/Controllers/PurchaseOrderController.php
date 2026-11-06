@@ -111,6 +111,7 @@ class PurchaseOrderController extends Controller
                 PurchaseOrderItem::create([
                     'purchase_order_id' => $po->id,
                     'part_id' => $item['part_id'] ?? null,
+                    'size' => $item['size'] ?? null,
                     'qty' => $item['qty'],
                     'unit' => $item['unit'] ?? null,
                     'price' => $item['price'] ?? null,
@@ -150,6 +151,7 @@ class PurchaseOrderController extends Controller
                 PurchaseOrderItem::create([
                     'purchase_order_id' => $purchaseOrder->id,
                     'part_id' => $item['part_id'] ?? null,
+                    'size' => $item['size'] ?? null,
                     'qty' => $item['qty'],
                     'unit' => $item['unit'] ?? null,
                     'price' => $item['price'] ?? null,
@@ -191,6 +193,7 @@ class PurchaseOrderController extends Controller
             'items' => ['required', 'array', 'min:1'],
             'items.*.uid' => RowErrorKeys::rules(),
             'items.*.part_id' => ['required', 'exists:parts,id', PartTypeRule::notFg(), Rule::exists('part_substitutes', 'substitute_part_id')->where(fn ($q) => $q->where('supplier_id', $supplierId)->where('is_active', true))],
+            'items.*.size' => ['nullable', 'string', 'max:100'],
             'items.*.qty' => ['required', 'numeric', 'min:0'],
             'items.*.unit' => ['nullable', 'string', 'max:20', UomCode::optional()],
             'items.*.price' => ['nullable', 'numeric', 'min:0'],

@@ -60,6 +60,8 @@
     "TAG ':tag' sudah dipakai pada item ini.": "TAG ':tag' sudah dipakai pada item ini.",
     "Tag sudah pernah dipakai pada item ini.": "Tag sudah pernah dipakai pada item ini.",
     "Qty melebihi sisa (:remaining :unit).": "Jumlah melebihi sisa (:remaining :unit).",
+    "Total (:total :unit) melebihi qty PO (:po :unit). Sisa yang boleh diterima :remaining :unit.": "Total (:total :unit) melebihi qty PO (:po :unit). Sisa yang boleh diterima :remaining :unit.",
+    "Qty kedatangan (:qty :unit) melebihi qty PO (:po :unit). Sisa yang bisa dikedatangkan :remaining :unit.": "Jumlah kedatangan (:qty :unit) melebihi qty PO (:po :unit). Sisa yang bisa dikedatangkan :remaining :unit.",
     "Tag :tag diterima (:qty :unit).": "Tag :tag diterima (:qty :unit).",
     "Email atau password salah.": "Email atau kata sandi salah.",
     "WO dibuat, tapi ada kekurangan stok: :details": "WO dibuat, tetapi ada kekurangan stok: :details",

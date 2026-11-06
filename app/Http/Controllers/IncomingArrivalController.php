@@ -13,6 +13,7 @@ use App\Models\PurchaseOrder;
 use App\Models\Supplier;
 use App\Models\TruckingCompany;
 use App\Rules\UomCode;
+use App\Support\PurchaseOrderLimit;
 use App\Support\UomCatalog;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
@@ -182,6 +183,7 @@ class IncomingArrivalController extends Controller
                 'items' => $po->items->map(fn ($it) => [
                     'id' => $it->id,
                     'part_id' => $it->part_id,
+                    'size' => $it->size,
                     'qty' => (float) $it->qty,
                     'unit' => $it->unit ?? $it->part?->uom?->code,
                     'price' => (float) $it->price,
@@ -270,6 +272,8 @@ class IncomingArrivalController extends Controller
 
         $validated['items'] = $this->resolveMaterialItems($validated['items'], (int) $validated['supplier_id']);
 
+        $this->assertWithinPurchaseOrderLimit($validated['purchase_order_id'] ?? null, $validated['items']);
+
         $arrival = DB::transaction(function () use ($validated, $isLocal, $request) {
             $arrival = IncomingArrival::create([
                 'arrival_no' => IncomingArrival::generateArrivalNo(),
@@ -334,6 +338,53 @@ class IncomingArrivalController extends Controller
         });
 
         return redirect()->route('incoming-arrivals.show', $arrival)->with('success', __('Arrival created.'));
+    }
+
+    /**
+     * Pastikan total kedatangan tidak melebihi qty baris PO.
+     *
+     * @param  array<int, array<string, mixed>>  $items
+     */
+    private function assertWithinPurchaseOrderLimit(?int $purchaseOrderId, array $items, bool $excludeExistingItems = false): void
+    {
+        if ($purchaseOrderId === null) {
+            return;
+        }
+
+        $errors = [];
+
+        foreach ($items as $index => $item) {
+            $partId = isset($item['part_id']) ? (int) $item['part_id'] : null;
+            $basis = PurchaseOrderLimit::arrivalBasis(
+                (float) ($item['qty_goods'] ?? 0),
+                $item['unit_goods'] ?? null,
+                (float) ($item['weight_nett'] ?? 0),
+                $item['unit_weight'] ?? null,
+            );
+
+            if ($partId === null || $basis === null) {
+                continue;
+            }
+
+            [$qty, $unit] = $basis;
+            $excludeId = $excludeExistingItems && ! empty($item['id']) ? (int) $item['id'] : null;
+            $limit = PurchaseOrderLimit::arrivalLimit($purchaseOrderId, $partId, $unit, $excludeId);
+
+            if ($limit === null || $qty <= $limit['remaining'] + 1e-9) {
+                continue;
+            }
+
+            $errors["items.$index.qty_goods"] = __('Qty kedatangan (:qty :unit) melebihi qty PO (:po :unit). Sisa yang bisa dikedatangkan :remaining :unit.', [
+                'qty' => $qty,
+                'unit' => $unit,
+                'po' => $limit['po_qty'],
+                'remaining' => $limit['remaining'],
+            ]);
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
     }
 
     public function show(IncomingArrival $arrival): Response
@@ -440,6 +491,8 @@ class IncomingArrivalController extends Controller
 
         $validated['items'] = $this->resolveMaterialItems($validated['items'], (int) $validated['supplier_id']);
         $validated['updated_by'] = $request->user()?->id;
+
+        $this->assertWithinPurchaseOrderLimit($validated['purchase_order_id'] ?? null, $validated['items'], true);
         DB::transaction(function () use ($arrival, $validated, $isLocal) {
             $updateFields = [
                 'is_local' => $isLocal,

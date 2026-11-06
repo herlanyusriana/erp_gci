@@ -11,7 +11,7 @@ class PurchaseOrderItem extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        'purchase_order_id', 'part_id',
+        'purchase_order_id', 'part_id', 'size',
         'qty', 'unit', 'price', 'notes',
     ];
 

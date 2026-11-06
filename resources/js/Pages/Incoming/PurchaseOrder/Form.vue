@@ -13,6 +13,7 @@ const { t } = useI18n();
 interface ItemRow {
     uid: number;
     part_id: number | '';
+    size: string;
     qty: number | '';
     unit: string;
     price: number | '';
@@ -45,7 +46,7 @@ const props = defineProps<{
 
 let rowUid = 0;
 
-const blankItem = (): ItemRow => ({ uid: ++rowUid, part_id: '', qty: '', unit: '', price: '', notes: '' });
+const blankItem = (): ItemRow => ({ uid: ++rowUid, part_id: '', size: '', qty: '', unit: '', price: '', notes: '' });
 
 const isLocked = computed(() => props.purchaseOrder?.id != null);
 
@@ -53,6 +54,7 @@ const rows = ref<ItemRow[]>(
     props.purchaseOrder?.items?.map((i) => ({
         uid: ++rowUid,
         part_id: i.part_id ?? '',
+        size: i.size ?? '',
         qty: i.qty,
         unit: i.unit ?? '',
         price: i.price ?? '',
@@ -125,7 +127,7 @@ function addRow() {
     rows.value.push(blankItem());
 }
 function rowHasData(r: ItemRow): boolean {
-    return r.part_id !== '' || r.qty !== '' || r.unit !== '' || r.price !== '' || r.notes !== '';
+    return r.part_id !== '' || r.size !== '' || r.qty !== '' || r.unit !== '' || r.price !== '' || r.notes !== '';
 }
 
 function removeRow(i: number) {
@@ -151,6 +153,7 @@ function submit() {
         .map((r) => ({
             uid: r.uid,
             part_id: Number(r.part_id),
+            size: r.size.trim() || null,
             qty: r.qty === '' ? 0 : Number(r.qty),
             unit: r.unit,
             price: r.price === '' ? null : Number(r.price),
@@ -239,6 +242,11 @@ function submit() {
                         <p v-if="isLocked" class="mt-1 text-xs text-ink-secondary">{{ t('incoming.supplierLocked') }}</p>
                         <p v-if="form.supplier_id && partOptions.length === 0" class="mt-1 text-xs text-warning">{{ t('incoming.supplierNoParts') }}</p>
                         <InputError :message="rowError(r, 'part_id')" class="mt-1" />
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.size') }}</label>
+                        <input :aria-label="t('incoming.size')" v-model="r.size" type="text" maxlength="100" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <InputError :message="rowError(r, 'size')" class="mt-1" />
                     </div>
                     <div class="sm:col-span-2">
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.qty') }}</label>

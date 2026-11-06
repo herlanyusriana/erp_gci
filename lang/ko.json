@@ -60,6 +60,8 @@
     "TAG ':tag' sudah dipakai pada item ini.": "이 품목에 태그 ':tag'이(가) 이미 사용되었습니다.",
     "Tag sudah pernah dipakai pada item ini.": "이 품목에 이미 사용된 태그입니다.",
     "Qty melebihi sisa (:remaining :unit).": "수량이 잔여량(:remaining :unit)을 초과합니다.",
+    "Total (:total :unit) melebihi qty PO (:po :unit). Sisa yang boleh diterima :remaining :unit.": "합계(:total :unit)가 PO 수량(:po :unit)을 초과합니다. 입고 가능 잔여량: :remaining :unit.",
+    "Qty kedatangan (:qty :unit) melebihi qty PO (:po :unit). Sisa yang bisa dikedatangkan :remaining :unit.": "입고 수량(:qty :unit)이 PO 수량(:po :unit)을 초과합니다. 추가 입고 가능 잔여량: :remaining :unit.",
     "Tag :tag diterima (:qty :unit).": "태그 :tag의 입고가 완료되었습니다(:qty :unit).",
     "Email atau password salah.": "이메일 또는 비밀번호가 올바르지 않습니다.",
     "WO dibuat, tapi ada kekurangan stok: :details": "작업 지시가 생성되었지만 재고가 부족합니다: :details",

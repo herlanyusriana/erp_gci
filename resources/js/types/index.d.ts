@@ -208,6 +208,7 @@ export interface PurchaseOrderItem {
     id: number;
     purchase_order_id: number;
     part_id: number | null;
+    size: string | null;
     qty: number;
     unit: string | null;
     price: number | null;

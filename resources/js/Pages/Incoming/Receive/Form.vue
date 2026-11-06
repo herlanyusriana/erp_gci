@@ -16,12 +16,13 @@ interface TagRow {
     bundle_unit: string;
     net_weight: number | '';
     gross_weight: number | '';
-    qty_unit: string;
 }
 
 const props = defineProps<{
     arrivalItem: IncomingArrivalItem;
     remainingQty: number;
+    maxReceivable: number;
+    poLimit: { po_qty: number; remaining: number } | null;
     totalPlanned: number;
     totalReceived: number;
     weightBasis: boolean;
@@ -43,15 +44,12 @@ const blank = (): TagRow => ({
     qty: '',
     bundle_qty: '',
     bundle_unit: props.packingUnits[0] ?? 'PALLET',
-    net_weight: '',
+    net_weight: props.weightBasis ? props.remainingQty : '',
     gross_weight: '',
-    qty_unit: props.arrivalItem.unit_goods?.toUpperCase()
-        ?? props.uomCodes.find((c) => c === props.weightUnit)
-        ?? props.uomCodes[0]
-        ?? '',
 });
 
-const rows = ref<TagRow[]>([blank()]);
+const rows = ref<TagRow[]>([{ ...blank(), qty: props.maxReceivable }]);
+const unitLabelValue = unitLabel();
 
 const form = useForm({
     receive_date: new Date().toISOString().slice(0, 10),
@@ -73,7 +71,7 @@ function submit() {
         bundle_unit: r.bundle_unit,
         net_weight: props.weightBasis ? (r.net_weight === '' ? 0 : Number(r.net_weight)) : null,
         gross_weight: r.gross_weight === '' ? null : Number(r.gross_weight),
-        qty_unit: r.qty_unit,
+        qty_unit: unitLabelValue,
     })) as any;
 
     form.post(route('receive.store', props.arrivalItem.id));
@@ -99,9 +97,14 @@ function submit() {
             </div>
             <div class="rounded-xl border border-borderline bg-surface p-4">
                 <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('incoming.remainingUnit', { unit: unitLabel() }) }}</div>
-                <div class="mt-1 text-lg font-semibold tabular-nums" :class="remainingQty > 0 ? 'text-warning' : 'text-success'">{{ remainingQty.toFixed(2) }}</div>
-            </div>
-        </div>
+                        <div class="mt-1 text-lg font-semibold tabular-nums" :class="remainingQty > 0 ? 'text-warning' : 'text-success'">{{ remainingQty.toFixed(2) }}</div>
+                    </div>
+                    <div v-if="poLimit" class="rounded-xl border border-borderline bg-surface p-4">
+                        <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('incoming.poQty') }}</div>
+                        <div class="mt-1 text-ink-primary tabular-nums">{{ poLimit.po_qty }}</div>
+                        <div class="text-xs text-ink-secondary">{{ t('incoming.maxReceivable', { unit: unitLabel() }) }}: <span class="font-semibold tabular-nums text-ink-primary">{{ maxReceivable.toFixed(2) }}</span></div>
+                    </div>
+                </div>
 
         <form @submit.prevent="submit" class="space-y-6">
             <div class="rounded-xl border border-borderline bg-surface p-5">
@@ -151,9 +154,9 @@ function submit() {
                         </div>
                         <div class="sm:col-span-1">
                             <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.unit') }}</label>
-                            <select :aria-label="t('incoming.unit')" v-model="r.qty_unit" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
-                                <option v-for="code in uomCodes" :key="code" :value="code">{{ code }}</option>
-                            </select>
+                            <div class="mt-1 flex min-h-10 items-center rounded-lg border border-borderline bg-background px-3 py-2 text-sm font-medium text-ink-primary" :aria-label="t('incoming.unit')">
+                                {{ unitLabelValue || '—' }}
+                            </div>
                         </div>
                         <div class="sm:col-span-2">
                             <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.bundleQty') }}</label>

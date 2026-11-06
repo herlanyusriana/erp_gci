@@ -7,6 +7,7 @@ use App\Models\IncomingArrival;
 use App\Models\IncomingArrivalContainer;
 use App\Models\IncomingArrivalItem;
 use App\Models\IncomingReceive;
+use App\Models\Part;
 use App\Models\PartSubstitute;
 use App\Models\PurchaseOrder;
 use App\Models\Supplier;
@@ -59,8 +60,19 @@ class IncomingArrivalController extends Controller
     private function resolveMaterialItems(array $items, int $supplierId): array
     {
         return collect($items)->map(function (array $item, int $index) use ($supplierId) {
-            $group = trim((string) $item['material_group']);
-            $size = strtoupper(trim((string) $item['size']));
+            // Jika part_id sudah disertakan langsung (misal dari PO auto-fill), validasi ke part yang bersangkutan
+            if (! empty($item['part_id'])) {
+                $part = Part::find((int) $item['part_id']);
+                if ($part) {
+                    $item['material_group'] = $item['material_group'] ?? $part->part_number;
+                    $item['size'] = $item['size'] ?? ($part->size ?: 'STD');
+
+                    return $item;
+                }
+            }
+
+            $group = trim((string) ($item['material_group'] ?? ''));
+            $size = strtoupper(trim((string) ($item['size'] ?? '')));
 
             $mapping = PartSubstitute::query()
                 ->where('is_active', true)
@@ -114,10 +126,10 @@ class IncomingArrivalController extends Controller
 
         return Inertia::render('Incoming/Arrival/Form', [
             'arrival' => null,
-            'suppliers' => Supplier::select('id', 'supplier_code', 'supplier_name', 'source')->where('source', Supplier::SOURCE_IMPORT)->orderBy('supplier_name')->get(),
+            'suppliers' => Supplier::select('id', 'supplier_code', 'supplier_name', 'source')->where('is_active', true)->orderBy('supplier_name')->get(),
             'truckings' => TruckingCompany::select('id', 'company_code', 'company_name')->where('is_active', true)->orderBy('company_name')->get(),
             'materialOptions' => $this->materialOptions(),
-            'purchaseOrders' => PurchaseOrder::select('id', 'po_no', 'supplier_id')->orderByDesc('created_at')->get(),
+            'purchaseOrders' => PurchaseOrder::with(['items.part', 'supplier:id,source,supplier_name'])->select('id', 'po_no', 'supplier_id')->orderByDesc('created_at')->get(),
             'uomCodes' => UomCatalog::codes(),
             'packingUnits' => UomCatalog::packingUnits(),
         ]);
@@ -127,33 +139,23 @@ class IncomingArrivalController extends Controller
     {
         Gate::authorize('create', IncomingArrival::class);
 
-        $validated = $request->validate([
+        $isLocal = filter_var($request->input('is_local', false), FILTER_VALIDATE_BOOLEAN);
+
+        $rules = [
+            'is_local' => ['nullable', 'boolean'],
             'invoice_no' => ['nullable', 'string', 'max:255'],
+            'delivery_note_no' => ['nullable', 'string', 'max:255'],
             'invoice_date' => ['nullable', 'date'],
-            'supplier_id' => ['required', Rule::exists('suppliers', 'id')->where('source', Supplier::SOURCE_IMPORT)],
-            'trucking_company_id' => ['nullable', 'exists:trucking_companies,id'],
+            'supplier_id' => ['required', Rule::exists('suppliers', 'id')->where('is_active', true)],
             'purchase_order_id' => ['nullable', 'exists:purchase_orders,id'],
-            'vessel' => ['nullable', 'string', 'max:255'],
-            'etd' => ['nullable', 'date'],
-            'eta' => ['nullable', 'date'],
-            'eta_gci' => ['nullable', 'date'],
-            'bill_of_lading' => ['nullable', 'string', 'max:255'],
             'pen_no' => ['nullable', 'string', 'max:255'],
             'pen_date' => ['nullable', 'date'],
             'aju_no' => ['nullable', 'string', 'max:255'],
-            'price_term' => ['nullable', 'string', 'max:50'],
-            'hs_code' => ['nullable', 'string', 'max:255'],
-            'port_of_loading' => ['nullable', 'string', 'max:255'],
-            'country' => ['nullable', 'string', 'max:255'],
-            'currency' => ['nullable', 'string', 'max:10'],
             'notes' => ['nullable', 'string'],
-            'containers' => ['nullable', 'array'],
-            'containers.*.container_no' => ['required_with:containers', 'string', 'max:255'],
-            'containers.*.seal_code' => ['nullable', 'string', 'max:255'],
-            'containers.*.size' => ['nullable', 'string', 'max:50'],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.material_group' => ['required', 'string', 'max:255'],
-            'items.*.size' => ['required', 'string', 'max:100'],
+            'items.*.material_group' => ['nullable', 'string', 'max:255'],
+            'items.*.part_id' => ['nullable', 'integer', 'exists:parts,id'],
+            'items.*.size' => ['nullable', 'string', 'max:100'],
             'items.*.qty_goods' => ['required', 'numeric', 'min:0'],
             'items.*.unit_goods' => ['nullable', 'string', 'max:20', UomCode::optional()],
             'items.*.qty_bundle' => ['nullable', 'numeric', 'min:0'],
@@ -165,14 +167,38 @@ class IncomingArrivalController extends Controller
             'items.*.total_price' => ['nullable', 'numeric', 'min:0'],
             'items.*.is_foc' => ['sometimes', 'boolean'],
             'items.*.notes' => ['nullable', 'string'],
-        ]);
+        ];
+
+        if (! $isLocal) {
+            $rules += [
+                'trucking_company_id' => ['nullable', 'exists:trucking_companies,id'],
+                'vessel' => ['nullable', 'string', 'max:255'],
+                'etd' => ['nullable', 'date'],
+                'eta' => ['nullable', 'date'],
+                'eta_gci' => ['nullable', 'date'],
+                'bill_of_lading' => ['nullable', 'string', 'max:255'],
+                'price_term' => ['nullable', 'string', 'max:50'],
+                'hs_code' => ['nullable', 'string', 'max:255'],
+                'port_of_loading' => ['nullable', 'string', 'max:255'],
+                'country' => ['nullable', 'string', 'max:255'],
+                'currency' => ['nullable', 'string', 'max:10'],
+                'containers' => ['nullable', 'array'],
+                'containers.*.container_no' => ['required_with:containers', 'string', 'max:255'],
+                'containers.*.seal_code' => ['nullable', 'string', 'max:255'],
+                'containers.*.size' => ['nullable', 'string', 'max:50'],
+            ];
+        }
+
+        $validated = $request->validate($rules);
 
         $validated['items'] = $this->resolveMaterialItems($validated['items'], (int) $validated['supplier_id']);
 
-        $arrival = DB::transaction(function () use ($validated, $request) {
+        $arrival = DB::transaction(function () use ($validated, $isLocal, $request) {
             $arrival = IncomingArrival::create([
                 'arrival_no' => IncomingArrival::generateArrivalNo(),
+                'is_local' => $isLocal,
                 'invoice_no' => $validated['invoice_no'] ?? null,
+                'delivery_note_no' => $validated['delivery_note_no'] ?? null,
                 'invoice_date' => $validated['invoice_date'] ?? null,
                 'supplier_id' => $validated['supplier_id'] ?? null,
                 'trucking_company_id' => $validated['trucking_company_id'] ?? null,
@@ -192,16 +218,19 @@ class IncomingArrivalController extends Controller
                 'currency' => $validated['currency'] ?? null,
                 'notes' => $validated['notes'] ?? null,
                 'status' => 'pending',
+                'iqc_status' => 'pending',
                 'created_by' => $request->user()?->id,
             ]);
 
-            foreach ($validated['containers'] ?? [] as $container) {
-                IncomingArrivalContainer::create([
-                    'arrival_id' => $arrival->id,
-                    'container_no' => $container['container_no'],
-                    'seal_code' => $container['seal_code'] ?? null,
-                    'size' => $container['size'] ?? null,
-                ]);
+            if (! $isLocal) {
+                foreach ($validated['containers'] ?? [] as $container) {
+                    IncomingArrivalContainer::create([
+                        'arrival_id' => $arrival->id,
+                        'container_no' => $container['container_no'],
+                        'seal_code' => $container['seal_code'] ?? null,
+                        'size' => $container['size'] ?? null,
+                    ]);
+                }
             }
 
             foreach ($validated['items'] as $item) {
@@ -269,10 +298,10 @@ class IncomingArrivalController extends Controller
 
         return Inertia::render('Incoming/Arrival/Form', [
             'arrival' => $arrival,
-            'suppliers' => Supplier::select('id', 'supplier_code', 'supplier_name', 'source')->where('source', Supplier::SOURCE_IMPORT)->orderBy('supplier_name')->get(),
+            'suppliers' => Supplier::select('id', 'supplier_code', 'supplier_name', 'source')->where('is_active', true)->orderBy('supplier_name')->get(),
             'truckings' => TruckingCompany::select('id', 'company_code', 'company_name')->where('is_active', true)->orderBy('company_name')->get(),
             'materialOptions' => $this->materialOptions(),
-            'purchaseOrders' => PurchaseOrder::select('id', 'po_no', 'supplier_id')->orderByDesc('created_at')->get(),
+            'purchaseOrders' => PurchaseOrder::with(['items.part', 'supplier:id,source,supplier_name'])->select('id', 'po_no', 'supplier_id')->orderByDesc('created_at')->get(),
             'uomCodes' => UomCatalog::codes(),
             'packingUnits' => UomCatalog::packingUnits(),
         ]);
@@ -282,31 +311,25 @@ class IncomingArrivalController extends Controller
     {
         Gate::authorize('update', $arrival);
 
-        $validated = $request->validate([
+        $isLocal = filter_var($request->input('is_local', $arrival->is_local), FILTER_VALIDATE_BOOLEAN);
+
+        $rules = [
+            'is_local' => ['nullable', 'boolean'],
             'invoice_no' => ['nullable', 'string', 'max:255'],
+            'delivery_note_no' => ['nullable', 'string', 'max:255'],
             'invoice_date' => ['nullable', 'date'],
-            'supplier_id' => ['required', Rule::exists('suppliers', 'id')->where('source', Supplier::SOURCE_IMPORT)],
-            'trucking_company_id' => ['nullable', 'exists:trucking_companies,id'],
+            'supplier_id' => ['required', Rule::exists('suppliers', 'id')->where('is_active', true)],
             'purchase_order_id' => ['nullable', 'exists:purchase_orders,id'],
-            'vessel' => ['nullable', 'string', 'max:255'],
-            'etd' => ['nullable', 'date'],
-            'eta' => ['nullable', 'date'],
-            'eta_gci' => ['nullable', 'date'],
-            'bill_of_lading' => ['nullable', 'string', 'max:255'],
             'pen_no' => ['nullable', 'string', 'max:255'],
             'pen_date' => ['nullable', 'date'],
             'aju_no' => ['nullable', 'string', 'max:255'],
-            'price_term' => ['nullable', 'string', 'max:50'],
-            'hs_code' => ['nullable', 'string', 'max:255'],
-            'port_of_loading' => ['nullable', 'string', 'max:255'],
-            'country' => ['nullable', 'string', 'max:255'],
-            'currency' => ['nullable', 'string', 'max:10'],
             'notes' => ['nullable', 'string'],
             'status' => ['required', 'in:pending,completed,cancelled'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.id' => ['nullable', 'integer', 'exists:incoming_arrival_items,id'],
-            'items.*.material_group' => ['required', 'string', 'max:255'],
-            'items.*.size' => ['required', 'string', 'max:100'],
+            'items.*.material_group' => ['nullable', 'string', 'max:255'],
+            'items.*.part_id' => ['nullable', 'integer', 'exists:parts,id'],
+            'items.*.size' => ['nullable', 'string', 'max:100'],
             'items.*.qty_goods' => ['required', 'numeric', 'min:0'],
             'items.*.unit_goods' => ['nullable', 'string', 'max:20', UomCode::optional()],
             'items.*.qty_bundle' => ['nullable', 'numeric', 'min:0'],
@@ -318,18 +341,61 @@ class IncomingArrivalController extends Controller
             'items.*.total_price' => ['nullable', 'numeric', 'min:0'],
             'items.*.is_foc' => ['nullable', 'boolean'],
             'items.*.notes' => ['nullable', 'string'],
-        ]);
+        ];
+
+        if (! $isLocal) {
+            $rules += [
+                'trucking_company_id' => ['nullable', 'exists:trucking_companies,id'],
+                'vessel' => ['nullable', 'string', 'max:255'],
+                'etd' => ['nullable', 'date'],
+                'eta' => ['nullable', 'date'],
+                'eta_gci' => ['nullable', 'date'],
+                'bill_of_lading' => ['nullable', 'string', 'max:255'],
+                'price_term' => ['nullable', 'string', 'max:50'],
+                'hs_code' => ['nullable', 'string', 'max:255'],
+                'port_of_loading' => ['nullable', 'string', 'max:255'],
+                'country' => ['nullable', 'string', 'max:255'],
+                'currency' => ['nullable', 'string', 'max:10'],
+            ];
+        }
+
+        $validated = $request->validate($rules);
 
         $validated['items'] = $this->resolveMaterialItems($validated['items'], (int) $validated['supplier_id']);
         $validated['updated_by'] = $request->user()?->id;
-        DB::transaction(function () use ($arrival, $validated) {
-            $arrival->update(\Arr::only($validated, [
-                'invoice_no', 'invoice_date', 'supplier_id', 'trucking_company_id', 'purchase_order_id',
-                'vessel', 'etd', 'eta', 'eta_gci',
-                'bill_of_lading', 'pen_no', 'pen_date', 'aju_no',
-                'price_term', 'hs_code', 'port_of_loading', 'country', 'currency',
-                'notes', 'status', 'updated_by',
-            ]));
+        DB::transaction(function () use ($arrival, $validated, $isLocal) {
+            $updateFields = [
+                'is_local' => $isLocal,
+                'invoice_no' => $validated['invoice_no'] ?? null,
+                'delivery_note_no' => $validated['delivery_note_no'] ?? null,
+                'invoice_date' => $validated['invoice_date'] ?? null,
+                'supplier_id' => $validated['supplier_id'] ?? null,
+                'purchase_order_id' => $validated['purchase_order_id'] ?? null,
+                'pen_no' => $validated['pen_no'] ?? null,
+                'pen_date' => $validated['pen_date'] ?? null,
+                'aju_no' => $validated['aju_no'] ?? null,
+                'notes' => $validated['notes'] ?? null,
+                'status' => $validated['status'],
+                'updated_by' => $validated['updated_by'],
+            ];
+
+            if (! $isLocal) {
+                $updateFields += [
+                    'trucking_company_id' => $validated['trucking_company_id'] ?? null,
+                    'vessel' => $validated['vessel'] ?? null,
+                    'etd' => $validated['etd'] ?? null,
+                    'eta' => $validated['eta'] ?? null,
+                    'eta_gci' => $validated['eta_gci'] ?? null,
+                    'bill_of_lading' => $validated['bill_of_lading'] ?? null,
+                    'price_term' => $validated['price_term'] ?? null,
+                    'hs_code' => $validated['hs_code'] ?? null,
+                    'port_of_loading' => $validated['port_of_loading'] ?? null,
+                    'country' => $validated['country'] ?? null,
+                    'currency' => $validated['currency'] ?? null,
+                ];
+            }
+
+            $arrival->update($updateFields);
 
             foreach ($validated['items'] as $item) {
                 $payload = \Arr::except($item, ['id']);

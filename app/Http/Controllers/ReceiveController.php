@@ -51,6 +51,11 @@ class ReceiveController extends Controller
         Gate::authorize('create', IncomingReceive::class);
 
         $arrivalItem->load(['part', 'arrival.supplier', 'receives']);
+
+        if ($arrivalItem->arrival && $arrivalItem->arrival->iqc_status === 'rejected') {
+            abort(422, __('Material kedatangan ini ditolak oleh tim Quality.'));
+        }
+
         $remaining = $this->receiveService->remainingQty($arrivalItem);
         $totalReceived = $this->receiveService->receivedQuantity($arrivalItem);
 
@@ -72,6 +77,12 @@ class ReceiveController extends Controller
     {
         $arrivalItem->loadMissing(['arrival', 'part']);
         Gate::authorize('create', IncomingReceive::class);
+
+        if ($arrivalItem->arrival && $arrivalItem->arrival->iqc_status === 'rejected') {
+            return back()->withInput()->withErrors([
+                'tags' => __('Material kedatangan ini ditolak oleh tim Quality.'),
+            ]);
+        }
 
         $weightBasis = $this->receiveService->usesWeightBasis($arrivalItem);
 

@@ -44,10 +44,10 @@ const allModules = computed<ModuleItem[]>(() => [
     },
     {
         id: 'quality',
-        href: '#',
+        href: '/incoming-quality',
         title: t('account.quality'),
-        subtitle: t('account.notAvailable'),
-        disabled: true,
+        subtitle: t('quality.incomingQuality'),
+        permission: ['incoming.view', 'receive.view'],
     },
     {
         id: 'outgoing',

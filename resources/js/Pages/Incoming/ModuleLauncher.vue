@@ -13,7 +13,6 @@ const items = computed(() =>
     [
         { href: '/purchase-orders', title: 'incoming.purchaseOrder', subtitle: 'incoming.poTile', permission: ['purchase_order.view'] },
         { href: '/incoming-arrivals', title: 'incoming.arrival', subtitle: 'incoming.arrivalTile', permission: ['incoming.view'] },
-        { href: '/local-pos', title: 'incoming.localPo', subtitle: 'incoming.localTile', permission: ['purchase_order.view'] },
         { href: '/receive', title: 'incoming.receive', subtitle: 'incoming.receiveTile', permission: ['receive.view'] },
         { href: '/stocks', title: 'incoming.stock', subtitle: 'incoming.stockTile', permission: ['stock.view', 'incoming.view', 'receive.view'] },
     ].filter((it) => hasAnyPermission(it.permission)),

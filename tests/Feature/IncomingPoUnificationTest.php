@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Models\IncomingArrival;
 use App\Models\Part;
 use App\Models\PartSubstitute;
 use App\Models\PurchaseOrder;
@@ -61,7 +60,6 @@ class IncomingPoUnificationTest extends TestCase
         return $part;
     }
 
-    /** Supplier baru + mapping part-nya, agar payload valid dan tidak bergantung seeder. */
     private function freshSupplierWithPart(string $source): array
     {
         $supplier = Supplier::create([
@@ -92,82 +90,48 @@ class IncomingPoUnificationTest extends TestCase
         ];
     }
 
-    public function test_purchase_order_form_only_offers_local_suppliers(): void
+    public function test_purchase_order_form_offers_both_local_and_import_suppliers(): void
     {
-        $this->supplier(Supplier::SOURCE_LOCAL);
-        $this->supplier(Supplier::SOURCE_IMPORT);
+        $local = $this->supplier(Supplier::SOURCE_LOCAL);
+        $import = $this->supplier(Supplier::SOURCE_IMPORT);
 
         $this->get(route('purchase-orders.create'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Incoming/PurchaseOrder/Form')
                 ->has('suppliers')
-                ->where('suppliers', fn ($suppliers) => collect($suppliers)->isNotEmpty()
-                    && collect($suppliers)->every(fn ($s) => ($s['source'] ?? null) === 'local')));
+                ->where('suppliers', fn ($suppliers) => collect($suppliers)->pluck('id')->contains($local->id)
+                    && collect($suppliers)->pluck('id')->contains($import->id)));
     }
 
-    public function test_local_po_form_only_offers_local_suppliers(): void
-    {
-        $this->get(route('local-pos.create'))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->component('Incoming/LocalPo/Form')
-                ->has('suppliers')
-                ->where('suppliers', fn ($suppliers) => collect($suppliers)->every(fn ($s) => ($s['source'] ?? null) === 'local')));
-    }
-
-    public function test_purchase_order_rejects_an_import_supplier(): void
-    {
-        $import = $this->supplier(Supplier::SOURCE_IMPORT);
-        $part = $this->materialFor($import);
-
-        $this->post(route('purchase-orders.store'), $this->poPayload($import, $part))
-            ->assertSessionHasErrors('supplier_id');
-
-        $this->assertDatabaseMissing('purchase_orders', ['supplier_id' => $import->id]);
-    }
-
-    public function test_local_po_rejects_an_import_supplier(): void
-    {
-        $import = $this->supplier(Supplier::SOURCE_IMPORT);
-
-        $this->post(route('local-pos.store'), [
-            'po_no' => 'LPO-UNI-'.uniqid(),
-            'po_date' => now()->toDateString(),
-            'supplier_id' => $import->id,
-            'currency' => 'IDR',
-            'items' => [[
-                'part_id' => $this->materialFor($import)->id,
-                'qty_goods' => 5,
-                'unit_goods' => 'PCS',
-                'weight_nett' => 5,
-            ]],
-        ])->assertSessionHasErrors('supplier_id');
-    }
-
-    public function test_purchase_order_accepts_a_local_supplier(): void
+    public function test_purchase_order_accepts_both_local_and_import_suppliers(): void
     {
         $local = $this->supplier(Supplier::SOURCE_LOCAL);
-        $part = $this->materialFor($local);
+        $partLocal = $this->materialFor($local);
 
-        $this->post(route('purchase-orders.store'), $this->poPayload($local, $part))
+        $this->post(route('purchase-orders.store'), $this->poPayload($local, $partLocal))
             ->assertSessionHasNoErrors();
-
         $this->assertDatabaseHas('purchase_orders', ['supplier_id' => $local->id]);
+
+        $import = $this->supplier(Supplier::SOURCE_IMPORT);
+        $partImport = $this->materialFor($import);
+
+        $this->post(route('purchase-orders.store'), $this->poPayload($import, $partImport))
+            ->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('purchase_orders', ['supplier_id' => $import->id]);
     }
 
-    public function test_incoming_entry_point_states_which_flow_needs_arrival(): void
+    public function test_incoming_entry_point_displays_unified_purchase_order_tile(): void
     {
         $this->get(route('incoming-data'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page->component('Incoming/ModuleLauncher'));
 
-        // Launcher dirender sebagai SPA, jadi tautan tidak ada di HTML awal.
         $source = file_get_contents(resource_path('js/Pages/Incoming/ModuleLauncher.vue'));
 
         $this->assertStringContainsString("href: '/purchase-orders'", $source);
-        $this->assertStringContainsString("href: '/local-pos'", $source);
         $this->assertStringContainsString("href: '/incoming-arrivals'", $source);
+        $this->assertStringNotContainsString("href: '/local-pos'", $source);
     }
 
     public function test_purchase_order_keeps_its_supplier_on_update(): void
@@ -187,121 +151,40 @@ class IncomingPoUnificationTest extends TestCase
         $this->assertSame($local->id, $po->fresh()->supplier_id, 'Supplier tidak boleh diubah setelah PO disimpan.');
     }
 
-    public function test_local_po_update_cannot_move_to_an_import_supplier(): void
+    public function test_arrival_form_offers_both_local_and_import_suppliers(): void
     {
         $local = $this->supplier(Supplier::SOURCE_LOCAL);
-        $part = $this->materialFor($local);
-
-        $this->post(route('local-pos.store'), [
-            'po_no' => 'LPO-LOCK-'.uniqid(),
-            'po_date' => now()->toDateString(),
-            'supplier_id' => $local->id,
-            'currency' => 'IDR',
-            'items' => [[
-                'part_id' => $part->id,
-                'qty_goods' => 5,
-                'unit_goods' => 'PCS',
-                'weight_nett' => 5,
-            ]],
-        ])->assertSessionHasNoErrors();
-
-        $localPo = IncomingArrival::where('is_local', true)->latest('id')->firstOrFail();
         $import = $this->supplier(Supplier::SOURCE_IMPORT);
 
-        $this->put(route('local-pos.update', $localPo), [
-            'po_no' => $localPo->po_no,
-            'po_date' => now()->toDateString(),
-            'supplier_id' => $import->id,
-            'currency' => 'IDR',
-            'items' => [[
-                'part_id' => $part->id,
-                'qty_goods' => 5,
-                'unit_goods' => 'PCS',
-                'weight_nett' => 5,
-            ]],
-        ])->assertSessionHasErrors('supplier_id');
-
-        $this->assertSame($local->id, $localPo->fresh()->supplier_id, 'Local PO tidak boleh pindah ke supplier import.');
-    }
-
-    public function test_purchase_order_rejects_an_import_supplier_on_update(): void
-    {
-        [$local, $part] = $this->freshSupplierWithPart(Supplier::SOURCE_LOCAL);
-
-        $this->post(route('purchase-orders.store'), $this->poPayload($local, $part))
-            ->assertSessionHasNoErrors();
-
-        $po = PurchaseOrder::where('supplier_id', $local->id)->latest('id')->firstOrFail();
-
-        [$import] = $this->freshSupplierWithPart(Supplier::SOURCE_IMPORT);
-
-        $this->put(route('purchase-orders.update', $po), $this->poPayload($import, $part))
-            ->assertSessionHasErrors('supplier_id');
-
-        $this->assertSame($local->id, $po->fresh()->supplier_id, 'PO lokal tidak boleh pindah ke supplier import.');
-    }
-
-    public function test_local_po_cannot_switch_to_another_local_supplier(): void
-    {
-        [$local, $part] = $this->freshSupplierWithPart(Supplier::SOURCE_LOCAL);
-
-        $this->post(route('local-pos.store'), [
-            'po_no' => 'LPO-LOCK2-'.uniqid(),
-            'po_date' => now()->toDateString(),
-            'supplier_id' => $local->id,
-            'currency' => 'IDR',
-            'items' => [[
-                'part_id' => $part->id,
-                'qty_goods' => 5,
-                'unit_goods' => 'PCS',
-                'weight_nett' => 5,
-            ]],
-        ])->assertSessionHasNoErrors();
-
-        $localPo = IncomingArrival::where('is_local', true)->latest('id')->firstOrFail();
-
-        [$other] = $this->freshSupplierWithPart(Supplier::SOURCE_LOCAL);
-
-        $this->put(route('local-pos.update', $localPo), [
-            'po_no' => $localPo->po_no,
-            'po_date' => now()->toDateString(),
-            'supplier_id' => $other->id,
-            'currency' => 'IDR',
-            'items' => [[
-                'part_id' => $part->id,
-                'qty_goods' => 5,
-                'unit_goods' => 'PCS',
-                'weight_nett' => 5,
-            ]],
-        ])->assertSessionHasErrors('supplier_id');
-
-        $this->assertSame($local->id, $localPo->fresh()->supplier_id);
-    }
-
-    public function test_arrival_form_only_offers_import_suppliers(): void
-    {
         $this->get(route('incoming-arrivals.create'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Incoming/Arrival/Form')
-                ->where('suppliers', fn ($suppliers) => collect($suppliers)->every(fn ($s) => ($s['source'] ?? null) === 'import')));
+                ->where('suppliers', fn ($suppliers) => collect($suppliers)->pluck('id')->contains($local->id)
+                    && collect($suppliers)->pluck('id')->contains($import->id)));
     }
 
-    public function test_arrival_rejects_a_local_supplier(): void
+    public function test_arrival_accepts_local_supplier_with_pen_aju(): void
     {
-        [$local] = $this->freshSupplierWithPart(Supplier::SOURCE_LOCAL);
+        [$local, $part] = $this->freshSupplierWithPart(Supplier::SOURCE_LOCAL);
 
         $this->post(route('incoming-arrivals.store'), [
-            'invoice_no' => 'INV-REJ-'.uniqid(),
+            'is_local' => true,
+            'delivery_note_no' => 'SJ-'.uniqid(),
             'supplier_id' => $local->id,
+            'pen_no' => 'PEN-1122',
+            'aju_no' => 'AJU-3344',
             'items' => [[
-                'material_group' => 'STEEL',
-                'size' => 'L',
+                'part_id' => $part->id,
                 'qty_goods' => 5,
                 'unit_goods' => 'PCS',
             ]],
-        ])->assertSessionHasErrors('supplier_id');
+        ])->assertSessionHasNoErrors();
 
-        $this->assertDatabaseMissing('incoming_arrivals', ['supplier_id' => $local->id]);
+        $this->assertDatabaseHas('incoming_arrivals', [
+            'supplier_id' => $local->id,
+            'pen_no' => 'PEN-1122',
+            'aju_no' => 'AJU-3344',
+        ]);
     }
 }

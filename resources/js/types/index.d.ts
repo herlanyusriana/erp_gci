@@ -290,7 +290,10 @@ export interface IncomingArrival {
     country: string | null;
     currency: string | null;
     notes: string | null;
+    delivery_note_no?: string | null;
     status: string;
+    iqc_status?: string;
+    iqc_passed_at?: string | null;
     created_at?: string;
     items_count?: number;
     remaining_qty?: number;

@@ -13,13 +13,14 @@ class IncomingArrival extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        'arrival_no', 'transaction_no', 'po_no', 'invoice_no', 'invoice_date',
+        'arrival_no', 'transaction_no', 'po_no', 'invoice_no', 'delivery_note_no', 'invoice_date',
         'supplier_id', 'purchase_order_id', 'trucking_company_id', 'is_local',
         'vessel', 'etd', 'eta', 'eta_gci',
         'bill_of_lading', 'pen_no', 'pen_date', 'aju_no',
         'bill_of_lading_file', 'delivery_note_file', 'invoice_file', 'packing_list_file',
         'price_term', 'hs_code', 'port_of_loading', 'country', 'currency',
-        'notes', 'status', 'created_by', 'updated_by',
+        'notes', 'status', 'iqc_status', 'iqc_passed_at', 'iqc_passed_by',
+        'created_by', 'updated_by',
     ];
 
     protected $casts = [
@@ -28,8 +29,14 @@ class IncomingArrival extends Model
         'eta' => 'date',
         'eta_gci' => 'date',
         'pen_date' => 'date',
+        'iqc_passed_at' => 'datetime',
         'is_local' => 'boolean',
     ];
+
+    public function iqcInspector(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'iqc_passed_by');
+    }
 
     public function supplier(): BelongsTo
     {

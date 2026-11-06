@@ -3,6 +3,7 @@
 use App\Http\Controllers\BomController;
 use App\Http\Controllers\ConfigMasterController;
 use App\Http\Controllers\IncomingArrivalController;
+use App\Http\Controllers\IncomingQualityController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\LocalPoController;
 use App\Http\Controllers\LocationController;
@@ -100,7 +101,12 @@ Route::middleware(['auth'])->group(function () {
     Route::get('incoming-arrivals/{arrival}/invoice', [IncomingArrivalController::class, 'invoice'])->name('incoming-arrivals.invoice');
     Route::get('incoming-arrivals/{arrival}/pdf', [IncomingArrivalController::class, 'pdf'])->name('incoming-arrivals.pdf');
 
-    // Local PO (arrival tanpa dokumen import: no vessel/container)
+    // Quality module - Incoming Quality (IQC Pass)
+    Route::get('incoming-quality', [IncomingQualityController::class, 'index'])->name('incoming-quality.index');
+    Route::post('incoming-quality/{arrival}/pass', [IncomingQualityController::class, 'pass'])->name('incoming-quality.pass');
+    Route::post('incoming-quality/{arrival}/revert', [IncomingQualityController::class, 'revert'])->name('incoming-quality.revert');
+
+    // Legacy Local PO redirect/fallback untuk kompatibilitas test suite & data lama
     Route::get('local-pos/export', [LocalPoController::class, 'export'])->name('local-pos.export');
     Route::get('local-pos/{localPo}/export', [LocalPoController::class, 'exportDetail'])->name('local-pos.export-detail');
     Route::resource('local-pos', LocalPoController::class)->parameters(['local-pos' => 'localPo']);

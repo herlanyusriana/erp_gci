@@ -321,18 +321,15 @@ function submit() {
                     </div>
 
                     <div>
-                        <label class="text-xs font-semibold text-ink-secondary">
-                            {{ t('incoming.purchaseOrder') }}
-                            <span v-if="!form.supplier_id" class="text-[11px] text-ink-secondary italic font-normal">(pilih supplier dahulu)</span>
-                        </label>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.purchaseOrder') }}</label>
                         <select
                             :aria-label="t('incoming.purchaseOrder')"
                             v-model="form.purchase_order_id"
                             @change="onPurchaseOrderChange"
-                            :disabled="!form.supplier_id && filteredPurchaseOrders.length === 0"
-                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary disabled:opacity-60"
+                            :disabled="!form.supplier_id"
+                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                            <option value="">{{ form.supplier_id ? t('incoming.choose') : '— Pilih Supplier dahulu —' }}</option>
+                            <option value="">{{ t('incoming.choose') }}</option>
                             <option v-for="po in filteredPurchaseOrders" :key="po.id" :value="po.id">
                                 {{ po.po_no }} (Sisa: {{ Number(po.remaining_qty || 0).toLocaleString() }})
                             </option>
@@ -417,12 +414,15 @@ function submit() {
                         <InputError :message="form.errors.supplier_id" class="mt-1" />
                     </div>
                     <div>
-                        <label class="text-xs font-semibold text-ink-secondary">
-                            {{ t('incoming.purchaseOrder') }}
-                            <span v-if="!form.supplier_id" class="text-[11px] text-ink-secondary italic font-normal">(pilih supplier dahulu)</span>
-                        </label>
-                        <select :aria-label="t('incoming.purchaseOrder')" v-model="form.purchase_order_id" @change="onPurchaseOrderChange" :disabled="!form.supplier_id && filteredPurchaseOrders.length === 0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary disabled:opacity-60">
-                            <option value="">{{ form.supplier_id ? t('incoming.choose') : '— Pilih Supplier dahulu —' }}</option>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.purchaseOrder') }}</label>
+                        <select
+                            :aria-label="t('incoming.purchaseOrder')"
+                            v-model="form.purchase_order_id"
+                            @change="onPurchaseOrderChange"
+                            :disabled="!form.supplier_id"
+                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            <option value="">{{ t('incoming.choose') }}</option>
                             <option v-for="po in filteredPurchaseOrders" :key="po.id" :value="po.id">
                                 {{ po.po_no }} (Sisa: {{ Number(po.remaining_qty || 0).toLocaleString() }})
                             </option>

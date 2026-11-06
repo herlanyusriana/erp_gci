@@ -31,13 +31,15 @@ function remove(a: IncomingArrival) {
 }
 
 function pipelineStage(a: IncomingArrival): { label: string; class: string } {
-    // 1. Cek apakah sudah ada receive fisik di gudang
+    if (a.status === 'cancelled') {
+        return { label: t('incoming.status_cancelled') || 'Dibatalkan', class: 'bg-surface text-ink-secondary border border-borderline' };
+    }
+
     const hasReceives = a.items?.some((it) => it.receives && it.receives.length > 0);
     if (a.status === 'completed' || hasReceives) {
         return { label: 'Received', class: 'bg-success/15 text-success border border-success/30' };
     }
 
-    // 2. Cek status IQC
     if (a.iqc_status === 'passed') {
         return { label: 'IQC Pass', class: 'bg-info/15 text-info border border-info/30' };
     }
@@ -45,7 +47,6 @@ function pipelineStage(a: IncomingArrival): { label: string; class: string } {
         return { label: 'IQC Reject', class: 'bg-danger/15 text-danger border border-danger/30' };
     }
 
-    // 3. Status awal kedatangan
     return { label: 'Arrival', class: 'bg-warning/15 text-warning border border-warning/30' };
 }
 </script>
@@ -90,7 +91,6 @@ function pipelineStage(a: IncomingArrival): { label: string; class: string } {
                             <th scope="col" class="px-4 py-3">{{ t('incoming.items') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('incoming.eta') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('incoming.status') }}</th>
-                            <th scope="col" class="px-4 py-3">{{ t('incoming.pipeline') || 'Tahapan' }}</th>
                             <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.actions') }}</th>
                         </tr>
                     </thead>
@@ -104,10 +104,7 @@ function pipelineStage(a: IncomingArrival): { label: string; class: string } {
                             <td class="px-4 py-3 text-ink-primary">{{ a.items_count ?? 0 }}</td>
                             <td class="px-4 py-3 text-ink-primary whitespace-nowrap">{{ formatDate(a.eta_gci ?? a.eta) }}</td>
                             <td class="px-4 py-3">
-                                <StatusBadge uppercase :status="a.status">{{ t('incoming.status_' + a.status) }}</StatusBadge>
-                            </td>
-                            <td class="px-4 py-3">
-                                <span :class="['inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold', pipelineStage(a).class]">
+                                <span :class="['inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold', pipelineStage(a).class]">
                                     {{ pipelineStage(a).label }}
                                 </span>
                             </td>
@@ -120,7 +117,7 @@ function pipelineStage(a: IncomingArrival): { label: string; class: string } {
                             </td>
                         </tr>
                         <tr v-if="arrivals.data.length === 0">
-                            <td colspan="8" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noArrivals') }}</td>
+                            <td colspan="7" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noArrivals') }}</td>
                         </tr>
                     </tbody>
                 </table>

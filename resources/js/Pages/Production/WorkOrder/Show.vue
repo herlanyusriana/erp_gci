@@ -217,15 +217,15 @@ function doDestroy() {
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
             <div class="border-b border-borderline px-4 py-3 flex items-center justify-between text-sm font-semibold text-ink-primary">
                 <span>{{ t('production.routing') }}</span>
-                <span class="text-xs font-normal text-ink-secondary">
-                    Status Part: <span class="font-medium text-ink-primary">{{ workOrder.status === 'planned' ? 'Main Part BOM (Sebelum Issue)' : 'Substitute Part (Setelah Issue)' }}</span>
+                <span class="text-xs text-ink-secondary">
+                    {{ workOrder.status === 'planned' ? 'BOM Target (Pre-Issue)' : 'Allocated Materials' }}
                 </span>
             </div>
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-borderline text-sm">
                     <thead class="bg-background">
                         <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                            <th scope="col" class="px-3 py-3">{{ t('production.sequence') }}</th>
+                            <th scope="col" class="px-3 py-3 w-12">{{ t('production.sequence') }}</th>
                             <th scope="col" class="px-3 py-3">{{ t('production.process') }}</th>
                             <th scope="col" class="px-3 py-3">{{ t('production.machine') }}</th>
                             <th scope="col" class="px-3 py-3">Material Input</th>
@@ -245,18 +245,18 @@ function doDestroy() {
                                 <td class="px-3 py-3 tabular-nums font-semibold text-ink-secondary">{{ g.sequence }}</td>
                                 <td class="px-3 py-3 font-medium text-ink-primary">{{ g.processName }}</td>
                                 <td class="px-3 py-3 whitespace-nowrap text-ink-primary">
-                                    <span class="inline-flex items-center rounded-md bg-primary-light px-2 py-0.5 text-xs font-semibold text-primary">
-                                        {{ g.machineName }} (Tandem Line)
+                                    <span class="inline-flex items-center rounded bg-primary-light px-2 py-0.5 text-xs font-medium text-primary">
+                                        {{ g.machineName }}
                                     </span>
                                 </td>
                                 <td class="px-3 py-3">
                                     <div class="font-medium text-ink-primary">{{ displayPartInfo(g.items[0]).partNumber }}</div>
                                     <div class="text-xs text-ink-secondary">{{ displayPartInfo(g.items[0]).partName }}</div>
                                     <div class="mt-1 flex items-center gap-1.5">
-                                        <span :class="['inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium', displayPartInfo(g.items[0]).isSubstitute ? 'bg-info/15 text-info' : 'bg-background text-ink-secondary']">
-                                            {{ displayPartInfo(g.items[0]).badge }}
+                                        <span v-if="displayPartInfo(g.items[0]).isSubstitute" class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-info/10 text-info">
+                                            Substitusi
                                         </span>
-                                        <span class="rounded bg-background px-1.5 py-0.5 text-[11px] text-ink-secondary">
+                                        <span class="text-[11px] text-ink-secondary">
                                             {{ g.items.length }} step terintegrasi
                                         </span>
                                     </div>
@@ -293,28 +293,25 @@ function doDestroy() {
                                 </td>
                             </tr>
 
-                            <!-- KASUS B: MESIN NON-TPL / ASSEMBLY MULTI-INPUT (Menjabarkan Seluruh Material Input) -->
-                            <tr v-else v-for="(it, idx) in g.items" :key="g.key + '-' + it.id" class="align-top hover:bg-primary-light/40" :class="idx > 0 ? 'bg-surface/50 border-t border-dashed border-borderline/60' : ''">
-                                <!-- Sequence & Process hanya dirender jelas di baris pertama proses, baris komponen berikutnya diberi visual grouping -->
+                            <!-- KASUS B: MESIN NON-TPL / ASSEMBLY MULTI-INPUT (Tabular Sub-Rows yang Bersih) -->
+                            <tr v-else v-for="(it, idx) in g.items" :key="g.key + '-' + it.id" class="align-top hover:bg-primary-light/40" :class="idx > 0 ? 'bg-surface/30' : ''">
                                 <td class="px-3 py-2.5 tabular-nums text-ink-secondary">
                                     <span v-if="idx === 0" class="font-semibold">{{ g.sequence }}</span>
-                                    <span v-else class="text-ink-secondary/40 text-xs">↳</span>
                                 </td>
                                 <td class="px-3 py-2.5 text-ink-primary">
-                                    <div v-if="idx === 0" class="font-medium">{{ g.processName }}</div>
-                                    <div v-else class="text-xs text-ink-secondary italic">Komponen {{ idx + 1 }} dari {{ g.items.length }}</div>
+                                    <span v-if="idx === 0" class="font-medium">{{ g.processName }}</span>
                                 </td>
                                 <td class="px-3 py-2.5 whitespace-nowrap text-ink-primary">
                                     <span v-if="idx === 0">{{ g.machineName }}</span>
                                 </td>
-                                <td class="px-3 py-2.5">
+                                <td class="px-3 py-2.5" :class="g.items.length > 1 ? 'border-l border-borderline/60 pl-3' : ''">
                                     <div class="font-medium text-ink-primary">{{ displayPartInfo(it).partNumber }}</div>
                                     <div class="text-xs text-ink-secondary">{{ displayPartInfo(it).partName }}</div>
-                                    <div class="mt-1 flex items-center gap-1.5">
-                                        <span :class="['inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium', displayPartInfo(it).isSubstitute ? 'bg-info/15 text-info' : 'bg-background text-ink-secondary']">
-                                            {{ displayPartInfo(it).badge }}
+                                    <div v-if="displayPartInfo(it).isSubstitute" class="mt-1 flex items-center gap-1.5">
+                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-info/10 text-info">
+                                            Substitusi
                                         </span>
-                                        <span v-if="displayPartInfo(it).isSubstitute && it.child_part" class="text-[11px] text-ink-secondary">
+                                        <span v-if="it.child_part" class="text-[11px] text-ink-secondary">
                                             (Main: {{ it.child_part.part_number }})
                                         </span>
                                     </div>

@@ -93,14 +93,30 @@ const form = useForm({
     items: [] as any[],
 });
 
-// Filter PO berdasarkan switcher tab: Lokal vs Impor
+// Filter PO berdasarkan Supplier terpilih dan switcher tab: Lokal vs Impor
 const filteredPurchaseOrders = computed(() => {
     return props.purchaseOrders.filter((po) => {
+        // Jika supplier sudah dipilih, hanya tampilkan PO milik supplier tersebut
+        if (form.supplier_id && Number(po.supplier_id) !== Number(form.supplier_id)) {
+            return false;
+        }
+
         const supp = props.suppliers.find((s) => s.id === po.supplier_id);
         const suppSource = supp?.source ?? (po.supplier?.source ?? 'import');
         return isLocalArrival.value ? suppSource === 'local' : suppSource === 'import';
     });
 });
+
+function onSupplierChange() {
+    resetMaterialRows();
+    // Jika PO yang saat ini terpilih bukan milik supplier baru, reset purchase_order_id
+    if (form.purchase_order_id) {
+        const po = props.purchaseOrders.find((p) => p.id === Number(form.purchase_order_id));
+        if (po && Number(po.supplier_id) !== Number(form.supplier_id)) {
+            form.purchase_order_id = '';
+        }
+    }
+}
 
 // Auto-populate item saat PO dipilih
 function onPurchaseOrderChange() {
@@ -291,31 +307,37 @@ function submit() {
 
                 <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     <div>
-                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.purchaseOrder') }}</label>
-                        <select
-                            :aria-label="t('incoming.purchaseOrder')"
-                            v-model="form.purchase_order_id"
-                            @change="onPurchaseOrderChange"
-                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
-                        >
-                            <option value="">{{ t('incoming.choose') }}</option>
-                            <option v-for="po in filteredPurchaseOrders" :key="po.id" :value="po.id">{{ po.po_no }}</option>
-                        </select>
-                        <InputError :message="form.errors.purchase_order_id" class="mt-1" />
-                    </div>
-
-                    <div>
-                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.supplier') }}</label>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.supplier') }} <span class="text-danger">*</span></label>
                         <select
                             :aria-label="t('incoming.supplier')"
                             v-model="form.supplier_id"
-                            @change="resetMaterialRows"
+                            @change="onSupplierChange"
                             class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
                         >
                             <option value="">{{ t('incoming.choose') }}</option>
                             <option v-for="s in suppliers.filter(s => s.source === 'local')" :key="s.id" :value="s.id">{{ s.supplier_name }}</option>
                         </select>
                         <InputError :message="form.errors.supplier_id" class="mt-1" />
+                    </div>
+
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">
+                            {{ t('incoming.purchaseOrder') }}
+                            <span v-if="!form.supplier_id" class="text-[11px] text-ink-secondary italic font-normal">(pilih supplier dahulu)</span>
+                        </label>
+                        <select
+                            :aria-label="t('incoming.purchaseOrder')"
+                            v-model="form.purchase_order_id"
+                            @change="onPurchaseOrderChange"
+                            :disabled="!form.supplier_id && filteredPurchaseOrders.length === 0"
+                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary disabled:opacity-60"
+                        >
+                            <option value="">{{ form.supplier_id ? t('incoming.choose') : '— Pilih Supplier dahulu —' }}</option>
+                            <option v-for="po in filteredPurchaseOrders" :key="po.id" :value="po.id">
+                                {{ po.po_no }} (Sisa: {{ Number(po.remaining_qty || 0).toLocaleString() }})
+                            </option>
+                        </select>
+                        <InputError :message="form.errors.purchase_order_id" class="mt-1" />
                     </div>
 
                     <div>
@@ -387,19 +409,24 @@ function submit() {
 
                 <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     <div>
-                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.purchaseOrder') }}</label>
-                        <select :aria-label="t('incoming.purchaseOrder')" v-model="form.purchase_order_id" @change="onPurchaseOrderChange" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
-                            <option value="">{{ t('incoming.choose') }}</option>
-                            <option v-for="po in filteredPurchaseOrders" :key="po.id" :value="po.id">{{ po.po_no }}</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.supplier') }}</label>
-                        <select :aria-label="t('incoming.supplier')" v-model="form.supplier_id" @change="resetMaterialRows" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.supplier') }} <span class="text-danger">*</span></label>
+                        <select :aria-label="t('incoming.supplier')" v-model="form.supplier_id" @change="onSupplierChange" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                             <option value="">{{ t('incoming.choose') }}</option>
                             <option v-for="s in suppliers.filter(s => s.source === 'import')" :key="s.id" :value="s.id">{{ s.supplier_name }}</option>
                         </select>
                         <InputError :message="form.errors.supplier_id" class="mt-1" />
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">
+                            {{ t('incoming.purchaseOrder') }}
+                            <span v-if="!form.supplier_id" class="text-[11px] text-ink-secondary italic font-normal">(pilih supplier dahulu)</span>
+                        </label>
+                        <select :aria-label="t('incoming.purchaseOrder')" v-model="form.purchase_order_id" @change="onPurchaseOrderChange" :disabled="!form.supplier_id && filteredPurchaseOrders.length === 0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary disabled:opacity-60">
+                            <option value="">{{ form.supplier_id ? t('incoming.choose') : '— Pilih Supplier dahulu —' }}</option>
+                            <option v-for="po in filteredPurchaseOrders" :key="po.id" :value="po.id">
+                                {{ po.po_no }} (Sisa: {{ Number(po.remaining_qty || 0).toLocaleString() }})
+                            </option>
+                        </select>
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.invoiceNo') }}</label>

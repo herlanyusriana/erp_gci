@@ -17,6 +17,7 @@ use App\Support\UomCatalog;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
@@ -101,8 +102,7 @@ class IncomingArrivalController extends Controller
         Gate::authorize('viewAny', IncomingArrival::class);
 
         $arrivals = IncomingArrival::query()
-            ->where('is_local', false)
-            ->with(['supplier:id,supplier_code,supplier_name'])
+            ->with(['supplier:id,supplier_code,supplier_name', 'items.receives'])
             ->withCount('items')
             ->when($request->input('search'), fn ($q, $s) => $q
                 ->where('arrival_no', 'ilike', "%{$s}%")
@@ -120,6 +120,83 @@ class IncomingArrivalController extends Controller
         ]);
     }
 
+    /**
+     * Mengambil daftar PO aktif yang masih memiliki sisa kuantitas belum tiba,
+     * atau menyertakan PO saat ini jika dalam mode edit.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function activePurchaseOrders(?int $currentPoId = null)
+    {
+        $pos = PurchaseOrder::query()
+            ->with(['items.part.uom', 'supplier:id,source,supplier_name'])
+            ->whereNotIn('status', ['cancelled'])
+            ->select('id', 'po_no', 'supplier_id', 'status', 'po_date', 'expected_date')
+            ->orderByDesc('created_at')
+            ->get();
+
+        // Hitung total kuantitas arrival yang sudah dicatat per PO
+        $arrivalTotals = DB::table('incoming_arrival_items as iai')
+            ->join('incoming_arrivals as ia', 'ia.id', '=', 'iai.arrival_id')
+            ->whereNull('ia.deleted_at')
+            ->whereNull('iai.deleted_at')
+            ->whereNotNull('ia.purchase_order_id')
+            ->groupBy('ia.purchase_order_id')
+            ->selectRaw('ia.purchase_order_id, SUM(iai.qty_goods) as total_arrived')
+            ->pluck('total_arrived', 'purchase_order_id');
+
+        return $pos->filter(function (PurchaseOrder $po) use ($arrivalTotals, $currentPoId) {
+            // Selalu sertakan PO milik arrival yang sedang diedit
+            if ($currentPoId !== null && (int) $po->id === (int) $currentPoId) {
+                return true;
+            }
+
+            if ($po->status === 'completed') {
+                return false;
+            }
+
+            $totalPoQty = (float) $po->items->sum('qty');
+            $arrived = (float) ($arrivalTotals[$po->id] ?? 0);
+            $remaining = $totalPoQty - $arrived;
+
+            // Jika total PO 0 (belum ada item), tetap izinkan agar bisa diisi
+            return $totalPoQty <= 0 || $remaining > 1e-6;
+        })->map(function (PurchaseOrder $po) use ($arrivalTotals) {
+            $totalPoQty = (float) $po->items->sum('qty');
+            $arrived = (float) ($arrivalTotals[$po->id] ?? 0);
+            $remaining = max(0.0, $totalPoQty - $arrived);
+
+            return [
+                'id' => $po->id,
+                'po_no' => $po->po_no,
+                'supplier_id' => $po->supplier_id,
+                'status' => $po->status,
+                'total_qty' => round($totalPoQty, 4),
+                'arrived_qty' => round($arrived, 4),
+                'remaining_qty' => round($remaining, 4),
+                'supplier' => $po->supplier ? [
+                    'id' => $po->supplier->id,
+                    'supplier_name' => $po->supplier->supplier_name,
+                    'source' => $po->supplier->source,
+                ] : null,
+                'items' => $po->items->map(fn ($it) => [
+                    'id' => $it->id,
+                    'part_id' => $it->part_id,
+                    'qty' => (float) $it->qty,
+                    'unit' => $it->unit ?? $it->part?->uom?->code,
+                    'price' => (float) $it->price,
+                    'notes' => $it->notes,
+                    'part' => $it->part ? [
+                        'id' => $it->part->id,
+                        'part_number' => $it->part->part_number,
+                        'part_name' => $it->part->part_name,
+                        'size' => $it->part->size,
+                    ] : null,
+                ])->values()->all(),
+            ];
+        })->values();
+    }
+
     public function create(): Response
     {
         Gate::authorize('create', IncomingArrival::class);
@@ -129,7 +206,7 @@ class IncomingArrivalController extends Controller
             'suppliers' => Supplier::select('id', 'supplier_code', 'supplier_name', 'source')->where('is_active', true)->orderBy('supplier_name')->get(),
             'truckings' => TruckingCompany::select('id', 'company_code', 'company_name')->where('is_active', true)->orderBy('company_name')->get(),
             'materialOptions' => $this->materialOptions(),
-            'purchaseOrders' => PurchaseOrder::with(['items.part', 'supplier:id,source,supplier_name'])->select('id', 'po_no', 'supplier_id')->orderByDesc('created_at')->get(),
+            'purchaseOrders' => $this->activePurchaseOrders(),
             'uomCodes' => UomCatalog::codes(),
             'packingUnits' => UomCatalog::packingUnits(),
         ]);
@@ -301,7 +378,7 @@ class IncomingArrivalController extends Controller
             'suppliers' => Supplier::select('id', 'supplier_code', 'supplier_name', 'source')->where('is_active', true)->orderBy('supplier_name')->get(),
             'truckings' => TruckingCompany::select('id', 'company_code', 'company_name')->where('is_active', true)->orderBy('company_name')->get(),
             'materialOptions' => $this->materialOptions(),
-            'purchaseOrders' => PurchaseOrder::with(['items.part', 'supplier:id,source,supplier_name'])->select('id', 'po_no', 'supplier_id')->orderByDesc('created_at')->get(),
+            'purchaseOrders' => $this->activePurchaseOrders($arrival->purchase_order_id),
             'uomCodes' => UomCatalog::codes(),
             'packingUnits' => UomCatalog::packingUnits(),
         ]);

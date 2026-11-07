@@ -25,12 +25,12 @@ defineProps<{
                 <h1 class="text-2xl font-bold tracking-tight text-ink-primary">{{ t('incoming.poTitle', { number: purchaseOrder.po_no }) }}</h1>
                 <p class="mt-1 text-sm text-ink-secondary">
                     {{ purchaseOrder.supplier?.supplier_name ?? '—' }}
-                    · <StatusBadge uppercase :status="purchaseOrder.status">{{ t('incoming.status_' + purchaseOrder.status) }}</StatusBadge>
+                    · <StatusBadge uppercase :status="purchaseOrder.status">{{ purchaseOrder.status ? t('incoming.status_' + purchaseOrder.status) : '—' }}</StatusBadge>
                 </p>
             </div>
             <div class="flex items-center gap-2">
                 <a
-                    :href="route('purchase-orders.print', purchaseOrder.id)"
+                    :href="`/purchase-orders/${purchaseOrder.id}/print`"
                     target="_blank"
                     rel="noopener"
                     class="inline-flex items-center gap-1.5 rounded-md border border-borderline bg-surface px-4 py-2 text-sm font-semibold text-ink-primary transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"

@@ -72,6 +72,7 @@ class PurchaseOrderPrintTest extends TestCase
 
         // Verifikasi struktur template dan layout
         $response->assertSee('Purchase Order Confirmation PO/1026/00323');
+        $response->assertSee('images/logo-big.jpg');
         $response->assertSee('PT Geum Cheon Indo');
         $response->assertSee('All of the Metal Manufacture');
         $response->assertSee('Shipping address:');

@@ -63,13 +63,15 @@ class PartTypeGuardTest extends TestCase
         $supplier->forceFill(['source' => Supplier::SOURCE_LOCAL])->saveQuietly();
         $material = Part::findOrFail($mapping->substitute_part_id);
 
+        $initialCount = PurchaseOrder::count();
+
         $this->post(route('purchase-orders.store'), [
             'po_no' => 'PO-GUARD-'.uniqid(),
             'supplier_id' => $supplier->id,
             'status' => 'draft',
             'items' => [['part_id' => $fg->id, 'qty' => 1]],
         ])->assertSessionHasErrors(['items.0.part_id']);
-        $this->assertSame(0, PurchaseOrder::count());
+        $this->assertSame($initialCount, PurchaseOrder::count());
 
         $this->post(route('purchase-orders.store'), [
             'po_no' => 'PO-GUARD-'.uniqid(),
@@ -77,7 +79,7 @@ class PartTypeGuardTest extends TestCase
             'status' => 'draft',
             'items' => [['part_id' => $material->id, 'qty' => 1]],
         ])->assertSessionHasNoErrors();
-        $this->assertSame(1, PurchaseOrder::count());
+        $this->assertSame($initialCount + 1, PurchaseOrder::count());
     }
 
     public function test_local_po_rejects_fg_part(): void

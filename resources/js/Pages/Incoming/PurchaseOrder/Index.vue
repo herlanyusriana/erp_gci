@@ -74,11 +74,11 @@ function remove(po: PurchaseOrder) {
                             <td class="px-4 py-3 text-ink-primary">{{ po.items_count ?? 0 }}</td>
                             <td class="px-4 py-3 text-ink-primary whitespace-nowrap">{{ formatDate(po.expected_date) }}</td>
                             <td class="px-4 py-3">
-                                <StatusBadge uppercase :status="po.status">{{ t('incoming.status_' + po.status) }}</StatusBadge>
+                                <StatusBadge uppercase :status="po.status">{{ po.status ? t('incoming.status_' + po.status) : '—' }}</StatusBadge>
                             </td>
                             <td class="px-4 py-3">
                                 <div class="flex justify-end gap-1.5">
-                                    <ActionButton :href="route('purchase-orders.print', po.id)" :label="t('incoming.printPo')" variant="print" />
+                                    <ActionButton :href="`/purchase-orders/${po.id}/print`" :label="t('incoming.printPo')" variant="print" />
                                     <ActionButton :href="route('purchase-orders.show', po.id)" :label="t('incoming.view')" variant="view" />
                                     <ActionButton :href="route('purchase-orders.edit', po.id)" :label="t('incoming.edit')" variant="edit" />
                                     <ActionButton :label="t('incoming.delete')" variant="delete" @click="remove(po)" />

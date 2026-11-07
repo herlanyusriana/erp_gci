@@ -32,23 +32,8 @@
   .inner { min-width: 900px; }
 
   /* ===== Header ===== */
-  .head { position: relative; height: 62px; }
-  .brand { display: flex; align-items: center; gap: 4px; }
-  .logo {
-    width: 46px; height: 46px; border-radius: 50%;
-    background: #6a6a96; color: #fff;
-    font-family: Arial, sans-serif; font-weight: bold; font-size: 17px;
-    display: flex; align-items: center; justify-content: center;
-    border: 2px solid #4b4b78; flex-shrink: 0;
-  }
-  .brand-name {
-    font-family: "Times New Roman", Times, serif;
-    font-size: 30px; color: #44445f; letter-spacing: .3px; white-space: nowrap;
-  }
-  .tagline {
-    position: absolute; left: 62px; top: 40px;
-    font-size: 12px; font-weight: bold; color: #333;
-  }
+  .head { position: relative; height: 62px; display: flex; align-items: center; }
+  .logo-big { height: 52px; width: auto; object-fit: contain; }
   .vendor-tag {
     position: absolute; left: 58%; bottom: 3px;
     font-size: 9px; font-weight: bold;
@@ -106,11 +91,7 @@
 <div class="page"><div class="inner">
 
   <div class="head">
-    <div class="brand">
-      <div class="logo">GC</div>
-      <div class="brand-name">{{ $companyName }}</div>
-    </div>
-    <div class="tagline">All of the Metal Manufacture</div>
+    <img src="{{ asset('images/logo-big.jpg') }}" alt="{{ $companyName }} - All of the Metal Manufacture" class="logo-big">
     <div class="vendor-tag">{{ strtoupper($companyName) }}</div>
   </div>
   <div class="rule"></div>

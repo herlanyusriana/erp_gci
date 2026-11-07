@@ -35,4 +35,9 @@ class PurchaseOrder extends Model
     {
         return $this->hasMany(IncomingArrival::class);
     }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
 }

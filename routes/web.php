@@ -94,6 +94,7 @@ Route::middleware(['auth'])->group(function () {
     Route::resource('boms', BomController::class)->only(['index', 'create', 'store', 'show', 'edit', 'update']);
 
     // Incoming module
+    Route::get('purchase-orders/{purchaseOrder}/print', [PurchaseOrderController::class, 'print'])->name('purchase-orders.print');
     Route::resource('purchase-orders', PurchaseOrderController::class)->parameters(['purchase-orders' => 'purchaseOrder']);
     Route::resource('incoming-arrivals', IncomingArrivalController::class)->parameters(['incoming-arrivals' => 'arrival']);
     Route::post('incoming-containers/{container}/inspect', [IncomingArrivalController::class, 'inspectContainer'])->name('incoming-containers.inspect');

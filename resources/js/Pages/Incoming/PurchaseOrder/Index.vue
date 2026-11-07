@@ -78,6 +78,7 @@ function remove(po: PurchaseOrder) {
                             </td>
                             <td class="px-4 py-3">
                                 <div class="flex justify-end gap-1.5">
+                                    <ActionButton :href="route('purchase-orders.print', po.id)" :label="t('incoming.printPo')" variant="print" />
                                     <ActionButton :href="route('purchase-orders.show', po.id)" :label="t('incoming.view')" variant="view" />
                                     <ActionButton :href="route('purchase-orders.edit', po.id)" :label="t('incoming.edit')" variant="edit" />
                                     <ActionButton :label="t('incoming.delete')" variant="delete" @click="remove(po)" />

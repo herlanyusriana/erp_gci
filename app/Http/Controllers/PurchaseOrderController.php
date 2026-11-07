@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ConfigMaster;
 use App\Models\Part;
 use App\Models\PartPrice;
 use App\Models\PartSubstitute;
@@ -70,6 +71,30 @@ class PurchaseOrderController extends Controller
         return Inertia::render('Incoming/PurchaseOrder/Show', [
             'purchaseOrder' => $purchaseOrder,
         ]);
+    }
+
+    public function print(PurchaseOrder $purchaseOrder)
+    {
+        Gate::authorize('view', $purchaseOrder);
+
+        $purchaseOrder->load([
+            'supplier',
+            'creator:id,name',
+            'items.part',
+        ]);
+
+        $totalQty = (float) $purchaseOrder->items->sum('qty');
+        $totalAmount = (float) $purchaseOrder->items->sum(fn ($item) => (float) $item->qty * (float) ($item->price ?? 0));
+        $currency = $purchaseOrder->supplier?->source === 'import' ? 'USD' : 'IDR';
+        $companyName = (string) ConfigMaster::getValue('SYSTEM', 'company_name', 'PT. GEUM CHEON INDO');
+
+        return view('purchase-orders.print', compact(
+            'purchaseOrder',
+            'totalQty',
+            'totalAmount',
+            'currency',
+            'companyName',
+        ));
     }
 
     public function edit(PurchaseOrder $purchaseOrder): Response

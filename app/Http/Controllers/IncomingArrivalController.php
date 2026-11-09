@@ -482,6 +482,10 @@ class IncomingArrivalController extends Controller
                 'port_of_loading' => ['nullable', 'string', 'max:255'],
                 'country' => ['nullable', 'string', 'max:255'],
                 'currency' => ['nullable', 'string', 'max:10'],
+                'containers' => ['nullable', 'array'],
+                'containers.*.container_no' => ['required_with:containers', 'string', 'max:255'],
+                'containers.*.seal_code' => ['nullable', 'string', 'max:255'],
+                'containers.*.size' => ['nullable', 'string', 'max:50'],
             ];
         }
 
@@ -532,6 +536,22 @@ class IncomingArrivalController extends Controller
                     ['id' => $item['id'] ?? null],
                     $payload,
                 );
+            }
+
+            // Container hanya untuk kedatangan impor: ganti seluruh baris agar
+            // nomor yang dihapus di form benar-benar hilang. Lokal tidak punya
+            // container sehingga baris lama ikut dibersihkan saat beralih tab.
+            $arrival->containers()->delete();
+
+            if (! $isLocal) {
+                foreach ($validated['containers'] ?? [] as $container) {
+                    IncomingArrivalContainer::create([
+                        'arrival_id' => $arrival->id,
+                        'container_no' => $container['container_no'],
+                        'seal_code' => $container['seal_code'] ?? null,
+                        'size' => $container['size'] ?? null,
+                    ]);
+                }
             }
         });
 

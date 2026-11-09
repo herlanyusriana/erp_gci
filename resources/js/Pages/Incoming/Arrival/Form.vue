@@ -29,6 +29,12 @@ interface ItemRow {
     po_qty_ref?: number; // referensi kuantitas asli PO
 }
 
+interface ContainerRow {
+    container_no: string;
+    seal_code: string;
+    size: string;
+}
+
 const props = defineProps<{
     arrival: IncomingArrival | null;
     suppliers: Array<Pick<Supplier, 'id' | 'supplier_code' | 'supplier_name' | 'source'>>;
@@ -47,6 +53,22 @@ const blankItem = (): ItemRow => ({
     weight_nett: '', unit_weight: '', weight_gross: '', price: '', total_price: '',
     is_foc: false, notes: '',
 });
+
+const blankContainer = (): ContainerRow => ({ container_no: '', seal_code: '', size: '' });
+
+const containerRows = ref<ContainerRow[]>(
+    props.arrival?.containers?.map((c) => ({
+        container_no: c.container_no ?? '',
+        seal_code: c.seal_code ?? '',
+        size: c.size ?? '',
+    })) ?? [blankContainer()],
+);
+
+function addContainer() { containerRows.value.push(blankContainer()); }
+function removeContainer(i: number) {
+    if (containerRows.value.length > 1) containerRows.value.splice(i, 1);
+}
+const containerSizes = ['20 FT', '40 FT', '40 HC', '45 HC'];
 
 const itemRows = ref<ItemRow[]>(
     props.arrival?.items?.map((i) => ({
@@ -92,6 +114,7 @@ const form = useForm({
     notes: props.arrival?.notes ?? '',
     status: props.arrival?.status ?? 'pending',
     items: [] as any[],
+    containers: [] as Array<{ container_no: string; seal_code: string | null; size: string | null }>,
 });
 
 // Filter PO berdasarkan Supplier terpilih dan switcher tab: Lokal vs Impor
@@ -159,6 +182,8 @@ watch(isLocalArrival, (val) => {
     form.is_local = val;
     form.currency = val ? 'IDR' : 'USD';
     form.purchase_order_id = '';
+    // Container hanya relevan untuk kedatangan impor; saat pindah ke Lokal,
+    // baris kosong tidak ikut terkirim karena disaring di submit().
 });
 
 const materialGroups = computed(() => Array.from(new Set(
@@ -254,6 +279,17 @@ function submit() {
             is_foc: r.is_foc,
             notes: r.notes,
         })) as any;
+
+    // Container hanya untuk kedatangan impor; baris tanpa nomor kontainer dibuang.
+    form.containers = isLocalArrival.value
+        ? []
+        : containerRows.value
+              .filter((c) => c.container_no.trim() !== '')
+              .map((c) => ({
+                  container_no: c.container_no.trim(),
+                  seal_code: c.seal_code.trim() || null,
+                  size: c.size || null,
+              }));
 
     if (props.arrival) {
         form.put(route('incoming-arrivals.update', props.arrival.id));
@@ -504,6 +540,62 @@ function submit() {
                             <option value="IDR">IDR</option>
                             <option value="KRW">KRW</option>
                         </select>
+                    </div>
+                </div>
+
+                <!-- Container & Segel — khusus kedatangan impor -->
+                <div class="mt-5 border-t border-borderline pt-4">
+                    <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <h3 class="text-sm font-semibold text-ink-primary">{{ t('incoming.containers') }}</h3>
+                            <p class="text-xs text-ink-secondary">{{ t('incoming.containersHelp') }}</p>
+                        </div>
+                        <button type="button" @click="addContainer" class="inline-flex items-center gap-1.5 rounded-md border border-primary px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-primary-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
+                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                            {{ t('incoming.addContainer') }}
+                        </button>
+                    </div>
+                    <InputError :message="form.errors.containers" class="mb-2" />
+
+                    <div v-for="(c, ci) in containerRows" :key="ci" class="grid gap-3 py-2 sm:grid-cols-12">
+                        <div class="sm:col-span-5">
+                            <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.containerNo') }}</label>
+                            <input
+                                :aria-label="t('incoming.containerNo')"
+                                v-model="c.container_no"
+                                type="text"
+                                placeholder="MSCU1234567"
+                                class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm font-mono uppercase text-ink-primary focus:border-primary focus:ring-primary"
+                            />
+                            <InputError :message="(form.errors as any)[`containers.${ci}.container_no`]" class="mt-1" />
+                        </div>
+                        <div class="sm:col-span-4">
+                            <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.sealCode') }}</label>
+                            <input
+                                :aria-label="t('incoming.sealCode')"
+                                v-model="c.seal_code"
+                                type="text"
+                                placeholder="SEAL-001"
+                                class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm font-mono uppercase text-ink-primary focus:border-primary focus:ring-primary"
+                            />
+                            <InputError :message="(form.errors as any)[`containers.${ci}.seal_code`]" class="mt-1" />
+                        </div>
+                        <div class="sm:col-span-2">
+                            <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.size') }}</label>
+                            <select :aria-label="t('incoming.size')" v-model="c.size" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                                <option value="">—</option>
+                                <option v-for="s in containerSizes" :key="s" :value="s">{{ s }}</option>
+                            </select>
+                        </div>
+                        <div class="flex items-end sm:col-span-1">
+                            <button
+                                type="button"
+                                @click="removeContainer(ci)"
+                                :disabled="containerRows.length <= 1"
+                                class="rounded-lg border border-borderline px-3 py-2 text-sm text-danger transition hover:bg-danger/10 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                                :aria-label="t('incoming.delete')"
+                            >✕</button>
+                        </div>
                     </div>
                 </div>
             </div>

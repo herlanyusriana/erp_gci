@@ -7,6 +7,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import Modal from '@/Components/Modal.vue';
 import FinishedGoodPicker from '@/Components/FinishedGoodPicker.vue';
+import SearchableSelect from '@/Components/SearchableSelect.vue';
 import InputError from '@/Components/InputError.vue';
 import type { Machine, Part, ProductionPlan, ProductionPlanItem } from '@/types';
 
@@ -850,12 +851,16 @@ function submitEdit() {
 
                 <div>
                     <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.workOrder') }}</label>
-                    <select :aria-label="t('production.workOrder')" v-model="attachForm.work_order_id" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
-                        <option value="">{{ t('production.selectWo') }}</option>
-                        <option v-for="wo in unplannedWorkOrders" :key="wo.id" :value="wo.id">
-                            {{ wo.wo_no }} · {{ wo.part?.part_number ?? '—' }} · {{ fmt(wo.qty) }}
-                        </option>
-                    </select>
+                    <SearchableSelect
+                        v-model="attachForm.work_order_id"
+                        :options="unplannedWorkOrders.map(wo => ({ id: wo.id, wo_no: wo.wo_no, detail: `${wo.part?.part_number ?? '—'} · ${fmt(wo.qty)}` }))"
+                        value-key="id"
+                        label-key="wo_no"
+                        sublabel-key="detail"
+                        :placeholder="t('production.selectWo')"
+                        :aria-label="t('production.workOrder')"
+                        :error="attachForm.errors.work_order_id"
+                    />
                     <InputError :message="attachForm.errors.work_order_id" class="mt-1" />
                 </div>
 

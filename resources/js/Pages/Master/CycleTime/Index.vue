@@ -8,6 +8,7 @@ import ActionButton from '@/Components/ActionButton.vue';
 import Pagination from '@/Components/Pagination.vue';
 import Modal from '@/Components/Modal.vue';
 import InputError from '@/Components/InputError.vue';
+import SearchableSelect from '@/Components/SearchableSelect.vue';
 import type { MachineCycleTime, Machine, Part, Paginated, PageProps } from '@/types';
 import StatusBadge from '@/Components/StatusBadge.vue';
 
@@ -162,18 +163,34 @@ const fmtNumber = (n: number | null | undefined, decimals = 2) =>
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.machine') }}</label>
-                        <select :aria-label="t('master.machine')" v-model="form.machine_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
-                            <option value="">{{ t('master.selectMachine') }}</option>
-                            <option v-for="m in machines" :key="m.id" :value="String(m.id)">{{ m.machine_name }}</option>
-                        </select>
+                        <div class="mt-1">
+                            <SearchableSelect
+                                v-model="form.machine_id"
+                                :options="machines"
+                                value-key="id"
+                                label-key="machine_name"
+                                sublabel-key="machine_code"
+                                :placeholder="t('master.selectMachine')"
+                                :aria-label="t('master.machine')"
+                                :error="form.errors.machine_id"
+                            />
+                        </div>
                         <InputError :message="form.errors.machine_id" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.part') }}</label>
-                        <select :aria-label="t('master.part')" v-model="form.part_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
-                            <option value="">{{ t('master.selectPart') }}</option>
-                            <option v-for="p in parts" :key="p.id" :value="String(p.id)">{{ p.part_number }} · {{ p.part_name }}</option>
-                        </select>
+                        <div class="mt-1">
+                            <SearchableSelect
+                                v-model="form.part_id"
+                                :options="parts"
+                                value-key="id"
+                                label-key="part_number"
+                                sublabel-key="part_name"
+                                :placeholder="t('master.selectPart')"
+                                :aria-label="t('master.part')"
+                                :error="form.errors.part_id"
+                            />
+                        </div>
                         <InputError :message="form.errors.part_id" class="mt-1" />
                     </div>
                     <div>

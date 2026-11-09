@@ -5,6 +5,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
+import SearchableSelect from '@/Components/SearchableSelect.vue';
 import type { Part, PartType, Uom } from '@/types';
 import { computed } from 'vue';
 
@@ -133,10 +134,18 @@ function partTypeLabel(partType: PartType | null): string {
                     </div>
                     <div>
                         <InputLabel for="uom_id" :value="t('master.uom')" />
-                        <select id="uom_id" v-model="form.uom_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
-                            <option value="">{{ t('master.selectUom') }}</option>
-                            <option v-for="u in uoms" :key="u.id" :value="u.id">{{ u.code }}</option>
-                        </select>
+                        <div class="mt-1">
+                            <SearchableSelect
+                                v-model="form.uom_id"
+                                :options="uoms"
+                                value-key="id"
+                                label-key="code"
+                                sublabel-key="name"
+                                :placeholder="t('master.selectUom')"
+                                :aria-label="t('master.uom')"
+                                :error="form.errors.uom_id"
+                            />
+                        </div>
                         <InputError :message="form.errors.uom_id" class="mt-1" />
                     </div>
                     <div>

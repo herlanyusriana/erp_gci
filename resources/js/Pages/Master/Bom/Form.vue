@@ -6,6 +6,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import InputError from '@/Components/InputError.vue';
 import PartSelect from '@/Components/PartSelect.vue';
+import SearchableSelect from '@/Components/SearchableSelect.vue';
 import type { Bom, BomItem, Machine, Part, Process } from '@/types';
 
 const { t } = useI18n();
@@ -177,10 +178,19 @@ const fieldClass = 'mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.fgPart') }}</label>
-                        <select :aria-label="t('master.fgPart')" v-model="form.part_id" :disabled="editing" :class="[fieldClass, editing ? 'cursor-not-allowed bg-background text-ink-secondary' : '']">
-                            <option value="">{{ t('master.selectFgPart') }}</option>
-                            <option v-for="p in fgParts" :key="p.id" :value="String(p.id)">{{ p.part_number }} · {{ p.part_name }}</option>
-                        </select>
+                        <div class="mt-1">
+                            <SearchableSelect
+                                v-model="form.part_id"
+                                :options="fgParts"
+                                value-key="id"
+                                label-key="part_number"
+                                sublabel-key="part_name"
+                                :placeholder="t('master.selectFgPart')"
+                                :disabled="editing"
+                                :aria-label="t('master.fgPart')"
+                                :error="form.errors.part_id"
+                            />
+                        </div>
                         <p v-if="editing" class="mt-1 text-xs text-ink-secondary">{{ t('master.bomPartLocked') }}</p>
                         <InputError :message="form.errors.part_id" class="mt-1" />
                     </div>
@@ -220,18 +230,34 @@ const fieldClass = 'mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-
                         </div>
                         <div class="sm:col-span-5">
                             <label class="text-xs font-semibold text-ink-secondary">{{ t('master.process') }}</label>
-                            <select :aria-label="t('master.process')" v-model="r.process_id" :class="fieldClass">
-                                <option value="">—</option>
-                                <option v-for="p in processes" :key="p.id" :value="p.id">{{ p.process_name }}</option>
-                            </select>
+                            <div class="mt-1">
+                                <SearchableSelect
+                                    v-model="r.process_id"
+                                    :options="processes"
+                                    value-key="id"
+                                    label-key="process_name"
+                                    sublabel-key="process_code"
+                                    placeholder="—"
+                                    :aria-label="t('master.process')"
+                                    :error="form.errors[`items.${i}.process_id`]"
+                                />
+                            </div>
                             <InputError :message="form.errors[`items.${i}.process_id`]" class="mt-1" />
                         </div>
                         <div class="sm:col-span-5">
                             <label class="text-xs font-semibold text-ink-secondary">{{ t('master.machine') }}</label>
-                            <select :aria-label="t('master.machine')" v-model="r.machine_id" :class="fieldClass">
-                                <option value="">—</option>
-                                <option v-for="m in machines" :key="m.id" :value="m.id">{{ m.machine_name }}</option>
-                            </select>
+                            <div class="mt-1">
+                                <SearchableSelect
+                                    v-model="r.machine_id"
+                                    :options="machines"
+                                    value-key="id"
+                                    label-key="machine_name"
+                                    sublabel-key="machine_code"
+                                    placeholder="—"
+                                    :aria-label="t('master.machine')"
+                                    :error="form.errors[`items.${i}.machine_id`]"
+                                />
+                            </div>
                             <InputError :message="form.errors[`items.${i}.machine_id`]" class="mt-1" />
                         </div>
 

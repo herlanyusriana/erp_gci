@@ -5,6 +5,7 @@ import { Head, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import InputError from '@/Components/InputError.vue';
+import SearchableSelect from '@/Components/SearchableSelect.vue';
 import type { IncomingArrival, Supplier, PurchaseOrder, TruckingCompany } from '@/types';
 
 const { t } = useI18n();
@@ -308,32 +309,38 @@ function submit() {
                 <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.supplier') }} <span class="text-danger">*</span></label>
-                        <select
-                            :aria-label="t('incoming.supplier')"
-                            v-model="form.supplier_id"
-                            @change="onSupplierChange"
-                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
-                        >
-                            <option value="">{{ t('incoming.choose') }}</option>
-                            <option v-for="s in suppliers.filter(s => s.source === 'local')" :key="s.id" :value="s.id">{{ s.supplier_name }}</option>
-                        </select>
+                        <div class="mt-1">
+                            <SearchableSelect
+                                v-model="form.supplier_id"
+                                :options="suppliers.filter(s => s.source === 'local')"
+                                value-key="id"
+                                label-key="supplier_name"
+                                sublabel-key="supplier_code"
+                                :placeholder="t('incoming.choose')"
+                                :aria-label="t('incoming.supplier')"
+                                :error="form.errors.supplier_id"
+                                @change="onSupplierChange"
+                            />
+                        </div>
                         <InputError :message="form.errors.supplier_id" class="mt-1" />
                     </div>
 
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.purchaseOrder') }}</label>
-                        <select
-                            :aria-label="t('incoming.purchaseOrder')"
-                            v-model="form.purchase_order_id"
-                            @change="onPurchaseOrderChange"
-                            :disabled="!form.supplier_id"
-                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            <option value="">{{ t('incoming.choose') }}</option>
-                            <option v-for="po in filteredPurchaseOrders" :key="po.id" :value="po.id">
-                                {{ po.po_no }} (Sisa: {{ Number(po.remaining_qty || 0).toLocaleString() }})
-                            </option>
-                        </select>
+                        <div class="mt-1">
+                            <SearchableSelect
+                                v-model="form.purchase_order_id"
+                                :options="filteredPurchaseOrders.map(po => ({ id: po.id, po_no: po.po_no, remaining_label: `Sisa: ${Number(po.remaining_qty || 0).toLocaleString()}` }))"
+                                value-key="id"
+                                label-key="po_no"
+                                sublabel-key="remaining_label"
+                                :placeholder="t('incoming.choose')"
+                                :disabled="!form.supplier_id"
+                                :aria-label="t('incoming.purchaseOrder')"
+                                :error="form.errors.purchase_order_id"
+                                @change="onPurchaseOrderChange"
+                            />
+                        </div>
                         <InputError :message="form.errors.purchase_order_id" class="mt-1" />
                     </div>
 
@@ -407,26 +414,37 @@ function submit() {
                 <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.supplier') }} <span class="text-danger">*</span></label>
-                        <select :aria-label="t('incoming.supplier')" v-model="form.supplier_id" @change="onSupplierChange" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
-                            <option value="">{{ t('incoming.choose') }}</option>
-                            <option v-for="s in suppliers.filter(s => s.source === 'import')" :key="s.id" :value="s.id">{{ s.supplier_name }}</option>
-                        </select>
+                        <div class="mt-1">
+                            <SearchableSelect
+                                v-model="form.supplier_id"
+                                :options="suppliers.filter(s => s.source === 'import')"
+                                value-key="id"
+                                label-key="supplier_name"
+                                sublabel-key="supplier_code"
+                                :placeholder="t('incoming.choose')"
+                                :aria-label="t('incoming.supplier')"
+                                :error="form.errors.supplier_id"
+                                @change="onSupplierChange"
+                            />
+                        </div>
                         <InputError :message="form.errors.supplier_id" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.purchaseOrder') }}</label>
-                        <select
-                            :aria-label="t('incoming.purchaseOrder')"
-                            v-model="form.purchase_order_id"
-                            @change="onPurchaseOrderChange"
-                            :disabled="!form.supplier_id"
-                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            <option value="">{{ t('incoming.choose') }}</option>
-                            <option v-for="po in filteredPurchaseOrders" :key="po.id" :value="po.id">
-                                {{ po.po_no }} (Sisa: {{ Number(po.remaining_qty || 0).toLocaleString() }})
-                            </option>
-                        </select>
+                        <div class="mt-1">
+                            <SearchableSelect
+                                v-model="form.purchase_order_id"
+                                :options="filteredPurchaseOrders.map(po => ({ id: po.id, po_no: po.po_no, remaining_label: `Sisa: ${Number(po.remaining_qty || 0).toLocaleString()}` }))"
+                                value-key="id"
+                                label-key="po_no"
+                                sublabel-key="remaining_label"
+                                :placeholder="t('incoming.choose')"
+                                :disabled="!form.supplier_id"
+                                :aria-label="t('incoming.purchaseOrder')"
+                                :error="form.errors.purchase_order_id"
+                                @change="onPurchaseOrderChange"
+                            />
+                        </div>
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.invoiceNo') }}</label>
@@ -439,10 +457,17 @@ function submit() {
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.trucking') }}</label>
-                        <select :aria-label="t('incoming.trucking')" v-model="form.trucking_company_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
-                            <option value="">{{ t('incoming.choose') }}</option>
-                            <option v-for="tr in truckings" :key="tr.id" :value="tr.id">{{ tr.company_name }}</option>
-                        </select>
+                        <div class="mt-1">
+                            <SearchableSelect
+                                v-model="form.trucking_company_id"
+                                :options="truckings"
+                                value-key="id"
+                                label-key="company_name"
+                                sublabel-key="company_code"
+                                :placeholder="t('incoming.choose')"
+                                :aria-label="t('incoming.trucking')"
+                            />
+                        </div>
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.vessel') }}</label>

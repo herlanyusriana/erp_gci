@@ -5,6 +5,7 @@ import { computed } from 'vue';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
+import SearchableSelect from '@/Components/SearchableSelect.vue';
 import type { WorkOrderItem, WorkOrderMachine } from '@/types';
 
 const { t } = useI18n();
@@ -188,15 +189,17 @@ function submit() {
                                 <div class="sm:col-span-7">
                                     <label class="text-xs font-semibold text-ink-secondary">{{ t('production.material') }}</label>
                                     <div class="mt-1 flex gap-2">
-                                        <select :aria-label="t('production.material')" v-model="row.part_id" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
-                                            <option value="">{{ t('production.searchMaterial') }}</option>
-                                            <optgroup v-if="optionsWithStock.length" :label="t('production.withStock')">
-                                                <option v-for="o in optionsWithStock" :key="o.id" :value="o.id">{{ optionLabel(o) }}</option>
-                                            </optgroup>
-                                            <optgroup v-if="optionsWithoutStock.length" :label="t('production.withoutStock')">
-                                                <option v-for="o in optionsWithoutStock" :key="o.id" :value="o.id">{{ optionLabel(o) }}</option>
-                                            </optgroup>
-                                        </select>
+                                        <div class="w-full">
+                                            <SearchableSelect
+                                                v-model="row.part_id"
+                                                :options="materialOptions.map(o => ({ id: o.id, part_number: o.part_number, part_name: o.part_name, stock_badge: o.stock > 0 ? `Stok: ${o.stock}` : 'Tanpa stok' }))"
+                                                value-key="id"
+                                                label-key="part_number"
+                                                sublabel-key="part_name"
+                                                :placeholder="t('production.searchMaterial')"
+                                                :aria-label="t('production.material')"
+                                            />
+                                        </div>
                                         <button
                                             type="button"
                                             :disabled="row.part_id === ''"
@@ -290,10 +293,16 @@ function submit() {
                 <!-- Machine -->
                 <div>
                     <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.machine') }}</label>
-                    <select :aria-label="t('production.machine')" v-model="form.machine_id" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
-                        <option value="">{{ t('production.selectMachine') }}</option>
-                        <option v-for="m in machines" :key="m.id" :value="m.id">{{ m.machine_code }} · {{ m.machine_name }}</option>
-                    </select>
+                    <SearchableSelect
+                        v-model="form.machine_id"
+                        :options="machines"
+                        value-key="id"
+                        label-key="machine_name"
+                        sublabel-key="machine_code"
+                        :placeholder="t('production.selectMachine')"
+                        :aria-label="t('production.machine')"
+                        :error="form.errors.machine_id"
+                    />
                     <div v-if="form.errors.machine_id" class="mt-1 text-xs text-danger">{{ form.errors.machine_id }}</div>
                 </div>
 

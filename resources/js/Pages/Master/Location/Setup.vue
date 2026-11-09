@@ -6,6 +6,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import Pagination from '@/Components/Pagination.vue';
 import InputError from '@/Components/InputError.vue';
+import SearchableSelect from '@/Components/SearchableSelect.vue';
 import type { IncomingReceive, Paginated } from '@/types';
 
 const { t } = useI18n();
@@ -55,14 +56,18 @@ function assign() {
         <div class="mb-4 flex flex-wrap items-end gap-3 rounded-xl border border-borderline bg-surface p-4">
             <div class="min-w-56 flex-1">
                 <label class="text-xs font-semibold text-ink-secondary">{{ t('master.setupSelectLocation') }}</label>
-                <select
-                    :aria-label="t('master.setupSelectLocation')"
-                    v-model="form.location_code"
-                    class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
-                >
-                    <option value="">{{ t('master.setupSelectLocation') }}</option>
-                    <option v-for="loc in locations" :key="loc.code" :value="loc.code">{{ loc.code }} — {{ loc.name }}</option>
-                </select>
+                <div class="mt-1">
+                    <SearchableSelect
+                        v-model="form.location_code"
+                        :options="locations"
+                        value-key="code"
+                        label-key="code"
+                        sublabel-key="name"
+                        :placeholder="t('master.setupSelectLocation')"
+                        :aria-label="t('master.setupSelectLocation')"
+                        :error="form.errors.location_code"
+                    />
+                </div>
                 <InputError :message="form.errors.location_code" class="mt-1" />
             </div>
             <button

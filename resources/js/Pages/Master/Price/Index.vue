@@ -8,6 +8,7 @@ import ActionButton from '@/Components/ActionButton.vue';
 import Pagination from '@/Components/Pagination.vue';
 import Modal from '@/Components/Modal.vue';
 import InputError from '@/Components/InputError.vue';
+import SearchableSelect from '@/Components/SearchableSelect.vue';
 import type { PartPrice, Part, Supplier, Paginated, PageProps } from '@/types';
 import StatusBadge from '@/Components/StatusBadge.vue';
 
@@ -150,10 +151,16 @@ const fmtDate = (value: string | null | undefined) => {
 
         <div class="mb-4 flex flex-col gap-3 sm:flex-row">
             <input v-model="search" type="search" :placeholder="t('master.priceSearch')" :aria-label="t('master.priceSearch')" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
-            <select :aria-label="t('master.allSuppliers')" v-model="supplierId" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-64">
-                <option value="">{{ t('master.allSuppliers') }}</option>
-                <option v-for="s in suppliers" :key="s.id" :value="String(s.id)">{{ s.supplier_name }}</option>
-            </select>
+            <div class="w-full sm:w-64">
+                <SearchableSelect
+                    v-model="supplierId"
+                    :options="suppliers"
+                    value-key="id"
+                    label-key="supplier_name"
+                    :placeholder="t('master.allSuppliers')"
+                    :aria-label="t('master.allSuppliers')"
+                />
+            </div>
         </div>
 
         <div class="overflow-x-auto rounded-xl border border-borderline bg-surface">
@@ -205,18 +212,35 @@ const fmtDate = (value: string | null | undefined) => {
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.supplier') }}</label>
-                        <select :aria-label="t('master.supplier')" v-model="form.supplier_id" @change="onSupplierChange" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
-                            <option value="">—</option>
-                            <option v-for="s in suppliers" :key="s.id" :value="String(s.id)">{{ s.supplier_name }}</option>
-                        </select>
+                        <div class="mt-1">
+                            <SearchableSelect
+                                v-model="form.supplier_id"
+                                :options="suppliers"
+                                value-key="id"
+                                label-key="supplier_name"
+                                placeholder="—"
+                                :aria-label="t('master.supplier')"
+                                :error="form.errors.supplier_id"
+                                @change="onSupplierChange"
+                            />
+                        </div>
                         <InputError :message="form.errors.supplier_id" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.part') }}</label>
-                        <select :aria-label="t('master.part')" v-model="form.part_id" :disabled="!form.supplier_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary disabled:bg-background disabled:text-ink-secondary">
-                            <option value="">{{ t('master.selectPart') }}</option>
-                            <option v-for="p in partOptions" :key="p.id" :value="String(p.id)">{{ p.part_number }} · {{ p.part_name }}</option>
-                        </select>
+                        <div class="mt-1">
+                            <SearchableSelect
+                                v-model="form.part_id"
+                                :options="partOptions"
+                                value-key="id"
+                                label-key="part_number"
+                                sublabel-key="part_name"
+                                :placeholder="t('master.selectPart')"
+                                :disabled="!form.supplier_id"
+                                :aria-label="t('master.part')"
+                                :error="form.errors.part_id"
+                            />
+                        </div>
                         <p v-if="form.supplier_id && partOptions.length === 0" class="mt-1 text-xs text-warning">{{ t('master.supplierNoParts') }}</p>
                         <InputError :message="form.errors.part_id" class="mt-1" />
                     </div>

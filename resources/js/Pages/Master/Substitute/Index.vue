@@ -8,6 +8,7 @@ import ActionButton from '@/Components/ActionButton.vue';
 import Pagination from '@/Components/Pagination.vue';
 import Modal from '@/Components/Modal.vue';
 import InputError from '@/Components/InputError.vue';
+import SearchableSelect from '@/Components/SearchableSelect.vue';
 import type { PartSubstitute, Part, Supplier, Paginated, PageProps } from '@/types';
 
 const { t } = useI18n();
@@ -105,11 +106,20 @@ function openPackingForm() {
 }
 function closePackingForm() { showPackingForm.value = false; }
 function submitPackingType() {
+    const addedCode = packingForm.code.trim().toUpperCase();
     packingForm.post(route('substitutes.packing-types.store'), {
-        preserveState: false,
+        preserveState: true,
+        preserveScroll: true,
         onSuccess: () => {
             closePackingForm();
-            router.reload({ only: ['packingTypes'] });
+            router.reload({
+                only: ['packingTypes'],
+                onSuccess: () => {
+                    if (addedCode) {
+                        form.packing_type = addedCode;
+                    }
+                },
+            });
         },
     });
 }
@@ -161,10 +171,16 @@ function remove(s: PartSubstitute) {
         <!-- Filters -->
         <div class="mb-4 flex flex-col gap-3 sm:flex-row">
             <input v-model="search" type="search" :placeholder="t('master.substituteSearch')" :aria-label="t('master.substituteSearch')" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
-            <select :aria-label="t('master.allSuppliers')" v-model="supplierId" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-64">
-                <option value="">{{ t('master.allSuppliers') }}</option>
-                <option v-for="s in suppliers" :key="s.id" :value="String(s.id)">{{ s.supplier_name }}</option>
-            </select>
+            <div class="w-full sm:w-64">
+                <SearchableSelect
+                    v-model="supplierId"
+                    :options="suppliers"
+                    value-key="id"
+                    label-key="supplier_name"
+                    :placeholder="t('master.allSuppliers')"
+                    :aria-label="t('master.allSuppliers')"
+                />
+            </div>
         </div>
 
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
@@ -224,18 +240,35 @@ function remove(s: PartSubstitute) {
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.materialPart') }}</label>
-                        <select :aria-label="t('master.materialPart')" v-model="form.part_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
-                            <option value="">{{ t('master.selectPart') }}</option>
-                            <option v-for="p in availableMainParts" :key="p.id" :value="String(p.id)">{{ p.part_number }} · {{ p.part_name }}</option>
-                        </select>
+                        <div class="mt-1">
+                            <SearchableSelect
+                                v-model="form.part_id"
+                                :options="availableMainParts"
+                                value-key="id"
+                                label-key="part_number"
+                                sublabel-key="part_name"
+                                :placeholder="t('master.selectPart')"
+                                :aria-label="t('master.materialPart')"
+                                :error="form.errors.part_id"
+                            />
+                        </div>
                         <InputError :message="form.errors.part_id" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.substitutePart') }}</label>
-                        <select :aria-label="t('master.substitutePart')" v-model="form.substitute_part_id" @change="onSubstitutePartChange" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
-                            <option value="">{{ t('master.selectPart') }}</option>
-                            <option v-for="p in availableSubstituteParts" :key="p.id" :value="String(p.id)">{{ p.part_number }} · {{ p.part_name }}</option>
-                        </select>
+                        <div class="mt-1">
+                            <SearchableSelect
+                                v-model="form.substitute_part_id"
+                                :options="availableSubstituteParts"
+                                value-key="id"
+                                label-key="part_number"
+                                sublabel-key="part_name"
+                                :placeholder="t('master.selectPart')"
+                                :aria-label="t('master.substitutePart')"
+                                :error="form.errors.substitute_part_id"
+                                @change="onSubstitutePartChange"
+                            />
+                        </div>
                         <InputError :message="form.errors.substitute_part_id" class="mt-1" />
                     </div>
                     <div>
@@ -262,10 +295,18 @@ function remove(s: PartSubstitute) {
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.supplier') }}</label>
-                        <select :aria-label="t('master.supplier')" v-model="form.supplier_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
-                            <option value="">—</option>
-                            <option v-for="s in suppliers" :key="s.id" :value="String(s.id)">{{ s.supplier_name }}</option>
-                        </select>
+                        <div class="mt-1">
+                            <SearchableSelect
+                                v-model="form.supplier_id"
+                                :options="suppliers"
+                                value-key="id"
+                                label-key="supplier_name"
+                                sublabel-key="supplier_code"
+                                placeholder="—"
+                                :aria-label="t('master.supplier')"
+                                :error="form.errors.supplier_id"
+                            />
+                        </div>
                         <InputError :message="form.errors.supplier_id" class="mt-1" />
                     </div>
                     <div>

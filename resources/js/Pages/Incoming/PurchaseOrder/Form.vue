@@ -6,6 +6,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import InputError from '@/Components/InputError.vue';
 import PartSelect from '@/Components/PartSelect.vue';
+import SearchableSelect from '@/Components/SearchableSelect.vue';
 import type { PurchaseOrder, Supplier, Part } from '@/types';
 
 const { t } = useI18n();
@@ -187,10 +188,20 @@ function submit() {
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.supplier') }}</label>
-                        <select :aria-label="t('incoming.supplier')" v-model="form.supplier_id" @change="onSupplierChange" :disabled="isLocked" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary disabled:bg-background disabled:text-ink-secondary">
-                            <option value="">{{ t('incoming.chooseSupplier') }}</option>
-                            <option v-for="s in suppliers" :key="s.id" :value="s.id">{{ s.supplier_name }}</option>
-                        </select>
+                        <div class="mt-1">
+                            <SearchableSelect
+                                v-model="form.supplier_id"
+                                :options="suppliers"
+                                value-key="id"
+                                label-key="supplier_name"
+                                sublabel-key="supplier_code"
+                                :placeholder="t('incoming.chooseSupplier')"
+                                :disabled="isLocked"
+                                :aria-label="t('incoming.supplier')"
+                                :error="form.errors.supplier_id"
+                                @change="onSupplierChange"
+                            />
+                        </div>
                         <InputError :message="form.errors.supplier_id" class="mt-1" />
                     </div>
                     <div>

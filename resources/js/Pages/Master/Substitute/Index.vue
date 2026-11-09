@@ -19,6 +19,8 @@ const props = defineProps<{
     filters: { search?: string; supplier_id?: string };
     suppliers: Supplier[];
     parts: Part[];
+    mainParts?: Part[];
+    substituteParts?: Part[];
     packingTypes: Record<string, string[]>;
 }>();
 
@@ -58,12 +60,33 @@ const form = useForm({
 const showPackingForm = ref(false);
 const packingForm = useForm({ part_id: '', code: '' });
 
+/** Daftar Main Part (material acuan) untuk pilihan field Main Part */
+const availableMainParts = computed(() => {
+    const list = [...(props.mainParts ?? props.parts ?? [])];
+    const editPart = editing.value?.part;
+    if (editPart && !list.some((p) => p.id === editPart.id)) {
+        list.unshift(editPart as any);
+    }
+    return list;
+});
+
+/** Daftar Substitute Part (material pengganti supplier) untuk pilihan field Substitute Part */
+const availableSubstituteParts = computed(() => {
+    const list = [...(props.substituteParts ?? props.parts ?? [])];
+    const editSubPart = editing.value?.substitute_part;
+    if (editSubPart && !list.some((p) => p.id === editSubPart.id)) {
+        list.unshift(editSubPart as any);
+    }
+    return list;
+});
+
 /** Kode packing yang tersedia untuk part pengganti pada form. */
 const packingOptions = computed(() => props.packingTypes[String(form.substitute_part_id)] ?? []);
 
 /** UOM dari master part pengganti, baca-saja. */
 const substituteUom = computed(() => {
-    const part = props.parts.find((p) => String(p.id) === form.substitute_part_id);
+    const all = [...(props.substituteParts ?? []), ...(props.parts ?? [])];
+    const part = all.find((p) => String(p.id) === form.substitute_part_id);
     return part?.uom?.code ?? '—';
 });
 
@@ -203,7 +226,7 @@ function remove(s: PartSubstitute) {
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.materialPart') }}</label>
                         <select :aria-label="t('master.materialPart')" v-model="form.part_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                             <option value="">{{ t('master.selectPart') }}</option>
-                            <option v-for="p in parts" :key="p.id" :value="String(p.id)">{{ p.part_number }} · {{ p.part_name }}</option>
+                            <option v-for="p in availableMainParts" :key="p.id" :value="String(p.id)">{{ p.part_number }} · {{ p.part_name }}</option>
                         </select>
                         <InputError :message="form.errors.part_id" class="mt-1" />
                     </div>
@@ -211,7 +234,7 @@ function remove(s: PartSubstitute) {
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.substitutePart') }}</label>
                         <select :aria-label="t('master.substitutePart')" v-model="form.substitute_part_id" @change="onSubstitutePartChange" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                             <option value="">{{ t('master.selectPart') }}</option>
-                            <option v-for="p in parts" :key="p.id" :value="String(p.id)">{{ p.part_number }} · {{ p.part_name }}</option>
+                            <option v-for="p in availableSubstituteParts" :key="p.id" :value="String(p.id)">{{ p.part_number }} · {{ p.part_name }}</option>
                         </select>
                         <InputError :message="form.errors.substitute_part_id" class="mt-1" />
                     </div>

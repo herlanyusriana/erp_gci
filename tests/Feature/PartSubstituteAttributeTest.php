@@ -429,4 +429,31 @@ class PartSubstituteAttributeTest extends TestCase
 
         $this->assertDatabaseHas('part_substitutes', ['id' => $relation->id]);
     }
+
+    public function test_index_separates_main_parts_and_substitute_parts_excluding_wip_and_fg(): void
+    {
+        $this->actingAs($this->admin())
+            ->get(route('substitutes.index'))
+            ->assertOk()
+            ->assertInertia(function (AssertableInertia $page) {
+                $page->component('Master/Substitute/Index')
+                    ->has('mainParts')
+                    ->has('substituteParts');
+
+                $mainParts = collect($page->toArray()['props']['mainParts']);
+                $substituteParts = collect($page->toArray()['props']['substituteParts']);
+
+                // Main parts harus memuat main material BOM, tidak memuat WIP/FG
+                $this->assertTrue($mainParts->isNotEmpty());
+                $this->assertTrue($substituteParts->isNotEmpty());
+
+                // Pastikan tidak ada part WIP atau FG di kedua dropdown
+                $allPartIds = $mainParts->pluck('id')->merge($substituteParts->pluck('id'))->unique();
+                $invalidCount = Part::whereIn('id', $allPartIds)
+                    ->whereHas('partType', fn ($q) => $q->whereIn('code', ['FG', 'WIP']))
+                    ->count();
+
+                $this->assertSame(0, $invalidCount);
+            });
+    }
 }

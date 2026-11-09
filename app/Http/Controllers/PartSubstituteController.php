@@ -9,6 +9,7 @@ use App\Models\Supplier;
 use App\Rules\PartTypeRule;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -37,13 +38,40 @@ class PartSubstituteController extends Controller
 
         $substitutes = $query->orderBy('id')->paginate(15)->withQueryString();
 
+        $mainPartIds = DB::table('part_substitutes')->distinct()->pluck('part_id')->all();
+        $bomChildIds = DB::table('bom_items')->distinct()->pluck('child_part_id')->all();
+        $subPartIds = DB::table('part_substitutes')->distinct()->pluck('substitute_part_id')->all();
+
+        // Main parts: part non-FG yang menjadi acuan BOM, induk substitute, atau belum menjadi sub part lain
+        $mainParts = Part::whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))
+            ->where(function ($q) use ($mainPartIds, $bomChildIds, $subPartIds) {
+                $q->whereIn('id', $mainPartIds)
+                    ->orWhereIn('id', $bomChildIds)
+                    ->orWhereNotIn('id', $subPartIds);
+            })
+            ->whereDoesntHave('partType', fn ($q) => $q->whereRaw('LOWER(code) = ?', ['wip']))
+            ->with('uom:id,code')
+            ->orderBy('part_number')
+            ->get(['id', 'part_number', 'part_name', 'uom_id']);
+
+        // Substitute parts: part non-FG yang didaftarkan sebagai pengganti supplier, atau belum menjadi main part
+        $substituteParts = Part::whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))
+            ->where(function ($q) use ($subPartIds, $mainPartIds) {
+                $q->whereIn('id', $subPartIds)
+                    ->orWhereNotIn('id', $mainPartIds);
+            })
+            ->whereDoesntHave('partType', fn ($q) => $q->whereRaw('LOWER(code) = ?', ['wip']))
+            ->with('uom:id,code')
+            ->orderBy('part_number')
+            ->get(['id', 'part_number', 'part_name', 'uom_id']);
+
         return Inertia::render('Master/Substitute/Index', [
             'substitutes' => $substitutes,
             'filters' => $request->only('search', 'supplier_id'),
             'suppliers' => Supplier::orderBy('supplier_name')->get(['id', 'supplier_code', 'supplier_name']),
-            'parts' => Part::whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))
-                ->with('uom:id,code')
-                ->orderBy('part_number')->get(['id', 'part_number', 'part_name', 'uom_id']),
+            'parts' => $mainParts->merge($substituteParts)->unique('id')->values(),
+            'mainParts' => $mainParts,
+            'substituteParts' => $substituteParts,
             'packingTypes' => $this->packingTypeOptions(),
         ]);
     }

@@ -62,7 +62,7 @@ defineProps<{
                             <td class="px-4 py-3">
                                 <div class="flex justify-end gap-1.5">
                                     <Link
-                                        :href="route('incoming-arrivals.show', a.id)"
+                                        :href="route('receive.show', a.id)"
                                         :disabled="a.iqc_status !== 'passed'"
                                         class="rounded-md px-3 py-2 text-xs font-semibold text-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                                         :class="a.iqc_status === 'passed' ? 'bg-primary hover:bg-primary-hover' : 'bg-ink-secondary/40 cursor-not-allowed pointer-events-none'"

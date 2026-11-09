@@ -116,6 +116,7 @@ Route::middleware(['auth'])->group(function () {
 
     // Receive (FIFO tag)
     Route::get('receive', [ReceiveController::class, 'index'])->name('receive.index');
+    Route::get('receive/{arrival}', [ReceiveController::class, 'show'])->name('receive.show');
     Route::get('arrival-items/{arrivalItem}/receive', [ReceiveController::class, 'create'])->name('receive.create');
     Route::post('arrival-items/{arrivalItem}/receive', [ReceiveController::class, 'store'])->name('receive.store');
     Route::get('receives/{receive}/label', [ReceiveController::class, 'printLabel'])->name('receive.label');

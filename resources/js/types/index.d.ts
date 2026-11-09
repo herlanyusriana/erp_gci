@@ -313,8 +313,12 @@ export interface IncomingReceive {
     tag: string | null;
     qty: number;
     qty_unit: string | null;
+    bundle_count?: number | null;
     bundle_qty: number | null;
     bundle_unit: string | null;
+    packing_count?: number | null;
+    packing_type?: string | null;
+    packing_qty?: number | null;
     net_weight: number | null;
     gross_weight: number | null;
     qc_status: string | null;

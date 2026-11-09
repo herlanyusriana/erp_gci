@@ -5,14 +5,28 @@
     $incomingPartNo = $part?->part_number ?? $arrivalItem?->part_id ?? '-';
     $partName = $part?->part_name ?? '-';
 
-    if ($weightBasis) {
-        // Basis berat (KGM): baris utama = berat; baris sekunder = qty barang.
-        $qtyWeightText = number_format((float) ($receive->net_weight ?? $receive->weight ?? 0), 2) . ' KGM';
-        $qtySecondaryText = number_format((float) ($receive->qty ?? 0), 0) . ' ' . $goodsUnit;
+    $bCount = $receive->bundle_count ?? $receive->bundle_qty;
+    $bUnit = $receive->bundle_unit ?? 'PALLET';
+    $pCount = $receive->packing_count ?? 1;
+    $pType = $receive->packing_type ?? 'BOX';
+    $pQty = $receive->packing_qty;
+
+    if ($bCount && $pCount && $pQty) {
+        $packagingText = (float)$bCount . ' ' . $bUnit . ' @ ' . (float)$pCount . ' ' . $pType . ' @ ' . number_format((float)$pQty, 0) . ' ' . $goodsUnit;
+    } elseif ($bCount) {
+        $packagingText = (float)$bCount . ' ' . $bUnit;
     } else {
-        // Basis qty (local/barang): baris utama = qty; baris sekunder = '-'.
+        $packagingText = null;
+    }
+
+    if ($weightBasis) {
+        // Basis berat (KGM): baris utama = berat; baris sekunder = kemasan / qty barang.
+        $qtyWeightText = number_format((float) ($receive->net_weight ?? $receive->weight ?? 0), 2) . ' KGM';
+        $qtySecondaryText = $packagingText ?: (number_format((float) ($receive->qty ?? 0), 0) . ' ' . $goodsUnit);
+    } else {
+        // Basis qty (local/barang): baris utama = qty; baris sekunder = rincian kemasan.
         $qtyWeightText = number_format((float) ($receive->qty ?? 0), 0) . ' ' . $goodsUnit;
-        $qtySecondaryText = '-';
+        $qtySecondaryText = $packagingText ?: '-';
     }
 
     $monthBox = str_pad((string) ($monthNumber ?? 1), 2, '0', STR_PAD_LEFT);

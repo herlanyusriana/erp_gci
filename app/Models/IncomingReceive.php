@@ -13,7 +13,8 @@ class IncomingReceive extends Model
     protected $fillable = [
         'arrival_item_id', 'part_id',
         'tag', 'qty', 'qty_unit',
-        'bundle_qty', 'bundle_unit',
+        'bundle_count', 'bundle_qty', 'bundle_unit',
+        'packing_count', 'packing_type', 'packing_qty',
         'weight', 'net_weight', 'gross_weight', 'weight_kgm',
         'location_code', 'qc_status',
         'invoice_no', 'delivery_note_no', 'truck_no', 'jo_po_number',
@@ -22,7 +23,10 @@ class IncomingReceive extends Model
 
     protected $casts = [
         'qty' => 'float',
+        'bundle_count' => 'float',
         'bundle_qty' => 'float',
+        'packing_count' => 'float',
+        'packing_qty' => 'float',
         'weight' => 'float',
         'net_weight' => 'float',
         'gross_weight' => 'float',

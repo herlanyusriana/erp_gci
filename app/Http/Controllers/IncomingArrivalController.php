@@ -6,7 +6,6 @@ use App\Exports\ArrivalDetailExport;
 use App\Models\IncomingArrival;
 use App\Models\IncomingArrivalContainer;
 use App\Models\IncomingArrivalItem;
-use App\Models\IncomingReceive;
 use App\Models\Part;
 use App\Models\PartSubstitute;
 use App\Models\PurchaseOrder;
@@ -396,18 +395,17 @@ class IncomingArrivalController extends Controller
             'trucking',
             'purchaseOrder',
             'items.part',
-            'items.receives',
             'containers.inspection',
         ]);
 
         $pending = collect($arrival->items)->map(function ($item) {
-            $received = (float) $item->receives
-                ->sum(fn (IncomingReceive $r) => (float) ($r->net_weight ?? $r->weight ?? $r->qty ?? 0));
+            $received = (float) $item->receives()
+                ->sum(DB::raw('COALESCE(net_weight, weight, qty, 0)'));
 
             return [
                 'item' => $item,
                 'received' => $received,
-                'remaining' => max(0, (float) $item->weight_nett - $received),
+                'remaining' => max(0, (float) ($item->weight_nett ?: $item->qty_goods) - $received),
             ];
         });
 

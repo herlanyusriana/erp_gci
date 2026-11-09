@@ -47,6 +47,35 @@ class ReceiveController extends Controller
         ]);
     }
 
+    public function show(IncomingArrival $arrival): Response
+    {
+        Gate::authorize('viewAny', IncomingReceive::class);
+
+        $arrival->load([
+            'supplier',
+            'trucking',
+            'purchaseOrder',
+            'items.part',
+            'items.receives',
+            'containers.inspection',
+        ]);
+
+        $pending = collect($arrival->items)->map(function ($item) {
+            return [
+                'item' => $item,
+                'planned' => $this->receiveService->plannedQuantity($item),
+                'received' => $this->receiveService->receivedQuantity($item),
+                'remaining' => $this->receiveService->remainingQty($item),
+            ];
+        });
+
+        return Inertia::render('Incoming/Receive/Show', [
+            'arrival' => $arrival,
+            'pending' => $pending,
+            'weightUnit' => UomCatalog::WEIGHT,
+        ]);
+    }
+
     public function create(IncomingArrivalItem $arrivalItem): Response
     {
         Gate::authorize('create', IncomingReceive::class);
@@ -102,8 +131,12 @@ class ReceiveController extends Controller
             'tags' => ['required', 'array', 'min:1'],
             'tags.*.tag' => ['required', 'string', 'max:255'],
             'tags.*.qty' => ['required', 'numeric', 'min:0.0001'],
+            'tags.*.bundle_count' => ['nullable', 'numeric', 'min:0'],
             'tags.*.bundle_qty' => ['nullable', 'numeric', 'min:0'],
-            'tags.*.bundle_unit' => ['nullable', 'string', 'max:20', Rule::in(UomCatalog::packingUnits())],
+            'tags.*.bundle_unit' => ['nullable', 'string', 'max:50'],
+            'tags.*.packing_count' => ['nullable', 'numeric', 'min:0'],
+            'tags.*.packing_type' => ['nullable', 'string', 'max:50'],
+            'tags.*.packing_qty' => ['nullable', 'numeric', 'min:0'],
             'tags.*.net_weight' => $weightBasis
                 ? ['required', 'numeric', 'min:0.0001']
                 : ['nullable', 'numeric'],
@@ -155,8 +188,10 @@ class ReceiveController extends Controller
                     ]);
                 }
 
-                // Berat: basis KGM wajib; basis qty (local) biarkan null → stok pakai qty.
-                $netWeight = $weightBasis ? (float) ($tagData['net_weight'] ?? $tagData['qty']) : null;
+                // Berat bersih dan kotor: selalu dalam basis KGM
+                $netWeight = isset($tagData['net_weight']) && $tagData['net_weight'] !== null && $tagData['net_weight'] !== ''
+                    ? (float) $tagData['net_weight']
+                    : ($weightBasis ? (float) $tagData['qty'] : null);
 
                 $tag = $this->receiveService->normalizeTag($tagData['tag'] ?? null);
 
@@ -164,8 +199,12 @@ class ReceiveController extends Controller
                     'part_id' => $partId,
                     'tag' => $tag,
                     'qty' => $tagData['qty'],
-                    'bundle_qty' => $tagData['bundle_qty'] ?? null,
+                    'bundle_count' => $tagData['bundle_count'] ?? $tagData['bundle_qty'] ?? null,
+                    'bundle_qty' => $tagData['bundle_count'] ?? $tagData['bundle_qty'] ?? null,
                     'bundle_unit' => $tagData['bundle_unit'] ?? null,
+                    'packing_count' => $tagData['packing_count'] ?? 1,
+                    'packing_type' => $tagData['packing_type'] ?? null,
+                    'packing_qty' => $tagData['packing_qty'] ?? null,
                     'weight' => $netWeight,
                     'net_weight' => $netWeight,
                     'gross_weight' => $tagData['gross_weight'] ?? null,
@@ -198,7 +237,7 @@ class ReceiveController extends Controller
                 : __('TAG tersimpan. Masih ada pending.');
 
             return redirect()
-                ->route(($arrival->is_local ? 'local-pos.show' : 'incoming-arrivals.show'), $arrival)->with('success', $message);
+                ->route('receive.show', $arrival)->with('success', $message);
         }
 
         return redirect()->route('receive.index')->with('success', __('TAG tersimpan.'));
@@ -272,8 +311,12 @@ class ReceiveController extends Controller
             'truck_no' => ['nullable', 'string', 'max:50'],
             'location_code' => $this->locationRule(),
             'qty' => ['required', 'numeric', 'min:0.0001'],
+            'bundle_count' => ['nullable', 'numeric', 'min:0'],
             'bundle_qty' => ['nullable', 'numeric', 'min:0'],
-            'bundle_unit' => ['nullable', 'string', 'max:20', Rule::in(UomCatalog::packingUnits())],
+            'bundle_unit' => ['nullable', 'string', 'max:50'],
+            'packing_count' => ['nullable', 'numeric', 'min:0'],
+            'packing_type' => ['nullable', 'string', 'max:50'],
+            'packing_qty' => ['nullable', 'numeric', 'min:0'],
             'net_weight' => $weightBasis
                 ? ['required', 'numeric', 'min:0.0001']
                 : ['nullable', 'numeric'],
@@ -314,8 +357,12 @@ class ReceiveController extends Controller
                     : []),
                 'tag' => $tag,
                 'qty' => $validated['qty'],
-                'bundle_qty' => $validated['bundle_qty'] ?? null,
+                'bundle_count' => $validated['bundle_count'] ?? $validated['bundle_qty'] ?? null,
+                'bundle_qty' => $validated['bundle_count'] ?? $validated['bundle_qty'] ?? null,
                 'bundle_unit' => $validated['bundle_unit'] ?? null,
+                'packing_count' => $validated['packing_count'] ?? 1,
+                'packing_type' => $validated['packing_type'] ?? null,
+                'packing_qty' => $validated['packing_qty'] ?? null,
                 'weight' => $netWeight,
                 'net_weight' => $netWeight,
                 'gross_weight' => $validated['gross_weight'] ?? null,
@@ -328,10 +375,8 @@ class ReceiveController extends Controller
             $this->receiveService->postStock($receive);
         });
 
-        $route = $arrivalItem->arrival?->is_local ? 'local-pos.show' : 'incoming-arrivals.show';
-
         return redirect()
-            ->route($route, $arrivalItem->arrival)->with('success', __('Receive updated.'));
+            ->route('receive.show', $arrivalItem->arrival)->with('success', __('Receive updated.'));
     }
 
     public function destroy(IncomingReceive $receive): RedirectResponse
@@ -344,10 +389,8 @@ class ReceiveController extends Controller
             $receive->delete();
         });
 
-        $route = $receive->arrivalItem->arrival?->is_local ? 'local-pos.show' : 'incoming-arrivals.show';
-
         return redirect()
-            ->route($route, $receive->arrivalItem->arrival)->with('success', __('Receive :tag deleted.', ['tag' => $receive->tag]));
+            ->route('receive.show', $receive->arrivalItem->arrival)->with('success', __('Receive :tag deleted.', ['tag' => $receive->tag]));
     }
 
     /**

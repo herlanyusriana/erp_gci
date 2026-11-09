@@ -117,8 +117,10 @@ export interface PartSubstitute {
     packing_type: string | null;
     source: string | null;
     is_active: boolean;
-    part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
+    part?: Pick<Part, 'id' | 'part_number' | 'part_name'> & { model?: string | null; size?: string | null } | null;
     substitute_part?: (Pick<Part, 'id' | 'part_number' | 'part_name'> & {
+        model?: string | null;
+        size?: string | null;
         uom?: Pick<Uom, 'id' | 'code'> | null;
     }) | null;
     supplier?: Pick<Supplier, 'id' | 'supplier_code' | 'supplier_name'> | null;

@@ -23,8 +23,8 @@ class PartSubstituteController extends Controller
 
         $query = PartSubstitute::query()
             ->with([
-                'part:id,part_number,part_name',
-                'substitutePart:id,part_number,part_name,uom_id',
+                'part:id,part_number,part_name,model,size',
+                'substitutePart:id,part_number,part_name,uom_id,model,size',
                 'substitutePart.uom:id,code',
                 'supplier:id,supplier_code,supplier_name',
             ])
@@ -36,7 +36,14 @@ class PartSubstituteController extends Controller
             })
             ->when($request->input('supplier_id'), fn ($q, $sid) => $q->where('supplier_id', $sid));
 
-        $substitutes = $query->orderBy('id')->paginate(15)->withQueryString();
+        // Urut per main part lalu substitutenya, supaya daftar mudah dibaca
+        // sebagai kelompok main part dengan seluruh substitutenya.
+        $substitutes = $query
+            ->orderBy('part_id')
+            ->orderBy('substitute_part_id')
+            ->orderBy('id')
+            ->paginate(25)
+            ->withQueryString();
 
         $mainPartIds = DB::table('part_substitutes')->distinct()->pluck('part_id')->all();
         $bomChildIds = DB::table('bom_items')->distinct()->pluck('child_part_id')->all();

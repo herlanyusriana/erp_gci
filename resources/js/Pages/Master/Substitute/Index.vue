@@ -45,6 +45,60 @@ const perms = computed(() => {
     return { create: has('part_substitute.create') || has('part.create'), update: has('part_substitute.update') || has('part.update'), delete: has('part_substitute.delete') || has('part.delete') };
 });
 
+/** Nilai master `-` / kosong ditampilkan sebagai em dash, bukan strip mentah. */
+function clean(value: string | null | undefined): string {
+    const text = (value ?? '').trim();
+    return text === '' || text === '-' ? '—' : text;
+}
+
+/**
+ * Size per substitusi: kolom relasi dulu (khusus supplier), lalu fallback ke
+ * size master part pengganti.
+ */
+function substituteSize(s: PartSubstitute): string {
+    return clean(s.size) !== '—' ? clean(s.size) : clean(s.substitute_part?.size);
+}
+
+/** Model diambil dari master part pengganti. */
+function substituteModel(s: PartSubstitute): string {
+    return clean(s.substitute_part?.model);
+}
+
+interface SubstituteGroup {
+    mainId: number;
+    partNumber: string;
+    partName: string;
+    model: string;
+    rows: PartSubstitute[];
+}
+
+/** Satu baris header per main part, seluruh substitutenya di bawahnya. */
+const substituteGroups = computed<SubstituteGroup[]>(() => {
+    const groups: SubstituteGroup[] = [];
+    const index = new Map<number, SubstituteGroup>();
+
+    for (const row of props.substitutes.data) {
+        const mainId = Number(row.part_id);
+        let group = index.get(mainId);
+
+        if (!group) {
+            group = {
+                mainId,
+                partNumber: row.part?.part_number ?? '—',
+                partName: row.part?.part_name ?? '',
+                model: clean(row.part?.model),
+                rows: [],
+            };
+            index.set(mainId, group);
+            groups.push(group);
+        }
+
+        group.rows.push(row);
+    }
+
+    return groups;
+});
+
 const showForm = ref(false);
 const editing = ref<PartSubstitute | null>(null);
 const form = useForm({
@@ -190,6 +244,7 @@ function remove(s: PartSubstitute) {
                         <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                             <th scope="col" class="px-4 py-3">{{ t('master.materialPart') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('master.substitutePart') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.model') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('master.size') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('master.uom') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('master.packingType') }}</th>
@@ -199,32 +254,39 @@ function remove(s: PartSubstitute) {
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-borderline">
-                        <tr v-for="s in substitutes.data" :key="s.id" class="hover:bg-primary-light/40">
-                            <td class="px-4 py-3">
-                                <div class="font-medium text-ink-primary">{{ s.part?.part_number ?? '—' }}</div>
-                                <div class="text-xs text-ink-secondary">{{ s.part?.part_name }}</div>
-                            </td>
-                            <td class="px-4 py-3">
-                                <div class="font-medium text-ink-primary">{{ s.substitute_part?.part_number ?? '—' }}</div>
-                                <div class="text-xs text-ink-secondary">{{ s.substitute_part?.part_name }}</div>
-                            </td>
-                            <td class="px-4 py-3 text-ink-primary">{{ s.size || '—' }}</td>
-                            <td class="px-4 py-3 text-ink-primary">{{ s.substitute_part?.uom?.code ?? '—' }}</td>
-                            <td class="px-4 py-3 text-ink-primary">{{ s.packing_type ?? '—' }}</td>
-                            <td class="px-4 py-3 text-ink-primary">{{ s.supplier?.supplier_name ?? '—' }}</td>
-                            <td class="px-4 py-3">
-                                <div class="text-ink-primary">{{ s.material_group ?? '—' }}</div>
-                                <div class="text-xs text-ink-secondary">{{ s.source ?? '—' }}</div>
-                            </td>
-                            <td class="px-4 py-3">
-                                <div class="flex justify-end gap-1.5">
-                                    <ActionButton v-if="perms.update" :label="t('master.edit')" variant="edit" @click="openEdit(s)" />
-                                    <ActionButton v-if="perms.delete" :label="t('master.delete')" variant="delete" @click="remove(s)" />
-                                </div>
-                            </td>
-                        </tr>
+                        <template v-for="g in substituteGroups" :key="g.mainId">
+                            <tr v-for="(s, i) in g.rows" :key="s.id" :class="i === 0 ? 'border-t-2 border-borderline' : ''">
+                                <!-- Main part: satu sel untuk seluruh substitutenya -->
+                                <td v-if="i === 0" :rowspan="g.rows.length" class="bg-background/40 px-4 py-3 align-top">
+                                    <div class="font-semibold text-ink-primary">{{ g.partNumber }}</div>
+                                    <div class="text-xs text-ink-secondary">{{ g.partName }}</div>
+                                    <div v-if="g.model !== '—'" class="mt-1 text-xs text-ink-secondary">{{ g.model }}</div>
+                                    <div class="mt-1 text-[11px] text-ink-secondary">{{ g.rows.length }} substitute</div>
+                                </td>
+
+                                <td class="px-4 py-3">
+                                    <div class="font-medium text-ink-primary">{{ s.substitute_part?.part_number ?? '—' }}</div>
+                                    <div class="text-xs text-ink-secondary">{{ s.substitute_part?.part_name }}</div>
+                                </td>
+                                <td class="px-4 py-3 text-ink-primary">{{ substituteModel(s) }}</td>
+                                <td class="px-4 py-3 tabular-nums text-ink-primary">{{ substituteSize(s) }}</td>
+                                <td class="px-4 py-3 text-ink-primary">{{ s.substitute_part?.uom?.code ?? '—' }}</td>
+                                <td class="px-4 py-3 text-ink-primary">{{ s.packing_type ?? '—' }}</td>
+                                <td class="px-4 py-3 text-ink-primary">{{ s.supplier?.supplier_name ?? '—' }}</td>
+                                <td class="px-4 py-3">
+                                    <div class="text-ink-primary">{{ clean(s.material_group) }}</div>
+                                    <div class="text-xs text-ink-secondary">{{ clean(s.source) }}</div>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <div class="flex justify-end gap-1.5">
+                                        <ActionButton v-if="perms.update" :label="t('master.edit')" variant="edit" @click="openEdit(s)" />
+                                        <ActionButton v-if="perms.delete" :label="t('master.delete')" variant="delete" @click="remove(s)" />
+                                    </div>
+                                </td>
+                            </tr>
+                        </template>
                         <tr v-if="substitutes.data.length === 0">
-                            <td colspan="8" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.substituteEmpty') }}</td>
+                            <td colspan="9" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.substituteEmpty') }}</td>
                         </tr>
                     </tbody>
                 </table>

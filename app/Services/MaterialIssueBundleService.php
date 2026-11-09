@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Models\IncomingReceive;
 use App\Models\PartStock;
 use App\Models\WorkOrder;
 use App\Models\WorkOrderItem;
@@ -34,7 +35,7 @@ class MaterialIssueBundleService
     public function forTag(WorkOrderItem $item, WorkOrder $workOrder, string $tag): array
     {
         $stock = PartStock::query()
-            ->with(['receive:id,invoice_no,arrival_item_id,bundle_qty,bundle_unit', 'receive.arrivalItem:id,arrival_id,part_id,material_group,size,unit_goods'])
+            ->with(['receive:id,invoice_no,arrival_item_id,bundle_count,bundle_qty,bundle_unit,packing_count,packing_type,packing_qty', 'receive.arrivalItem:id,arrival_id,part_id,material_group,size,unit_goods'])
             ->whereRaw('LOWER(COALESCE(tag, \'\')) = ?', [mb_strtolower(trim($tag))])
             ->where('qty', '>', 0)
             ->whereIn('part_id', $this->allowedPartIds($item))
@@ -59,7 +60,7 @@ class MaterialIssueBundleService
     public function forStock(WorkOrderItem $item, WorkOrder $workOrder, int $partStockId): ?array
     {
         $stock = PartStock::query()
-            ->with(['receive:id,invoice_no,arrival_item_id,bundle_qty,bundle_unit', 'receive.arrivalItem:id,arrival_id,part_id,material_group,size,unit_goods'])
+            ->with(['receive:id,invoice_no,arrival_item_id,bundle_count,bundle_qty,bundle_unit,packing_count,packing_type,packing_qty', 'receive.arrivalItem:id,arrival_id,part_id,material_group,size,unit_goods'])
             ->whereKey($partStockId)
             ->where('qty', '>', 0)
             ->first();
@@ -133,16 +134,24 @@ class MaterialIssueBundleService
     }
 
     /**
-     * Jumlah bundle pada satu tag penerimaan: pakai bundle_qty dari receive,
-     * fallback 1 (tag dianggap satu bundle utuh) bila operator tidak mengisinya.
+     * Jumlah kemasan individual yang dapat dipilih pada satu tag penerimaan.
+     * Bila terdapat sub-kemasan bertingkat (misal 2 Pallet @ 5 Box), jumlahnya
+     * adalah total sub-kemasannya (10 Box).
      */
     public function bundleCount(PartStock $stock): int
     {
         $receive = $stock->receive;
 
-        $count = $receive?->bundle_qty !== null ? (int) round((float) $receive->bundle_qty) : 0;
+        $bCount = (float) ($receive?->bundle_count ?? $receive?->bundle_qty ?? 0);
+        $pCount = (float) ($receive?->packing_count ?? 1);
 
-        return (int) min(max(1, $count), self::MAX_BUNDLES);
+        if ($bCount > 0) {
+            $totalPackages = (int) round($bCount * max(1.0, $pCount));
+
+            return (int) min(max(1, $totalPackages), self::MAX_BUNDLES);
+        }
+
+        return 1;
     }
 
     /**
@@ -157,6 +166,10 @@ class MaterialIssueBundleService
         $net = $this->netRequirement($item);
         $receive = $stock->receive;
         $arrivalItem = $receive?->arrivalItem;
+
+        // Satuan kemasan individual yang dicentang: pakai jenis packing dalam jika ada (mis. BOX),
+        // fallback ke bundle_unit (mis. PALLET / BUNDLE)
+        $itemPackingUnit = $receive?->packing_type ?: ($receive?->bundle_unit ?: 'bundle');
 
         // `net_requirement` sudah memperhitungkan issued + stok di mesin; jangan
         // kurangi dua kali.
@@ -180,9 +193,10 @@ class MaterialIssueBundleService
             'invoice_no' => $receive?->invoice_no,
             'uom' => $uom,
             'total_qty' => round($totalQty, 4),
-            'bundle_unit' => $receive?->bundle_unit,
+            'bundle_unit' => $itemPackingUnit,
             'bundle_count' => $plan['bundle_count'],
             'packing_qty' => $plan['packing_qty'],
+            'packaging_text' => $this->packagingSummary($receive),
             'bundles' => $plan['bundles'],
             'net_requirement' => $plan['net_requirement'],
             'required_qty' => $net['required_qty'],
@@ -197,6 +211,24 @@ class MaterialIssueBundleService
             ],
             'work_order_item_id' => (int) $item->id,
         ];
+    }
+
+    private function packagingSummary(?IncomingReceive $receive): ?string
+    {
+        if ($receive === null) {
+            return null;
+        }
+
+        $bCount = $receive->bundle_count ?? $receive->bundle_qty;
+        $bUnit = $receive->bundle_unit ?? 'PALLET';
+        $pCount = $receive->packing_count ?? 1;
+        $pType = $receive->packing_type ?? 'BOX';
+
+        if ($bCount && $pCount && $pCount > 1) {
+            return "{$bCount} {$bUnit} @ {$pCount} {$pType}";
+        }
+
+        return $bCount ? "{$bCount} {$bUnit}" : null;
     }
 
     private function requiredQty(WorkOrderItem $item): float

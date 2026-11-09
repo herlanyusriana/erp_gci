@@ -156,6 +156,25 @@ it('serves the issue plan over the api', function () {
         ->assertJsonCount(10, 'data.bundles');
 });
 
+it('supports multi tier packaging resolution with bundle and packing counts', function () {
+    [$wo, $item, $stock, $receive] = bundleIssueContext(16000, 16000, 20000, 10);
+    $receive->update([
+        'bundle_count' => 2,
+        'bundle_unit' => 'PALLET',
+        'packing_count' => 5,
+        'packing_type' => 'BOX',
+        'packing_qty' => 2000,
+    ]);
+
+    $plan = app(MaterialIssueBundleService::class)->forTag($item, $wo, $receive->tag);
+
+    // 2 Pallet @ 5 Box = 10 Box total
+    expect($plan['bundle_count'])->toBe(10)
+        ->and($plan['bundle_unit'])->toBe('BOX')
+        ->and($plan['packing_qty'])->toBe(2000.0)
+        ->and($plan['packaging_text'])->toBe('2 PALLET @ 5 BOX');
+});
+
 it('rejects a confirm whose total issue exceeds the net requirement when the bundle plan flag is set', function () {
     [$wo, $item, $stock, $receive] = bundleIssueContext(16000, 16000, 20000, 10);
     $this->actingAs(User::where('email', 'admin@geumcheon.local')->firstOrFail());

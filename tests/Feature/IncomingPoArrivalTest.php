@@ -126,4 +126,75 @@ class IncomingPoArrivalTest extends TestCase
         $arrival->update(['iqc_status' => 'passed']);
         $this->get(route('receive.create', $item->id))->assertOk();
     }
+
+    public function test_arrival_stores_and_updates_bundle_packaging_and_gross_weight(): void
+    {
+        $supplier = Supplier::where('is_active', true)->firstOrFail();
+        $part = Part::whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))->firstOrFail();
+
+        $invNo = 'INV-BUNDLE-'.uniqid();
+        $response = $this->post(route('incoming-arrivals.store'), [
+            'is_local' => false,
+            'supplier_id' => $supplier->id,
+            'invoice_no' => $invNo,
+            'invoice_date' => now()->toDateString(),
+            'items' => [
+                [
+                    'part_id' => $part->id,
+                    'qty_goods' => 500,
+                    'unit_goods' => 'KGM',
+                    'qty_bundle' => 2,
+                    'unit_bundle' => 'PALLET',
+                    'weight_nett' => 500,
+                    'weight_gross' => 520,
+                    'price' => 1500,
+                    'total_price' => 750000,
+                ],
+            ],
+            'containers' => [
+                ['container_no' => 'TGHU1234567', 'seal_code' => 'SEAL-01', 'size' => '40 HC'],
+            ],
+        ]);
+
+        $response->assertRedirect();
+
+        $arrival = IncomingArrival::where('invoice_no', $invNo)->firstOrFail();
+        $item = $arrival->items()->firstOrFail();
+
+        $this->assertEquals(2, $item->qty_bundle);
+        $this->assertSame('PALLET', $item->unit_bundle);
+        $this->assertEquals(500, $item->weight_nett);
+        $this->assertEquals(520, $item->weight_gross);
+
+        // Update test
+        $this->put(route('incoming-arrivals.update', $arrival), [
+            'is_local' => false,
+            'supplier_id' => $supplier->id,
+            'status' => 'pending',
+            'invoice_no' => $arrival->invoice_no,
+            'invoice_date' => now()->toDateString(),
+            'items' => [
+                [
+                    'id' => $item->id,
+                    'part_id' => $part->id,
+                    'qty_goods' => 600,
+                    'unit_goods' => 'KGM',
+                    'qty_bundle' => 3,
+                    'unit_bundle' => 'BOX',
+                    'weight_nett' => 600,
+                    'weight_gross' => 625,
+                ],
+            ],
+            'containers' => [
+                ['container_no' => 'TGHU1234567', 'seal_code' => 'SEAL-01', 'size' => '40 HC'],
+            ],
+        ])->assertSessionHasNoErrors()->assertRedirect();
+
+        $item->refresh();
+        $this->assertEquals(3, $item->qty_bundle);
+        $this->assertSame('BOX', $item->unit_bundle);
+        $this->assertEquals(600, $item->qty_goods);
+        $this->assertEquals(600, $item->weight_nett);
+        $this->assertEquals(625, $item->weight_gross);
+    }
 }

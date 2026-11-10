@@ -13,6 +13,8 @@ const { t } = useI18n();
 interface ItemRow {
     id: number | null;
     part_id: number | null;
+    part_number?: string;
+    part_name?: string;
     material_group: string;
     size: string;
     qty_goods: number | '';
@@ -39,7 +41,15 @@ const props = defineProps<{
     arrival: IncomingArrival | null;
     suppliers: Array<Pick<Supplier, 'id' | 'supplier_code' | 'supplier_name' | 'source'>>;
     truckings: Array<Pick<TruckingCompany, 'id' | 'company_code' | 'company_name'>>;
-    materialOptions: Array<{ supplier_id: number; group: string; size: string; part_id: number; unit: string | null }>;
+    materialOptions: Array<{
+        supplier_id: number;
+        group: string;
+        size: string;
+        part_id: number;
+        part_number?: string;
+        part_name?: string;
+        unit: string | null;
+    }>;
     purchaseOrders: Array<any>;
     uomCodes: string[];
     packingUnits: string[];
@@ -48,10 +58,23 @@ const props = defineProps<{
 const isLocalArrival = ref(Boolean(props.arrival?.is_local ?? false));
 
 const blankItem = (): ItemRow => ({
-    id: null, part_id: null, material_group: '', size: '',
-    qty_goods: '', unit_goods: '', qty_bundle: '', unit_bundle: '',
-    weight_nett: '', unit_weight: '', weight_gross: '', price: '', total_price: '',
-    is_foc: false, notes: '',
+    id: null,
+    part_id: null,
+    part_number: '',
+    part_name: '',
+    material_group: '',
+    size: '',
+    qty_goods: '',
+    unit_goods: 'KGM',
+    qty_bundle: '',
+    unit_bundle: props.packingUnits[0] ?? 'PALLET',
+    weight_nett: '',
+    unit_weight: 'KGM',
+    weight_gross: '',
+    price: '',
+    total_price: '',
+    is_foc: false,
+    notes: '',
 });
 
 const blankContainer = (): ContainerRow => ({ container_no: '', seal_code: '', size: '' });
@@ -71,21 +94,23 @@ function removeContainer(i: number) {
 const containerSizes = ['20 FT', '40 FT', '40 HC', '45 HC'];
 
 const itemRows = ref<ItemRow[]>(
-    props.arrival?.items?.map((i) => ({
+    props.arrival?.items?.map((i: any) => ({
         id: i.id ?? null,
         part_id: i.part_id ?? null,
-        material_group: i.material_group ?? '',
-        size: i.size ?? '',
+        part_number: i.part?.part_number ?? '',
+        part_name: i.part?.part_name ?? '',
+        material_group: i.material_group ?? i.part?.part_number ?? '',
+        size: i.size ?? i.part?.size ?? '',
         qty_goods: i.qty_goods,
-        unit_goods: i.unit_goods ?? '',
+        unit_goods: i.unit_goods ?? i.part?.uom?.code ?? 'KGM',
         qty_bundle: i.qty_bundle ?? '',
-        unit_bundle: i.unit_bundle ?? '',
+        unit_bundle: i.unit_bundle ?? (props.packingUnits[0] ?? 'PALLET'),
         weight_nett: i.weight_nett ?? '',
-        unit_weight: i.unit_weight ?? '',
+        unit_weight: i.unit_weight ?? 'KGM',
         weight_gross: i.weight_gross ?? '',
         price: i.price ?? '',
         total_price: i.total_price ?? '',
-        is_foc: i.is_foc ?? false,
+        is_foc: Boolean(i.is_foc),
         notes: i.notes ?? '',
     })) ?? [blankItem()],
 );
@@ -160,13 +185,15 @@ function onPurchaseOrderChange() {
         itemRows.value = po.items.map((it: any) => ({
             id: null,
             part_id: it.part_id ?? null,
+            part_number: it.part?.part_number ?? '',
+            part_name: it.part?.part_name ?? '',
             material_group: it.part?.part_number ?? it.material_group ?? '',
             size: it.size ?? it.part?.size ?? 'STD',
             qty_goods: it.qty ?? '',
             po_qty_ref: it.qty ?? 0,
             unit_goods: it.unit ?? it.part?.uom?.code ?? 'KGM',
             qty_bundle: '',
-            unit_bundle: '',
+            unit_bundle: props.packingUnits[0] ?? 'PALLET',
             weight_nett: it.unit === 'KGM' || !it.unit ? it.qty : '',
             unit_weight: 'KGM',
             weight_gross: '',
@@ -186,19 +213,51 @@ watch(isLocalArrival, (val) => {
     // baris kosong tidak ikut terkirim karena disaring di submit().
 });
 
-const materialGroups = computed(() => Array.from(new Set(
-    props.materialOptions.filter((m) => !form.supplier_id || m.supplier_id === Number(form.supplier_id)).map((m) => m.group),
-)));
+const supplierMaterialOptions = computed(() => {
+    const list = props.materialOptions.filter(
+        (m) => !form.supplier_id || m.supplier_id === Number(form.supplier_id),
+    );
+    return list.map((m) => ({
+        value: m.part_id,
+        label: m.part_number ? `${m.part_number} · ${m.part_name}` : m.group,
+        sublabel: `${m.group} · Size: ${m.size} · UOM: ${m.unit ?? 'KGM'}`,
+        raw: m,
+    }));
+});
 
-function sizesFor(group: string) {
-    return props.materialOptions.filter((m) => m.supplier_id === Number(form.supplier_id) && m.group === group);
+function onSelectMaterial(r: ItemRow, partId: number | '') {
+    if (!partId) {
+        r.part_id = null;
+        r.part_number = '';
+        r.part_name = '';
+        r.material_group = '';
+        r.size = '';
+        return;
+    }
+    const match = props.materialOptions.find((m) => m.part_id === Number(partId));
+    if (match) {
+        r.part_id = match.part_id;
+        r.part_number = match.part_number ?? '';
+        r.part_name = match.part_name ?? '';
+        r.material_group = match.group;
+        r.size = match.size || 'STD';
+        if (match.unit && !r.unit_goods) {
+            r.unit_goods = match.unit;
+        }
+        if (r.unit_goods === 'KGM' && r.qty_goods && !r.weight_nett) {
+            r.weight_nett = r.qty_goods;
+        }
+        recalcPrice(r);
+    }
 }
 
-function syncMaterial(row: ItemRow) {
-    const match = sizesFor(row.material_group).find((m) => m.size === row.size);
-    if (match?.unit && !row.unit_goods) row.unit_goods = match.unit;
-    if (match?.part_id) row.part_id = match.part_id;
-    recalcPrice(row);
+function onQtyGoodsInput(r: ItemRow) {
+    if (r.unit_goods === 'KGM' || !r.weight_nett) {
+        if (r.unit_goods === 'KGM') {
+            r.weight_nett = r.qty_goods;
+        }
+    }
+    recalcPrice(r);
 }
 
 function resetMaterialRows() {
@@ -206,6 +265,8 @@ function resetMaterialRows() {
         row.material_group = '';
         row.size = '';
         row.part_id = null;
+        row.part_number = '';
+        row.part_name = '';
     });
 }
 
@@ -256,7 +317,7 @@ function addItem() { itemRows.value.push(blankItem()); }
 function removeItem(i: number) { if (itemRows.value.length > 1) itemRows.value.splice(i, 1); }
 
 function isRowEmpty(r: ItemRow) {
-    return !r.material_group && !r.size && r.qty_goods === '' && r.total_price === '';
+    return !r.part_id && !r.material_group && !r.size && r.qty_goods === '' && r.total_price === '';
 }
 
 function submit() {
@@ -265,14 +326,14 @@ function submit() {
         .map((r) => ({
             id: r.id,
             part_id: r.part_id,
-            material_group: r.material_group,
+            material_group: r.material_group || (r.part_number ? r.part_number : null),
             size: r.size || 'STD',
             qty_goods: r.qty_goods === '' ? 0 : Number(r.qty_goods),
             unit_goods: r.unit_goods || 'KGM',
             qty_bundle: r.qty_bundle === '' ? null : Number(r.qty_bundle),
-            unit_bundle: r.unit_bundle,
+            unit_bundle: r.unit_bundle || null,
             weight_nett: r.weight_nett === '' ? (r.unit_goods === 'KGM' ? Number(r.qty_goods) : null) : Number(r.weight_nett),
-            unit_weight: r.unit_weight || 'KGM',
+            unit_weight: 'KGM',
             weight_gross: r.weight_gross === '' ? null : Number(r.weight_gross),
             price: r.price === '' ? null : Number(r.price),
             total_price: r.total_price === '' ? null : Number(r.total_price),
@@ -614,67 +675,192 @@ function submit() {
                 </div>
                 <InputError :message="form.errors.items" class="mb-3" />
 
-                <div v-for="(r, i) in itemRows" :key="i" class="border-t border-borderline py-3">
-                    <div class="grid gap-3 sm:grid-cols-12">
-                        <div class="sm:col-span-3">
-                            <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.materialGroup') }}</label>
-                            <input
-                                v-if="r.part_id"
-                                :value="r.material_group"
-                                readonly
-                                class="mt-1 w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary font-medium"
-                            />
-                            <select
-                                v-else
-                                v-model="r.material_group"
-                                @change="r.size = ''; syncMaterial(r)"
-                                class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
-                            >
-                                <option value="">{{ t('incoming.chooseGroup') }}</option>
-                                <option v-for="group in materialGroups" :key="group" :value="group">{{ group }}</option>
-                            </select>
-                        </div>
+                <div v-if="rowErrorList.length" class="mb-4 space-y-1 rounded-lg bg-danger/10 p-3 text-xs text-danger">
+                    <div v-for="err in rowErrorList" :key="err.row">
+                        Baris #{{ err.row }}: {{ err.msg }}
+                    </div>
+                </div>
 
-                        <div class="sm:col-span-2">
-                            <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.size') }}</label>
-                            <input
-                                v-if="r.part_id"
-                                :value="r.size"
-                                readonly
-                                class="mt-1 w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-secondary"
-                            />
-                            <select
-                                v-else
-                                v-model="r.size"
-                                @change="syncMaterial(r)"
-                                :disabled="!form.supplier_id || !r.material_group"
-                                class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary disabled:opacity-50"
-                            >
-                                <option value="">{{ t('incoming.chooseSize') }}</option>
-                                <option v-for="option in sizesFor(r.material_group)" :key="option.part_id" :value="option.size">{{ option.size }}</option>
-                            </select>
-                        </div>
-
-                        <div class="sm:col-span-2">
-                            <div class="flex justify-between">
-                                <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.qtyGoods') }}</label>
-                                <span v-if="r.po_qty_ref" class="text-[11px] text-ink-secondary font-mono">PO: {{ r.po_qty_ref }}</span>
+                <div class="space-y-4">
+                    <div
+                        v-for="(r, i) in itemRows"
+                        :key="i"
+                        class="space-y-3 rounded-xl border border-borderline bg-background/40 p-4 transition hover:border-borderline/80"
+                    >
+                        <!-- Header Baris Material & Aksi -->
+                        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-borderline/60 pb-2.5">
+                            <div class="flex items-center gap-2">
+                                <span class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                                    {{ i + 1 }}
+                                </span>
+                                <div v-if="r.part_id" class="flex flex-wrap items-baseline gap-2">
+                                    <span class="font-mono text-sm font-bold text-ink-primary">{{ r.part_number || r.material_group }}</span>
+                                    <span v-if="r.part_name" class="text-xs text-ink-secondary">· {{ r.part_name }}</span>
+                                    <span v-if="r.po_qty_ref" class="rounded bg-primary-light px-2 py-0.5 text-[11px] font-semibold text-primary">
+                                        Ref PO: {{ r.po_qty_ref }} {{ r.unit_goods }}
+                                    </span>
+                                </div>
+                                <div v-else class="text-xs font-semibold text-ink-secondary">
+                                    {{ t('incoming.chooseGroup') }}
+                                </div>
                             </div>
-                            <input v-model="r.qty_goods" type="number" step="0.0001" min="0" @input="recalcPrice(r)" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary font-bold text-primary" />
+
+                            <button
+                                type="button"
+                                @click="removeItem(i)"
+                                :disabled="itemRows.length <= 1"
+                                class="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-danger transition hover:bg-danger/10 disabled:opacity-30"
+                                :title="t('incoming.delete')"
+                            >
+                                <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                                {{ t('incoming.delete') }}
+                            </button>
                         </div>
 
-                        <div class="sm:col-span-2">
-                            <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.unitGoods') }}</label>
-                            <input v-model="r.unit_goods" list="uom-codes" type="text" placeholder="KGM / PCS" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <!-- Baris 1: Pilihan Part / Material, Ukuran, Qty Barang, Satuan -->
+                        <div class="grid gap-3 sm:grid-cols-12">
+                            <div class="sm:col-span-5">
+                                <label class="text-xs font-semibold text-ink-secondary">Part / Material</label>
+                                <div v-if="r.part_id && form.purchase_order_id" class="mt-1 flex items-center justify-between rounded-lg border border-borderline bg-surface px-3 py-2 text-sm text-ink-primary">
+                                    <div class="truncate">
+                                        <span class="font-mono font-bold">{{ r.part_number || r.material_group }}</span>
+                                        <span v-if="r.part_name" class="ml-1.5 text-xs text-ink-secondary">{{ r.part_name }}</span>
+                                    </div>
+                                    <span class="ml-2 shrink-0 rounded bg-background px-1.5 py-0.5 text-[10px] font-semibold text-ink-secondary">PO</span>
+                                </div>
+                                <div v-else class="mt-1">
+                                    <SearchableSelect
+                                        :model-value="r.part_id"
+                                        :options="supplierMaterialOptions"
+                                        value-key="value"
+                                        label-key="label"
+                                        sublabel-key="sublabel"
+                                        :placeholder="form.supplier_id ? 'Pilih part / material substitute...' : 'Pilih supplier terlebih dahulu'"
+                                        :disabled="!form.supplier_id"
+                                        @update:model-value="onSelectMaterial(r, $event)"
+                                    />
+                                </div>
+                            </div>
+
+                            <div class="sm:col-span-2">
+                                <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.size') }}</label>
+                                <input
+                                    v-model="r.size"
+                                    type="text"
+                                    placeholder="STD / 0.5T / ..."
+                                    class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                                />
+                            </div>
+
+                            <div class="sm:col-span-3">
+                                <div class="flex items-center justify-between">
+                                    <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.qtyGoods') }}</label>
+                                    <span v-if="r.po_qty_ref" class="font-mono text-[10px] text-ink-secondary">Maks: {{ r.po_qty_ref }}</span>
+                                </div>
+                                <input
+                                    v-model="r.qty_goods"
+                                    type="number"
+                                    step="0.0001"
+                                    min="0"
+                                    @input="onQtyGoodsInput(r)"
+                                    class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm font-bold text-primary focus:border-primary focus:ring-primary"
+                                />
+                            </div>
+
+                            <div class="sm:col-span-2">
+                                <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.unitGoods') }}</label>
+                                <input
+                                    v-model="r.unit_goods"
+                                    list="uom-codes"
+                                    type="text"
+                                    placeholder="KGM / PCS"
+                                    class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                                />
+                            </div>
                         </div>
 
-                        <div class="sm:col-span-2">
-                            <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.netWeight') }}</label>
-                            <input v-model="r.weight_nett" type="number" step="0.0001" @input="recalcPrice(r)" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <!-- Baris 2: Kemasan (Bundle) & Berat (KGM) -->
+                        <div class="grid gap-3 border-t border-dashed border-borderline/60 pt-2.5 sm:grid-cols-12">
+                            <div class="sm:col-span-3">
+                                <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.bundleQty') }}</label>
+                                <input
+                                    v-model="r.qty_bundle"
+                                    type="number"
+                                    step="1"
+                                    min="0"
+                                    placeholder="2"
+                                    class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                                />
+                                <p class="mt-1 text-[11px] text-ink-secondary">{{ t('incoming.bundleOptionalHint') }}</p>
+                            </div>
+
+                            <div class="sm:col-span-3">
+                                <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.bundleUnit') }}</label>
+                                <select
+                                    v-model="r.unit_bundle"
+                                    class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                                >
+                                    <option value="">—</option>
+                                    <option v-for="unit in packingUnits" :key="unit" :value="unit">{{ unit }}</option>
+                                </select>
+                            </div>
+
+                            <div class="sm:col-span-3">
+                                <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.netWeight') }} (KGM)</label>
+                                <input
+                                    v-model="r.weight_nett"
+                                    type="number"
+                                    step="0.0001"
+                                    min="0"
+                                    placeholder="0.0000"
+                                    @input="recalcPrice(r)"
+                                    class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                                />
+                            </div>
+
+                            <div class="sm:col-span-3">
+                                <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.grossWeight') }} (KGM)</label>
+                                <input
+                                    v-model="r.weight_gross"
+                                    type="number"
+                                    step="0.0001"
+                                    min="0"
+                                    placeholder="0.0000"
+                                    class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                                />
+                                <p v-if="weightInvalid(r)" class="mt-0.5 text-[10px] text-danger">{{ t('incoming.invalidWeight') }}</p>
+                            </div>
                         </div>
 
-                        <div class="flex items-end justify-end sm:col-span-1">
-                            <button type="button" @click="removeItem(i)" :disabled="itemRows.length <= 1" class="rounded-lg border border-borderline px-3 py-2 text-sm text-danger transition hover:bg-danger/10 disabled:opacity-40">✕</button>
+                        <!-- Baris 3: Informasi Opsional (Total Harga, Harga Satuan, Catatan) -->
+                        <div class="flex flex-wrap items-center gap-4 border-t border-dashed border-borderline/40 pt-2 text-xs text-ink-secondary">
+                            <div class="flex items-center gap-1.5">
+                                <label>{{ t('incoming.totalPrice') }}:</label>
+                                <input
+                                    v-model="r.total_price"
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    @input="recalcPrice(r)"
+                                    placeholder="0.00"
+                                    class="h-7 w-28 rounded border-borderline bg-surface px-2 py-1 text-xs text-ink-primary"
+                                />
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                                <label>{{ t('incoming.autoPrice') }}:</label>
+                                <span class="font-mono font-medium text-ink-primary">{{ r.price !== '' ? Number(r.price).toLocaleString() : '—' }}</span>
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                                <label>{{ t('incoming.notes') }}:</label>
+                                <input
+                                    v-model="r.notes"
+                                    type="text"
+                                    placeholder="Catatan..."
+                                    class="h-7 w-48 rounded border-borderline bg-surface px-2 py-1 text-xs text-ink-primary"
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>

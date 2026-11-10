@@ -34,26 +34,29 @@ class IncomingArrivalController extends Controller
         return PartSubstitute::query()
             ->where('is_active', true)
             ->whereNotNull('supplier_id')
-            ->whereNotNull('material_group')
-            ->whereRaw("NULLIF(TRIM(material_group), '') IS NOT NULL")
             ->with(['substitutePart:id,part_number,part_name,size,uom_id', 'substitutePart.uom:id,code'])
             ->get()
             ->map(function (PartSubstitute $mapping) {
                 $part = $mapping->substitutePart;
-                if (! $part || trim((string) $part->size) === '') {
+                if (! $part) {
                     return null;
                 }
 
+                $group = trim((string) ($mapping->material_group ?? ''));
+                $size = trim((string) ($mapping->size ?: ($part->size ?: 'STD')));
+
                 return [
                     'supplier_id' => (int) $mapping->supplier_id,
-                    'group' => trim((string) $mapping->material_group),
-                    'size' => trim((string) $part->size),
+                    'group' => $group ?: $part->part_number,
+                    'size' => $size,
                     'part_id' => (int) $part->id,
+                    'part_number' => $part->part_number,
+                    'part_name' => $part->part_name,
                     'unit' => $part->uom?->code,
                 ];
             })
             ->filter()
-            ->unique(fn (array $row) => $row['supplier_id'].'|'.strtoupper($row['group']).'|'.strtoupper($row['size']))
+            ->unique(fn (array $row) => $row['supplier_id'].'|'.$row['part_id'])
             ->values()
             ->all();
     }
@@ -420,7 +423,7 @@ class IncomingArrivalController extends Controller
     {
         Gate::authorize('update', $arrival);
 
-        $arrival->load(['supplier', 'items', 'containers']);
+        $arrival->load(['supplier', 'items.part.uom', 'containers']);
 
         return Inertia::render('Incoming/Arrival/Form', [
             'arrival' => $arrival,
@@ -529,28 +532,59 @@ class IncomingArrivalController extends Controller
 
             $arrival->update($updateFields);
 
+            $submittedIds = [];
             foreach ($validated['items'] as $item) {
                 $payload = \Arr::except($item, ['id']);
                 $payload['arrival_id'] = $arrival->id;
-                $arrival->items()->updateOrCreate(
+                $savedItem = $arrival->items()->updateOrCreate(
                     ['id' => $item['id'] ?? null],
                     $payload,
                 );
+                $submittedIds[] = $savedItem->id;
             }
 
-            // Container hanya untuk kedatangan impor: ganti seluruh baris agar
-            // nomor yang dihapus di form benar-benar hilang. Lokal tidak punya
-            // container sehingga baris lama ikut dibersihkan saat beralih tab.
-            $arrival->containers()->delete();
+            $arrival->items()
+                ->whereNotIn('id', $submittedIds)
+                ->whereDoesntHave('receives')
+                ->delete();
 
-            if (! $isLocal) {
+            // Container hanya untuk kedatangan impor: sinkronisasi agar nomor yang
+            // dihapus benar-benar hilang tanpa melanggar unique constraint jika
+            // nomor kontainer yang sama tetap dipertahankan.
+            if ($isLocal) {
+                $arrival->containers()->delete();
+            } else {
+                $currentContainerNos = collect($validated['containers'] ?? [])
+                    ->pluck('container_no')
+                    ->filter()
+                    ->all();
+
+                $arrival->containers()
+                    ->whereNotIn('container_no', $currentContainerNos)
+                    ->delete();
+
                 foreach ($validated['containers'] ?? [] as $container) {
-                    IncomingArrivalContainer::create([
-                        'arrival_id' => $arrival->id,
-                        'container_no' => $container['container_no'],
-                        'seal_code' => $container['seal_code'] ?? null,
-                        'size' => $container['size'] ?? null,
-                    ]);
+                    $existing = IncomingArrivalContainer::withTrashed()
+                        ->where('arrival_id', $arrival->id)
+                        ->where('container_no', $container['container_no'])
+                        ->first();
+
+                    if ($existing) {
+                        if ($existing->trashed()) {
+                            $existing->restore();
+                        }
+                        $existing->update([
+                            'seal_code' => $container['seal_code'] ?? null,
+                            'size' => $container['size'] ?? null,
+                        ]);
+                    } else {
+                        IncomingArrivalContainer::create([
+                            'arrival_id' => $arrival->id,
+                            'container_no' => $container['container_no'],
+                            'seal_code' => $container['seal_code'] ?? null,
+                            'size' => $container['size'] ?? null,
+                        ]);
+                    }
                 }
             }
         });

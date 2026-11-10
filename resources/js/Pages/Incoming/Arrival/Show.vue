@@ -75,8 +75,9 @@ const props = defineProps<{
                         <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                             <th scope="col" class="px-4 py-3">{{ t('incoming.part') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('incoming.groupSize') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('incoming.bundleQty') }}</th>
                             <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.qtyGoods') }}</th>
-                            <th scope="col" class="px-4 py-3">{{ t('incoming.unit') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.netWeight') }} ({{ weightUnit }})</th>
                             <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.receivedUnit', { unit: weightUnit }) }}</th>
                             <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.remainingUnit', { unit: weightUnit }) }}</th>
                         </tr>
@@ -84,17 +85,25 @@ const props = defineProps<{
                     <tbody class="divide-y divide-borderline">
                         <tr v-for="p in pending" :key="p.item.id" class="hover:bg-primary-light/40">
                             <td class="px-4 py-3 font-medium text-ink-primary">
-                                {{ p.item.part?.part_number ?? '—' }}
+                                <span class="font-mono font-bold">{{ p.item.part?.part_number ?? p.item.material_group ?? '—' }}</span>
                                 <div class="text-xs text-ink-secondary">{{ p.item.part?.part_name ?? '' }}</div>
                             </td>
                             <td class="px-4 py-3 text-ink-primary">{{ p.item.material_group ?? '—' }} · {{ p.item.size ?? '—' }}</td>
-                            <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ p.item.qty_goods }}</td>
-                            <td class="px-4 py-3 text-ink-primary">{{ p.item.unit_goods ?? '—' }}</td>
+                            <td class="px-4 py-3 text-ink-primary">
+                                <span v-if="p.item.qty_bundle" class="font-medium">{{ p.item.qty_bundle }} {{ p.item.unit_bundle ?? '' }}</span>
+                                <span v-else class="text-ink-secondary">—</span>
+                            </td>
+                            <td class="px-4 py-3 text-right tabular-nums text-ink-primary">
+                                {{ p.item.qty_goods }} <span class="text-xs text-ink-secondary">{{ p.item.unit_goods ?? '' }}</span>
+                            </td>
+                            <td class="px-4 py-3 text-right tabular-nums text-ink-primary">
+                                {{ p.item.weight_nett != null ? p.item.weight_nett : '—' }}
+                            </td>
                             <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ p.received }}</td>
                             <td class="px-4 py-3 text-right tabular-nums font-semibold" :class="p.remaining > 0 ? 'text-warning' : 'text-success'">{{ p.remaining }}</td>
                         </tr>
                         <tr v-if="!pending.length">
-                            <td colspan="6" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noItems') }}</td>
+                            <td colspan="7" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noItems') }}</td>
                         </tr>
                     </tbody>
                 </table>

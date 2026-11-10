@@ -90,6 +90,79 @@ class TieredReceiveTest extends TestCase
         ]);
     }
 
+    public function test_receive_generates_one_tag_per_bundle_with_coil_packing(): void
+    {
+        [$arrival, $item] = $this->createArrivalWithItem('KGM');
+
+        // Rencana: 2 PALLET @ 5 COIL @ 500 KGM. Satu tag = satu bundle.
+        $response = $this->post(route('receive.store', $item), [
+            'receive_date' => now()->toDateString(),
+            'tags' => [
+                [
+                    'tag' => 'INV-COIL-B01',
+                    'bundle_count' => 1,
+                    'bundle_unit' => 'pallet',
+                    'packing_count' => 5,
+                    'packing_type' => 'coil',
+                    'packing_qty' => 500,
+                    'qty' => 2500,
+                    'qty_unit' => 'KGM',
+                ],
+                [
+                    'tag' => 'INV-COIL-B02',
+                    'bundle_count' => 1,
+                    'bundle_unit' => 'pallet',
+                    'packing_count' => 5,
+                    'packing_type' => 'coil',
+                    'packing_qty' => 500,
+                    'qty' => 2500,
+                    'qty_unit' => 'KGM',
+                ],
+            ],
+        ]);
+
+        $response->assertRedirect(route('receive.show', $arrival));
+
+        $this->assertSame(2, $item->receives()->count());
+        foreach ($item->receives()->orderBy('tag')->get() as $receive) {
+            $this->assertEquals(1, $receive->bundle_count);
+            $this->assertSame('PALLET', $receive->bundle_unit);
+            $this->assertEquals(5, $receive->packing_count);
+            $this->assertSame('COIL', $receive->packing_type);
+            $this->assertEquals(500, $receive->packing_qty);
+            $this->assertEquals(2500, $receive->qty);
+        }
+
+        $first = $item->receives()->orderBy('tag')->firstOrFail();
+        $this->get(route('receive.label', $first))
+            ->assertOk()
+            ->assertSee('1 PALLET @ 5 COIL @ 500 KGM');
+    }
+
+    public function test_receive_generates_auto_tag_when_identification_is_blank(): void
+    {
+        [$arrival, $item] = $this->createArrivalWithItem('EA');
+
+        $this->post(route('receive.store', $item), [
+            'receive_date' => now()->toDateString(),
+            'tags' => [
+                [
+                    'tag' => '',
+                    'bundle_count' => 1,
+                    'bundle_unit' => 'PALLET',
+                    'packing_count' => 5,
+                    'packing_type' => 'BOX',
+                    'packing_qty' => 2000,
+                    'qty' => 10000,
+                    'qty_unit' => 'EA',
+                ],
+            ],
+        ])->assertRedirect(route('receive.show', $arrival));
+
+        $receive = $item->receives()->firstOrFail();
+        $this->assertMatchesRegularExpression('/^AUTO-\d{6}-\d{4}$/', (string) $receive->tag);
+    }
+
     public function test_arrival_show_page_no_longer_renders_receive_buttons_or_receive_tags_table(): void
     {
         [$arrival, $item] = $this->createArrivalWithItem('EA');

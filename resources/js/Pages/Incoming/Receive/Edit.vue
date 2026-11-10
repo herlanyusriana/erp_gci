@@ -16,13 +16,15 @@ const props = defineProps<{
     isLocal: boolean;
     uomCodes: string[];
     packingUnits: string[];
+    packingTypes: string[];
     weightUnit: string;
     locations: Array<{ code: string; name: string }>;
 }>();
 
 const backHref = () => route('receive.show', props.arrivalItem.arrival_id);
 
-const subPackingTypes = ['BOX', 'PACK', 'BAG', 'ROLL', 'CAN', 'DRUM', 'PALLET', 'BUNDLE'];
+const packingTypeOptions = () =>
+    props.packingTypes?.length ? props.packingTypes : props.packingUnits;
 
 const form = useForm({
     receive_date: props.receive.ata_date?.slice(0, 10) ?? '',
@@ -106,42 +108,42 @@ function submit() {
 
                 <!-- Kemasan Bertingkat -->
                 <div>
-                    <label class="text-xs font-semibold text-ink-secondary">Jml Bundle (Wadah Besar)</label>
+                    <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.bundleQty') }}</label>
                     <input v-model="form.bundle_count" @input="calculateTotal" type="number" step="1" min="0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary font-semibold focus:border-primary focus:ring-primary" />
                 </div>
                 <div>
-                    <label class="text-xs font-semibold text-ink-secondary">Tipe Bundle</label>
+                    <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.bundleUnit') }}</label>
                     <select v-model="form.bundle_unit" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                         <option v-for="code in packingUnits" :key="code" :value="code">{{ code }}</option>
                     </select>
                 </div>
                 <div>
-                    <label class="text-xs font-semibold text-ink-secondary">Packing / Bundle</label>
+                    <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.packingPerBundle') }}</label>
                     <input v-model="form.packing_count" @input="calculateTotal" type="number" step="1" min="0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                 </div>
                 <div>
-                    <label class="text-xs font-semibold text-ink-secondary">Tipe Packing</label>
+                    <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.packingType') }}</label>
                     <select v-model="form.packing_type" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
-                        <option v-for="pType in subPackingTypes" :key="pType" :value="pType">{{ pType }}</option>
+                        <option v-for="pType in packingTypeOptions()" :key="pType" :value="pType">{{ pType }}</option>
                     </select>
                 </div>
                 <div>
-                    <label class="text-xs font-semibold text-ink-secondary">Isi Qty per Packing</label>
+                    <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.qtyPerPacking') }}</label>
                     <input v-model="form.packing_qty" @input="calculateTotal" type="number" step="any" min="0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary font-semibold focus:border-primary focus:ring-primary" />
                 </div>
                 <div>
-                    <label class="text-xs font-semibold text-ink-secondary">Total Qty (Dihitung/Fisik) *</label>
+                    <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.qty') }} *</label>
                     <input :aria-label="t('incoming.qty')" v-model="form.qty" type="number" step="any" min="0.0001" class="mt-1 w-full rounded-lg border-primary bg-surface px-3 py-2 text-sm font-bold text-primary focus:border-primary focus:ring-primary" />
                     <InputError :message="form.errors.qty" class="mt-1" />
                 </div>
                 <div>
-                    <label class="text-xs font-semibold text-ink-secondary">Berat Bersih (KGM)</label>
-                    <input v-model="form.net_weight" type="number" step="any" min="0" placeholder="KGM" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                    <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.netWeight') }} ({{ weightUnit }})</label>
+                    <input v-model="form.net_weight" type="number" step="any" min="0" :placeholder="weightUnit" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     <InputError :message="form.errors.net_weight" class="mt-1" />
                 </div>
                 <div>
-                    <label class="text-xs font-semibold text-ink-secondary">Berat Kotor (KGM)</label>
-                    <input v-model="form.gross_weight" type="number" step="any" min="0" placeholder="KGM" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                    <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.grossWeight') }} ({{ weightUnit }})</label>
+                    <input v-model="form.gross_weight" type="number" step="any" min="0" :placeholder="weightUnit" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                 </div>
             </div>
 

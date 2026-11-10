@@ -47,6 +47,7 @@ class ReceiveFormDefaultsTest extends TestCase
                 ->where('arrivalItem.unit_goods', 'SHEET')
                 ->where('remainingQty', 100)
                 ->where('arrivalItem.qty_bundle', 4)
-                ->where('arrivalItem.unit_bundle', 'PALLET'));
+                ->where('arrivalItem.unit_bundle', 'PALLET')
+                ->where('packingTypes', fn ($types) => collect($types)->contains('COIL')));
     }
 }

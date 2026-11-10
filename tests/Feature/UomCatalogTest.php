@@ -51,6 +51,13 @@ class UomCatalogTest extends TestCase
         $this->assertSame('PCS', UomCatalog::defaultCode());
     }
 
+    public function test_packing_catalog_includes_coil_for_bundle_and_packing_type(): void
+    {
+        $this->assertContains('COIL', UomCatalog::packingUnits());
+        $this->assertContains('COIL', UomCatalog::packingTypes());
+        $this->assertSame(UomCatalog::packingUnits(), UomCatalog::packingTypes());
+    }
+
     public function test_local_po_rejects_unit_outside_master(): void
     {
         $this->actingAs(User::where('email', 'admin@geumcheon.local')->firstOrFail());

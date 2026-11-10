@@ -249,6 +249,7 @@ export interface IncomingArrivalItem {
     is_foc: boolean;
     notes: string | null;
     part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
+    arrival?: { id: number; invoice_no: string | null } | null;
     receives?: IncomingReceive[];
 }
 

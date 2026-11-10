@@ -32,7 +32,15 @@ final class UomCatalog
      *
      * @var list<string>
      */
-    public const PACKING_UNITS = ['PALLET', 'BUNDLE', 'BOX', 'BAG', 'ROLL', 'PACKAGES'];
+    public const PACKING_UNITS = ['PALLET', 'BUNDLE', 'BOX', 'BAG', 'ROLL', 'COIL', 'CARTON', 'DRUM', 'CAN', 'PACK', 'PACKAGES'];
+
+    /**
+     * Jenis kemasan dalam (packing) per bundle. Satu katalog dengan satuan
+     * bundle supaya pilihan form dan validasi tidak pernah menyimpang.
+     *
+     * @var list<string>
+     */
+    public const PACKING_TYPES = self::PACKING_UNITS;
 
     /**
      * Kode cadangan bila tabel `uoms` kosong/belum termigrasi, agar form dan
@@ -133,6 +141,16 @@ final class UomCatalog
     public static function packingUnits(): array
     {
         return self::PACKING_UNITS;
+    }
+
+    /**
+     * Jenis kemasan yang sah untuk packing_type.
+     *
+     * @return list<string>
+     */
+    public static function packingTypes(): array
+    {
+        return self::PACKING_TYPES;
     }
 
     /**

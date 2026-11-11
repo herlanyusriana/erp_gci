@@ -176,6 +176,65 @@ class WipInventoryTest extends TestCase
         $this->assertCount(2, collect($rows)->where('part_id', $this->part->id));
     }
 
+    public function test_rows_carry_part_type_so_wip_and_raw_material_can_be_grouped(): void
+    {
+        $this->receipt('2026-10-30', 100);
+        $this->consumption('2026-10-30', 20);
+
+        $wipPart = Part::whereHas('partType', fn ($q) => $q->whereRaw('UPPER(code) = ?', ['WIP']))->firstOrFail();
+        $wipWo = WorkOrder::create([
+            'wo_no' => 'WO-WIP-TYPE-'.uniqid(),
+            'part_id' => $this->wo->part_id,
+            'qty' => 100,
+            'status' => 'in_progress',
+        ]);
+        $wipItem = WorkOrderItem::create([
+            'work_order_id' => $wipWo->id,
+            'sequence' => 1,
+            'machine_id' => $this->machine->id,
+            'parent_part_id' => $wipWo->part_id,
+            'parent_qty' => 1,
+            'parent_uom' => 'PCS',
+            'child_part_id' => $wipPart->id,
+            'selected_part_id' => $wipPart->id,
+            'child_qty' => 1,
+            'uom_rm' => 'KGM',
+            'qty_required' => 100,
+        ]);
+        $issue = MaterialIssue::create([
+            'issue_no' => 'MI-WIP-TYPE-'.uniqid(),
+            'work_order_id' => $wipWo->id,
+            'issue_date' => '2026-10-30',
+            'status' => 'posted',
+        ]);
+        $issueItem = MaterialIssueItem::create([
+            'material_issue_id' => $issue->id,
+            'work_order_item_id' => $wipItem->id,
+            'part_id' => $wipPart->id,
+            'tag' => 'T-WIP-'.uniqid(),
+            'qty' => 50,
+            'uom' => 'KGM',
+        ]);
+        ProductionMaterialReceipt::create([
+            'material_issue_item_id' => $issueItem->id,
+            'tag' => $issueItem->tag,
+            'part_id' => $wipPart->id,
+            'machine_id' => $this->machine->id,
+            'work_order_id' => $wipWo->id,
+            'work_order_item_id' => $wipItem->id,
+            'received_at' => '2026-10-30 08:00:00',
+            'qty' => 50,
+            'qty_consumed' => 0,
+            'uom' => 'KGM',
+            'transfer_status' => 'transferred',
+        ]);
+
+        $rows = collect(app(WipInventoryService::class)->forDate('2026-10-30'));
+
+        $this->assertSame('MATERIAL', $rows->firstWhere('part_id', $this->part->id)['part_type']);
+        $this->assertSame('WIP', $rows->firstWhere('part_id', $wipPart->id)['part_type']);
+    }
+
     public function test_machine_filter_narrows_the_rows(): void
     {
         $otherMachine = Machine::create([

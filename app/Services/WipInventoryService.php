@@ -80,7 +80,8 @@ final class WipInventoryService
         $machines = $this->machines($machineId);
         $parts = Part::query()
             ->whereIn('id', $partIds)
-            ->get(['id', 'part_number', 'part_name', 'model', 'size'])
+            ->with('partType:id,code')
+            ->get(['id', 'part_number', 'part_name', 'model', 'size', 'part_type_id'])
             ->keyBy('id');
 
         $rows = [];
@@ -99,6 +100,8 @@ final class WipInventoryService
                 'part_name' => $part?->part_name,
                 'model' => $part?->model,
                 'size' => $part?->size,
+                // WIP = barang setengah jadi; MATERIAL = raw material murni.
+                'part_type' => strtoupper((string) $part?->partType?->code) ?: null,
                 'invoice' => $movement['invoice'],
                 'supplier' => $movement['supplier'],
                 'uom' => $movement['uom'],
@@ -114,8 +117,9 @@ final class WipInventoryService
             ];
         }
 
-        usort($rows, fn (array $a, array $b): int => [$a['machine_name'], $a['part_number']]
-            <=> [$b['machine_name'], $b['part_number']]);
+        // Urutkan per kategori dulu agar WIP dan raw material tidak tercampur.
+        usort($rows, fn (array $a, array $b): int => [$a['part_type'] ?? '', $a['machine_name'], $a['part_number']]
+            <=> [$b['part_type'] ?? '', $b['machine_name'], $b['part_number']]);
 
         return $rows;
     }

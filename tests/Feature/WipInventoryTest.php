@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Models\WorkOrder;
 use App\Models\WorkOrderConsumption;
 use App\Models\WorkOrderItem;
+use App\Services\ProductionResultService;
 use App\Services\WipInventoryService;
 use App\Services\WipStockService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -451,7 +452,18 @@ class WipInventoryTest extends TestCase
     {
         $wipPart = Part::whereHas('partType', fn ($q) => $q->whereRaw('UPPER(code) = ?', ['WIP']))->firstOrFail();
 
-        $this->receiptForPart($wipPart, '2026-10-30', 40);
+        // WIP muncul dari output produksi; raw material dari transfer ke mesin.
+        ProductionResult::create([
+            'work_order_id' => $this->wo->id,
+            'parent_part_id' => $wipPart->id,
+            'machine_id' => $this->machine->id,
+            'result_date' => '2026-10-30',
+            'shift' => '1',
+            'qty_good' => 40,
+            'qty_reject' => 0,
+            'uom' => 'KGM',
+            'label_status' => 'pending',
+        ]);
         $this->receiptForPart($this->part, '2026-10-30', 100);
 
         $service = app(WipInventoryService::class);
@@ -463,6 +475,69 @@ class WipInventoryTest extends TestCase
         $this->assertFalse($wipFg->contains('part_id', $this->part->id));
         $this->assertTrue($material->contains('part_id', $this->part->id));
         $this->assertFalse($material->contains('part_id', $wipPart->id));
+    }
+
+    public function test_wip_output_is_attributed_to_the_producing_machine(): void
+    {
+        $wipPart = Part::whereHas('partType', fn ($q) => $q->whereRaw('UPPER(code) = ?', ['WIP']))->firstOrFail();
+
+        $consumer = Machine::create([
+            'machine_code' => 'CONS-'.uniqid(),
+            'machine_name' => 'Consuming Machine',
+            'is_active' => true,
+        ]);
+
+        $stock = PartStock::create([
+            'part_id' => $wipPart->id,
+            'tag' => 'WIP-OUT-'.uniqid(),
+            'qty' => 40,
+            'qty_unit' => 'KGM',
+            'received_at' => now(),
+        ]);
+
+        ProductionResult::create([
+            'work_order_id' => $this->wo->id,
+            'parent_part_id' => $wipPart->id,
+            'machine_id' => $this->machine->id,
+            'result_date' => now()->toDateString(),
+            'shift' => '1',
+            'qty_good' => 40,
+            'qty_reject' => 0,
+            'uom' => 'KGM',
+            'label_status' => 'pending',
+            'output_part_stock_id' => $stock->id,
+        ]);
+
+        // WIP dipakai di mesin lain; baris tetap milik mesin pembuatnya.
+        $consumerItem = WorkOrderItem::create([
+            'work_order_id' => $this->wo->id,
+            'sequence' => 2,
+            'machine_id' => $consumer->id,
+            'parent_part_id' => $this->wo->part_id,
+            'child_part_id' => $wipPart->id,
+            'uom_rm' => 'KGM',
+            'qty_required' => 40,
+            'qty_consumed' => 0,
+        ]);
+
+        WorkOrderConsumption::create([
+            'work_order_id' => $this->wo->id,
+            'work_order_item_id' => $consumerItem->id,
+            'part_stock_id' => $stock->id,
+            'part_id' => $wipPart->id,
+            'qty' => 10,
+            'uom' => 'KGM',
+        ]);
+
+        $rows = app(WipInventoryService::class)
+            ->forRange(now()->toDateString(), now()->toDateString(), $this->machine->id, WipInventoryService::CATEGORY_WIP_FG);
+        $row = collect($rows)->firstWhere('part_id', $wipPart->id);
+
+        $this->assertNotNull($row);
+        $this->assertSame($this->machine->id, $row['machine_id'], 'Baris WIP harus milik mesin pembuat');
+        $this->assertEqualsWithDelta(40.0, (float) $row['received_qty'], 1e-6);
+        $this->assertEqualsWithDelta(10.0, (float) $row['issued_qty'], 1e-6);
+        $this->assertEqualsWithDelta(30.0, (float) $row['ending_qty'], 1e-6);
     }
 
     public function test_fg_production_output_is_received_with_zero_issue(): void
@@ -541,6 +616,119 @@ class WipInventoryTest extends TestCase
                 ->where('detail.from', '2026-10-28')
                 ->where('detail.to', '2026-10-30')
                 ->where('detail.totals.received', 150));
+    }
+
+    public function test_tpl_final_step_reported_directly_still_lands_on_the_producing_machine(): void
+    {
+        $fg = Part::where('part_number', 'AAN30056405')->firstOrFail();
+        $rm = Part::where('part_number', 'CBKG07256C')->firstOrFail();
+        $wip1 = Part::where('part_number', 'AAN30056405-WIP1')->firstOrFail();
+        $wip2 = Part::where('part_number', 'AAN30056405-WIP2')->firstOrFail();
+        $wip3 = Part::where('part_number', 'AAN30056405-WIP3')->firstOrFail();
+
+        $tpl = Machine::firstOrCreate(
+            ['machine_code' => 'TPL_DONGSHIN'],
+            ['machine_name' => 'TPL DONGSHIN', 'is_active' => true],
+        );
+        $assy = Machine::firstOrCreate(
+            ['machine_code' => 'ASSY_TPL_DONGSHIN'],
+            ['machine_name' => 'ASSY. TPL DONGSHIN', 'is_active' => true],
+        );
+        $tpl->forceFill(['is_active' => true])->save();
+        $assy->forceFill(['is_active' => true])->save();
+
+        $wo = WorkOrder::create([
+            'wo_no' => 'WO-TPL-'.uniqid(),
+            'part_id' => $fg->id,
+            'qty' => 10,
+            'status' => 'in_progress',
+        ]);
+
+        // Rantai TPL: WIP1 <- RM, WIP2 <- WIP1, WIP3 <- WIP2, lalu FG <- WIP3 di ASSY.
+        $item1 = WorkOrderItem::create([
+            'work_order_id' => $wo->id, 'sequence' => 1, 'machine_id' => $tpl->id,
+            'parent_part_id' => $wip1->id, 'parent_qty' => 1, 'parent_uom' => 'PCS',
+            'child_part_id' => $rm->id, 'uom_rm' => 'KGM', 'child_qty' => 1, 'qty_required' => 10,
+        ]);
+        $item2 = WorkOrderItem::create([
+            'work_order_id' => $wo->id, 'sequence' => 2, 'machine_id' => $tpl->id,
+            'parent_part_id' => $wip2->id, 'parent_qty' => 1, 'parent_uom' => 'PCS',
+            'child_part_id' => $wip1->id, 'uom_rm' => 'PCS', 'child_qty' => 1, 'qty_required' => 10,
+        ]);
+        WorkOrderItem::create([
+            'work_order_id' => $wo->id, 'sequence' => 3, 'machine_id' => $tpl->id,
+            'parent_part_id' => $wip3->id, 'parent_qty' => 1, 'parent_uom' => 'PCS',
+            'child_part_id' => $wip2->id, 'uom_rm' => 'PCS', 'child_qty' => 1, 'qty_required' => 10,
+        ]);
+        WorkOrderItem::create([
+            'work_order_id' => $wo->id, 'sequence' => 4, 'machine_id' => $assy->id,
+            'parent_part_id' => $fg->id, 'parent_qty' => 1, 'parent_uom' => 'PCS',
+            'child_part_id' => $wip3->id, 'uom_rm' => 'PCS', 'child_qty' => 1, 'qty_required' => 10,
+        ]);
+
+        // Raw material sudah diterima di TPL.
+        $issue = MaterialIssue::create([
+            'issue_no' => 'MI-TPL-'.uniqid(), 'work_order_id' => $wo->id,
+            'issue_date' => now()->toDateString(), 'status' => 'posted',
+        ]);
+        $issueItem = MaterialIssueItem::create([
+            'material_issue_id' => $issue->id, 'work_order_item_id' => $item1->id,
+            'part_id' => $rm->id, 'tag' => 'T-TPL-'.uniqid(), 'qty' => 10, 'uom' => 'KGM',
+        ]);
+        ProductionMaterialReceipt::create([
+            'material_issue_item_id' => $issueItem->id, 'tag' => $issueItem->tag,
+            'part_id' => $rm->id, 'machine_id' => $tpl->id,
+            'work_order_id' => $wo->id, 'work_order_item_id' => $item1->id,
+            'received_at' => now(), 'qty' => 10, 'qty_consumed' => 0,
+            'uom' => 'KGM', 'transfer_status' => 'transferred',
+        ]);
+
+        $actorId = (int) User::where('email', 'admin@geumcheon.local')->value('id');
+        $service = app(ProductionResultService::class);
+
+        // TPL melaporkan step terakhir (WIP3) saja; raw material dikonsumsi langsung.
+        $service->report($wo, $wip3->id, [
+            'qty_good' => 10, 'qty_reject' => 0, 'machine_id' => $tpl->id,
+            'result_date' => now()->toDateString(), 'shift' => '1',
+        ], $actorId);
+
+        // ASSY memakai WIP3 untuk menghasilkan FG.
+        $service->report($wo, $fg->id, [
+            'qty_good' => 10, 'qty_reject' => 0, 'machine_id' => $assy->id,
+            'result_date' => now()->toDateString(), 'shift' => '1',
+        ], $actorId);
+
+        $today = now()->toDateString();
+        $wipRows = app(WipInventoryService::class)
+            ->forRange($today, $today, $tpl->id, WipInventoryService::CATEGORY_WIP_FG);
+
+        $wipRow = collect($wipRows)->firstWhere('part_id', $wip3->id);
+        $this->assertNotNull($wipRow);
+        $this->assertSame($tpl->id, $wipRow['machine_id']);
+        $this->assertEqualsWithDelta(10.0, (float) $wipRow['received_qty'], 1e-6);
+        $this->assertEqualsWithDelta(10.0, (float) $wipRow['issued_qty'], 1e-6);
+        $this->assertEqualsWithDelta(0.0, (float) $wipRow['ending_qty'], 1e-6);
+
+        // Step perantara yang tidak dilaporkan tidak muncul sebagai baris stok.
+        $this->assertFalse(collect($wipRows)->contains('part_id', $wip1->id));
+        $this->assertFalse(collect($wipRows)->contains('part_id', $wip2->id));
+
+        // FG lahir di ASSY.
+        $fgRows = app(WipInventoryService::class)
+            ->forRange($today, $today, $assy->id, WipInventoryService::CATEGORY_WIP_FG);
+        $fgRow = collect($fgRows)->firstWhere('part_id', $fg->id);
+        $this->assertNotNull($fgRow);
+        $this->assertEqualsWithDelta(10.0, (float) $fgRow['received_qty'], 1e-6);
+        $this->assertEqualsWithDelta(0.0, (float) $fgRow['issued_qty'], 1e-6);
+
+        // Raw material yang dikonsumsi langsung di TPL masuk tab Raw Material.
+        $rmRows = app(WipInventoryService::class)
+            ->forRange($today, $today, $tpl->id, WipInventoryService::CATEGORY_MATERIAL);
+        $rmRow = collect($rmRows)->firstWhere('part_id', $rm->id);
+        $this->assertNotNull($rmRow);
+        $this->assertEqualsWithDelta(10.0, (float) $rmRow['received_qty'], 1e-6);
+        $this->assertEqualsWithDelta(10.0, (float) $rmRow['issued_qty'], 1e-6);
+        $this->assertEqualsWithDelta(0.0, (float) $rmRow['ending_qty'], 1e-6);
     }
 
     public function test_backfill_fills_invoice_on_consumptions_that_predate_the_fix(): void

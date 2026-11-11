@@ -8,8 +8,8 @@ Petugas PPIC, gudang, dan produksi perlu tahu, untuk periode tertentu, berapa ma
 
 WIP Inventory menjadi satu halaman dengan dua tab kartu stok per mesin:
 
-1. **WIP & FG** — barang setengah jadi (output proses sebelumnya yang masuk ke mesin) dan barang jadi (output mesin terakhir).
-2. **Raw Material** — material murni yang di-transfer ke mesin, termasuk tambahan raw material di proses berikutnya.
+1. **WIP & FG** — barang setengah jadi dan barang jadi, dikelompokkan menurut **mesin yang memproduksinya** (bukan mesin yang memakainya).
+2. **Raw Material** — material murni, dikelompokkan menurut **mesin yang menerima dan memakainya**, termasuk tambahan raw material di proses berikutnya.
 
 Kedua tab memakai format yang sama: Stok Awal, Receive, Issue, Stok Akhir untuk rentang tanggal yang dipilih, dengan penyaring mesin.
 
@@ -42,17 +42,19 @@ Menyediakan kartu stok WIP/FG dan raw material per mesin yang konsisten dengan e
 **Definisi perhitungan (rentang `from`..`to`, inklusif, zona waktu sistem)**
 
 - **Stok Awal** = seluruh Receive sebelum `from` − seluruh Issue sebelum `from`.
-- **Receive** dalam rentang:
-  - WIP dan Raw Material: `production_material_receipts` dengan `transfer_status = transferred`, `received_at` dalam rentang.
-  - FG: `production_results.qty_good` untuk part bertipe FG, `result_date` dalam rentang (output mesin terakhir).
-- **Issue** dalam rentang: `work_order_consumptions` yang tidak di-reverse, dikaitkan ke mesin lewat `work_order_items.machine_id`.
-  - FG: tidak ada sumber issue, nilainya 0 sampai modul pengiriman FG ada.
+- **WIP & FG memakai model output** (baris milik mesin pembuat):
+  - Receive = `production_results.qty_good` untuk part bertipe WIP atau FG, `result_date` dalam rentang, mesin = `production_results.machine_id`.
+  - Issue = pemakaian part WIP oleh proses berikutnya (`work_order_consumptions`), diatribusikan kembali ke mesin pembuat melalui asal stok yang dikonsumsi: `work_order_consumptions.part_stock_id` → `production_results.output_part_stock_id` → `production_results.machine_id`. Bila asal stok tidak terlacak (data legacy), dipakai mesin pemakai dari `work_order_items.machine_id`.
+  - FG: tidak punya issue, nilainya 0 sampai modul pengiriman FG ada.
+- **Raw Material memakai model input** (baris milik mesin penerima/pemakai):
+  - Receive = `production_material_receipts` dengan `transfer_status = transferred`, `received_at` dalam rentang.
+  - Issue = `work_order_consumptions` pada mesin itu (`work_order_items.machine_id`).
 - **Stok Akhir** = Stok Awal + Receive − Issue.
 - Baris = kombinasi mesin × part × UOM. Baris ditampilkan bila Stok Awal ≠ 0 atau ada Receive/Issue dalam rentang.
 - **Kategori tab**:
   - `wip_fg` = part dengan tipe WIP atau FG.
   - `material` = part dengan tipe selain WIP dan FG (MATERIAL dan yang belum terklasifikasi), agar tidak ada baris yang hilang.
-- **Invoice/supplier**: mengikuti aturan yang sudah dipakai halaman ini — dari `material_issue_items` untuk penerimaan, dari `work_order_consumptions` untuk pemakaian. Untuk baris FG, diambil dari konsumsi material utama pada production result terkait (item non-penunjang dengan urutan BOM paling awal), konsisten dengan aturan label FG.
+- **Invoice/supplier**: Raw Material dari `material_issue_items` untuk penerimaan dan `work_order_consumptions` untuk pemakaian. WIP & FG dari konsumsi material utama pada production result terkait (item non-penunjang seperti OPP tape dikecualikan), konsisten dengan aturan label FG.
 
 **Kontrak halaman**
 
@@ -121,6 +123,7 @@ Test halaman memakai `assertInertia` untuk memastikan prop `rows`, `tab`, `from`
 - [ ] Kedua tab menampilkan kolom Stok Awal, Receive, Issue, Stok Akhir per mesin dan part.
 - [ ] Filter rentang tanggal default tanggal 1 bulan berjalan s.d. hari ini, dan bisa diubah.
 - [ ] Mengubah tab tidak menghapus filter tanggal/mesin.
+- [ ] Baris WIP tampil di bawah mesin yang **memproduksinya**, bukan mesin yang memakainya.
 - [ ] Baris FG yang diproduksi di rentang tampil dengan Receive = qty_good dan Issue = 0.
 - [ ] Baris dengan Stok Awal ≠ 0 tetapi tanpa mutasi dalam rentang tetap tampil.
 - [ ] Stok Akhir setiap baris = Stok Awal + Receive − Issue.

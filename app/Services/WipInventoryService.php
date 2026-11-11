@@ -5,15 +5,21 @@ namespace App\Services;
 use App\Models\Part;
 use App\Models\ProductionMaterialReceipt;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
  * Kartu stok material per mesin untuk halaman WIP Inventory.
  *
- * Stok Awal = seluruh penerimaan sebelum periode − seluruh pemakaian sebelum
- * periode, sehingga saldo menyambung antar periode. Penerimaan diambil dari
- * transfer material ke mesin (APK) ditambah output produksi untuk barang jadi;
- * pemakaian diambil dari konsumsi BOM saat laporan hasil produksi.
+ * Dua model atribusi:
+ * - Raw Material (input): baris milik mesin yang menerima transfer material
+ *   dan memakainya. Receive = transfer APK, Issue = konsumsi BOM di mesin itu.
+ * - WIP & FG (output): baris milik mesin yang MEMPRODUKSI barang tersebut.
+ *   Receive = output Production Result, Issue = pemakaian WIP di proses
+ *   berikutnya yang dilacak kembali ke mesin pembuatnya lewat asal stok.
+ *
+ * Stok Awal = seluruh receive sebelum periode − seluruh issue sebelum periode,
+ * sehingga saldo menyambung antar periode.
  */
 final class WipInventoryService
 {
@@ -85,10 +91,46 @@ final class WipInventoryService
      */
     public function forRange(string $from, string $to, ?int $machineId = null, ?string $category = null): array
     {
-        $received = $this->receivedAggregate($machineId, $from, $to);
-        $issued = $this->issuedAggregate($machineId, $from, $to);
-        $beginning = $this->beginningAggregate($machineId, $from);
+        // WIP & FG memakai model output (mesin pembuat); raw material dan
+        // pemanggil lama memakai model input (mesin penerima/pemakai).
+        $buckets = $category === self::CATEGORY_WIP_FG
+            ? $this->outputBuckets($machineId, $from, $to)
+            : $this->inputBuckets($machineId, $from, $to);
 
+        return $this->buildRows($buckets, $machineId, $category);
+    }
+
+    /** @return array<string, array<string, mixed>> */
+    private function inputBuckets(?int $machineId, string $from, string $to): array
+    {
+        return $this->mergeBuckets(
+            $this->receivedAggregate($machineId, $from, $to),
+            $this->issuedAggregate($machineId, $from, $to),
+            $this->beginningAggregate($machineId, $from),
+        );
+    }
+
+    /** @return array<string, array<string, mixed>> */
+    private function outputBuckets(?int $machineId, string $from, string $to): array
+    {
+        return $this->mergeBuckets(
+            $this->outputReceivedAggregate($machineId, $from, $to),
+            $this->outputIssuedAggregate($machineId, $from, $to),
+            $this->outputBeginningAggregate($machineId, $from),
+        );
+    }
+
+    /**
+     * Gabungkan receive, issue, dan saldo awal menjadi satu bucket
+     * machine|part|uom.
+     *
+     * @param  array<string, array<string, mixed>>  $received
+     * @param  array<string, array<string, mixed>>  $issued
+     * @param  array<string, float>  $beginning
+     * @return array<string, array<string, mixed>>
+     */
+    private function mergeBuckets(array $received, array $issued, array $beginning): array
+    {
         $buckets = [];
 
         foreach ($received as $key => $row) {
@@ -146,6 +188,15 @@ final class WipInventoryService
             $buckets[$key]['beginning_qty'] = $qty;
         }
 
+        return $buckets;
+    }
+
+    /**
+     * @param  array<string, array<string, mixed>>  $buckets
+     * @return list<array<string, mixed>>
+     */
+    private function buildRows(array $buckets, ?int $machineId, ?string $category): array
+    {
         if ($buckets === []) {
             return [];
         }
@@ -224,9 +275,16 @@ final class WipInventoryService
             ->find($partId, ['id', 'part_number', 'part_name', 'model', 'size', 'uom_id', 'part_type_id']);
         $partType = strtoupper((string) $part?->partType?->code) ?: null;
 
-        $beginningRows = $this->detailBeginning($machineId, $partId, $from);
-        $receivedRows = $this->detailReceived($machineId, $partId, $from, $to);
-        $issuedRows = $this->detailIssued($machineId, $partId, $from, $to);
+        // WIP & FG memakai model output (mesin pembuat); material memakai model input.
+        if (in_array($partType, ['WIP', 'FG'], true)) {
+            $beginningRows = $this->detailOutputBeginning($machineId, $partId, $from);
+            $receivedRows = $this->detailOutputReceived($machineId, $partId, $from, $to);
+            $issuedRows = $this->detailOutputIssued($machineId, $partId, $from, $to);
+        } else {
+            $beginningRows = $this->detailBeginning($machineId, $partId, $from);
+            $receivedRows = $this->detailReceived($machineId, $partId, $from, $to);
+            $issuedRows = $this->detailIssued($machineId, $partId, $from, $to);
+        }
 
         $sum = fn (array $rows): float => round(array_sum(array_column($rows, 'qty')), 4);
 
@@ -260,105 +318,121 @@ final class WipInventoryService
     }
 
     /**
-     * Penerimaan dalam periode: transfer material ke mesin + output FG.
+     * Penerimaan model input: transfer material ke mesin.
      *
      * @return array<string, array{machine_id: int, part_id: int, uom: string|null, qty: float, invoice: string|null, supplier: string|null}>
      */
     private function receivedAggregate(?int $machineId, ?string $from, ?string $to, ?string $before = null): array
     {
-        $rows = [];
-
-        $material = $this->materialReceivedQuery($machineId, $from, $to, $before)
+        return $this->materialReceivedQuery($machineId, $from, $to, $before)
             ->groupBy('r.machine_id', 'r.part_id', 'r.uom')
             ->selectRaw('r.machine_id, r.part_id, r.uom, SUM(r.qty) AS qty')
             ->selectRaw('MAX(COALESCE(mii.invoice, r.invoice)) AS invoice')
             ->selectRaw('MAX(COALESCE(mii.supplier, r.supplier)) AS supplier')
-            ->get();
-
-        foreach ($material as $row) {
-            $key = $this->bucketKey($row->machine_id, $row->part_id, $row->uom);
-            $rows[$key] = [
-                'machine_id' => (int) $row->machine_id,
-                'part_id' => (int) $row->part_id,
-                'uom' => $row->uom,
-                'qty' => (float) $row->qty,
-                'invoice' => $row->invoice,
-                'supplier' => $row->supplier,
-            ];
-        }
-
-        foreach ($this->fgReceivedAggregate($machineId, $from, $to, $before) as $key => $row) {
-            if (isset($rows[$key])) {
-                $rows[$key]['qty'] += $row['qty'];
-                $rows[$key]['invoice'] ??= $row['invoice'];
-                $rows[$key]['supplier'] ??= $row['supplier'];
-            } else {
-                $rows[$key] = $row;
-            }
-        }
-
-        return $rows;
+            ->get()
+            ->mapWithKeys(fn ($row) => [
+                $this->bucketKey($row->machine_id, $row->part_id, $row->uom) => [
+                    'machine_id' => (int) $row->machine_id,
+                    'part_id' => (int) $row->part_id,
+                    'uom' => $row->uom,
+                    'qty' => (float) $row->qty,
+                    'invoice' => $row->invoice,
+                    'supplier' => $row->supplier,
+                ],
+            ])
+            ->all();
     }
 
     /**
-     * Output barang jadi per mesin pada periode (dari laporan hasil produksi).
+     * Output produksi (WIP & FG) per mesin PEMBUAT pada periode.
      *
      * @return array<string, array{machine_id: int, part_id: int, uom: string|null, qty: float, invoice: string|null, supplier: string|null}>
      */
-    private function fgReceivedAggregate(?int $machineId, ?string $from, ?string $to, ?string $before = null): array
+    private function outputReceivedAggregate(?int $machineId, ?string $from, ?string $to, ?string $before = null): array
     {
-        $qtyRows = $this->fgResultQuery($machineId, $from, $to, $before)
+        return $this->outputResultQuery($machineId, $from, $to, $before)
+            ->leftJoinSub($this->mainMaterialInvoiceSub(), 'src', 'src.production_result_id', '=', 'pr.id')
             ->groupBy('pr.machine_id', 'pr.parent_part_id', 'pr.uom')
             ->selectRaw('pr.machine_id, pr.parent_part_id AS part_id, pr.uom, SUM(pr.qty_good) AS qty')
-            ->get();
+            ->selectRaw('MAX(src.invoice) AS invoice')
+            ->selectRaw('MAX(src.supplier) AS supplier')
+            ->get()
+            ->mapWithKeys(fn ($row) => [
+                $this->bucketKey($row->machine_id, $row->part_id, $row->uom) => [
+                    'machine_id' => (int) $row->machine_id,
+                    'part_id' => (int) $row->part_id,
+                    'uom' => $row->uom,
+                    'qty' => (float) $row->qty,
+                    'invoice' => $row->invoice,
+                    'supplier' => $row->supplier,
+                ],
+            ])
+            ->all();
+    }
 
-        if ($qtyRows->isEmpty()) {
-            return [];
+    /**
+     * Pemakaian WIP pada periode, diatribusikan ke mesin PEMBUAT-nya melalui
+     * asal stok yang dikonsumsi (part_stock -> production result -> machine).
+     *
+     * @return array<string, array{machine_id: int|null, part_id: int, uom: string|null, qty: float, invoice: string|null, supplier: string|null}>
+     */
+    private function outputIssuedAggregate(?int $machineId, ?string $from, ?string $to, ?string $before = null): array
+    {
+        $query = $this->outputIssueBaseQuery($machineId);
+
+        if ($before !== null) {
+            $query->whereDate('woc.created_at', '<', $before);
+        } else {
+            $query->whereDate('woc.created_at', '>=', (string) $from)
+                ->whereDate('woc.created_at', '<=', (string) $to);
         }
 
-        $invoiceRows = $this->fgResultQuery($machineId, $from, $to, $before)
-            ->leftJoin('work_order_consumptions as woc', function ($join) {
-                $join->on('woc.production_result_id', '=', 'pr.id')
-                    ->whereNull('woc.deleted_at')
-                    ->whereNull('woc.reversed_by');
-            })
-            ->leftJoin('work_order_items as woi', 'woi.id', '=', 'woc.work_order_item_id')
-            ->leftJoin('parts as cp', 'cp.id', '=', 'woi.child_part_id')
-            ->whereNotNull('woc.invoice_no')
-            ->whereRaw("NOT (UPPER(COALESCE(cp.part_number, '')) LIKE 'OPT%' OR UPPER(COALESCE(cp.part_number, '')) LIKE 'OPO%' OR UPPER(COALESCE(woi.child_part_name, '')) LIKE '%OPP %' OR UPPER(COALESCE(woi.child_part_name, '')) = 'OPP')")
-            ->groupBy('pr.machine_id', 'pr.parent_part_id', 'pr.uom')
-            ->selectRaw('pr.machine_id, pr.parent_part_id AS part_id, pr.uom')
+        return $query
+            ->groupByRaw('COALESCE(pr_out.machine_id, woi.machine_id), woc.part_id, woc.uom')
+            ->selectRaw('COALESCE(pr_out.machine_id, woi.machine_id) AS machine_id, woc.part_id, woc.uom, SUM(woc.qty) AS qty')
             ->selectRaw("STRING_AGG(DISTINCT woc.invoice_no, ' | ') AS invoice")
             ->selectRaw("STRING_AGG(DISTINCT woc.supplier_name, ' | ') AS supplier")
             ->get()
-            ->keyBy(fn ($row) => $this->bucketKey($row->machine_id, $row->part_id, $row->uom));
-
-        $rows = [];
-
-        foreach ($qtyRows as $row) {
-            $key = $this->bucketKey($row->machine_id, $row->part_id, $row->uom);
-            $invoices = $invoiceRows->get($key);
-
-            $rows[$key] = [
-                'machine_id' => (int) $row->machine_id,
-                'part_id' => (int) $row->part_id,
-                'uom' => $row->uom,
-                'qty' => (float) $row->qty,
-                'invoice' => $invoices?->invoice,
-                'supplier' => $invoices?->supplier,
-            ];
-        }
-
-        return $rows;
+            ->mapWithKeys(fn ($row) => [
+                $this->bucketKey($row->machine_id, $row->part_id, $row->uom) => [
+                    'machine_id' => $row->machine_id !== null ? (int) $row->machine_id : null,
+                    'part_id' => (int) $row->part_id,
+                    'uom' => $row->uom,
+                    'qty' => (float) $row->qty,
+                    'invoice' => $row->invoice,
+                    'supplier' => $row->supplier,
+                ],
+            ])
+            ->all();
     }
 
-    /** Query output FG (belum di-reverse) untuk mesin & periode. */
-    private function fgResultQuery(?int $machineId, ?string $from, ?string $to, ?string $before = null): Builder
+    /**
+     * Saldo awal model output: output sebelum periode − pemakaian WIP sebelum periode.
+     *
+     * @return array<string, float>
+     */
+    private function outputBeginningAggregate(?int $machineId, string $before): array
+    {
+        $map = [];
+
+        foreach ($this->outputReceivedAggregate($machineId, null, null, $before) as $key => $row) {
+            $map[$key] = ($map[$key] ?? 0.0) + $row['qty'];
+        }
+
+        foreach ($this->outputIssuedAggregate($machineId, null, null, $before) as $key => $row) {
+            $map[$key] = ($map[$key] ?? 0.0) - $row['qty'];
+        }
+
+        return array_map(fn ($qty): float => round($qty, 4), $map);
+    }
+
+    /** Query output produksi WIP/FG yang belum di-reverse. */
+    private function outputResultQuery(?int $machineId, ?string $from, ?string $to, ?string $before = null): Builder
     {
         $query = DB::table('production_results as pr')
             ->join('parts as p', 'p.id', '=', 'pr.parent_part_id')
             ->join('part_types as pt', 'pt.id', '=', 'p.part_type_id')
-            ->whereRaw('UPPER(pt.code) = ?', ['FG'])
+            ->whereRaw("UPPER(pt.code) IN ('WIP', 'FG')")
             ->whereNull('pr.deleted_at')
             ->whereNull('pr.reversed_by')
             ->whereNotNull('pr.machine_id')
@@ -372,6 +446,39 @@ final class WipInventoryService
         }
 
         return $query;
+    }
+
+    /**
+     * Subquery nota material utama per production result (tanpa material
+     * penunjang seperti OPP tape).
+     */
+    private function mainMaterialInvoiceSub(): Builder
+    {
+        return DB::table('work_order_consumptions as woc')
+            ->leftJoin('work_order_items as woi', 'woi.id', '=', 'woc.work_order_item_id')
+            ->leftJoin('parts as cp', 'cp.id', '=', 'woi.child_part_id')
+            ->whereNull('woc.deleted_at')
+            ->whereNull('woc.reversed_by')
+            ->whereNotNull('woc.invoice_no')
+            ->whereRaw("NOT (UPPER(COALESCE(cp.part_number, '')) LIKE 'OPT%' OR UPPER(COALESCE(cp.part_number, '')) LIKE 'OPO%' OR UPPER(COALESCE(woi.child_part_name, '')) LIKE '%OPP %' OR UPPER(COALESCE(woi.child_part_name, '')) = 'OPP')")
+            ->groupBy('woc.production_result_id')
+            ->selectRaw('woc.production_result_id')
+            ->selectRaw("STRING_AGG(DISTINCT woc.invoice_no, ' | ') AS invoice")
+            ->selectRaw("STRING_AGG(DISTINCT woc.supplier_name, ' | ') AS supplier");
+    }
+
+    /** Basis query konsumsi WIP dengan mesin pembuat hasil pelacakan stok. */
+    private function outputIssueBaseQuery(?int $machineId = null): Builder
+    {
+        return DB::table('work_order_consumptions as woc')
+            ->join('work_order_items as woi', 'woi.id', '=', 'woc.work_order_item_id')
+            ->leftJoin('production_results as pr_out', 'pr_out.output_part_stock_id', '=', 'woc.part_stock_id')
+            ->join('parts as p', 'p.id', '=', 'woc.part_id')
+            ->join('part_types as pt', 'pt.id', '=', 'p.part_type_id')
+            ->whereRaw("UPPER(pt.code) = 'WIP'")
+            ->whereNull('woc.deleted_at')
+            ->whereNull('woc.reversed_by')
+            ->when($machineId !== null, fn ($q) => $q->whereRaw('COALESCE(pr_out.machine_id, woi.machine_id) = ?', [$machineId]));
     }
 
     /**
@@ -452,12 +559,6 @@ final class WipInventoryService
             $this->addDetailRow($map, $row->invoice, $row->supplier, $row->uom, (float) $row->qty);
         }
 
-        foreach ($this->fgReceivedAggregate($machineId, null, null, $before) as $row) {
-            if ($row['part_id'] === $partId) {
-                $this->addDetailRow($map, $row['invoice'], $row['supplier'], $row['uom'], $row['qty']);
-            }
-        }
-
         $issued = $this->issuedQuery($machineId, $partId)
             ->whereDate('work_order_consumptions.created_at', '<', $before)
             ->groupBy('work_order_consumptions.uom', 'work_order_consumptions.invoice_no', 'work_order_consumptions.supplier_name')
@@ -494,12 +595,6 @@ final class WipInventoryService
             $this->addDetailRow($map, $row->invoice, $row->supplier, $row->uom, (float) $row->qty);
         }
 
-        foreach ($this->fgReceivedAggregate($machineId, $from, $to) as $row) {
-            if ($row['part_id'] === $partId) {
-                $this->addDetailRow($map, $row['invoice'], $row['supplier'], $row['uom'], $row['qty']);
-            }
-        }
-
         return $this->detailRows($map);
     }
 
@@ -525,6 +620,91 @@ final class WipInventoryService
         }
 
         return $this->detailRows($map);
+    }
+
+    /**
+     * Output produksi per laporan pada periode (detail model output).
+     *
+     * @return list<array{invoice: string|null, supplier: string|null, uom: string|null, qty: float}>
+     */
+    private function detailOutputReceived(int $machineId, int $partId, string $from, string $to, ?string $before = null): array
+    {
+        $rows = $this->outputResultQuery(
+            $machineId,
+            $before === null ? $from : null,
+            $before === null ? $to : null,
+            $before,
+        )
+            ->where('pr.parent_part_id', $partId)
+            ->leftJoinSub($this->mainMaterialInvoiceSub(), 'src', 'src.production_result_id', '=', 'pr.id')
+            ->orderBy('pr.result_date')
+            ->orderBy('pr.id')
+            ->selectRaw('pr.uom AS uom, pr.qty_good AS qty, src.invoice AS invoice, src.supplier AS supplier')
+            ->get();
+
+        $map = [];
+
+        foreach ($rows as $row) {
+            $this->addDetailRow($map, $row->invoice, $row->supplier, $row->uom, (float) $row->qty);
+        }
+
+        return $this->detailRows($map);
+    }
+
+    /**
+     * Pemakaian WIP pada periode, diatribusikan ke mesin pembuat.
+     *
+     * @return list<array{invoice: string|null, supplier: string|null, uom: string|null, qty: float}>
+     */
+    private function detailOutputIssued(int $machineId, int $partId, string $from, string $to): array
+    {
+        $map = [];
+
+        foreach ($this->outputIssuedRows($machineId, $partId, $from, $to) as $row) {
+            $this->addDetailRow($map, $row->invoice, $row->supplier, $row->uom, (float) $row->qty);
+        }
+
+        return $this->detailRows($map);
+    }
+
+    /**
+     * Saldo awal model output per nota.
+     *
+     * @return list<array{invoice: string|null, supplier: string|null, uom: string|null, qty: float}>
+     */
+    private function detailOutputBeginning(int $machineId, int $partId, string $before): array
+    {
+        $map = [];
+
+        foreach ($this->detailOutputReceived($machineId, $partId, $before, $before, $before) as $row) {
+            $this->addDetailRow($map, $row['invoice'], $row['supplier'], $row['uom'], $row['qty']);
+        }
+
+        foreach ($this->outputIssuedRows($machineId, $partId, null, null, $before) as $row) {
+            $this->addDetailRow($map, $row->invoice, $row->supplier, $row->uom, -1 * (float) $row->qty);
+        }
+
+        return $this->detailRows($map);
+    }
+
+    /**
+     * @return Collection<int, object>
+     */
+    private function outputIssuedRows(int $machineId, int $partId, ?string $from, ?string $to, ?string $before = null)
+    {
+        $query = $this->outputIssueBaseQuery($machineId)->where('woc.part_id', $partId);
+
+        if ($before !== null) {
+            $query->whereDate('woc.created_at', '<', $before);
+        } else {
+            $query->whereDate('woc.created_at', '>=', (string) $from)
+                ->whereDate('woc.created_at', '<=', (string) $to);
+        }
+
+        return $query
+            ->groupBy('woc.uom', 'woc.invoice_no', 'woc.supplier_name')
+            ->selectRaw('woc.uom AS uom, woc.invoice_no AS invoice, woc.supplier_name AS supplier, SUM(woc.qty) AS qty')
+            ->get();
     }
 
     /**

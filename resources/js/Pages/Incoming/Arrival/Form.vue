@@ -400,7 +400,7 @@ function submit() {
             <div v-if="isLocalArrival" class="rounded-xl border border-borderline bg-surface p-5 space-y-4">
                 <div class="border-b border-borderline pb-3">
                     <h2 class="text-sm font-bold text-ink-primary">Data Kedatangan Lokal</h2>
-                    <p class="text-xs text-ink-secondary">Pilih nomor PO untuk memuat item otomatis, masukkan No. Surat Jalan, No. PEN, dan No. AJU.</p>
+                    <p class="text-xs text-ink-secondary">Pilih nomor PO untuk memuat item otomatis, lalu masukkan No. Surat Jalan. No. PEN dan No. AJU diisi saat penerimaan barang.</p>
                 </div>
 
                 <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -462,30 +462,6 @@ function submit() {
                             class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
                         />
                         <InputError :message="form.errors.invoice_date" class="mt-1" />
-                    </div>
-
-                    <div>
-                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.penNo') }}</label>
-                        <input
-                            :aria-label="t('incoming.penNo')"
-                            v-model="form.pen_no"
-                            type="text"
-                            placeholder="No. PEN Bea Cukai"
-                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
-                        />
-                        <InputError :message="form.errors.pen_no" class="mt-1" />
-                    </div>
-
-                    <div>
-                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.ajuNo') }}</label>
-                        <input
-                            :aria-label="t('incoming.ajuNo')"
-                            v-model="form.aju_no"
-                            type="text"
-                            placeholder="No. AJU Bea Cukai"
-                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
-                        />
-                        <InputError :message="form.errors.aju_no" class="mt-1" />
                     </div>
 
                     <div class="lg:col-span-3">
@@ -587,13 +563,17 @@ function submit() {
                         <input :aria-label="t('incoming.billOfLading')" v-model="form.bill_of_lading" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     </div>
                     <div>
-                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.penNo') }}</label>
-                        <input :aria-label="t('incoming.penNo')" v-model="form.pen_no" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.portLoading') }}</label>
+                        <input
+                            :aria-label="t('incoming.portLoading')"
+                            v-model="form.port_of_loading"
+                            type="text"
+                            placeholder="Contoh: BUSAN"
+                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                        />
+                        <InputError :message="form.errors.port_of_loading" class="mt-1" />
                     </div>
-                    <div>
-                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.ajuNo') }}</label>
-                        <input :aria-label="t('incoming.ajuNo')" v-model="form.aju_no" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
-                    </div>
+
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.currency') }}</label>
                         <select :aria-label="t('incoming.currency')" v-model="form.currency" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">

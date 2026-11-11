@@ -31,6 +31,8 @@ const form = useForm({
     tag: props.receive.tag ?? '',
     truck_no: props.receive.truck_no ?? '',
     location_code: props.receive.location_code ?? '',
+    pen_no: props.arrivalItem.arrival?.pen_no ?? '',
+    aju_no: props.arrivalItem.arrival?.aju_no ?? '',
     bundle_count: (props.receive as any).bundle_count ?? props.receive.bundle_qty ?? 1,
     bundle_qty: (props.receive as any).bundle_count ?? props.receive.bundle_qty ?? 1,
     bundle_unit: props.receive.bundle_unit ?? props.packingUnits[0] ?? 'PALLET',
@@ -104,6 +106,16 @@ function submit() {
                         />
                     </div>
                     <InputError :message="form.errors.location_code" class="mt-1" />
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.penNo') }}</label>
+                    <input :aria-label="t('incoming.penNo')" v-model="form.pen_no" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                    <InputError :message="(form.errors as any).pen_no" class="mt-1" />
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.ajuNo') }}</label>
+                    <input :aria-label="t('incoming.ajuNo')" v-model="form.aju_no" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                    <InputError :message="(form.errors as any).aju_no" class="mt-1" />
                 </div>
 
                 <!-- Kemasan Bertingkat -->

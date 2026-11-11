@@ -163,6 +163,28 @@ class TieredReceiveTest extends TestCase
         $this->assertMatchesRegularExpression('/^AUTO-\d{6}-\d{4}$/', (string) $receive->tag);
     }
 
+    public function test_receive_stores_pen_and_aju_on_the_arrival(): void
+    {
+        [$arrival, $item] = $this->createArrivalWithItem('EA');
+
+        $this->post(route('receive.store', $item), [
+            'receive_date' => now()->toDateString(),
+            'pen_no' => 'PEN-RECV-1',
+            'aju_no' => 'AJU-RECV-1',
+            'tags' => [
+                [
+                    'tag' => 'TAG-PEN-1',
+                    'qty' => 1000,
+                    'qty_unit' => 'EA',
+                ],
+            ],
+        ])->assertRedirect(route('receive.show', $arrival));
+
+        $arrival->refresh();
+        $this->assertSame('PEN-RECV-1', $arrival->pen_no);
+        $this->assertSame('AJU-RECV-1', $arrival->aju_no);
+    }
+
     public function test_arrival_show_page_no_longer_renders_receive_buttons_or_receive_tags_table(): void
     {
         [$arrival, $item] = $this->createArrivalWithItem('EA');

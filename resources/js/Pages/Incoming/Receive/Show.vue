@@ -55,6 +55,9 @@ function removeReceive(r: IncomingReceive) {
                 <p class="mt-1 text-sm text-ink-secondary">
                     {{ arrival.supplier?.supplier_name ?? '—' }} · {{ arrival.invoice_no ?? '—' }}
                 </p>
+                <p class="mt-1 text-xs text-ink-secondary">
+                    {{ t('incoming.penNo') }}: {{ arrival.pen_no ?? '—' }} · {{ t('incoming.ajuNo') }}: {{ arrival.aju_no ?? '—' }}
+                </p>
             </div>
             <div class="flex items-center gap-2">
                 <span

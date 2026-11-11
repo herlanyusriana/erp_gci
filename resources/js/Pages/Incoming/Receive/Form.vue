@@ -186,6 +186,8 @@ const form = useForm({
     receive_date: new Date().toISOString().slice(0, 10),
     truck_no: '',
     location_code: '',
+    pen_no: props.arrivalItem.arrival?.pen_no ?? '',
+    aju_no: props.arrivalItem.arrival?.aju_no ?? '',
     tags: [] as any[],
 });
 
@@ -286,6 +288,32 @@ function submit() {
                             />
                         </div>
                         <InputError :message="form.errors.location_code" class="mt-1" />
+                    </div>
+                </div>
+
+                <!-- Dokumen kepabeanan diisi saat penerimaan -->
+                <div class="mt-4 grid gap-4 border-t border-borderline pt-4 sm:grid-cols-2">
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.penNo') }}</label>
+                        <input
+                            :aria-label="t('incoming.penNo')"
+                            v-model="form.pen_no"
+                            type="text"
+                            placeholder="No. PEN Bea Cukai"
+                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                        />
+                        <InputError :message="(form.errors as any).pen_no" class="mt-1" />
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.ajuNo') }}</label>
+                        <input
+                            :aria-label="t('incoming.ajuNo')"
+                            v-model="form.aju_no"
+                            type="text"
+                            placeholder="No. AJU Bea Cukai"
+                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                        />
+                        <InputError :message="(form.errors as any).aju_no" class="mt-1" />
                     </div>
                 </div>
             </div>

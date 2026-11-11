@@ -99,6 +99,34 @@ class IncomingPoArrivalTest extends TestCase
         $this->assertSame(0, $arrival->containers()->count());
     }
 
+    public function test_arrival_stores_port_of_loading(): void
+    {
+        $supplier = Supplier::where('is_active', true)->firstOrFail();
+        $part = Part::whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))->firstOrFail();
+        $invoiceNo = 'INV-POL-'.uniqid();
+
+        $this->post(route('incoming-arrivals.store'), [
+            'is_local' => false,
+            'supplier_id' => $supplier->id,
+            'invoice_no' => $invoiceNo,
+            'invoice_date' => now()->toDateString(),
+            'port_of_loading' => 'BUSAN',
+            'items' => [
+                [
+                    'part_id' => $part->id,
+                    'qty_goods' => 10,
+                    'unit_goods' => 'KGM',
+                ],
+            ],
+            'containers' => [],
+        ])->assertSessionHasNoErrors()->assertRedirect();
+
+        $this->assertDatabaseHas('incoming_arrivals', [
+            'invoice_no' => $invoiceNo,
+            'port_of_loading' => 'BUSAN',
+        ]);
+    }
+
     public function test_receive_is_blocked_if_iqc_rejected(): void
     {
         $supplier = Supplier::where('is_active', true)->firstOrFail();

@@ -29,6 +29,8 @@ class ReceiveFormDefaultsTest extends TestCase
             'is_local' => true,
             'status' => 'pending',
             'iqc_status' => 'passed',
+            'pen_no' => 'PEN-FORM-1',
+            'aju_no' => 'AJU-FORM-1',
         ]);
         $item = IncomingArrivalItem::create([
             'arrival_id' => $arrival->id,
@@ -48,6 +50,8 @@ class ReceiveFormDefaultsTest extends TestCase
                 ->where('remainingQty', 100)
                 ->where('arrivalItem.qty_bundle', 4)
                 ->where('arrivalItem.unit_bundle', 'PALLET')
+                ->where('arrivalItem.arrival.pen_no', 'PEN-FORM-1')
+                ->where('arrivalItem.arrival.aju_no', 'AJU-FORM-1')
                 ->where('packingTypes', fn ($types) => collect($types)->contains('COIL')));
     }
 }

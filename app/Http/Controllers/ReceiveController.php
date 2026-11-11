@@ -129,6 +129,8 @@ class ReceiveController extends Controller
             'receive_date' => ['required', 'date'],
             'truck_no' => ['nullable', 'string', 'max:50'],
             'location_code' => $this->locationRule(),
+            'pen_no' => ['nullable', 'string', 'max:255'],
+            'aju_no' => ['nullable', 'string', 'max:255'],
             'tags' => ['required', 'array', 'min:1'],
             'tags.*.tag' => ['nullable', 'string', 'max:255'],
             'tags.*.qty' => ['required', 'numeric', 'min:0.0001'],
@@ -224,6 +226,15 @@ class ReceiveController extends Controller
 
                 $this->receiveService->postStock($receive);
             }
+
+            // PEN/AJU diisi saat penerimaan, tetapi tetap milik dokumen kedatangan.
+            $arrival = $arrivalItem->arrival;
+            if ($arrival !== null) {
+                $arrival->update([
+                    'pen_no' => array_key_exists('pen_no', $validated) ? $validated['pen_no'] : $arrival->pen_no,
+                    'aju_no' => array_key_exists('aju_no', $validated) ? $validated['aju_no'] : $arrival->aju_no,
+                ]);
+            }
         });
 
         $arrival = $arrivalItem->arrival()->with('items.receives')->first();
@@ -312,6 +323,8 @@ class ReceiveController extends Controller
             'tag' => ['nullable', 'string', 'max:255'],
             'truck_no' => ['nullable', 'string', 'max:50'],
             'location_code' => $this->locationRule(),
+            'pen_no' => ['nullable', 'string', 'max:255'],
+            'aju_no' => ['nullable', 'string', 'max:255'],
             'qty' => ['required', 'numeric', 'min:0.0001'],
             'bundle_count' => ['nullable', 'numeric', 'min:0'],
             'bundle_qty' => ['nullable', 'numeric', 'min:0'],
@@ -349,7 +362,7 @@ class ReceiveController extends Controller
             ]);
         }
 
-        DB::transaction(function () use ($receive, $validated, $tag, $goodsUnit, $receiveAt, $netWeight) {
+        DB::transaction(function () use ($receive, $validated, $tag, $goodsUnit, $receiveAt, $netWeight, $arrivalItem) {
             // Reverse old stock contribution before mutating.
             $this->receiveService->reverseStock($receive);
 
@@ -375,6 +388,14 @@ class ReceiveController extends Controller
             ]);
 
             $this->receiveService->postStock($receive);
+
+            $arrival = $arrivalItem->arrival;
+            if ($arrival !== null) {
+                $arrival->update([
+                    'pen_no' => array_key_exists('pen_no', $validated) ? $validated['pen_no'] : $arrival->pen_no,
+                    'aju_no' => array_key_exists('aju_no', $validated) ? $validated['aju_no'] : $arrival->aju_no,
+                ]);
+            }
         });
 
         return redirect()

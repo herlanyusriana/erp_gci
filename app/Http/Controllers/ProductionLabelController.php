@@ -7,6 +7,8 @@ use App\Models\ProductionResult;
 use App\Models\User;
 use App\Models\WorkOrder;
 use App\Models\WorkOrderConsumption;
+use App\Models\WorkOrderItem;
+use App\Services\ReleaseContextService;
 use App\Support\QrSvg;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -37,7 +39,7 @@ class ProductionLabelController extends Controller
         $date = $request->input('date') ?: now($timezone)->toDateString();
 
         $rows = ProductionResult::query()
-            ->with(['workOrder:id,wo_no', 'parentPart:id,part_number,part_name', 'machine:id,machine_code,machine_name', 'reporter:id,name'])
+            ->with(['workOrder:id,wo_no', 'parentPart:id,part_number,part_name,part_type_id', 'parentPart.partType:id,code', 'machine:id,machine_code,machine_name', 'reporter:id,name'])
             ->whereDate('result_date', $date)
             ->when($status !== null && $status !== '', fn ($q) => $q->where('label_status', $status))
             ->where(function ($q) {
@@ -62,6 +64,7 @@ class ProductionLabelController extends Controller
                     'part_id' => (int) $row->parent_part_id,
                     'part_number' => $row->parentPart?->part_number,
                     'part_name' => $row->parentPart?->part_name,
+                    'is_fg' => strtoupper((string) $row->parentPart?->partType?->code) === 'FG',
                     'machine_name' => $row->machine?->machine_name,
                     'shift' => $row->shift,
                     'period_label' => substr((string) $row->period_start, 0, 5).' - '.substr((string) $row->period_end, 0, 5),
@@ -114,12 +117,18 @@ class ProductionLabelController extends Controller
 
         $result->load([
             'workOrder.part:id,part_number,part_name',
-            'workOrder.items:id,work_order_id,parent_part_id,process_id,sequence',
-            'parentPart:id,part_number,part_name',
+            'workOrder.items:id,work_order_id,parent_part_id,process_id,sequence,child_part_id',
+            'parentPart:id,part_number,part_name,model,size,part_type_id',
+            'parentPart.partType:id,code',
             'process:id,process_name',
             'machine:id,machine_code,machine_name',
             'reporter:id,name',
         ]);
+
+        // Proses terakhir menghasilkan barang jadi, jadi labelnya label FG —
+        // bukan label WIP.
+        $isFinishedGood = strtoupper((string) $result->parentPart?->partType?->code) === 'FG'
+            || (int) $result->parent_part_id === (int) $result->workOrder?->part_id;
 
         // Cek apakah ada sisa carry-over dari periode sebelumnya pada WO & part yang sama
         $carryOverSource = null;
@@ -222,22 +231,29 @@ class ProductionLabelController extends Controller
             ? ($stepIndex + 1).'/'.$uniqueStepParentIds->count()
             : null;
 
-        // Asal bahan: ambil nota yang BENAR-BENAR terpakai oleh laporan periode
-        // ini, bukan sembarang nota milik WO. Satu periode bisa memakai beberapa
-        // nota sekaligus, jadi semuanya didaftar — bukan diambil satu asal-asalan.
-        $consumedInvoices = WorkOrderConsumption::query()
+        // Asal bahan: label hanya mencantumkan jejak material UTAMA, bukan
+        // semua material penunjang (mis. OPP tape). Satu laporan bisa memakai
+        // beberapa nota, jadi semuanya didaftar untuk material utama tersebut.
+        $consumptions = WorkOrderConsumption::query()
             ->where('production_result_id', $result->id)
-            ->whereNotNull('invoice_no')
-            ->pluck('invoice_no')
-            ->unique()
-            ->values();
+            ->with(['workOrderItem.childPart:id,part_number,part_name'])
+            ->get();
 
-        $consumedTags = WorkOrderConsumption::query()
-            ->where('production_result_id', $result->id)
-            ->whereNotNull('source_tag')
-            ->pluck('source_tag')
-            ->unique()
-            ->values();
+        // Material utama = item non-penunjang dengan urutan BOM paling awal.
+        $mainItem = $consumptions
+            ->pluck('workOrderItem')
+            ->filter()
+            ->unique('id')
+            ->reject(fn (WorkOrderItem $item): bool => ReleaseContextService::isAuxiliaryItem($item))
+            ->sortBy([['sequence', 'asc'], ['id', 'asc']])
+            ->first();
+
+        $mainConsumptions = $mainItem !== null
+            ? $consumptions->where('work_order_item_id', $mainItem->id)
+            : $consumptions;
+
+        $consumedInvoices = $mainConsumptions->pluck('invoice_no')->filter()->unique()->values();
+        $consumedTags = $mainConsumptions->pluck('source_tag')->filter()->unique()->values();
 
         $invoiceLabel = match (true) {
             $consumedInvoices->isEmpty() => '-',
@@ -245,13 +261,7 @@ class ProductionLabelController extends Controller
             default => $consumedInvoices->implode(', '),
         };
 
-        $supplierLabel = WorkOrderConsumption::query()
-            ->where('production_result_id', $result->id)
-            ->whereNotNull('supplier_name')
-            ->pluck('supplier_name')
-            ->unique()
-            ->values()
-            ->implode(', ');
+        $supplierLabel = $mainConsumptions->pluck('supplier_name')->filter()->unique()->implode(', ');
 
         $tagSeq = ProductionResult::query()
             ->where('work_order_id', $result->work_order_id)
@@ -270,8 +280,11 @@ class ProductionLabelController extends Controller
             ? $selectedOperatorName
             : ($result->reporter?->name ?? '-');
 
-        return view('production.labels.wip', [
+        $view = $isFinishedGood ? 'production.labels.fg' : 'production.labels.wip';
+
+        return view($view, [
             'kind' => $kind,
+            'isFinishedGood' => $isFinishedGood,
             'qty' => $effectiveQty,
             'labelSheets' => $labelSheets,
             'packingType' => $packingType,
@@ -280,6 +293,8 @@ class ProductionLabelController extends Controller
             'fgPartName' => $result->workOrder?->part?->part_name ?? $result->parentPart?->part_name,
             'partNumber' => $result->parentPart?->part_number,
             'partName' => $result->parentPart?->part_name,
+            'model' => $result->parentPart?->model,
+            'size' => $result->parentPart?->size,
             'processName' => $result->process?->process_name ?? $result->parentPart?->part_name,
             'stepFraction' => $stepFraction,
             'invoiceNo' => $invoiceLabel,
@@ -296,7 +311,7 @@ class ProductionLabelController extends Controller
             'resultDate' => $result->result_date?->toDateString(),
             'isBackfilled' => (bool) $result->is_backfilled,
             'qr' => QrSvg::make((string) json_encode([
-                'type' => 'wip',
+                'type' => $isFinishedGood ? 'fg' : 'wip',
                 'wo_id' => (int) $result->work_order_id,
                 'part_id' => (int) $result->parent_part_id,
                 'result_id' => (int) $result->id,
@@ -319,7 +334,7 @@ class ProductionLabelController extends Controller
         $partId = $request->input('part_id');
 
         $query = ProductionResult::query()
-            ->with(['workOrder.part', 'parentPart', 'process', 'machine', 'reporter'])
+            ->with(['workOrder.part', 'parentPart.partType:id,code', 'process', 'machine', 'reporter'])
             ->whereDate('result_date', $date)
             ->where('qty_reject', '>', 0)
             ->when($workOrderId, fn ($q) => $q->where('work_order_id', (int) $workOrderId))
@@ -334,6 +349,8 @@ class ProductionLabelController extends Controller
 
         $first = $results->first();
         $woNo = $first->workOrder?->wo_no;
+        $isFinishedGood = strtoupper((string) $first->parentPart?->partType?->code) === 'FG'
+            || (int) $first->parent_part_id === (int) $first->workOrder?->part_id;
 
         $monthBox = str_pad((string) (($first->result_date ?? now())->format('m')), 2, '0', STR_PAD_LEFT);
 
@@ -347,8 +364,11 @@ class ProductionLabelController extends Controller
             ],
         ];
 
-        return view('production.labels.wip', [
+        $view = $isFinishedGood ? 'production.labels.fg' : 'production.labels.wip';
+
+        return view($view, [
             'kind' => 'ng',
+            'isFinishedGood' => $isFinishedGood,
             'qty' => $totalNg,
             'labelSheets' => $labelSheets,
             'packingType' => 'REJECT',
@@ -357,6 +377,8 @@ class ProductionLabelController extends Controller
             'fgPartName' => $first->workOrder?->part?->part_name ?? $first->parentPart?->part_name,
             'partNumber' => $first->parentPart?->part_number,
             'partName' => $first->parentPart?->part_name,
+            'model' => $first->parentPart?->model,
+            'size' => $first->parentPart?->size,
             'processName' => $first->process?->process_name ?? $first->parentPart?->part_name,
             'stepFraction' => null,
             'invoiceNo' => 'AKUMULASI NG',
@@ -373,7 +395,7 @@ class ProductionLabelController extends Controller
             'resultDate' => $date,
             'isBackfilled' => false,
             'qr' => QrSvg::make((string) json_encode([
-                'type' => 'wip',
+                'type' => $isFinishedGood ? 'fg' : 'wip',
                 'wo_id' => (int) $first->work_order_id,
                 'part_id' => (int) $first->parent_part_id,
                 'result_id' => (int) $first->id,

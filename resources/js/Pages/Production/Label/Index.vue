@@ -17,6 +17,7 @@ interface LabelRow {
     part_id: number;
     part_number: string | null;
     part_name: string | null;
+    is_fg: boolean;
     machine_name: string | null;
     shift: string | null;
     period_label: string;
@@ -222,7 +223,15 @@ const canDeliver = (row: LabelRow) => row.label_status === 'printed';
                         <td class="px-4 py-3 text-ink-secondary">{{ row.machine_name ?? '—' }}</td>
                         <td class="px-4 py-3 font-medium text-ink-primary">{{ row.wo_no ?? '—' }}</td>
                         <td class="px-4 py-3">
-                            <div class="text-ink-primary">{{ row.part_number ?? '—' }}</div>
+                            <div class="flex items-center gap-1.5 text-ink-primary">
+                                <span>{{ row.part_number ?? '—' }}</span>
+                                <span
+                                    class="rounded px-1.5 py-0.5 text-[10px] font-bold uppercase"
+                                    :class="row.is_fg ? 'bg-success/15 text-success' : 'bg-primary/10 text-primary'"
+                                >
+                                    {{ row.is_fg ? t('production.finishedGood') : t('production.wipPart') }}
+                                </span>
+                            </div>
                             <div class="text-xs text-ink-secondary">{{ row.part_name ?? '' }}</div>
                         </td>
                         <td class="px-4 py-3 text-right tabular-nums text-success">

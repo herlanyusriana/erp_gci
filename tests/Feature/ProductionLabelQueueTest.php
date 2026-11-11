@@ -329,4 +329,67 @@ class ProductionLabelQueueTest extends TestCase
             ->assertOk()
             ->assertSee('OPERATOR: SUHARJA');
     }
+
+    public function test_final_step_prints_a_finish_good_label(): void
+    {
+        $result = ProductionResult::create([
+            'work_order_id' => $this->wo->id,
+            // Proses terakhir: output adalah part FG milik WO.
+            'parent_part_id' => $this->wo->part_id,
+            'result_date' => now()->toDateString(),
+            'shift' => '1',
+            'period_start' => '07:30',
+            'period_end' => '08:30',
+            'label_status' => 'pending',
+            'qty_good' => 100,
+            'qty_reject' => 0,
+            'uom' => 'PCS',
+        ]);
+
+        $this->get(route('production-labels.print', [$result, 'good']))
+            ->assertOk()
+            ->assertSee('LABEL FINISH GOOD')
+            ->assertDontSee('LABEL WIP')
+            ->assertSee($this->wo->wo_no)
+            ->assertSee('QUANTITY (PCS - BOX)');
+    }
+
+    public function test_label_only_shows_invoice_and_tag_of_the_main_material(): void
+    {
+        $result = $this->makeResult(100, 0);
+
+        $auxItem = WorkOrderItem::create([
+            'work_order_id' => $this->wo->id,
+            'parent_part_id' => $this->part->id,
+            'sequence' => 100,
+            'child_part_name' => 'OPP TAPE',
+            'uom_rm' => 'ROLL',
+            'qty_required' => 10,
+            'qty_consumed' => 0,
+        ]);
+
+        WorkOrderConsumption::create([
+            'work_order_id' => $this->wo->id, 'work_order_item_id' => $this->woItemId(),
+            'part_id' => $this->part->id,
+            'qty' => 260, 'uom' => 'KGM',
+            'invoice_no' => 'INV-MAIN-1', 'supplier_name' => 'MAIN SUPPLIER',
+            'source_tag' => 'TAG-MAIN-1',
+            'production_result_id' => $result->id,
+        ]);
+        WorkOrderConsumption::create([
+            'work_order_id' => $this->wo->id, 'work_order_item_id' => $auxItem->id,
+            'part_id' => $this->part->id,
+            'qty' => 5, 'uom' => 'ROLL',
+            'invoice_no' => 'INV-OPP-9', 'supplier_name' => 'TAPE SUPPLIER',
+            'source_tag' => 'TAG-OPP-9',
+            'production_result_id' => $result->id,
+        ]);
+
+        $this->get(route('production-labels.print', [$result, 'good']))
+            ->assertOk()
+            ->assertSee('INV-MAIN-1')
+            ->assertSee('TAG-MAIN-1')
+            ->assertDontSee('INV-OPP-9')
+            ->assertDontSee('TAG-OPP-9');
+    }
 }

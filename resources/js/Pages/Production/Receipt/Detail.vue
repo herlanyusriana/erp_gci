@@ -15,9 +15,10 @@ interface InvoiceRow {
 
 interface Detail {
     machine: { id: number; name: string; code: string | null };
-    part: { id: number; number: string | null; name: string | null; model: string | null; size: string | null };
+    part: { id: number; number: string | null; name: string | null; model: string | null; size: string | null; type: string | null };
     uom: string | null;
-    date: string;
+    from: string;
+    to: string;
     beginning: InvoiceRow[];
     received: InvoiceRow[];
     issued: InvoiceRow[];
@@ -26,9 +27,12 @@ interface Detail {
 
 const props = defineProps<{
     detail: Detail;
-    date: string;
+    from: string;
+    to: string;
     timezone: string;
 }>();
+
+const periodLabel = () => (props.from === props.to ? props.from : `${props.from} - ${props.to}`);
 
 const fmt = (n: number | null | undefined) =>
     n == null ? '—' : Number(n).toLocaleString(locale.value, { maximumFractionDigits: 4 });
@@ -37,7 +41,7 @@ const fmt = (n: number | null | undefined) =>
 <template>
     <AppLayout>
         <Head :title="`${detail.part.number ?? ''} · ${detail.machine.name}`" />
-        <BackButton :href="route('production-receipts.index', { machine_id: detail.machine.id, date })" class="mb-4" />
+        <BackButton :href="route('production-receipts.index', { machine_id: detail.machine.id, from, to })" class="mb-4" />
 
         <div class="mb-5">
             <h1 class="text-2xl font-bold tracking-tight text-ink-primary">{{ detail.part.number ?? '—' }}</h1>
@@ -45,9 +49,10 @@ const fmt = (n: number | null | undefined) =>
                 {{ detail.part.name ?? '' }}
                 <span v-if="detail.machine.name"> · {{ detail.machine.name }}</span>
                 <span v-if="detail.machine.code" class="text-xs"> ({{ detail.machine.code }})</span>
-                · {{ date }}
+                · {{ periodLabel() }}
             </p>
             <div class="mt-2 flex flex-wrap gap-1 text-[11px] text-ink-secondary">
+                <span v-if="detail.part.type" class="rounded bg-primary/10 px-1.5 py-0.5 font-semibold uppercase text-primary">{{ detail.part.type }}</span>
                 <span v-if="detail.part.model" class="rounded bg-background px-1.5 py-0.5">{{ detail.part.model }}</span>
                 <span v-if="detail.part.size" class="rounded bg-background px-1.5 py-0.5">{{ detail.part.size }}</span>
             </div>

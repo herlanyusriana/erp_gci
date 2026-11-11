@@ -100,6 +100,43 @@ class WipInventoryTest extends TestCase
         ]);
     }
 
+    private function receiptForPart(Part $part, string $date, float $qty, ?Machine $machine = null): ProductionMaterialReceipt
+    {
+        $machine ??= $this->machine;
+
+        $issue = MaterialIssue::create([
+            'issue_no' => 'MI-WIP-'.uniqid(),
+            'work_order_id' => $this->wo->id,
+            'issue_date' => $date,
+            'status' => 'posted',
+        ]);
+
+        $issueItem = MaterialIssueItem::create([
+            'material_issue_id' => $issue->id,
+            'work_order_item_id' => $this->item->id,
+            'part_id' => $part->id,
+            'tag' => 'T-'.uniqid(),
+            'qty' => $qty,
+            'uom' => 'KGM',
+            'invoice' => 'INV-'.$part->id.'-'.$date,
+            'supplier' => 'Supplier WIP',
+        ]);
+
+        return ProductionMaterialReceipt::create([
+            'material_issue_item_id' => $issueItem->id,
+            'tag' => $issueItem->tag,
+            'part_id' => $part->id,
+            'machine_id' => $machine->id,
+            'work_order_id' => $this->wo->id,
+            'work_order_item_id' => $this->item->id,
+            'received_at' => $date.' 08:00:00',
+            'qty' => $qty,
+            'qty_consumed' => 0,
+            'uom' => 'KGM',
+            'transfer_status' => 'transferred',
+        ]);
+    }
+
     private function consumption(string $date, float $qty): WorkOrderConsumption
     {
         $consumption = new WorkOrderConsumption([
@@ -390,6 +427,120 @@ class WipInventoryTest extends TestCase
                 ->has('detail.beginning')
                 ->has('detail.received')
                 ->has('detail.issued'));
+    }
+
+    public function test_range_scopes_movement_and_carries_beginning_balance(): void
+    {
+        $this->receipt('2026-10-27', 500);
+        $this->receipt('2026-10-28', 300);
+        $this->consumption('2026-10-29', 100);
+        $this->receipt('2026-10-30', 200);
+        $this->consumption('2026-10-30', 50);
+
+        $rows = app(WipInventoryService::class)->forRange('2026-10-30', '2026-10-30', $this->machine->id);
+        $row = collect($rows)->firstWhere('part_id', $this->part->id);
+
+        $this->assertNotNull($row);
+        $this->assertEqualsWithDelta(700.0, (float) $row['beginning_qty'], 1e-6);
+        $this->assertEqualsWithDelta(200.0, (float) $row['received_qty'], 1e-6);
+        $this->assertEqualsWithDelta(50.0, (float) $row['issued_qty'], 1e-6);
+        $this->assertEqualsWithDelta(850.0, (float) $row['ending_qty'], 1e-6);
+    }
+
+    public function test_range_splits_wip_fg_and_raw_material_categories(): void
+    {
+        $wipPart = Part::whereHas('partType', fn ($q) => $q->whereRaw('UPPER(code) = ?', ['WIP']))->firstOrFail();
+
+        $this->receiptForPart($wipPart, '2026-10-30', 40);
+        $this->receiptForPart($this->part, '2026-10-30', 100);
+
+        $service = app(WipInventoryService::class);
+
+        $wipFg = collect($service->forRange('2026-10-30', '2026-10-30', $this->machine->id, WipInventoryService::CATEGORY_WIP_FG));
+        $material = collect($service->forRange('2026-10-30', '2026-10-30', $this->machine->id, WipInventoryService::CATEGORY_MATERIAL));
+
+        $this->assertTrue($wipFg->contains('part_id', $wipPart->id));
+        $this->assertFalse($wipFg->contains('part_id', $this->part->id));
+        $this->assertTrue($material->contains('part_id', $this->part->id));
+        $this->assertFalse($material->contains('part_id', $wipPart->id));
+    }
+
+    public function test_fg_production_output_is_received_with_zero_issue(): void
+    {
+        $fg = Part::where('part_number', 'AAN30056405')->firstOrFail();
+
+        ProductionResult::create([
+            'work_order_id' => $this->wo->id,
+            'parent_part_id' => $fg->id,
+            'machine_id' => $this->machine->id,
+            'result_date' => '2026-10-30',
+            'shift' => '1',
+            'qty_good' => 250,
+            'qty_reject' => 0,
+            'uom' => 'PCS',
+            'label_status' => 'pending',
+        ]);
+
+        $rows = app(WipInventoryService::class)
+            ->forRange('2026-10-30', '2026-10-30', $this->machine->id, WipInventoryService::CATEGORY_WIP_FG);
+        $row = collect($rows)->firstWhere('part_id', $fg->id);
+
+        $this->assertNotNull($row);
+        $this->assertEqualsWithDelta(250.0, (float) $row['received_qty'], 1e-6);
+        $this->assertEqualsWithDelta(0.0, (float) $row['issued_qty'], 1e-6);
+        $this->assertEqualsWithDelta(250.0, (float) $row['ending_qty'], 1e-6);
+        $this->assertSame('FG', $row['part_type']);
+    }
+
+    public function test_rows_with_only_beginning_stock_are_listed(): void
+    {
+        $this->receipt('2026-10-29', 400);
+
+        $rows = app(WipInventoryService::class)->forRange('2026-10-30', '2026-10-30', $this->machine->id);
+        $row = collect($rows)->firstWhere('part_id', $this->part->id);
+
+        $this->assertNotNull($row, 'Baris dengan stok awal saja harus tetap tampil');
+        $this->assertEqualsWithDelta(400.0, (float) $row['beginning_qty'], 1e-6);
+        $this->assertEqualsWithDelta(0.0, (float) $row['received_qty'], 1e-6);
+        $this->assertEqualsWithDelta(0.0, (float) $row['issued_qty'], 1e-6);
+        $this->assertEqualsWithDelta(400.0, (float) $row['ending_qty'], 1e-6);
+    }
+
+    public function test_index_page_exposes_two_tabs_and_period_filters(): void
+    {
+        $this->receipt('2026-10-30', 100);
+
+        $this->get(route('production-receipts.index', [
+            'tab' => WipInventoryService::CATEGORY_MATERIAL,
+            'from' => '2026-10-01',
+            'to' => '2026-10-31',
+        ]))->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('Production/Receipt/Index')
+                ->where('tab', WipInventoryService::CATEGORY_MATERIAL)
+                ->where('from', '2026-10-01')
+                ->where('to', '2026-10-31')
+                ->has('tabs', 2)
+                ->has('rows')
+                ->missing('stockRows'));
+    }
+
+    public function test_detail_accepts_a_date_range(): void
+    {
+        $this->receipt('2026-10-28', 100);
+        $this->receipt('2026-10-30', 50);
+
+        $this->get(route('production-receipts.detail', [
+            'machine' => $this->machine->id,
+            'part' => $this->part->id,
+            'from' => '2026-10-28',
+            'to' => '2026-10-30',
+        ]))->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('Production/Receipt/Detail')
+                ->where('detail.from', '2026-10-28')
+                ->where('detail.to', '2026-10-30')
+                ->where('detail.totals.received', 150));
     }
 
     public function test_backfill_fills_invoice_on_consumptions_that_predate_the_fix(): void

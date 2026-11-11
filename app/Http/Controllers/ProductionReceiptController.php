@@ -6,23 +6,24 @@ use App\Models\ConfigMaster;
 use App\Models\Machine;
 use App\Models\WorkOrder;
 use App\Services\WipInventoryService;
-use App\Services\WipStockService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * WIP Inventory: kartu stok WIP per mesin.
+ * WIP Inventory: kartu stok material per mesin.
  *
- * Beginning + Received (scan APK) − Issued (konsumsi BOM dari production result)
- * = End Stock. Saldo awal menyambung dari hari-hari sebelumnya.
+ * Dua tab: WIP & FG (barang setengah jadi dan barang jadi) serta Raw Material.
+ * Beginning + Received − Issued = Ending untuk rentang tanggal yang dipilih.
  */
 class ProductionReceiptController extends Controller
 {
+    public const TABS = [WipInventoryService::CATEGORY_WIP_FG, WipInventoryService::CATEGORY_MATERIAL];
+
     public function __construct(
         private WipInventoryService $wipInventory,
-        private WipStockService $wipStock,
     ) {}
 
     public function index(Request $request): Response
@@ -39,37 +40,55 @@ class ProductionReceiptController extends Controller
         $machineId = $selectedMachineId !== null && $selectedMachineId !== ''
             ? (int) $selectedMachineId
             : null;
-        $date = (string) ($request->input('date') ?: now($timezone)->toDateString());
 
-        $rows = $this->wipInventory->forDate($date, $machineId);
+        $tab = (string) $request->input('tab', WipInventoryService::CATEGORY_WIP_FG);
+        $tab = in_array($tab, self::TABS, true) ? $tab : WipInventoryService::CATEGORY_WIP_FG;
 
-        // Stok WIP fisik saat ini — sumbernya sama dengan Papan WIP di APK,
-        // supaya angka di Web dan APK tidak pernah berbeda.
-        $stockRows = $this->wipStock->current('WIP');
+        $today = now($timezone)->toDateString();
+        $from = (string) ($request->input('from') ?: Carbon::parse($today, $timezone)->startOfMonth()->toDateString());
+        $to = (string) ($request->input('to') ?: $today);
+
+        // Rentang terbalik ditukar agar laporan tetap masuk akal.
+        if ($from > $to) {
+            [$from, $to] = [$to, $from];
+        }
+
+        $rows = $this->wipInventory->forRange($from, $to, $machineId, $tab);
 
         return Inertia::render('Production/Receipt/Index', [
             'machines' => $machines,
             'selectedMachineId' => $machineId,
-            'date' => $date,
+            'tab' => $tab,
+            'tabs' => self::TABS,
+            'from' => $from,
+            'to' => $to,
             'rows' => $rows,
-            'stockRows' => $stockRows,
             'timezone' => $timezone,
         ]);
     }
 
     /**
-     * Rincian pergerakan satu mesin + part pada satu tanggal, dipecah per nota.
+     * Rincian pergerakan satu mesin + part pada satu rentang, dipecah per nota.
      */
     public function detail(Request $request, int $machine, int $part): Response
     {
         Gate::authorize('viewAny', WorkOrder::class);
 
         $timezone = (string) ConfigMaster::getValue('SYSTEM', 'timezone', 'Asia/Jakarta');
-        $date = (string) ($request->input('date') ?: now($timezone)->toDateString());
+        $today = now($timezone)->toDateString();
+
+        // `date` dipertahankan untuk tautan lama (satu hari).
+        $from = (string) ($request->input('from') ?: $request->input('date') ?: $today);
+        $to = (string) ($request->input('to') ?: $from);
+
+        if ($from > $to) {
+            [$from, $to] = [$to, $from];
+        }
 
         return Inertia::render('Production/Receipt/Detail', [
-            'detail' => $this->wipInventory->detail($machine, $part, $date),
-            'date' => $date,
+            'detail' => $this->wipInventory->detail($machine, $part, $from, $to),
+            'from' => $from,
+            'to' => $to,
             'timezone' => $timezone,
         ]);
     }

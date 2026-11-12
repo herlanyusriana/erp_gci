@@ -11,7 +11,7 @@ class PartStock extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        'part_id', 'tag', 'qty', 'received_at', 'receive_id', 'qty_unit', 'price', 'remarks',
+        'part_id', 'tag', 'qty', 'received_at', 'receive_id', 'qty_unit', 'location_code', 'price', 'remarks',
     ];
 
     protected $casts = [

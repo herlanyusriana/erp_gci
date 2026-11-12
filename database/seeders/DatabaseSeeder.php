@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
             UomSeeder::class,
             MasterDataSeeder::class,
             LocationSeeder::class,
+            DeliveryLocationSeeder::class,
             BomSeeder::class,
             DerivedDataSeeder::class,
         ]);

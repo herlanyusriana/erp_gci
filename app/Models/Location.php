@@ -9,8 +9,17 @@ class Location extends Model
 {
     use SoftDeletes;
 
+    /** Tipe lokasi: rak penyimpanan, lokasi mesin, dan area pengiriman. */
+    public const TYPE_STORAGE = 'storage';
+
+    public const TYPE_MACHINE = 'machine';
+
+    public const TYPE_DELIVERY_PREP = 'delivery_prep';
+
+    public const TYPES = [self::TYPE_STORAGE, self::TYPE_MACHINE, self::TYPE_DELIVERY_PREP];
+
     protected $fillable = [
-        'code', 'name', 'is_active', 'created_by', 'updated_by',
+        'code', 'name', 'type', 'is_active', 'created_by', 'updated_by',
     ];
 
     protected $casts = [

@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\ConfigMaster;
 use App\Models\IncomingReceive;
 use App\Models\Location;
+use App\Models\PartStock;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -25,6 +27,7 @@ class LocationController extends Controller
         return Inertia::render('Master/Location/Index', [
             'locations' => $locations,
             'filters' => $request->only('search'),
+            'types' => Location::TYPES,
         ]);
     }
 
@@ -33,9 +36,11 @@ class LocationController extends Controller
         $data = $request->validate([
             'code' => ['required', 'string', 'max:40', 'unique:locations,code'],
             'name' => ['required', 'string', 'max:255'],
+            'type' => ['nullable', Rule::in(Location::TYPES)],
             'is_active' => ['sometimes', 'boolean'],
         ]);
 
+        $data['type'] = $data['type'] ?? Location::TYPE_STORAGE;
         $data['created_by'] = $request->user()?->id;
         Location::create($data);
 
@@ -47,9 +52,11 @@ class LocationController extends Controller
         $data = $request->validate([
             'code' => ['required', 'string', 'max:40', "unique:locations,code,{$location->id}"],
             'name' => ['required', 'string', 'max:255'],
+            'type' => ['nullable', Rule::in(Location::TYPES)],
             'is_active' => ['sometimes', 'boolean'],
         ]);
 
+        $data['type'] = $data['type'] ?? $location->type ?? Location::TYPE_STORAGE;
         $data['updated_by'] = $request->user()?->id;
         $location->update($data);
 
@@ -60,7 +67,8 @@ class LocationController extends Controller
     {
         // Lokasi yang sudah dipakai dokumen penerimaan tidak boleh dihapus, supaya
         // riwayat lama tetap menunjuk lokasi yang sah.
-        if (IncomingReceive::query()->where('location_code', $location->code)->exists()) {
+        if (IncomingReceive::query()->where('location_code', $location->code)->exists()
+            || PartStock::query()->where('location_code', $location->code)->exists()) {
             return redirect()
                 ->route('locations.index')
                 ->with('error', __('Lokasi sudah dipakai penerimaan; nonaktifkan saja alih-alih menghapus.'));

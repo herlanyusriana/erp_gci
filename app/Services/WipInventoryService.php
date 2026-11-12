@@ -387,7 +387,7 @@ final class WipInventoryService
                 ->whereDate('woc.created_at', '<=', (string) $to);
         }
 
-        return $query
+        $rows = $query
             ->groupByRaw('COALESCE(pr_out.machine_id, woi.machine_id), woc.part_id, woc.uom')
             ->selectRaw('COALESCE(pr_out.machine_id, woi.machine_id) AS machine_id, woc.part_id, woc.uom, SUM(woc.qty) AS qty')
             ->selectRaw("STRING_AGG(DISTINCT woc.invoice_no, ' | ') AS invoice")
@@ -404,6 +404,78 @@ final class WipInventoryService
                 ],
             ])
             ->all();
+
+        // Barang jadi keluar dari lokasi mesin saat dipindah ke area pengiriman.
+        foreach ($this->fgDeliveryIssuedAggregate($machineId, $from, $to, $before) as $key => $row) {
+            if (isset($rows[$key])) {
+                $rows[$key]['qty'] += $row['qty'];
+                $rows[$key]['invoice'] = $this->joinLabels($rows[$key]['invoice'], $row['invoice']);
+                $rows[$key]['supplier'] = $this->joinLabels($rows[$key]['supplier'], $row['supplier']);
+            } else {
+                $rows[$key] = $row;
+            }
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Pemakaian barang jadi: qty yang sudah dipindah ke area pengiriman,
+     * diatribusikan ke mesin pembuat tag tersebut.
+     *
+     * @return array<string, array{machine_id: int|null, part_id: int, uom: string|null, qty: float, invoice: string|null, supplier: string|null}>
+     */
+    private function fgDeliveryIssuedAggregate(?int $machineId, ?string $from, ?string $to, ?string $before = null): array
+    {
+        $query = DB::table('delivery_items as di')
+            ->join('deliveries as d', 'd.id', '=', 'di.delivery_id')
+            ->leftJoin('production_results as pr_out', 'pr_out.output_part_stock_id', '=', 'di.part_stock_id')
+            ->leftJoin('machines as m', fn ($join) => $join
+                ->on(DB::raw('LOWER(m.machine_code)'), '=', DB::raw('LOWER(di.origin_location_code)')))
+            ->join('parts as p', 'p.id', '=', 'di.part_id')
+            ->join('part_types as pt', 'pt.id', '=', 'p.part_type_id')
+            ->whereRaw('UPPER(pt.code) = ?', ['FG'])
+            ->whereNull('d.deleted_at')
+            ->whereNotNull('d.picked_at')
+            ->whereIn('d.status', ['picked', 'shipped'])
+            ->when($machineId !== null, fn ($q) => $q->whereRaw(
+                'COALESCE(pr_out.machine_id, m.id) = ?',
+                [$machineId],
+            ));
+
+        if ($before !== null) {
+            $query->whereDate('d.picked_at', '<', $before);
+        } else {
+            $query->whereDate('d.picked_at', '>=', (string) $from)
+                ->whereDate('d.picked_at', '<=', (string) $to);
+        }
+
+        return $query
+            ->groupByRaw('COALESCE(pr_out.machine_id, m.id), di.part_id, di.qty_unit')
+            ->selectRaw('COALESCE(pr_out.machine_id, m.id) AS machine_id, di.part_id, di.qty_unit AS uom, SUM(di.qty) AS qty')
+            ->selectRaw('STRING_AGG(DISTINCT d.delivery_no, \' | \') AS invoice')
+            ->selectRaw('STRING_AGG(DISTINCT c.customer_name, \' | \') AS supplier')
+            ->leftJoin('customers as c', 'c.id', '=', 'd.customer_id')
+            ->get()
+            ->mapWithKeys(fn ($row) => [
+                $this->bucketKey($row->machine_id, $row->part_id, $row->uom) => [
+                    'machine_id' => $row->machine_id !== null ? (int) $row->machine_id : null,
+                    'part_id' => (int) $row->part_id,
+                    'uom' => $row->uom,
+                    'qty' => (float) $row->qty,
+                    'invoice' => $row->invoice,
+                    'supplier' => $row->supplier,
+                ],
+            ])
+            ->all();
+    }
+
+    /** Gabungkan label nota/supplier dari dua sumber tanpa duplikasi. */
+    private function joinLabels(?string $a, ?string $b): ?string
+    {
+        $parts = array_filter(array_map('trim', explode('|', (string) $a.'|'.(string) $b)));
+
+        return $parts === [] ? null : implode(' | ', array_values(array_unique($parts)));
     }
 
     /**
@@ -664,7 +736,43 @@ final class WipInventoryService
             $this->addDetailRow($map, $row->invoice, $row->supplier, $row->uom, (float) $row->qty);
         }
 
+        foreach ($this->detailFgDeliveryIssued($machineId, $partId, $from, $to) as $row) {
+            $this->addDetailRow($map, $row->invoice, $row->supplier, $row->uom, (float) $row->qty);
+        }
+
         return $this->detailRows($map);
+    }
+
+    /**
+     * Barang jadi yang dipindah ke area pengiriman pada periode, per dokumen.
+     *
+     * @return Collection<int, object>
+     */
+    private function detailFgDeliveryIssued(int $machineId, int $partId, string $from, string $to, ?string $before = null)
+    {
+        $query = DB::table('delivery_items as di')
+            ->join('deliveries as d', 'd.id', '=', 'di.delivery_id')
+            ->leftJoin('customers as c', 'c.id', '=', 'd.customer_id')
+            ->leftJoin('production_results as pr_out', 'pr_out.output_part_stock_id', '=', 'di.part_stock_id')
+            ->leftJoin('machines as m', fn ($join) => $join
+                ->on(DB::raw('LOWER(m.machine_code)'), '=', DB::raw('LOWER(di.origin_location_code)')))
+            ->whereNull('d.deleted_at')
+            ->whereNotNull('d.picked_at')
+            ->whereIn('d.status', ['picked', 'shipped'])
+            ->where('di.part_id', $partId)
+            ->whereRaw('COALESCE(pr_out.machine_id, m.id) = ?', [$machineId]);
+
+        if ($before !== null) {
+            $query->whereDate('d.picked_at', '<', $before);
+        } else {
+            $query->whereDate('d.picked_at', '>=', $from)
+                ->whereDate('d.picked_at', '<=', $to);
+        }
+
+        return $query
+            ->groupBy('di.qty_unit', 'd.delivery_no', 'c.customer_name')
+            ->selectRaw('di.qty_unit AS uom, d.delivery_no AS invoice, c.customer_name AS supplier, SUM(di.qty) AS qty')
+            ->get();
     }
 
     /**
@@ -681,6 +789,10 @@ final class WipInventoryService
         }
 
         foreach ($this->outputIssuedRows($machineId, $partId, null, null, $before) as $row) {
+            $this->addDetailRow($map, $row->invoice, $row->supplier, $row->uom, -1 * (float) $row->qty);
+        }
+
+        foreach ($this->detailFgDeliveryIssued($machineId, $partId, $before, $before, $before) as $row) {
             $this->addDetailRow($map, $row->invoice, $row->supplier, $row->uom, -1 * (float) $row->qty);
         }
 

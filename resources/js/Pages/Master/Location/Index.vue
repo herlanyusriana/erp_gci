@@ -16,7 +16,10 @@ const { t } = useI18n();
 const props = defineProps<{
     locations: Paginated<Location>;
     filters: { search?: string };
+    types?: string[];
 }>();
+
+const locationTypes = () => (props.types?.length ? props.types : ['storage', 'machine', 'delivery_prep']);
 
 const search = ref(props.filters.search ?? '');
 let timer: ReturnType<typeof setTimeout> | undefined;
@@ -25,7 +28,7 @@ function doSearch() {
     timer = setTimeout(() => router.get(route('locations.index'), { search: search.value || undefined }, { preserveState: true, replace: true }), 300);
 }
 
-const form = useForm({ code: '', name: '', is_active: true });
+const form = useForm({ code: '', name: '', type: 'storage', is_active: true });
 const showForm = ref(false);
 const editing = ref<Location | null>(null);
 
@@ -41,6 +44,7 @@ function openEdit(location: Location) {
     form.clearErrors();
     form.code = location.code;
     form.name = location.name;
+    form.type = location.type ?? 'storage';
     form.is_active = location.is_active;
     showForm.value = true;
 }
@@ -95,6 +99,7 @@ function remove(location: Location) {
                         <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                             <th scope="col" class="px-4 py-3">{{ t('master.code') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('master.name') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.locationType') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('master.status') }}</th>
                             <th scope="col" class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
                         </tr>
@@ -103,6 +108,11 @@ function remove(location: Location) {
                         <tr v-for="location in locations.data" :key="location.id" class="hover:bg-primary-light/40">
                             <td class="px-4 py-3 font-medium text-ink-primary">{{ location.code }}</td>
                             <td class="px-4 py-3 text-ink-primary">{{ location.name }}</td>
+                            <td class="px-4 py-3">
+                                <span class="rounded bg-background px-1.5 py-0.5 text-[11px] font-semibold text-ink-secondary">
+                                    {{ t(`master.locationType_${location.type ?? 'storage'}`) }}
+                                </span>
+                            </td>
                             <td class="px-4 py-3">
                                 <StatusBadge :tone="location.is_active ? 'success' : 'warning'">{{ location.is_active ? t('master.active') : t('master.inactive') }}</StatusBadge>
                             </td>
@@ -142,6 +152,13 @@ function remove(location: Location) {
                 <p class="mt-3 text-xs text-ink-secondary">{{ t('master.locationLabelHint') }}</p>
                 <div class="mt-4 flex items-center justify-end gap-3">
                     <button type="button" @click="closeForm" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-primary hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">{{ t('master.cancel') }}</button>
+                    <div class="sm:col-span-2">
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('master.locationType') }}</label>
+                        <select :aria-label="t('master.locationType')" v-model="form.type" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                            <option v-for="tp in locationTypes()" :key="tp" :value="tp">{{ t(`master.locationType_${tp}`) }}</option>
+                        </select>
+                        <InputError :message="form.errors.type" class="mt-1" />
+                    </div>
                     <button type="submit" :disabled="form.processing" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
                         {{ form.processing ? t('master.saving') : t('master.save') }}
                     </button>

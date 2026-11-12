@@ -104,6 +104,7 @@ export interface Location {
     id: number;
     code: string;
     name: string;
+    type?: 'storage' | 'machine' | 'delivery_prep' | null;
     is_active: boolean;
 }
 

@@ -819,12 +819,23 @@ class ReceiveMaterialService
      * Post stok hasil produksi (WO output WIP/FG).
      * receive_id = null, tag produksi bebas, received_at = waktu produksi.
      */
-    public function postProductionStock(int $partId, string $tag, float|string $qty, ?string $uom = null, $receivedAt = null): PartStock
-    {
+    /**
+     * Posting stok hasil produksi. `$locationCode` mengisi lokasi fisik barang;
+     * untuk barang jadi lokasinya adalah mesin yang memproduksinya sampai
+     * dipindah ke area pengiriman.
+     */
+    public function postProductionStock(
+        int $partId,
+        string $tag,
+        float|string $qty,
+        ?string $uom = null,
+        $receivedAt = null,
+        ?string $locationCode = null,
+    ): PartStock {
         $receivedAt = $receivedAt ?? now();
         $uom = UomCatalog::normalize($uom) ?? UomCatalog::PIECE;
 
-        return DB::transaction(function () use ($partId, $tag, $qty, $uom, $receivedAt) {
+        return DB::transaction(function () use ($partId, $tag, $qty, $uom, $receivedAt, $locationCode) {
             $stock = PartStock::query()
                 ->where('part_id', $partId)
                 ->whereRaw('LOWER(COALESCE(tag, \'\')) = ?', [strtolower($tag)])
@@ -833,6 +844,9 @@ class ReceiveMaterialService
 
             if ($stock) {
                 $stock->increment('qty', $qty);
+                if ($locationCode !== null && $stock->location_code === null) {
+                    $stock->update(['location_code' => $locationCode]);
+                }
 
                 return $stock->fresh();
             }
@@ -842,6 +856,7 @@ class ReceiveMaterialService
                 'tag' => $tag,
                 'qty' => $qty,
                 'qty_unit' => $uom,
+                'location_code' => $locationCode,
                 'received_at' => $receivedAt,
                 'receive_id' => null,
                 'price' => null,

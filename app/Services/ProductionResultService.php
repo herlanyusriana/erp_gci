@@ -219,7 +219,11 @@ class ProductionResultService
             }
 
             $tag = $workOrder->wo_no.'#'.($first->parentPart?->part_number ?? $parentPartId).'#R'.$result->id;
-            $output = $this->stockService->postProductionStock($parentPartId, $tag, (string) $goodDecimal, $uom, $reportedAt);
+            $output = $this->stockService->postProductionStock(
+                $parentPartId, $tag, (string) $goodDecimal, $uom, $reportedAt,
+                // Lokasi barang jadi sementara: mesin yang memproduksinya.
+                $machine?->machine_code,
+            );
             $result->update(['output_part_stock_id' => $output->id]);
 
             return $result;

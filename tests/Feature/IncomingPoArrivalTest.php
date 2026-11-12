@@ -127,6 +127,55 @@ class IncomingPoArrivalTest extends TestCase
         ]);
     }
 
+    public function test_arrival_invoice_prints_package_count_and_model_instead_of_part_name(): void
+    {
+        $supplier = Supplier::where('is_active', true)->firstOrFail();
+
+        // Part dengan model terisi, agar kolom DESCRIPTION memakai model.
+        $part = Part::whereNotNull('model')
+            ->whereRaw('TRIM(model) NOT IN (?, ?)', ['', '-'])
+            ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))
+            ->firstOrFail();
+
+        $invoiceNo = 'INV-MODEL-'.uniqid();
+        $arrival = IncomingArrival::create([
+            'arrival_no' => 'ARV-MODEL-'.uniqid(),
+            'supplier_id' => $supplier->id,
+            'invoice_no' => $invoiceNo,
+            'invoice_date' => now()->toDateString(),
+            'is_local' => false,
+            'status' => 'pending',
+            'iqc_status' => 'passed',
+        ]);
+
+        IncomingArrivalItem::create([
+            'arrival_id' => $arrival->id,
+            'part_id' => $part->id,
+            'material_group' => 'STEEL IN SHEET',
+            'size' => '1.2MM',
+            'qty_goods' => 1000,
+            'unit_goods' => 'KGM',
+            'qty_bundle' => 4,
+            'unit_bundle' => 'PALLET',
+            'weight_nett' => 1000,
+            'unit_weight' => 'KGM',
+        ]);
+
+        $response = $this->get(route('incoming-arrivals.invoice', $arrival))->assertOk();
+
+        // Jumlah kemasan tampil sebagai "NO. OF PKGS : 4", bukan rentang nomor.
+        $response->assertSee('NO. OF PKGS : 4');
+
+        // Description of goods HANYA material group: tanpa model dan tanpa size.
+        $response->assertSee('STEEL IN SHEET');
+        $response->assertDontSee(strtoupper((string) $part->model).' (MODEL)');
+        $response->assertDontSee('1.2MM');
+
+        // Kolom MARKS memakai nama barang + model, bukan part number.
+        $response->assertSee(strtoupper(trim((string) $part->part_name).' '.trim((string) $part->model)));
+        $response->assertDontSee(strtoupper((string) $part->part_number));
+    }
+
     public function test_receive_is_blocked_if_iqc_rejected(): void
     {
         $supplier = Supplier::where('is_active', true)->firstOrFail();

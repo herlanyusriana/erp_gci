@@ -578,6 +578,30 @@
         if ($marksNoEnd <= 0) {
             $marksNoEnd = $arrival->items->count();
         }
+
+        // Jumlah kemasan yang dicetak pada kolom MARKS, mis. "NO. OF PKGS : 4".
+        $pkgsTotal = $marksNoEnd;
+
+        // Model part dipakai sebagai identitas barang pada DESCRIPTION OF GOODS.
+        // Bila model kosong (sebagian material belum punya model), pakai nama
+        // part supaya baris tidak tampil kosong.
+        // Nama barang + model untuk kolom MARKS, mis. "BACK PLATE VT 7".
+        // Model tidak diulang bila sudah termuat dalam nama part.
+        $nameModelLabel = function ($item): string {
+            $name = strtoupper(trim((string) ($item->part?->part_name ?? $item->display_part_name ?? '')));
+            $model = strtoupper(trim((string) ($item->part?->model ?? '')));
+
+            if ($model === '' || $model === '-') {
+                return $name;
+            }
+
+            if ($name !== '' && str_contains($name, $model)) {
+                return $name;
+            }
+
+            return trim($name.' '.$model);
+        };
+
         $bundleUnitDisplay = optional($arrival->items->filter(function ($item) {
             return ($item->qty_bundle ?? 0) > 0 && $item->unit_bundle;
         })->first())->unit_bundle ?? 'BUNDLE';
@@ -763,7 +787,7 @@
                         </thead>
                         <tbody>
                             <tr>
-                                <td>NO: 1-{{ $marksNoEnd }}.</td>
+                                <td>NO. OF PKGS : {{ $pkgsTotal }}</td>
                                 <td>&nbsp;</td>
                                 <td colspan="2">&nbsp;</td>
                                 <td>&nbsp;</td>
@@ -775,7 +799,7 @@
                                     <td>&nbsp;</td>
                                     <td>
                                         <div class="ci-product-title">
-                                            {{ $items->first()->material_group ?: ($items->first()->display_part_name ?? $groupKey) }}
+                                            {{ $items->first()->material_group ?: $groupKey }}
                                         </div>
                                     </td>
                                     <td colspan="2">&nbsp;</td>
@@ -809,12 +833,14 @@
                                     @endphp
                                     <tr>
                                         <td>
-                                            {{ strtoupper($item->display_part_name) }}
+                                            <div>{{ $nameModelLabel($item) }}</div>
                                             @if ($item->is_foc)
-                                                FOC
+                                                <span style="font-size:9px;">FOC</span>
                                             @endif
                                         </td>
-                                        <td class="ci-center">{{ $item->size ?? '' }}</td>
+                                        <td class="ci-center">
+                                            {{ $items->first()->material_group ?: $groupKey }}
+                                        </td>
                                         <td class="ci-center" style="white-space:nowrap;">{{ $qtyText }}</td>
                                         <td class="ci-center" style="white-space:nowrap;">{{ $nettText }}</td>
                                         <td class="ci-right" style="white-space:nowrap;">
@@ -1064,8 +1090,7 @@
                         {{-- Marks row --}}
                         <tr>
                             <td style="vertical-align:top;">
-                                NO: 1-{{ $marksNoEnd }}<br>
-
+                                NO. OF PKGS : {{ $pkgsTotal }}
                             </td>
                             <td colspan="4">&nbsp;</td>
                         </tr>
@@ -1086,12 +1111,14 @@
                             @foreach($items as $item)
                                 <tr>
                                     <td>
-                                        {{ strtoupper($item->display_part_name) }}
+                                        <div>{{ $nameModelLabel($item) }}</div>
                                         @if ($item->is_foc)
-                                            FOC
+                                            <span style="font-size:9px;">FOC</span>
                                         @endif
                                     </td>
-                                    <td class="text-center" style="white-space:nowrap;">{{ $item->size ?? '' }}</td>
+                                    <td class="text-center" style="white-space:nowrap;">
+                                        {{ $items->first()->material_group ?: $vendorName }}
+                                    </td>
                                     @php
                                         $packageText = (($item->qty_bundle ?? 0) > 0)
                                             ? number_format((float) ($item->qty_bundle ?? 0), 0) . ' ' . strtoupper($item->unit_bundle ?? 'BUNDLE')

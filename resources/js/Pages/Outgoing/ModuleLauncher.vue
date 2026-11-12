@@ -17,6 +17,12 @@ const items = computed(() =>
             subtitle: 'outgoing.monitoringIssueOutTile',
             permission: ['stock.issue'],
         },
+        {
+            href: route('deliveries.index'),
+            title: 'outgoing.deliveryTitle',
+            subtitle: 'outgoing.deliveryTile',
+            permission: ['delivery.view'],
+        },
     ].filter((it) => hasAnyPermission(it.permission)),
 );
 </script>

@@ -13,6 +13,7 @@ const items = computed(() =>
         { href: '/parts', title: 'master.part', subtitle: 'master.launcherPartSubtitle', permission: ['part.view'] },
         { href: '/boms', title: 'master.bom', subtitle: 'master.launcherBomSubtitle', permission: ['bom.view'] },
         { href: '/suppliers', title: 'master.supplier', subtitle: 'master.supplierTitle', permission: ['supplier.view'] },
+        { href: '/customers', title: 'outgoing.customerTitle', subtitle: 'outgoing.customerSubtitle', permission: ['customer.view'] },
         { href: '/trucking-companies', title: 'master.trucking', subtitle: 'master.truckingTitle', permission: ['trucking.view'] },
         { href: '/substitutes', title: 'master.substituteTitle', subtitle: 'master.launcherSubstituteSubtitle', permission: ['part_substitute.view'] },
         { href: '/machines', title: 'master.machine', subtitle: 'master.machineTitle', permission: ['machine.view'] },

@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\BomController;
 use App\Http\Controllers\ConfigMasterController;
+use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\DeliveryController;
 use App\Http\Controllers\IncomingArrivalController;
 use App\Http\Controllers\IncomingQualityController;
 use App\Http\Controllers\LocaleController;
@@ -67,9 +69,23 @@ Route::middleware(['auth'])->group(function () {
     Route::get('material-issues/{materialIssue}', [MaterialIssueController::class, 'show'])->name('material-issues.show');
     Route::get('material-issues/{materialIssue}/print', [MaterialIssueController::class, 'print'])->name('material-issues.print');
 
+    // Outgoing — pengiriman barang jadi (FG)
+    Route::get('deliveries', [DeliveryController::class, 'index'])->name('deliveries.index');
+    Route::get('deliveries/create', [DeliveryController::class, 'create'])->name('deliveries.create');
+    Route::post('deliveries', [DeliveryController::class, 'store'])->name('deliveries.store');
+    Route::get('deliveries/{delivery}', [DeliveryController::class, 'show'])->name('deliveries.show');
+    Route::get('deliveries/{delivery}/edit', [DeliveryController::class, 'edit'])->name('deliveries.edit');
+    Route::put('deliveries/{delivery}', [DeliveryController::class, 'update'])->name('deliveries.update');
+    Route::delete('deliveries/{delivery}', [DeliveryController::class, 'destroy'])->name('deliveries.destroy');
+    Route::post('deliveries/{delivery}/pick', [DeliveryController::class, 'pick'])->name('deliveries.pick');
+    Route::post('deliveries/{delivery}/return', [DeliveryController::class, 'returnToOrigin'])->name('deliveries.return');
+    Route::post('deliveries/{delivery}/ship', [DeliveryController::class, 'ship'])->name('deliveries.ship');
+    Route::get('deliveries/{delivery}/print', [DeliveryController::class, 'print'])->name('deliveries.print');
+
     // Master Data — CRUD
     Route::resource('parts', PartController::class)->except(['show']);
     Route::resource('suppliers', SupplierController::class)->except(['show']);
+    Route::resource('customers', CustomerController::class)->except(['show', 'create', 'edit']);
     Route::resource('trucking-companies', TruckingCompanyController::class)->except(['show'])->parameters(['trucking-companies' => 'trucking']);
     Route::resource('machines', MachineController::class)->except(['show']);
     Route::get('machines/{machine}/label', [MachineController::class, 'printLabel'])->name('machines.label');

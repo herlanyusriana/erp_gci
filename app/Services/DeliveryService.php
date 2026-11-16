@@ -586,7 +586,11 @@ class DeliveryService
      */
     public function loadingContext(Delivery $delivery): array
     {
-        $delivery->loadMissing(['customer:id,customer_code,customer_name', 'items.part:id,part_number,part_name']);
+        $delivery->loadMissing([
+            'customer:id,customer_code,customer_name',
+            'pickingList:id,picking_no',
+            'items.part:id,part_number,part_name',
+        ]);
 
         $scannedByPart = $delivery->scannedQtyByPart();
 
@@ -600,6 +604,7 @@ class DeliveryService
         return [
             'delivery_id' => (int) $delivery->id,
             'delivery_no' => (string) $delivery->delivery_no,
+            'picking_no' => $delivery->pickingList?->picking_no,
             'status' => (string) $delivery->status,
             'qc_status' => (string) $delivery->qc_status,
             'customer_name' => $delivery->customer?->customer_name,

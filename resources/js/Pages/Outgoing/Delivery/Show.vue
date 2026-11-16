@@ -20,6 +20,7 @@ interface Item {
     origin_location_code: string | null;
     price: number | null;
     total_price: number | null;
+    part_id: number;
     part?: { id: number; part_number: string; part_name: string } | null;
 }
 
@@ -89,7 +90,11 @@ const props = defineProps<{
     loading: LoadingContext;
     trolleys: TrolleyOption[];
     trolleyMasterEmpty: boolean;
+    scannedTags: Record<string, string[]>;
 }>();
+
+/** Tag yang benar-benar dipindai untuk satu part (baris rencana tanpa tag). */
+const tagsFor = (partId: number) => (props.scannedTags?.[partId] ?? []).join(', ');
 
 const fmt = (n: number | null | undefined) =>
     n == null ? '—' : Number(n).toLocaleString(locale.value, { maximumFractionDigits: 4 });
@@ -696,7 +701,9 @@ const missingPriceCount = computed(() => props.delivery.items.filter((item) => i
                                 <div class="font-medium text-ink-primary">{{ item.part?.part_number ?? '—' }}</div>
                                 <div class="text-xs text-ink-secondary">{{ item.part?.part_name ?? '' }}</div>
                             </td>
-                            <td class="px-4 py-3 font-mono text-ink-primary">{{ item.tag ?? '—' }}</td>
+                            <td class="px-4 py-3 font-mono text-xs text-ink-primary">
+                                {{ tagsFor(item.part_id) || item.tag || '—' }}
+                            </td>
                             <td class="px-4 py-3 text-right tabular-nums font-semibold text-ink-primary">
                                 {{ fmt(item.qty) }} <span class="text-xs font-normal text-ink-secondary">{{ item.qty_unit ?? '' }}</span>
                             </td>

@@ -62,6 +62,8 @@ class DeliveryController extends Controller
 
         return Inertia::render('Outgoing/Delivery/Show', [
             'delivery' => $delivery,
+            // Tag hasil pindai per part; baris rencana sendiri tidak memegang tag.
+            'scannedTags' => $delivery->scannedTagsByPart(),
             'prepLocation' => $this->deliveryService->deliveryPrepLocationCode(),
             'loading' => $this->deliveryService->loadingContext($delivery),
             'trolleys' => $this->deliveryService->availableTrolleys($this->preferredTrolleyKind($delivery)),

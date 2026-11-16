@@ -31,6 +31,7 @@ class DeliveryApiController extends Controller
         $deliveries = Delivery::query()
             ->with([
                 'customer:id,customer_code,customer_name',
+                'pickingList:id,picking_no',
                 'items:id,delivery_id,part_id,qty',
                 'scans:id,delivery_id,scan_type,part_stock_id,qty',
             ])
@@ -63,6 +64,7 @@ class DeliveryApiController extends Controller
                 'id' => (int) $delivery->id,
                 'delivery_no' => (string) $delivery->delivery_no,
                 'picking_list_id' => $delivery->picking_list_id !== null ? (int) $delivery->picking_list_id : null,
+                'picking_no' => $delivery->pickingList?->picking_no,
                 'delivery_date' => $delivery->delivery_date?->toDateString(),
                 'status' => (string) $delivery->status,
                 'customer_name' => $delivery->customer?->customer_name,

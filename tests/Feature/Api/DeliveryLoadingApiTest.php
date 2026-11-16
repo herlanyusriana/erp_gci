@@ -83,8 +83,18 @@ class DeliveryLoadingApiTest extends TestCase
         $this->getJson('/api/deliveries')
             ->assertOk()
             ->assertJsonPath('data.0.id', $delivery->id)
+            ->assertJsonPath('data.0.picking_no', $list->picking_no)
             ->assertJsonPath('data.0.total_tags', 1)
             ->assertJsonPath('data.0.scanned_tags', 0);
+
+        // Kontrak layar loading APK: baris rencana per part tanpa tag.
+        $this->getJson("/api/deliveries/{$delivery->id}/loading-context")
+            ->assertOk()
+            ->assertJsonPath('data.picking_no', $list->picking_no)
+            ->assertJsonPath('data.items.0.part_id', $this->fg->id)
+            ->assertJsonPath('data.items.0.tag', '')
+            ->assertJsonPath('data.items.0.scanned_qty', 0)
+            ->assertJsonPath('data.items.0.scanned', false);
 
         $this->postJson("/api/deliveries/{$delivery->id}/scan", ['code' => 'TRL-1'])->assertOk();
 
@@ -98,5 +108,11 @@ class DeliveryLoadingApiTest extends TestCase
         $this->getJson('/api/deliveries')
             ->assertOk()
             ->assertJsonPath('data.0.scanned_tags', 1);
+
+        $this->getJson("/api/deliveries/{$delivery->id}/loading-context")
+            ->assertOk()
+            ->assertJsonPath('data.items.0.scanned_qty', 6)
+            ->assertJsonPath('data.items.0.scanned', true)
+            ->assertJsonPath('data.loading_complete', true);
     }
 }

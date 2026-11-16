@@ -188,12 +188,35 @@ class DeliveryTest extends TestCase
         $stock = $this->fgStock('TAG-PICK-'.uniqid(), 40);
         $delivery = $this->makeDelivery($stock, 25);
 
+        // Scan lewat web (cadangan) lalu tombol pindah.
+        $this->post(route('deliveries.scan', $delivery), ['code' => 'TRL-1'])->assertRedirect();
+        $this->post(route('deliveries.scan', $delivery), ['code' => (string) $stock->tag])->assertRedirect();
+
         $this->post(route('deliveries.pick', $delivery))->assertRedirect();
 
         $this->assertSame($this->prepLocation->code, $stock->fresh()->location_code);
         $this->assertSame(Delivery::STATUS_PICKED, $delivery->fresh()->status);
         $this->assertNotNull($delivery->fresh()->picked_at);
         $this->assertSame($this->machineLocation->code, $delivery->items()->first()->origin_location_code);
+    }
+
+    public function test_pick_is_blocked_until_every_tag_and_a_trolley_are_scanned(): void
+    {
+        $stock = $this->fgStock('TAG-PICK-GATE-'.uniqid(), 40);
+        $delivery = $this->makeDelivery($stock, 25);
+
+        // Belum ada scan sama sekali.
+        $this->post(route('deliveries.pick', $delivery))->assertSessionHasErrors('scans');
+        $this->assertSame(Delivery::STATUS_DRAFT, $delivery->fresh()->status);
+
+        // Hanya troli, tag FG belum.
+        $this->post(route('deliveries.scan', $delivery), ['code' => 'TRL-1'])->assertRedirect();
+        $this->post(route('deliveries.pick', $delivery))->assertSessionHasErrors('scans');
+        $this->assertSame(Delivery::STATUS_DRAFT, $delivery->fresh()->status);
+
+        // Troli + semua tag: baru boleh pindah.
+        $this->post(route('deliveries.scan', $delivery), ['code' => (string) $stock->tag])->assertRedirect();
+        $this->assertSame(Delivery::STATUS_PICKED, $delivery->fresh()->status);
     }
 
     public function test_return_to_origin_restores_location_and_status(): void

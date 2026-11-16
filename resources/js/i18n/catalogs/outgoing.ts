@@ -1,5 +1,9 @@
 export default {
     "id": {
+        "scanWebFallback": "Cadangan web: pindai manual bila kamera APK bermasalah.",
+        "tagScanned": "Tag FG Dipindai",
+        "trolleyScanned": "Troli Dipindai",
+        "pickLocked": "Pindahkan hanya bisa ditekan setelah semua label FG dan minimal satu troli dipindai di APK.",
         "step_picking": "Picking (Delivery Order)",
         "step_picked": "Pindah ke Area Pengiriman",
         "step_oqc": "OQC & Cetak Dokumen",
@@ -198,6 +202,10 @@ export default {
         "signatureReceived": "Diterima"
     },
     "en": {
+        "scanWebFallback": "Web fallback: scan manually when the APK camera is unavailable.",
+        "tagScanned": "FG Tags Scanned",
+        "trolleyScanned": "Trolleys Scanned",
+        "pickLocked": "Moving is only enabled once every FG label and at least one trolley are scanned in the APK.",
         "step_picking": "Picking (Delivery Order)",
         "step_picked": "Move to Delivery Area",
         "step_oqc": "OQC & Print Documents",
@@ -396,6 +404,10 @@ export default {
         "signatureReceived": "Received"
     },
     "ko": {
+        "scanWebFallback": "웹 대체: APK 카메라를 사용할 수 없을 때 직접 스캔하세요.",
+        "tagScanned": "스캔된 FG 태그",
+        "trolleyScanned": "스캔된 트롤리",
+        "pickLocked": "APK에서 모든 FG 라벨과 최소 1개 트롤리를 스캔해야 이동할 수 있습니다.",
         "step_picking": "피킹 (출하 지시서)",
         "step_picked": "출하 구역 이동",
         "step_oqc": "OQC 및 서류 인쇄",

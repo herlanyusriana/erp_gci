@@ -364,18 +364,105 @@ const totalAmount = computed(() => props.delivery.items.reduce((sum, item) => su
                 <h2 class="text-sm font-bold text-ink-primary">{{ t('outgoing.step_draft') }}</h2>
                 <p class="mt-1 text-xs text-ink-secondary">{{ t('outgoing.actionDraftHint') }}</p>
 
-                <div class="mt-3 flex flex-wrap gap-2">
+                <!-- Progres bukti pindai dari APK: gate tombol pindah -->
+                <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                    <div class="rounded-lg border border-borderline bg-background/60 px-3 py-2">
+                        <div class="text-[11px] font-semibold uppercase tracking-wide text-ink-secondary">{{ t('outgoing.tagScanned') }}</div>
+                        <div class="mt-0.5 text-lg font-bold tabular-nums text-ink-primary">
+                            {{ loading.scanned_tags }}<span class="text-sm font-normal text-ink-secondary"> / {{ loading.total_tags }}</span>
+                        </div>
+                    </div>
+                    <div class="rounded-lg border border-borderline bg-background/60 px-3 py-2">
+                        <div class="text-[11px] font-semibold uppercase tracking-wide text-ink-secondary">{{ t('outgoing.trolleyScanned') }}</div>
+                        <div class="mt-0.5 text-lg font-bold tabular-nums" :class="loading.trolleys.length ? 'text-success' : 'text-warning-ink'">
+                            {{ loading.trolleys.length }}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cadangan web: pindai manual bila kamera APK bermasalah -->
+                <div class="mt-4 border-t border-borderline pt-4">
+                    <p class="text-xs font-semibold text-ink-secondary">{{ t('outgoing.scanWebFallback') }}</p>
+
+                    <form class="mt-2 flex flex-wrap items-end gap-2" @submit.prevent="submitScan">
+                        <div class="min-w-56 flex-1">
+                            <label class="text-xs font-semibold text-ink-secondary">{{ t('outgoing.scanCode') }}</label>
+                            <input
+                                v-model="scanCode"
+                                type="text"
+                                :aria-label="t('outgoing.scanCode')"
+                                :placeholder="t('outgoing.scanPlaceholder')"
+                                class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 font-mono text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                            />
+                        </div>
+                        <button
+                            type="submit"
+                            :disabled="scanBusy || scanCode.trim() === ''"
+                            class="rounded-md border border-primary px-4 py-2 text-sm font-semibold text-primary transition hover:bg-primary-light disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                        >
+                            {{ scanBusy ? t('outgoing.scanning') : t('outgoing.scan') }}
+                        </button>
+                    </form>
+                    <p v-if="scanError" class="mt-1 text-xs font-medium text-danger">{{ scanError }}</p>
+
+                    <div v-if="trolleys.length" class="mt-3 flex flex-wrap items-end gap-2">
+                        <div class="min-w-56 flex-1">
+                            <label class="text-xs font-semibold text-ink-secondary">{{ t('outgoing.pickTrolley') }}</label>
+                            <SearchableSelect
+                                v-model="selectedTrolley"
+                                :options="trolleyOptions"
+                                value-key="value"
+                                label-key="label"
+                                sublabel-key="sublabel"
+                                :placeholder="t('outgoing.chooseTrolley')"
+                                :aria-label="t('outgoing.pickTrolley')"
+                            />
+                        </div>
+                        <button
+                            type="button"
+                            @click="scanSelectedTrolley"
+                            :disabled="selectedTrolley === '' || scanBusy"
+                            class="rounded-md border border-primary px-4 py-2 text-sm font-semibold text-primary transition hover:bg-primary-light disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                        >
+                            {{ t('outgoing.useTrolley') }}
+                        </button>
+                    </div>
+
+                    <div v-if="delivery.scans?.length" class="mt-3 flex flex-wrap gap-1.5">
+                        <span
+                            v-for="scan in delivery.scans"
+                            :key="scan.id"
+                            class="inline-flex items-center gap-1.5 rounded-md border border-borderline bg-background px-2 py-1 text-xs"
+                        >
+                            <span class="font-mono text-ink-primary">{{ scan.code }}</span>
+                            <span class="text-[10px] uppercase text-ink-secondary">{{ scan.scan_type }}</span>
+                            <button
+                                type="button"
+                                @click="removeScan(scan.id)"
+                                class="text-danger transition hover:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                                :aria-label="t('outgoing.removeScan')"
+                            >✕</button>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="mt-3 flex flex-wrap items-center gap-2">
                     <button
                         type="button"
                         @click="pick"
-                        class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                        :disabled="!loading.loading_complete"
+                        class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                     >
                         {{ t('outgoing.pick') }}
                     </button>
-                    <span v-if="prepLocation" class="self-center text-xs text-ink-secondary">
+                    <span v-if="prepLocation" class="text-xs text-ink-secondary">
                         {{ t('outgoing.prepLocation') }}: <span class="font-mono font-semibold text-ink-primary">{{ prepLocation }}</span>
                     </span>
                 </div>
+
+                <p v-if="!loading.loading_complete" class="mt-2 rounded-lg bg-warning/10 px-3 py-2 text-xs font-medium text-warning-ink">
+                    {{ t('outgoing.pickLocked') }}
+                </p>
 
                 <p class="mt-3 rounded-lg bg-background px-3 py-2 text-xs text-ink-secondary">
                     {{ t('outgoing.pickWebHint') }}

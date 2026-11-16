@@ -116,6 +116,23 @@ class DeliveryService
             ]);
         }
 
+        // Pemindahan hanya sah setelah bukti pindai lengkap: seluruh label FG
+        // dan minimal satu troli. Tanpa ini tombol web bisa melewati langkah
+        // APK sepenuhnya.
+        if ($delivery->scannedTrolleyCount() === 0) {
+            throw ValidationException::withMessages([
+                'scans' => __('Pindai minimal satu label troli sebelum memindahkan barang.'),
+            ]);
+        }
+
+        if (! $delivery->allTagsScanned()) {
+            $missing = $delivery->items()->count() - $delivery->scannedTagCount();
+
+            throw ValidationException::withMessages([
+                'scans' => __('Masih ada :count tag FG yang belum dipindai.', ['count' => $missing]),
+            ]);
+        }
+
         foreach ($delivery->items as $item) {
             $stock = PartStock::query()->lockForUpdate()->find($item->part_stock_id);
 

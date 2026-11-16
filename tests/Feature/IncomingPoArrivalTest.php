@@ -309,4 +309,57 @@ class IncomingPoArrivalTest extends TestCase
         $this->assertEquals(600, $item->weight_nett);
         $this->assertEquals(625, $item->weight_gross);
     }
+
+    public function test_backfill_replaces_part_number_with_the_supplier_material_group(): void
+    {
+        $mapping = PartSubstitute::query()
+            ->where('is_active', true)
+            ->whereNotNull('supplier_id')
+            ->whereNotNull('material_group')
+            ->whereRaw("TRIM(material_group) <> ''")
+            ->with('substitutePart')
+            ->firstOrFail();
+
+        $arrival = IncomingArrival::create([
+            'arrival_no' => 'ARV-BACKFILL-'.uniqid(),
+            'supplier_id' => $mapping->supplier_id,
+            'is_local' => false,
+            'status' => 'pending',
+            'iqc_status' => 'passed',
+        ]);
+
+        // Data lama: kolom kelompok berisi part number.
+        $broken = IncomingArrivalItem::create([
+            'arrival_id' => $arrival->id,
+            'part_id' => $mapping->substitute_part_id,
+            'material_group' => $mapping->substitutePart->part_number,
+            'size' => '1.2MM',
+            'qty_goods' => 10,
+            'unit_goods' => 'KGM',
+            'weight_nett' => 10,
+            'unit_weight' => 'KGM',
+        ]);
+
+        // Baris yang sudah benar tidak boleh diubah.
+        $correct = IncomingArrivalItem::create([
+            'arrival_id' => $arrival->id,
+            'part_id' => $mapping->substitute_part_id,
+            'material_group' => 'SUDAH BENAR',
+            'size' => '1.2MM',
+            'qty_goods' => 5,
+            'unit_goods' => 'KGM',
+            'weight_nett' => 5,
+            'unit_weight' => 'KGM',
+        ]);
+
+        $migration = require database_path('migrations/2026_11_16_050000_backfill_material_group_on_arrival_items.php');
+        $migration->up();
+
+        $this->assertSame($mapping->material_group, $broken->fresh()->material_group);
+        $this->assertSame('SUDAH BENAR', $correct->fresh()->material_group);
+
+        // Idempoten: dijalankan ulang tidak mengubah apa pun.
+        $migration->up();
+        $this->assertSame($mapping->material_group, $broken->fresh()->material_group);
+    }
 }

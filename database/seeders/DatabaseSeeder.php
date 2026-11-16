@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
             MasterDataSeeder::class,
             LocationSeeder::class,
             DeliveryLocationSeeder::class,
+            TrolleySeeder::class,
             BomSeeder::class,
             DerivedDataSeeder::class,
         ]);

@@ -85,6 +85,7 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('deliveries/{delivery}/scans/{scan}', [DeliveryController::class, 'destroyScan'])->name('deliveries.scans.destroy');
     Route::post('deliveries/{delivery}/items/{item}/toggle-picked', [DeliveryController::class, 'toggleItemPicked'])->name('deliveries.items.toggle-picked');
     Route::put('deliveries/{delivery}/documents', [DeliveryController::class, 'updateDocuments'])->name('deliveries.documents.update');
+    Route::post('deliveries/{delivery}/release-ceisa', [DeliveryController::class, 'releaseCeisa'])->name('deliveries.release-ceisa');
     Route::post('deliveries/{delivery}/submit', [DeliveryController::class, 'submitOutgoing'])->name('deliveries.submit');
     Route::get('deliveries/{delivery}/label', [DeliveryController::class, 'printLabel'])->name('deliveries.label');
     Route::get('deliveries/{delivery}/print', [DeliveryController::class, 'print'])->name('deliveries.print');

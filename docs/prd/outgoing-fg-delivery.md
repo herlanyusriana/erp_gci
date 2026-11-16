@@ -6,7 +6,7 @@ Barang jadi yang sudah dilaporkan produksi punya tag dan stok, tetapi tidak ada 
 
 ## Solution
 
-Modul Outgoing FG tempat user membuat pengiriman secara manual: pilih customer, tentukan barang jadi yang dikirim, sistem menyarankan tag FG tertua (FIFO) yang bisa diganti, user mencari barang tersebut di lokasi mesin asalnya lalu memindahkannya ke **Delivery Preparation Area**. Alurnya: **picking (web)** dengan urutan keberangkatan per FG dan centang FG yang sudah diambil -> **pindah ke Delivery Preparation Area (APK)**: scan label FG, isi qty, scan label troli -> **OQC (APK)**: checklist OK/NG per troli -> **isi No. PEN/AJU (web)** -> **submit outgoing (web)**: stok berkurang -> **cetak** label pengiriman, Surat Jalan, Invoice, dan Packing List.
+Modul Outgoing FG tempat user membuat pengiriman secara manual: pilih customer, tentukan barang jadi yang dikirim, sistem menyarankan tag FG tertua (FIFO) yang bisa diganti, user mencari barang tersebut di lokasi mesin asalnya lalu memindahkannya ke **Delivery Preparation Area**. Alurnya: **picking (web)** dengan urutan keberangkatan per FG dan centang FG yang sudah diambil -> **pindah ke Delivery Preparation Area (APK)**: scan label FG, isi qty, scan label troli -> **OQC (APK)**: checklist OK/NG per troli -> **cetak Surat Jalan, Invoice, Packing List (web)** -> **rilis data CEISA** -> **isi No. PEN/AJU** -> **submit outgoing**: stok berkurang. Nomor PEN/AJU terbit dari CEISA, jadi dokumen dicetak sebelum nomor tersebut ada.
 
 ## User Stories
 
@@ -45,7 +45,7 @@ Menyediakan jalur keluar barang jadi yang tercatat, sehingga stok FG berkurang s
 - Tabel baru `deliveries`: `delivery_no` (unik, `DO-YYYYMM-####`), `customer_id`, `delivery_date`, `status` (`draft` | `picked` | `qc_passed` | `loaded` | `released`), `invoice_no` (diisi manual), `qc_status` (`pending` | `passed` | `rejected`), `qc_notes`, `qc_checked_at`, `qc_checked_by`, `truck_no`, `driver_name`, `notes`, `picked_at`, `loaded_at`, `released_at`, `created_by`, `updated_by`, timestamps, soft deletes.
 - Tabel baru `delivery_items`: `delivery_id`, `part_stock_id`, `part_id`, `tag`, `qty`, `qty_unit`, `origin_location_code`, `price`, `total_price`, `notes`.
 - Tabel baru `delivery_scans`: `delivery_id`, `scan_type` (`trolley` | `tag`), `code`, `part_stock_id` (nullable), `qty` (nullable, qty yang dipindah saat scan FG), `qc_status` (`ok`/`ng`, OQC per troli), `qc_notes`, `qc_checked_at`, `qc_checked_by`, `scanned_by`, `scanned_at`; unik per (`delivery_id`, `scan_type`, `code`).
-- `deliveries`: `pen_no`, `aju_no` (diisi sebelum submit). `delivery_items`: `sequence` (urutan keberangkatan) dan `is_picked` (centang FG sudah diambil).
+- `deliveries`: `pen_no`, `aju_no` (diisi setelah CEISA dirilis), `ceisa_released_at`, `ceisa_released_by`. `delivery_items`: `sequence` (urutan keberangkatan) dan `is_picked` (centang FG sudah diambil).
 - Tabel baru `trolleys` (mirror): `external_id`, `code` (unik), `type`, `kind`, `capacity`, `location`, `notes`, `synced_at`. Tanpa `status` (pergerakan, bukan master).
 - Tabel `part_stocks`: tambah kolom `location_code` (nullable, mengacu ke `locations.code`).
 - Satu lokasi bertipe `machine` dibuat untuk setiap mesin aktif, dengan `code` = kode mesin dan `name` = nama mesin.
@@ -150,8 +150,11 @@ Test fitur Pest pada level HTTP dan service, mengikuti pola test yang sudah ada 
 - [ ] Picking menampilkan urutan keberangkatan (seq) dan centang "FG sudah diambil" per baris.
 - [ ] Pemindahan dilakukan di APK dengan urutan scan label FG -> qty -> scan troli.
 - [ ] OQC per troli (OK/NG) wajib lengkap dan semua OK sebelum lolos.
-- [ ] Submit outgoing wajib No. PEN/AJU dan mengurangi stok FG.
-- [ ] Surat Jalan, Invoice, dan Packing List hanya dapat dicetak setelah submit.
+- [ ] Surat Jalan, Invoice, dan Packing List dapat dicetak setelah OQC lolos.
+- [ ] Rilis data CEISA tersimpan sebagai gate sebelum No. PEN/AJU diisi.
+- [ ] No. PEN/AJU tidak dapat diisi sebelum data CEISA dirilis.
+- [ ] Submit outgoing wajib CEISA dirilis + No. PEN/AJU, dan mengurangi stok FG.
+- [ ] Dokumen tetap dapat dicetak ulang setelah outgoing disubmit.
 - [ ] Loading hanya bisa dirilis setelah minimal satu label troli dan seluruh label FG dipindai.
 - [ ] Master troli ter-seed dari snapshot (202 troli) dan hasil pindai tervalidasi terhadap kode yang terdaftar.
 - [ ] APK dapat memindai troli dan label FG lewat endpoint delivery.

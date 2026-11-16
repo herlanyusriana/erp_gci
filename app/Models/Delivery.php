@@ -38,6 +38,7 @@ class Delivery extends Model
 
     protected $fillable = [
         'delivery_no', 'customer_id', 'delivery_date', 'status', 'invoice_no', 'pen_no', 'aju_no',
+        'ceisa_released_at', 'ceisa_released_by',
         'qc_status', 'qc_notes', 'qc_checked_at', 'qc_checked_by',
         'truck_no', 'driver_name', 'notes',
         'picked_at', 'released_at', 'shipped_at',
@@ -47,6 +48,7 @@ class Delivery extends Model
     protected $casts = [
         'delivery_date' => 'date',
         'picked_at' => 'datetime',
+        'ceisa_released_at' => 'datetime',
         'released_at' => 'datetime',
         'qc_checked_at' => 'datetime',
         'shipped_at' => 'datetime',
@@ -123,10 +125,31 @@ class Delivery extends Model
         return $this->status === self::STATUS_RELEASED;
     }
 
-    /** Dokumen (SJ, invoice, packing list) hanya boleh dicetak setelah submit. */
-    public function documentsReleased(): bool
+    /**
+     * Dokumen (surat jalan, invoice, packing list) dicetak setelah OQC lolos.
+     * Nomor PEN/AJU belum ada di tahap ini karena baru terbit dari CEISA.
+     */
+    public function documentsPrintable(): bool
     {
-        return $this->isReleased();
+        return $this->isQcPassed() || $this->isReleased();
+    }
+
+    /** Data sudah dirilis ke CEISA? Nomor PEN/AJU baru bisa diisi setelahnya. */
+    public function ceisaReleased(): bool
+    {
+        return $this->ceisa_released_at !== null;
+    }
+
+    /** Tahap berjalan untuk tampilan (5 langkah). */
+    public function currentStage(): string
+    {
+        return match (true) {
+            $this->isReleased() => 'submitted',
+            $this->ceisaReleased() => 'ceisa',
+            $this->isQcPassed() => 'oqc',
+            $this->isPicked() => 'picked',
+            default => 'picking',
+        };
     }
 
     /** Label pengiriman boleh dicetak setelah barang ada di area pengiriman. */

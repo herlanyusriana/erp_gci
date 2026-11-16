@@ -303,18 +303,19 @@ class DeliveryController extends Controller
             'invoice_no' => ['nullable', 'string', 'max:255'],
         ]);
 
-        if ($delivery->isReleased()) {
-            return back()->with('error', __('Outgoing sudah disubmit; dokumen tidak dapat diubah.'));
-        }
-
-        $delivery->update([
-            'pen_no' => $validated['pen_no'] ?? null,
-            'aju_no' => $validated['aju_no'] ?? null,
-            'invoice_no' => $validated['invoice_no'] ?? null,
-            'updated_by' => $request->user()?->id,
-        ]);
+        $this->deliveryService->saveDocuments($delivery, $validated, $request->user()?->id);
 
         return back()->with('success', __('Dokumen pengiriman disimpan.'));
+    }
+
+    /** Rilis data pengiriman ke CEISA (syarat input No. PEN/AJU). */
+    public function releaseCeisa(Delivery $delivery): RedirectResponse
+    {
+        Gate::authorize('update', $delivery);
+
+        $this->deliveryService->releaseCeisa($delivery, request()->user()?->id);
+
+        return back()->with('success', __('Data CEISA dirilis. Isi No. PEN dan No. AJU.'));
     }
 
     /** Submit outgoing: barang keluar, stok berkurang, dokumen bisa dicetak. */
@@ -346,7 +347,7 @@ class DeliveryController extends Controller
     {
         Gate::authorize('view', $delivery);
 
-        abort_unless($delivery->documentsReleased(), 403, __('Dokumen belum dirilis.'));
+        abort_unless($delivery->documentsPrintable(), 403, __('Dokumen dicetak setelah OQC lolos.'));
 
         $delivery->load(['customer', 'items.part:id,part_number,part_name']);
 
@@ -360,7 +361,7 @@ class DeliveryController extends Controller
     {
         Gate::authorize('view', $delivery);
 
-        abort_unless($delivery->documentsReleased(), 403, __('Dokumen belum dirilis.'));
+        abort_unless($delivery->documentsPrintable(), 403, __('Dokumen dicetak setelah OQC lolos.'));
 
         $delivery->load(['customer', 'items.part:id,part_number,part_name']);
 
@@ -374,7 +375,7 @@ class DeliveryController extends Controller
     {
         Gate::authorize('view', $delivery);
 
-        abort_unless($delivery->documentsReleased(), 403, __('Dokumen belum dirilis.'));
+        abort_unless($delivery->documentsPrintable(), 403, __('Dokumen dicetak setelah OQC lolos.'));
 
         $delivery->load(['customer', 'items.part:id,part_number,part_name']);
 

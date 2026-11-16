@@ -277,6 +277,38 @@ class DeliveryService
     }
 
     /**
+     * Rilis data pengiriman ke CEISA.
+     *
+     * Nomor PEN/AJU terbit dari CEISA, jadi tahap ini harus dilalui sebelum
+     * nomor tersebut boleh diisi dan outgoing disubmit.
+     */
+    public function releaseCeisa(Delivery $delivery, ?int $userId = null): void
+    {
+        if ($delivery->isReleased()) {
+            throw ValidationException::withMessages([
+                'status' => __('Outgoing sudah disubmit; data CEISA tidak dapat dirilis ulang.'),
+            ]);
+        }
+
+        if (! $delivery->isQcPassed()) {
+            throw ValidationException::withMessages([
+                'status' => __('Data CEISA dirilis setelah OQC lolos.'),
+            ]);
+        }
+
+        if ($delivery->ceisaReleased()) {
+            throw ValidationException::withMessages([
+                'status' => __('Data CEISA sudah dirilis untuk pengiriman ini.'),
+            ]);
+        }
+
+        $delivery->update([
+            'ceisa_released_at' => now(),
+            'ceisa_released_by' => $userId,
+        ]);
+    }
+
+    /**
      * Tahap akhir — catat sebagai outgoing.
      *
      * Syarat: OQC lolos dan No. PEN/AJU terisi. Stok baru berkurang di sini,
@@ -293,6 +325,12 @@ class DeliveryService
         if (! $delivery->isQcPassed()) {
             throw ValidationException::withMessages([
                 'status' => __('Outgoing hanya bisa disubmit setelah OQC lolos.'),
+            ]);
+        }
+
+        if (! $delivery->ceisaReleased()) {
+            throw ValidationException::withMessages([
+                'status' => __('Rilis data CEISA dulu sebelum mengisi PEN/AJU dan submit.'),
             ]);
         }
 
@@ -621,6 +659,39 @@ class DeliveryService
         }
 
         $delivery->update(['invoice_no' => $invoiceNo !== null ? trim($invoiceNo) : null]);
+    }
+
+    /**
+     * Simpan dokumen kepabeanan. No. PEN/AJU hanya boleh diisi setelah data
+     * dirilis ke CEISA.
+     *
+     * @param  array{pen_no?: string|null, aju_no?: string|null, invoice_no?: string|null}  $data
+     */
+    public function saveDocuments(Delivery $delivery, array $data, ?int $userId = null): void
+    {
+        if ($delivery->isReleased()) {
+            throw ValidationException::withMessages([
+                'status' => __('Outgoing sudah disubmit; dokumen tidak dapat diubah.'),
+            ]);
+        }
+
+        $penNo = trim((string) ($data['pen_no'] ?? ''));
+        $ajuNo = trim((string) ($data['aju_no'] ?? ''));
+
+        if (($penNo !== '' || $ajuNo !== '') && ! $delivery->ceisaReleased()) {
+            throw ValidationException::withMessages([
+                'pen_no' => __('Rilis data CEISA dulu sebelum mengisi No. PEN/AJU.'),
+            ]);
+        }
+
+        $delivery->update([
+            'pen_no' => $penNo !== '' ? $penNo : null,
+            'aju_no' => $ajuNo !== '' ? $ajuNo : null,
+            'invoice_no' => array_key_exists('invoice_no', $data)
+                ? (trim((string) $data['invoice_no']) !== '' ? trim((string) $data['invoice_no']) : null)
+                : $delivery->invoice_no,
+            'updated_by' => $userId,
+        ]);
     }
 
     /** Kode lokasi bertipe area pengiriman. */

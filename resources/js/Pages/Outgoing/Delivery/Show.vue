@@ -31,6 +31,7 @@ interface Delivery {
     invoice_no: string | null;
     pen_no: string | null;
     aju_no: string | null;
+    ceisa_released_at: string | null;
     qc_status: string;
     qc_notes: string | null;
     qc_checked_at: string | null;
@@ -66,6 +67,7 @@ interface LoadingContext {
     trolley_codes: string[];
     pen_no: string | null;
     aju_no: string | null;
+    ceisa_released_at: string | null;
     items: LoadingItem[];
     scanned_tags: number;
     total_tags: number;
@@ -103,9 +105,18 @@ const tone = () =>
             ? 'warning'
             : 'neutral';
 
-const STEPS = ['draft', 'picked', 'qc_passed', 'released'] as const;
+const STEPS = ['picking', 'picked', 'oqc', 'ceisa', 'submitted'] as const;
 
-const currentStep = computed(() => STEPS.indexOf(props.delivery.status as (typeof STEPS)[number]));
+/** Tahap berjalan: status + gate CEISA (dokumen sudah dicetak di tahap OQC). */
+const currentStep = computed(() => {
+    if (props.delivery.status === 'released') return 4;
+    if (props.delivery.ceisa_released_at) return 3;
+    if (props.delivery.status === 'qc_passed') return 2;
+    if (props.delivery.status === 'picked') return 1;
+
+    return 0;
+});
+
 const isDone = (step: string) => currentStep.value >= STEPS.indexOf(step as (typeof STEPS)[number]);
 
 const qcNotes = ref('');
@@ -247,6 +258,12 @@ function saveDocuments() {
             },
         },
     );
+}
+
+function releaseCeisa() {
+    if (confirm(t('outgoing.ceisaConfirm'))) {
+        router.post(route('deliveries.release-ceisa', props.delivery.id), {}, { preserveScroll: true });
+    }
 }
 
 function submitOutgoing() {
@@ -401,10 +418,58 @@ const totalAmount = computed(() => props.delivery.items.reduce((sum, item) => su
                 </ul>
             </template>
 
-            <!-- Tahap 3: OQC lolos, isi PEN/AJU lalu submit -->
+            <!-- Tahap 3: OQC lolos — cetak dokumen dulu, lalu rilis CEISA -->
+            <template v-else-if="delivery.status === 'qc_passed' && !delivery.ceisa_released_at">
+                <h2 class="text-sm font-bold text-ink-primary">{{ t('outgoing.printStageTitle') }}</h2>
+                <p class="mt-1 text-xs text-ink-secondary">{{ t('outgoing.printStageHint') }}</p>
+
+                <div class="mt-3 flex flex-wrap gap-2">
+                    <Link
+                        :href="route('deliveries.print', delivery.id)"
+                        target="_blank"
+                        rel="noopener"
+                        class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                    >
+                        {{ t('outgoing.printSj') }}
+                    </Link>
+                    <Link
+                        :href="route('deliveries.invoice', delivery.id)"
+                        target="_blank"
+                        rel="noopener"
+                        class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-primary transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                    >
+                        {{ t('outgoing.printInvoice') }}
+                    </Link>
+                    <Link
+                        :href="route('deliveries.packing-list', delivery.id)"
+                        target="_blank"
+                        rel="noopener"
+                        class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-primary transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                    >
+                        {{ t('outgoing.printPackingList') }}
+                    </Link>
+                </div>
+
+                <div class="mt-4 border-t border-borderline pt-4">
+                    <p class="text-xs text-ink-secondary">{{ t('outgoing.ceisaHint') }}</p>
+                    <button
+                        type="button"
+                        @click="releaseCeisa"
+                        class="mt-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                    >
+                        {{ t('outgoing.releaseCeisa') }}
+                    </button>
+                </div>
+            </template>
+
+            <!-- Tahap 4: CEISA dirilis — isi PEN/AJU lalu submit -->
             <template v-else-if="delivery.status === 'qc_passed'">
-                <h2 class="text-sm font-bold text-ink-primary">{{ t('outgoing.step_released') }}</h2>
-                <p class="mt-1 text-xs text-ink-secondary">{{ t('outgoing.submitHint') }}</p>
+                <h2 class="text-sm font-bold text-ink-primary">{{ t('outgoing.penAjuStageTitle') }}</h2>
+                <p class="mt-1 text-xs text-ink-secondary">{{ t('outgoing.penAjuStageHint') }}</p>
+
+                <p class="mt-2 inline-flex items-center gap-2 rounded-lg bg-success/10 px-3 py-1.5 text-xs font-semibold text-success-ink">
+                    {{ t('outgoing.ceisaReleasedAt') }}: {{ delivery.ceisa_released_at ? formatDate(delivery.ceisa_released_at) : '—' }}
+                </p>
 
                 <div class="mt-3 grid gap-3 sm:grid-cols-3">
                     <div>
@@ -461,10 +526,14 @@ const totalAmount = computed(() => props.delivery.items.reduce((sum, item) => su
                 <p class="mt-1 text-[11px] text-ink-secondary">{{ t('outgoing.submitStockHint') }}</p>
             </template>
 
-            <!-- Tahap 4: outgoing tercatat -->
+            <!-- Tahap 5: outgoing tercatat -->
             <template v-else>
                 <h2 class="text-sm font-bold text-success">{{ t('outgoing.docsReleased') }}</h2>
                 <p class="mt-1 text-xs text-ink-secondary">{{ t('outgoing.docsReleasedHint') }}</p>
+                <p class="mt-2 text-xs text-ink-secondary">
+                    {{ t('outgoing.penNo') }}: <span class="font-mono font-semibold text-ink-primary">{{ delivery.pen_no ?? '—' }}</span>
+                    · {{ t('outgoing.ajuNo') }}: <span class="font-mono font-semibold text-ink-primary">{{ delivery.aju_no ?? '—' }}</span>
+                </p>
             </template>
         </div>
 

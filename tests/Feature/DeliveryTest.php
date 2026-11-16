@@ -257,7 +257,16 @@ class DeliveryTest extends TestCase
         $this->assertSame(Delivery::STATUS_QC_PASSED, $fresh->status);
         $this->assertSame(Delivery::QC_PASSED, $fresh->qc_status);
 
-        // 4. Isi PEN/AJU lalu submit
+        // 4. Cetak dokumen (SJ/INV/PL) sudah boleh di tahap ini.
+        $this->get(route('deliveries.print', $delivery))->assertOk();
+        $this->get(route('deliveries.invoice', $delivery))->assertOk();
+        $this->get(route('deliveries.packing-list', $delivery))->assertOk();
+
+        // 5. Rilis data CEISA
+        $this->post(route('deliveries.release-ceisa', $delivery))->assertRedirect();
+        $this->assertNotNull($delivery->fresh()->ceisa_released_at);
+
+        // 6. Isi PEN/AJU lalu submit
         $this->put(route('deliveries.documents.update', $delivery), [
             'pen_no' => 'PEN-99',
             'aju_no' => 'AJU-99',
@@ -316,7 +325,31 @@ class DeliveryTest extends TestCase
         $stock = $this->fgStock('TAG-NOPEN-'.uniqid(), 40);
         $delivery = $this->qcPassedDelivery($stock, 25);
 
+        $this->post(route('deliveries.release-ceisa', $delivery))->assertRedirect();
+
         $this->post(route('deliveries.submit', $delivery))->assertSessionHasErrors('pen_no');
+        $this->assertSame(Delivery::STATUS_QC_PASSED, $delivery->fresh()->status);
+    }
+
+    public function test_pen_and_aju_cannot_be_filled_before_ceisa_is_released(): void
+    {
+        $stock = $this->fgStock('TAG-CEISA-EARLY-'.uniqid(), 40);
+        $delivery = $this->qcPassedDelivery($stock, 25);
+
+        $this->put(route('deliveries.documents.update', $delivery), [
+            'pen_no' => 'PEN-1',
+            'aju_no' => 'AJU-1',
+        ])->assertSessionHasErrors('pen_no');
+
+        $this->assertNull($delivery->fresh()->pen_no);
+    }
+
+    public function test_submit_requires_ceisa_release(): void
+    {
+        $stock = $this->fgStock('TAG-CEISA-SUBMIT-'.uniqid(), 40);
+        $delivery = $this->qcPassedDelivery($stock, 25);
+
+        $this->post(route('deliveries.submit', $delivery))->assertSessionHasErrors('status');
         $this->assertSame(Delivery::STATUS_QC_PASSED, $delivery->fresh()->status);
     }
 
@@ -469,6 +502,8 @@ class DeliveryTest extends TestCase
     private function releasedDelivery(PartStock $stock, float $qty, string $invoiceNo): Delivery
     {
         $delivery = $this->qcPassedDelivery($stock, $qty, $invoiceNo);
+
+        $this->post(route('deliveries.release-ceisa', $delivery))->assertRedirect();
 
         $this->put(route('deliveries.documents.update', $delivery), [
             'pen_no' => 'PEN-1',

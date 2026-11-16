@@ -341,6 +341,67 @@ class PickingListTest extends TestCase
         $this->assertNull(PickingList::find($list->id));
     }
 
+    public function test_validation_errors_are_keyed_by_row_uid(): void
+    {
+        $this->fgStock('TAG-PICK-UID-'.uniqid(), 10);
+
+        $this->post(route('picking-lists.store'), [
+            'picking_date' => now()->toDateString(),
+            'items' => [
+                ['uid' => 11, 'sequence' => 1, 'customer_id' => $this->customerA->id, 'part_id' => $this->fg->id, 'qty' => 1],
+                // Baris kedua tanpa qty: error harus menempel ke uid 22, bukan index 1.
+                ['uid' => 22, 'sequence' => 1, 'customer_id' => $this->customerB->id, 'part_id' => $this->fg->id, 'qty' => ''],
+            ],
+        ])->assertSessionHasErrors('items.22.qty');
+
+        $this->assertSame(0, PickingList::count());
+    }
+
+    public function test_missing_customer_and_part_have_their_own_messages(): void
+    {
+        $this->post(route('picking-lists.store'), [
+            'picking_date' => now()->toDateString(),
+            'items' => [
+                ['uid' => 5, 'sequence' => 1, 'customer_id' => '', 'part_id' => '', 'qty' => 2],
+            ],
+        ])->assertSessionHasErrors(['items.5.customer_id', 'items.5.part_id']);
+
+        $this->assertSame(0, PickingList::count());
+    }
+
+    public function test_edit_page_reports_generated_deliveries(): void
+    {
+        $this->fgStock('TAG-PICK-EDIT-COUNT-'.uniqid(), 100);
+        $list = $this->createPicking([$this->row($this->customerA, 6)]);
+
+        $before = $this->get(route('picking-lists.edit', $list));
+        $before->assertOk();
+        $this->assertSame(0, $before->viewData('page')['props']['deliveriesCount']);
+
+        $this->post(route('picking-lists.deliveries.generate', $list))->assertRedirect();
+
+        $after = $this->get(route('picking-lists.edit', $list));
+        $after->assertOk();
+        $this->assertSame(1, $after->viewData('page')['props']['deliveriesCount']);
+    }
+
+    public function test_show_page_exposes_customers_for_the_generate_dialog(): void
+    {
+        $this->fgStock('TAG-PICK-SHOW-'.uniqid(), 100);
+        $list = $this->createPicking([
+            $this->row($this->customerA, 6, 1),
+            $this->row($this->customerB, 4, 2),
+        ]);
+
+        $page = $this->get(route('picking-lists.show', $list))->assertOk()->viewData('page');
+        $items = $page['props']['pickingList']['items'];
+
+        $this->assertCount(2, $items);
+        $this->assertSame($this->customerA->id, $items[0]['customer_id']);
+        $this->assertSame($this->customerB->id, $items[1]['customer_id']);
+        $this->assertArrayNotHasKey('stockStatuses', $page['props']);
+    }
+
     public function test_picking_requires_permission(): void
     {
         $qc = User::where('email', 'qc@geumcheon.local')->firstOrFail();

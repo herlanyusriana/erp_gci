@@ -4,12 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\Customer;
 use App\Models\PickingList;
-use App\Models\PickingListItem;
 use App\Services\PickingListService;
+use App\Support\RowErrorKeys;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -46,6 +47,8 @@ class PickingListController extends Controller
             'pickingList' => null,
             'customers' => $this->activeCustomers(),
             'parts' => $this->pickingService->selectableParts(),
+            'stockAsOf' => now()->toIso8601String(),
+            'deliveriesCount' => 0,
         ]);
     }
 
@@ -77,12 +80,6 @@ class PickingListController extends Controller
 
         return Inertia::render('Outgoing/Picking/Show', [
             'pickingList' => $pickingList,
-            'stockStatuses' => [
-                PickingListItem::STOCK_OK,
-                PickingListItem::STOCK_SHORT_IN_PRODUCTION,
-                PickingListItem::STOCK_SHORT_NO_PRODUCTION,
-                PickingListItem::STOCK_NO_DATA,
-            ],
         ]);
     }
 
@@ -96,6 +93,8 @@ class PickingListController extends Controller
             'pickingList' => $pickingList,
             'customers' => $this->activeCustomers(),
             'parts' => $this->pickingService->selectableParts(),
+            'stockAsOf' => now()->toIso8601String(),
+            'deliveriesCount' => $pickingList->deliveries()->count(),
         ]);
     }
 
@@ -144,10 +143,13 @@ class PickingListController extends Controller
      */
     private function validatePayload(Request $request): array
     {
-        return $request->validate([
+        $rules = [
             'picking_date' => ['required', 'date'],
             'notes' => ['nullable', 'string'],
             'items' => ['required', 'array', 'min:1'],
+            // `uid` menjaga pesan validasi tetap menempel pada baris yang benar
+            // setelah baris kosong disaring di klien.
+            'items.*.uid' => RowErrorKeys::rules(),
             'items.*.sequence' => ['required', 'integer', 'min:1'],
             'items.*.customer_id' => ['required', 'integer', 'exists:customers,id'],
             'items.*.part_id' => [
@@ -160,10 +162,22 @@ class PickingListController extends Controller
             'items.*.qty' => ['required', 'numeric', 'min:0.0001'],
             'items.*.qty_unit' => ['nullable', 'string', 'max:20'],
             'items.*.notes' => ['nullable', 'string', 'max:255'],
-        ], [
+        ];
+
+        $messages = [
             'items.required' => __('Tambahkan minimal satu baris picking.'),
+            'items.*.customer_id.required' => __('Customer wajib dipilih.'),
+            'items.*.part_id.required' => __('Pilih barang jadi (FG) untuk baris ini.'),
             'items.*.part_id.exists' => __('Part yang dipilih bukan barang jadi (FG).'),
-        ]);
+            'items.*.qty.required' => __('Qty wajib diisi.'),
+            'items.*.qty.min' => __('Qty harus lebih dari 0.'),
+        ];
+
+        try {
+            return $request->validate($rules, $messages);
+        } catch (ValidationException $exception) {
+            RowErrorKeys::remap($exception, (array) $request->input('items', []));
+        }
     }
 
     /**

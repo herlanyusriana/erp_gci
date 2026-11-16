@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import ActionButton from '@/Components/ActionButton.vue';
+import Modal from '@/Components/Modal.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
 import { formatDate } from '@/utils/date';
 
@@ -13,6 +14,7 @@ const { t } = useI18n();
 interface PickingItem {
     id: number;
     sequence: number;
+    customer_id: number;
     qty: number;
     qty_unit: string | null;
     stock_available: number | null;
@@ -65,11 +67,27 @@ const statusTone = (status: string) => {
     return 'warning';
 };
 
-function generate() {
-    if (!confirm(t('picking.generateConfirm', { no: props.pickingList.picking_no }))) {
-        return;
+const showGenerate = ref(false);
+
+/** Customer unik pada picking ini — satu customer menjadi satu dokumen. */
+const customersInPicking = computed(() => {
+    const map = new Map<number, string>();
+
+    for (const item of props.pickingList.items) {
+        if (item.customer) {
+            map.set(item.customer_id, `${item.customer.customer_name} (${item.customer.customer_code})`);
+        }
     }
 
+    return [...map.values()];
+});
+
+function generate() {
+    showGenerate.value = true;
+}
+
+function confirmGenerate() {
+    showGenerate.value = false;
     router.post(route('picking-lists.deliveries.generate', props.pickingList.id), {}, { preserveScroll: true });
 }
 
@@ -211,5 +229,39 @@ function destroy() {
             </ul>
             <p v-else class="px-4 py-8 text-center text-sm text-ink-secondary">{{ t('picking.noDeliveries') }}</p>
         </div>
+        <Modal :show="showGenerate" max-width="lg" @close="showGenerate = false">
+            <div class="p-6">
+                <h2 class="text-lg font-bold text-ink-primary">{{ t('picking.generateModalTitle') }}</h2>
+                <p class="mt-1 text-sm text-ink-secondary">{{ t('picking.generateModalBody') }}</p>
+
+                <p class="mt-4 text-xs font-semibold uppercase tracking-wide text-ink-secondary">
+                    {{ t('picking.generateModalCustomers') }}
+                </p>
+                <ul class="mt-1 space-y-1 text-sm text-ink-primary">
+                    <li v-for="customer in customersInPicking" :key="customer">· {{ customer }}</li>
+                </ul>
+
+                <p class="mt-4 rounded-lg border border-warning bg-warning/10 px-3 py-2 text-sm text-warning-ink">
+                    {{ t('picking.generateModalLock') }}
+                </p>
+
+                <div class="mt-5 flex justify-end gap-2">
+                    <button
+                        type="button"
+                        class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-primary transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                        @click="showGenerate = false"
+                    >
+                        {{ t('picking.cancel') }}
+                    </button>
+                    <button
+                        type="button"
+                        class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                        @click="confirmGenerate"
+                    >
+                        {{ t('picking.generateModalConfirm') }}
+                    </button>
+                </div>
+            </div>
+        </Modal>
     </AppLayout>
 </template>

@@ -222,7 +222,11 @@ Catatan penting:
   daftar tag FIFO semua material. Main material = acuan BOM (tidak pegang stok).
 - **Picking List harian** (`/picking-lists`, permission `delivery.*`): satu
   tanggal, banyak `sequence`, banyak customer; baris = customer + FG + qty/UOM
-  **tanpa tag**. Saat simpan, `PickingListService::stockCheck` menulis snapshot
+  **tanpa tag**. Di form, **customer dipilih sekali per Seq** dan diwariskan ke
+  semua baris Seq itu (`picking_list_items.customer_id` tetap per baris di
+  server). Tiap baris membawa `uid` stabil; error validasi dipetakan lewat
+  `App\Support\RowErrorKeys::remap` menjadi `items.<uid>.<field>` supaya pesan
+  tetap menempel pada baris yang benar setelah baris kosong disaring. Saat simpan, `PickingListService::stockCheck` menulis snapshot
   `stock_status` (`ok` / `short_in_production` bila ada WO `planned`/`in_progress`
   / `short_no_production` / `no_data`). `generateDeliveries` membuat **satu
   Delivery draft per customer** berisi baris rencana (`delivery_items.part_stock_id`
@@ -236,6 +240,13 @@ Catatan penting:
   bukan per baris tag.
 - **Delivery tidak dibuat manual**: route `deliveries.create/store/edit/update`
   sudah dihapus; dokumen hanya lahir dari `picking-lists/{id}/deliveries`.
+- **`SearchableSelect`** (komponen bersama, 17 pemakaian): popup dirender lewat
+  `<Teleport>` ke `closest('dialog') ?? 'body'` dengan posisi `fixed` dari
+  `getBoundingClientRect`, supaya tidak terpotong ancestor `overflow-hidden` /
+  `overflow-x-auto` (tabel & modal). Jangan kembalikan ke `absolute` + z-index:
+  clipping bukan masalah stacking. Trigger = `<button role="combobox">` (bukan
+  input), pencarian ada di dalam popup, `size="md"` = tinggi 44px untuk baris
+  tabel. Teks bawaan memakai katalog `common.*` (bukan hardcoded).
 - **Harga jual per customer** (`customer_prices`, master `/customer-prices`):
   satu halaman = satu customer × seluruh FG aktif, disimpan sekaligus; harga
   kosong menghapus baris. `PickingListService::generateDeliveries` menyalin

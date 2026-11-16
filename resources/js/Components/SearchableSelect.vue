@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 export interface SelectOptionItem {
@@ -27,6 +27,7 @@ const props = withDefaults(
         error?: string | boolean;
         ariaLabel?: string;
         maxItems?: number;
+        size?: 'sm' | 'md';
     }>(),
     {
         valueKey: 'id',
@@ -38,6 +39,7 @@ const props = withDefaults(
         error: undefined,
         ariaLabel: undefined,
         maxItems: 60,
+        size: 'sm',
     },
 );
 
@@ -47,95 +49,140 @@ const emit = defineEmits<{
     clear: [];
 }>();
 
+// Id unik per instance: dipakai aria-controls/aria-activedescendant.
+let instanceSeq = 0;
+const instanceId = `ss-${++instanceSeq}-${Math.random().toString(36).slice(2, 7)}`;
+const listboxId = `${instanceId}-listbox`;
+const optionId = (index: number) => `${instanceId}-opt-${index}`;
+
 const containerRef = ref<HTMLElement | null>(null);
-const inputRef = ref<HTMLInputElement | null>(null);
-const listboxRef = ref<HTMLElement | null>(null);
+const triggerRef = ref<HTMLButtonElement | null>(null);
+const popupRef = ref<HTMLElement | null>(null);
+const listRef = ref<HTMLElement | null>(null);
+const searchRef = ref<HTMLInputElement | null>(null);
 
 const isOpen = ref(false);
 const searchQuery = ref('');
 const highlightedIndex = ref(-1);
+const popupStyle = ref<Record<string, string>>({});
+const portalTarget = ref<string | HTMLElement>('body');
 
-const normalizedOptions = computed<SelectOptionItem[]>(() => {
-    return (props.options ?? []).map((opt) => {
+const normalizedOptions = computed<SelectOptionItem[]>(() =>
+    (props.options ?? []).map((opt) => {
         if (typeof opt === 'string' || typeof opt === 'number') {
             return { value: opt, label: String(opt) };
         }
+
         const val = opt.value !== undefined ? opt.value : opt[props.valueKey];
         const lbl = opt.label !== undefined ? opt.label : opt[props.labelKey];
         const sub = props.sublabelKey && opt[props.sublabelKey] ? opt[props.sublabelKey] : opt.sublabel;
+
         return {
             ...opt,
             value: val,
             label: String(lbl ?? ''),
             sublabel: sub ? String(sub) : undefined,
         };
-    });
-});
+    }),
+);
 
 const selectedOption = computed(() => {
     if (props.modelValue === null || props.modelValue === undefined || props.modelValue === '') {
         return null;
     }
+
     return normalizedOptions.value.find((o) => String(o.value) === String(props.modelValue)) ?? null;
 });
 
-function formatDisplay(opt: SelectOptionItem | null): string {
-    if (!opt) return '';
-    return opt.sublabel ? `${opt.label} · ${opt.sublabel}` : opt.label;
-}
-
+/** Cocokkan pencarian ke label + sublabel, bukan seluruh isi objek. */
 const filteredOptions = computed(() => {
     const q = searchQuery.value.trim().toLowerCase();
-    // Jika input sama persis dengan format tampilan terpilih, tampilkan daftar awal agar user bisa ganti pilihan
-    if (!q || (selectedOption.value && q === formatDisplay(selectedOption.value).toLowerCase())) {
+
+    if (q === '') {
         return normalizedOptions.value.slice(0, props.maxItems);
     }
+
     return normalizedOptions.value
-        .filter((o) => {
-            const matchLabel = o.label.toLowerCase().includes(q);
-            const matchSub = o.sublabel ? o.sublabel.toLowerCase().includes(q) : false;
-            return matchLabel || matchSub;
-        })
+        .filter((o) => o.label.toLowerCase().includes(q) || (o.sublabel ?? '').toLowerCase().includes(q))
         .slice(0, props.maxItems);
 });
 
-function syncSearchFromSelected() {
-    searchQuery.value = formatDisplay(selectedOption.value);
-}
+const totalOptions = computed(() => normalizedOptions.value.length);
+const truncated = computed(() => filteredOptions.value.length < totalOptions.value);
 
-watch(
-    [() => props.modelValue, () => props.options],
-    () => {
-        if (!isOpen.value) {
-            syncSearchFromSelected();
-        }
-    },
-    { immediate: true },
-);
+function updatePosition() {
+    const el = triggerRef.value;
+    if (el === null) {
+        return;
+    }
+
+    const rect = el.getBoundingClientRect();
+    const margin = 8;
+    const width = Math.min(Math.max(rect.width, 288), window.innerWidth - margin * 2);
+    const left = Math.min(Math.max(rect.left, margin), window.innerWidth - margin - width);
+    const below = window.innerHeight - rect.bottom - margin;
+    const above = rect.top - margin;
+    const openUp = below < 320 && above > below;
+
+    popupStyle.value = {
+        position: 'fixed',
+        left: `${left}px`,
+        width: `${width}px`,
+        ...(openUp
+            ? { bottom: `${window.innerHeight - rect.top + 4}px`, maxHeight: `${Math.max(Math.min(above, 352), 160)}px` }
+            : { top: `${rect.bottom + 4}px`, maxHeight: `${Math.max(Math.min(below, 352), 160)}px` }),
+    };
+}
 
 function openDropdown() {
-    if (props.disabled) return;
-    isOpen.value = true;
+    if (props.disabled || isOpen.value) {
+        return;
+    }
+
+    // Popup harus ikut lapisan atas <dialog> agar tidak tertutup backdrop.
+    const dialog = containerRef.value?.closest('dialog');
+    portalTarget.value = dialog ?? 'body';
+
+    // Posisi dihitung sebelum popup dirender supaya tidak berkedip di dasar
+    // halaman selama satu frame.
+    searchQuery.value = '';
     highlightedIndex.value = -1;
-    nextTick(() => {
-        if (inputRef.value) {
-            inputRef.value.select();
-        }
-    });
+    updatePosition();
+    isOpen.value = true;
+
+    nextTick(() => searchRef.value?.focus());
 }
 
-function closeDropdown() {
+function closeDropdown(restoreFocus = true) {
+    // Fokus dikembalikan secara sinkron: pemanggil (mis. form yang memindahkan
+    // fokus ke input qty setelah memilih) menjadwalkan fokusnya di `nextTick`,
+    // sehingga fokus panggilan ini tidak menimpanya.
+    if (restoreFocus) {
+        triggerRef.value?.focus();
+    }
+
     isOpen.value = false;
+    searchQuery.value = '';
     highlightedIndex.value = -1;
-    syncSearchFromSelected();
+}
+
+function toggle() {
+    if (isOpen.value) {
+        closeDropdown();
+        return;
+    }
+
+    openDropdown();
 }
 
 function selectOption(option: SelectOptionItem) {
-    if (option.disabled) return;
+    if (option.disabled) {
+        return;
+    }
+
     emit('update:modelValue', option.value);
     emit('change', option.value, option);
-    isOpen.value = false;
-    searchQuery.value = formatDisplay(option);
+    closeDropdown();
 }
 
 function clearSelection(e?: Event) {
@@ -143,44 +190,48 @@ function clearSelection(e?: Event) {
     emit('update:modelValue', '');
     emit('change', '', null);
     emit('clear');
-    searchQuery.value = '';
-    isOpen.value = false;
+    closeDropdown();
 }
 
-function onInput() {
-    if (!isOpen.value) {
-        isOpen.value = true;
-    }
-    highlightedIndex.value = 0;
+function scrollToHighlighted() {
+    nextTick(() => {
+        const active = listRef.value?.querySelector<HTMLElement>('[data-highlighted="true"]');
+        active?.scrollIntoView({ block: 'nearest' });
+    });
 }
 
-function onKeyDown(e: KeyboardEvent) {
-    if (props.disabled) return;
-
-    if (!isOpen.value) {
-        if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(e.key)) {
-            e.preventDefault();
-            openDropdown();
-            return;
-        }
-    }
-
+function moveHighlight(step: number) {
     const items = filteredOptions.value;
     if (items.length === 0) {
-        if (e.key === 'Escape') closeDropdown();
         return;
     }
+
+    highlightedIndex.value = (highlightedIndex.value + step + items.length) % items.length;
+    scrollToHighlighted();
+}
+
+function onTriggerKeyDown(e: KeyboardEvent) {
+    if (props.disabled) {
+        return;
+    }
+
+    if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(e.key)) {
+        e.preventDefault();
+        openDropdown();
+    }
+}
+
+function onSearchKeyDown(e: KeyboardEvent) {
+    const items = filteredOptions.value;
 
     switch (e.key) {
         case 'ArrowDown':
             e.preventDefault();
-            highlightedIndex.value = (highlightedIndex.value + 1) % items.length;
-            scrollToHighlighted();
+            moveHighlight(1);
             break;
         case 'ArrowUp':
             e.preventDefault();
-            highlightedIndex.value = (highlightedIndex.value - 1 + items.length) % items.length;
-            scrollToHighlighted();
+            moveHighlight(-1);
             break;
         case 'Enter':
             e.preventDefault();
@@ -195,136 +246,255 @@ function onKeyDown(e: KeyboardEvent) {
             closeDropdown();
             break;
         case 'Tab':
-            closeDropdown();
+            closeDropdown(false);
             break;
     }
 }
 
-function scrollToHighlighted() {
-    nextTick(() => {
-        if (!listboxRef.value) return;
-        const activeEl = listboxRef.value.querySelector('[data-highlighted="true"]') as HTMLElement;
-        if (activeEl) {
-            activeEl.scrollIntoView({ block: 'nearest' });
-        }
-    });
+function handlePointerDown(e: PointerEvent) {
+    if (!isOpen.value) {
+        return;
+    }
+
+    const target = e.target as Node;
+
+    // Popup dirender lewat teleport, jadi containerRef saja tidak cukup.
+    if (containerRef.value?.contains(target) || popupRef.value?.contains(target)) {
+        return;
+    }
+
+    closeDropdown(false);
 }
 
-function handleClickOutside(e: MouseEvent) {
-    if (containerRef.value && !containerRef.value.contains(e.target as Node)) {
-        if (isOpen.value) {
-            closeDropdown();
-        }
+function onViewportChange() {
+    if (isOpen.value) {
+        updatePosition();
     }
 }
 
-onMounted(() => {
-    document.addEventListener('pointerdown', handleClickOutside);
+watch(
+    () => props.modelValue,
+    () => {
+        if (isOpen.value) {
+            highlightedIndex.value = -1;
+        }
+    },
+);
+
+watch(
+    () => props.disabled,
+    (disabled) => {
+        if (disabled && isOpen.value) {
+            closeDropdown(false);
+        }
+    },
+);
+
+// Dipakai form yang perlu memindahkan fokus ke baris tertentu (mis. setelah
+// validasi gagal): gulir dulu, baru fokus.
+defineExpose({
+    focus: () => {
+        triggerRef.value?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        triggerRef.value?.focus();
+    },
+    /** Buka daftar sekaligus fokus ke kolom pencarian (dipakai saat baris baru dibuat). */
+    open: () => {
+        triggerRef.value?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        openDropdown();
+    },
 });
 
-onUnmounted(() => {
-    document.removeEventListener('pointerdown', handleClickOutside);
+onMounted(() => {
+    document.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('resize', onViewportChange);
+    window.addEventListener('scroll', onViewportChange, true);
+});
+
+onBeforeUnmount(() => {
+    document.removeEventListener('pointerdown', handlePointerDown);
+    window.removeEventListener('resize', onViewportChange);
+    window.removeEventListener('scroll', onViewportChange, true);
 });
 </script>
 
 <template>
     <div ref="containerRef" class="relative w-full">
         <div class="relative flex items-center">
-            <input
-                ref="inputRef"
-                v-model="searchQuery"
-                type="text"
+            <button
+                ref="triggerRef"
+                type="button"
                 role="combobox"
+                aria-haspopup="listbox"
                 :aria-expanded="isOpen"
+                :aria-controls="listboxId"
                 :aria-label="ariaLabel"
-                aria-autocomplete="list"
-                autocomplete="off"
+                :aria-invalid="error ? 'true' : undefined"
                 :disabled="disabled"
-                :placeholder="placeholder || '— Ketik untuk mencari / pilih —'"
                 :class="[
-                    'w-full rounded-lg border bg-surface px-3 py-2 text-sm text-ink-primary transition placeholder:text-ink-secondary/60 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:bg-background disabled:text-ink-secondary',
+                    'flex w-full items-center gap-2 rounded-lg border bg-surface pl-3 text-left transition',
+                    size === 'md' ? 'h-11' : 'min-h-[38px] py-1.5',
+                    allowClear && selectedOption ? 'pr-[3.25rem]' : 'pr-11',
                     error
-                        ? 'border-danger focus:border-danger focus:ring-danger/20'
-                        : 'border-borderline focus:border-primary focus:ring-primary/20',
-                    allowClear && selectedOption ? 'pr-16' : 'pr-9',
+                        ? 'border-danger focus-visible:border-danger focus-visible:ring-danger'
+                        : 'border-borderline hover:border-primary hover:bg-primary-light/40 focus-visible:border-primary focus-visible:ring-primary',
+                    'focus-visible:outline-none focus-visible:ring-2',
+                    'disabled:cursor-not-allowed disabled:border-borderline disabled:bg-background disabled:text-ink-secondary disabled:hover:bg-background',
                 ]"
-                @focus="openDropdown"
-                @input="onInput"
-                @keydown="onKeyDown"
-            />
+                @click="toggle"
+                @keydown="onTriggerKeyDown"
+            >
+                <slot name="leading" />
 
-            <div class="absolute right-2 flex items-center gap-1 text-ink-secondary">
-                <button
-                    v-if="allowClear && selectedOption && !disabled"
-                    type="button"
-                    tabindex="-1"
-                    aria-label="Hapus pilihan"
-                    class="rounded p-0.5 hover:bg-background hover:text-ink-primary focus:outline-none"
-                    @click="clearSelection"
-                >
-                    <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-                    </svg>
-                </button>
-                <button
-                    type="button"
-                    tabindex="-1"
-                    :disabled="disabled"
-                    class="rounded p-0.5 transition-transform hover:text-ink-primary focus:outline-none"
+                <span v-if="selectedOption" class="flex min-w-0 flex-1 flex-col leading-tight">
+                    <span class="truncate text-sm font-medium text-ink-primary">{{ selectedOption.label }}</span>
+                    <span v-if="selectedOption.sublabel" class="truncate font-mono text-[11px] text-ink-secondary">
+                        {{ selectedOption.sublabel }}
+                    </span>
+                </span>
+                <span v-else class="min-w-0 flex-1 truncate text-sm text-ink-secondary">
+                    {{ placeholder || t('common.selectPlaceholder') }}
+                </span>
+
+                <svg
+                    class="h-4 w-4 shrink-0 text-ink-secondary transition-transform"
                     :class="isOpen ? 'rotate-180' : ''"
-                    @click="isOpen ? closeDropdown() : openDropdown()"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
                 >
-                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="m19 9-7 7-7-7" />
-                    </svg>
-                </button>
-            </div>
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m19 9-7 7-7-7" />
+                </svg>
+            </button>
+
+            <button
+                v-if="allowClear && selectedOption && !disabled"
+                type="button"
+                tabindex="-1"
+                :aria-label="t('common.clearSelection')"
+                class="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-lg text-ink-secondary transition hover:bg-background hover:text-ink-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                @click="clearSelection"
+            >
+                <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                </svg>
+            </button>
         </div>
 
-        <Transition
-            enter-active-class="transition ease-out duration-100"
-            enter-from-class="opacity-0 scale-95"
-            enter-to-class="opacity-100 scale-100"
-            leave-active-class="transition ease-in duration-75"
-            leave-from-class="opacity-100 scale-100"
-            leave-to-class="opacity-0 scale-95"
-        >
-            <div
-                v-if="isOpen"
-                ref="listboxRef"
-                role="listbox"
-                class="absolute z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-borderline bg-surface py-1 shadow-lg ring-1 ring-black/5"
+        <Teleport :to="portalTarget">
+            <Transition
+                enter-active-class="transition ease-out duration-100"
+                enter-from-class="opacity-0 translate-y-1"
+                enter-to-class="opacity-100 translate-y-0"
+                leave-active-class="transition ease-in duration-75"
+                leave-from-class="opacity-100 translate-y-0"
+                leave-to-class="opacity-0 translate-y-1"
             >
                 <div
-                    v-for="(option, idx) in filteredOptions"
-                    :key="option.value"
-                    role="option"
-                    :data-highlighted="idx === highlightedIndex"
-                    :aria-selected="String(option.value) === String(modelValue)"
-                    :class="[
-                        'flex cursor-pointer items-center justify-between px-3 py-2 text-sm transition',
-                        option.disabled ? 'cursor-not-allowed opacity-40' : '',
-                        idx === highlightedIndex ? 'bg-primary-light text-primary font-medium' : 'text-ink-primary hover:bg-background',
-                        String(option.value) === String(modelValue) ? 'font-semibold text-primary' : '',
-                    ]"
-                    @mousedown.prevent="selectOption(option)"
-                    @mouseenter="highlightedIndex = idx"
+                    v-if="isOpen"
+                    ref="popupRef"
+                    :style="popupStyle"
+                    class="z-[65] flex flex-col overflow-hidden rounded-lg border border-borderline bg-surface shadow-lg ring-1 ring-ink-primary/5"
                 >
-                    <slot name="option" :option="option" :selected="String(option.value) === String(modelValue)" :active="idx === highlightedIndex">
-                        <div class="flex flex-col truncate">
-                            <span class="truncate font-medium">{{ option.label }}</span>
-                            <span v-if="option.sublabel" class="truncate text-xs text-ink-secondary">
-                                {{ option.sublabel }}
-                            </span>
-                        </div>
-                        <span v-if="String(option.value) === String(modelValue)" class="ml-2 shrink-0 text-primary font-bold">✓</span>
-                    </slot>
-                </div>
+                    <div class="border-b border-borderline p-2">
+                        <input
+                            ref="searchRef"
+                            v-model="searchQuery"
+                            type="text"
+                            role="combobox"
+                            aria-autocomplete="list"
+                            :aria-controls="listboxId"
+                            :aria-expanded="true"
+                            :aria-activedescendant="highlightedIndex >= 0 ? optionId(highlightedIndex) : undefined"
+                            :aria-label="ariaLabel || placeholder || t('common.searchInList')"
+                            autocomplete="off"
+                            :placeholder="t('common.searchInList')"
+                            class="w-full rounded-md border-borderline bg-background px-2.5 py-1.5 text-sm text-ink-primary placeholder:text-ink-secondary focus:border-primary focus:ring-primary"
+                            @input="highlightedIndex = 0"
+                            @keydown="onSearchKeyDown"
+                        />
+                    </div>
 
-                <div v-if="filteredOptions.length === 0" class="px-3 py-3 text-center text-xs text-ink-secondary">
-                    Tidak ada data yang cocok
+                    <ul
+                        ref="listRef"
+                        :id="listboxId"
+                        role="listbox"
+                        :aria-label="ariaLabel || placeholder"
+                        class="min-h-0 flex-1 overflow-y-auto py-1"
+                    >
+                        <li
+                            v-for="(option, idx) in filteredOptions"
+                            :id="optionId(idx)"
+                            :key="option.value"
+                            role="option"
+                            :data-highlighted="idx === highlightedIndex"
+                            :aria-selected="String(option.value) === String(modelValue)"
+                            :aria-disabled="option.disabled ? 'true' : undefined"
+                            :class="[
+                                'flex cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm transition',
+                                option.disabled ? 'cursor-not-allowed text-ink-secondary' : '',
+                                idx === highlightedIndex ? 'bg-primary-light' : 'hover:bg-background',
+                            ]"
+                            @pointerdown.prevent="selectOption(option)"
+                            @mouseenter="highlightedIndex = idx"
+                        >
+                            <slot
+                                name="option"
+                                :option="option"
+                                :selected="String(option.value) === String(modelValue)"
+                                :active="idx === highlightedIndex"
+                            >
+                                <div class="flex min-w-0 flex-col">
+                                    <span
+                                        class="truncate font-medium"
+                                        :class="String(option.value) === String(modelValue) ? 'text-primary' : 'text-ink-primary'"
+                                    >
+                                        {{ option.label }}
+                                    </span>
+                                    <span
+                                        v-if="option.sublabel"
+                                        class="truncate text-xs"
+                                        :class="idx === highlightedIndex ? 'text-primary' : 'text-ink-secondary'"
+                                    >
+                                        {{ option.sublabel }}
+                                    </span>
+                                </div>
+
+                                <span
+                                    v-if="option.badge"
+                                    class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold tabular-nums"
+                                    :class="{
+                                        'bg-success/10 text-success-ink': option.badgeTone === 'success',
+                                        'bg-warning/10 text-warning-ink': option.badgeTone === 'warning',
+                                        'bg-danger/10 text-danger': option.badgeTone === 'danger',
+                                        'bg-background text-ink-secondary': !option.badgeTone || option.badgeTone === 'neutral',
+                                    }"
+                                >
+                                    {{ option.badge }}
+                                </span>
+                                <span
+                                    v-else-if="String(option.value) === String(modelValue)"
+                                    class="shrink-0 text-sm font-bold text-primary"
+                                    aria-hidden="true"
+                                >
+                                    ✓
+                                </span>
+                            </slot>
+                        </li>
+
+                        <li v-if="filteredOptions.length === 0" class="px-3 py-3 text-center text-xs text-ink-secondary">
+                            {{ t('common.noResults') }}
+                        </li>
+                        <li
+                            v-else-if="truncated && searchQuery.trim() === ''"
+                            class="px-3 py-2 text-center text-[11px] text-ink-secondary"
+                        >
+                            {{ t('common.typeToSearch', { count: totalOptions }) }}
+                        </li>
+                    </ul>
                 </div>
-            </div>
-        </Transition>
+            </Transition>
+        </Teleport>
     </div>
 </template>

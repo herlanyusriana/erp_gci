@@ -405,4 +405,41 @@ class TieredReceiveTest extends TestCase
             ->assertSee($mapping->material_group)
             ->assertDontSee($mapping->substitutePart->part_number.' · 1.2MM');
     }
+
+    public function test_receive_form_shows_the_supplier_material_group(): void
+    {
+        $mapping = PartSubstitute::query()
+            ->where('is_active', true)
+            ->whereNotNull('supplier_id')
+            ->whereNotNull('material_group')
+            ->whereRaw("TRIM(material_group) <> ''")
+            ->with('substitutePart')
+            ->firstOrFail();
+
+        $arrival = IncomingArrival::create([
+            'arrival_no' => 'ARV-GRPFORM-'.uniqid(),
+            'supplier_id' => $mapping->supplier_id,
+            'is_local' => false,
+            'status' => 'pending',
+            'iqc_status' => 'passed',
+        ]);
+
+        // Data lama: kolom material_group berisi part number.
+        $item = IncomingArrivalItem::create([
+            'arrival_id' => $arrival->id,
+            'part_id' => $mapping->substitute_part_id,
+            'material_group' => $mapping->substitutePart->part_number,
+            'size' => '1.2MM',
+            'qty_goods' => 100,
+            'unit_goods' => 'KGM',
+            'weight_nett' => 100,
+            'unit_weight' => 'KGM',
+        ]);
+
+        $this->get(route('receive.create', $item))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Incoming/Receive/Form')
+                ->where('arrivalItem.material_group_label', $mapping->material_group));
+    }
 }

@@ -307,7 +307,7 @@ function submit() {
                         <label class="text-xs font-semibold text-ink-secondary">Group / Ukuran</label>
                         <input
                             type="text"
-                            :value="`${arrivalItem.material_group ?? '—'} · ${arrivalItem.size ?? '—'}`"
+                            :value="`${arrivalItem.material_group_label ?? arrivalItem.material_group ?? '—'} · ${arrivalItem.size ?? '—'}`"
                             readonly
                             class="mt-1 w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-secondary"
                         />

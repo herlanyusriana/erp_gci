@@ -15,6 +15,7 @@ use App\Support\UomCatalog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
@@ -84,6 +85,7 @@ class ReceiveController extends Controller
         Gate::authorize('create', IncomingReceive::class);
 
         $arrivalItem->load(['part.uom', 'arrival.supplier', 'arrival.purchaseOrder', 'receives']);
+        $this->attachMaterialGroupLabel($arrivalItem);
 
         if ($arrivalItem->iqc_status === 'rejected' || $arrivalItem->arrival?->iqc_status === 'rejected') {
             abort(422, __('Material ini ditolak oleh tim Quality.'));
@@ -498,14 +500,42 @@ class ReceiveController extends Controller
                 ]);
 
         foreach ($arrival->items as $item) {
-            $stored = trim((string) ($item->material_group ?? ''));
-            $partNumber = trim((string) ($item->part?->part_number ?? ''));
-            $mapped = $groups->get((int) $item->part_id, '');
-
-            $label = $stored !== '' && $stored !== $partNumber ? $stored : $mapped;
-
-            $item->setAttribute('material_group_label', $label !== '' ? $label : null);
+            $item->setAttribute('material_group_label', $this->resolveMaterialGroupLabel($item, $groups));
         }
+    }
+
+    /** Versi satu item, dipakai form penerimaan. */
+    private function attachMaterialGroupLabel(IncomingArrivalItem $item): void
+    {
+        $supplierId = $item->arrival?->supplier_id;
+
+        $mapped = $supplierId === null || $item->part_id === null
+            ? ''
+            : trim((string) PartSubstitute::query()
+                ->where('is_active', true)
+                ->where('supplier_id', $supplierId)
+                ->where('substitute_part_id', $item->part_id)
+                ->orderByRaw("NULLIF(TRIM(COALESCE(material_group, '')), '') IS NULL")
+                ->value('material_group'));
+
+        $item->setAttribute('material_group_label', $this->resolveMaterialGroupLabel($item, collect([
+            (int) $item->part_id => $mapped,
+        ])));
+    }
+
+    /**
+     * Label kelompok: pakai nilai tersimpan bila bukan part number, jika tidak
+     * pakai hasil pemetaan supplier.
+     */
+    private function resolveMaterialGroupLabel(IncomingArrivalItem $item, Collection $groups): ?string
+    {
+        $stored = trim((string) ($item->material_group ?? ''));
+        $partNumber = trim((string) ($item->part?->part_number ?? ''));
+        $mapped = (string) $groups->get((int) $item->part_id, '');
+
+        $label = $stored !== '' && $stored !== $partNumber ? $stored : $mapped;
+
+        return $label !== '' ? $label : null;
     }
 
     /**

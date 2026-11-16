@@ -20,6 +20,7 @@ const items = computed(() =>
         { href: '/locations', title: 'master.location', subtitle: 'master.locationTitle', permission: ['location.view'] },
         { href: '/cycle-times', title: 'master.cycleTimeTitle', subtitle: 'master.launcherCycleTimeSubtitle', permission: ['machine.view', 'process.view'] },
         { href: '/prices', title: 'master.priceMaster', subtitle: 'master.launcherPriceSubtitle', permission: ['part.view'] },
+        { href: '/customer-prices', title: 'customerPrice.title', subtitle: 'customerPrice.subtitle', permission: ['customer_price.view', 'delivery.view'] },
         { href: '/processes', title: 'master.process', subtitle: 'master.processTitle', permission: ['process.view'] },
         { href: '/uoms', title: 'master.uom', subtitle: 'master.unitOfMeasure', permission: ['uom.view'] },
     ].filter((it) => hasAnyPermission(it.permission)),

@@ -9,13 +9,15 @@ class DeliveryItem extends Model
 {
     protected $fillable = [
         'delivery_id', 'part_stock_id', 'part_id', 'tag', 'qty', 'qty_unit',
-        'origin_location_code', 'price', 'total_price', 'notes',
+        'origin_location_code', 'price', 'total_price', 'sequence', 'is_picked', 'notes',
     ];
 
     protected $casts = [
         'qty' => 'float',
         'price' => 'float',
         'total_price' => 'float',
+        'sequence' => 'integer',
+        'is_picked' => 'boolean',
     ];
 
     public function delivery(): BelongsTo

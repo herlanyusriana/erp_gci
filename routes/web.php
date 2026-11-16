@@ -3,6 +3,7 @@
 use App\Http\Controllers\BomController;
 use App\Http\Controllers\ConfigMasterController;
 use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\CustomerPriceController;
 use App\Http\Controllers\DeliveryController;
 use App\Http\Controllers\IncomingArrivalController;
 use App\Http\Controllers\IncomingQualityController;
@@ -17,6 +18,7 @@ use App\Http\Controllers\PartController;
 use App\Http\Controllers\PartPriceController;
 use App\Http\Controllers\PartStockController;
 use App\Http\Controllers\PartSubstituteController;
+use App\Http\Controllers\PickingListController;
 use App\Http\Controllers\ProcessController;
 use App\Http\Controllers\ProductionLabelController;
 use App\Http\Controllers\ProductionPlanController;
@@ -71,11 +73,7 @@ Route::middleware(['auth'])->group(function () {
 
     // Outgoing — pengiriman barang jadi (FG)
     Route::get('deliveries', [DeliveryController::class, 'index'])->name('deliveries.index');
-    Route::get('deliveries/create', [DeliveryController::class, 'create'])->name('deliveries.create');
-    Route::post('deliveries', [DeliveryController::class, 'store'])->name('deliveries.store');
     Route::get('deliveries/{delivery}', [DeliveryController::class, 'show'])->name('deliveries.show');
-    Route::get('deliveries/{delivery}/edit', [DeliveryController::class, 'edit'])->name('deliveries.edit');
-    Route::put('deliveries/{delivery}', [DeliveryController::class, 'update'])->name('deliveries.update');
     Route::delete('deliveries/{delivery}', [DeliveryController::class, 'destroy'])->name('deliveries.destroy');
     Route::post('deliveries/{delivery}/pick', [DeliveryController::class, 'pick'])->name('deliveries.pick');
     Route::post('deliveries/{delivery}/return', [DeliveryController::class, 'returnToOrigin'])->name('deliveries.return');
@@ -92,10 +90,24 @@ Route::middleware(['auth'])->group(function () {
     Route::get('deliveries/{delivery}/invoice', [DeliveryController::class, 'printInvoice'])->name('deliveries.invoice');
     Route::get('deliveries/{delivery}/packing-list', [DeliveryController::class, 'printPackingList'])->name('deliveries.packing-list');
 
+    // Outgoing — picking list harian (sumber pengiriman per customer)
+    Route::get('picking-lists', [PickingListController::class, 'index'])->name('picking-lists.index');
+    Route::get('picking-lists/create', [PickingListController::class, 'create'])->name('picking-lists.create');
+    Route::post('picking-lists', [PickingListController::class, 'store'])->name('picking-lists.store');
+    Route::get('picking-lists/{pickingList}', [PickingListController::class, 'show'])->name('picking-lists.show');
+    Route::get('picking-lists/{pickingList}/edit', [PickingListController::class, 'edit'])->name('picking-lists.edit');
+    Route::put('picking-lists/{pickingList}', [PickingListController::class, 'update'])->name('picking-lists.update');
+    Route::delete('picking-lists/{pickingList}', [PickingListController::class, 'destroy'])->name('picking-lists.destroy');
+    Route::post('picking-lists/{pickingList}/deliveries', [PickingListController::class, 'generateDeliveries'])->name('picking-lists.deliveries.generate');
+
     // Master Data — CRUD
     Route::resource('parts', PartController::class)->except(['show']);
     Route::resource('suppliers', SupplierController::class)->except(['show']);
     Route::resource('customers', CustomerController::class)->except(['show', 'create', 'edit']);
+
+    // Master — harga jual barang jadi per customer
+    Route::get('customer-prices', [CustomerPriceController::class, 'index'])->name('customer-prices.index');
+    Route::post('customer-prices', [CustomerPriceController::class, 'store'])->name('customer-prices.store');
     Route::resource('trucking-companies', TruckingCompanyController::class)->except(['show'])->parameters(['trucking-companies' => 'trucking']);
     Route::resource('machines', MachineController::class)->except(['show']);
     Route::get('machines/{machine}/label', [MachineController::class, 'printLabel'])->name('machines.label');

@@ -43,27 +43,27 @@
 </head>
 <body>
     <div class="sheet-container">
-        @foreach ($delivery->items as $index => $item)
+        @foreach ($labels as $index => $item)
             <div class="label-card">
                 <div class="header">
                     <div class="brand">GL</div>
                     <div class="header-title">LABEL PENGIRIMAN</div>
-                    <div class="header-seq">{{ $index + 1 }}/{{ $delivery->items->count() }}</div>
+                    <div class="header-seq">{{ $index + 1 }}/{{ count($labels) }}</div>
                 </div>
 
                 <div class="body">
                     <div class="fields">
                         <div class="field part">
                             <span class="k">Part No</span>
-                            <span class="v">{{ $item->part?->part_number ?? '-' }}</span>
+                            <span class="v">{{ $item['part_number'] ?? '-' }}</span>
                         </div>
                         <div class="field">
                             <span class="k">Part Name</span>
-                            <span class="v">{{ $item->part?->part_name ?? '-' }}</span>
+                            <span class="v">{{ $item['part_name'] ?? '-' }}</span>
                         </div>
                         <div class="field">
                             <span class="k">Tag</span>
-                            <span class="v">{{ $item->tag ?? '-' }}</span>
+                            <span class="v">{{ $item['tag'] !== '' ? $item['tag'] : '-' }}</span>
                         </div>
                         <div class="field">
                             <span class="k">Customer</span>
@@ -84,14 +84,14 @@
                             'type' => 'delivery',
                             'delivery_id' => (int) $delivery->id,
                             'delivery_no' => (string) $delivery->delivery_no,
-                            'part_stock_id' => (int) $item->part_stock_id,
-                            'tag' => (string) ($item->tag ?? ''),
-                            'part_id' => (int) $item->part_id,
-                            'qty' => (float) $item->qty,
+                            'part_stock_id' => (int) $item['part_stock_id'],
+                            'tag' => (string) $item['tag'],
+                            'part_id' => (int) $item['part_id'],
+                            'qty' => (float) $item['qty'],
                         ]), 340, 0) !!}</div>
-                        <div class="qty-head">QTY ({{ strtoupper((string) ($item->qty_unit ?? 'PCS')) }})</div>
-                        <div class="qty-val">{{ rtrim(rtrim(number_format((float) $item->qty, 4, '.', ','), '0'), '.') }}</div>
-                        <div class="counter">LABEL {{ $index + 1 }} / {{ $delivery->items->count() }}</div>
+                        <div class="qty-head">QTY ({{ strtoupper((string) ($item['qty_unit'] ?? 'PCS')) }})</div>
+                        <div class="qty-val">{{ rtrim(rtrim(number_format((float) $item['qty'], 4, '.', ','), '0'), '.') }}</div>
+                        <div class="counter">LABEL {{ $index + 1 }} / {{ count($labels) }}</div>
                     </div>
                 </div>
             </div>

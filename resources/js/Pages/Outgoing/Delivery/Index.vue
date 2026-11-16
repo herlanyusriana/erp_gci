@@ -77,11 +77,11 @@ const tone = (value: string) =>
                 <p class="mt-1 text-sm text-ink-secondary">{{ t('outgoing.deliverySubtitle') }}</p>
             </div>
             <Link
-                :href="route('deliveries.create')"
+                :href="route('picking-lists.index')"
                 class="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
             >
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                {{ t('outgoing.newDelivery') }}
+                {{ t('picking.new') }}
             </Link>
         </div>
 

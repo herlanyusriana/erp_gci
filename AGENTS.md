@@ -220,6 +220,31 @@ Catatan penting:
   material dikelompokkan per inventory — optgroup "Ada stok" (urut stok
   terbesar) vs "Tanpa stok", tiap opsi menampilkan stoknya; tombol `>` membuka
   daftar tag FIFO semua material. Main material = acuan BOM (tidak pegang stok).
+- **Picking List harian** (`/picking-lists`, permission `delivery.*`): satu
+  tanggal, banyak `sequence`, banyak customer; baris = customer + FG + qty/UOM
+  **tanpa tag**. Saat simpan, `PickingListService::stockCheck` menulis snapshot
+  `stock_status` (`ok` / `short_in_production` bila ada WO `planned`/`in_progress`
+  / `short_no_production` / `no_data`). `generateDeliveries` membuat **satu
+  Delivery draft per customer** berisi baris rencana (`delivery_items.part_stock_id`
+  = null, `tag` = null, `sequence` diisi); picking lalu `picked` dan terkunci.
+- **Stok FG dipotong saat pindah ke area pengiriman**, bukan saat submit:
+  `DeliveryService::moveToPreparation` mengurangi `part_stocks.qty` sebesar qty
+  tag yang dipindai (sekali, dijaga `deliveries.stock_deducted_at`), memindah
+  `location_code` ke prep, dan menyimpan `delivery_scans.origin_location_code`
+  untuk pengembalian. `submitOutgoing` hanya mengunci dokumen. Kelengkapan
+  pindai dihitung per **part** (`plannedQtyByPart` vs `scannedQtyByPart`),
+  bukan per baris tag.
+- **Delivery tidak dibuat manual**: route `deliveries.create/store/edit/update`
+  sudah dihapus; dokumen hanya lahir dari `picking-lists/{id}/deliveries`.
+- **Harga jual per customer** (`customer_prices`, master `/customer-prices`):
+  satu halaman = satu customer × seluruh FG aktif, disimpan sekaligus; harga
+  kosong menghapus baris. `PickingListService::generateDeliveries` menyalin
+  harga aktif ke `delivery_items.price/total_price` sebagai snapshot. Dokumen
+  cetak (SJ/invoice/packing list) menampilkan tag hasil pindai per part
+  (`Delivery::scannedTagsByPart`), dan label pengiriman dicetak satu lembar per
+  tag (`DeliveryService::labelEntries`).
+- **Issue FG di WIP Inventory** dihitung dari `delivery_scans` (tag yang
+  dipindai) pada `deliveries.stock_deducted_at`, bukan dari baris rencana.
 
 ===
 

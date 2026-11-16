@@ -12,7 +12,7 @@ class DeliveryScan extends Model
     public const TYPE_TAG = 'tag';
 
     protected $fillable = [
-        'delivery_id', 'scan_type', 'code', 'part_stock_id', 'qty',
+        'delivery_id', 'scan_type', 'code', 'part_stock_id', 'qty', 'origin_location_code',
         'qc_status', 'qc_notes', 'qc_checked_at', 'qc_checked_by',
         'scanned_by', 'scanned_at',
     ];

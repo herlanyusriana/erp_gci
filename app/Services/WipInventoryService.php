@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\DeliveryScan;
 use App\Models\Part;
 use App\Models\ProductionMaterialReceipt;
 use Illuminate\Database\Query\Builder;
@@ -427,32 +428,35 @@ final class WipInventoryService
      */
     private function fgDeliveryIssuedAggregate(?int $machineId, ?string $from, ?string $to, ?string $before = null): array
     {
-        $query = DB::table('delivery_items as di')
-            ->join('deliveries as d', 'd.id', '=', 'di.delivery_id')
-            ->leftJoin('production_results as pr_out', 'pr_out.output_part_stock_id', '=', 'di.part_stock_id')
+        // Qty keluar dihitung dari tag yang benar-benar dipindai, bukan baris
+        // rencana: baris rencana tidak memegang stok maupun lokasi.
+        $query = DB::table('delivery_scans as ds')
+            ->join('deliveries as d', 'd.id', '=', 'ds.delivery_id')
+            ->join('part_stocks as ps', 'ps.id', '=', 'ds.part_stock_id')
+            ->leftJoin('production_results as pr_out', 'pr_out.output_part_stock_id', '=', 'ps.id')
             ->leftJoin('machines as m', fn ($join) => $join
-                ->on(DB::raw('LOWER(m.machine_code)'), '=', DB::raw('LOWER(di.origin_location_code)')))
-            ->join('parts as p', 'p.id', '=', 'di.part_id')
+                ->on(DB::raw('LOWER(m.machine_code)'), '=', DB::raw('LOWER(ds.origin_location_code)')))
+            ->join('parts as p', 'p.id', '=', 'ps.part_id')
             ->join('part_types as pt', 'pt.id', '=', 'p.part_type_id')
             ->whereRaw('UPPER(pt.code) = ?', ['FG'])
+            ->where('ds.scan_type', DeliveryScan::TYPE_TAG)
             ->whereNull('d.deleted_at')
-            ->whereNotNull('d.released_at')
-            ->where('d.status', 'released')
+            ->whereNotNull('d.stock_deducted_at')
             ->when($machineId !== null, fn ($q) => $q->whereRaw(
                 'COALESCE(pr_out.machine_id, m.id) = ?',
                 [$machineId],
             ));
 
         if ($before !== null) {
-            $query->whereDate('d.released_at', '<', $before);
+            $query->whereDate('d.stock_deducted_at', '<', $before);
         } else {
-            $query->whereDate('d.released_at', '>=', (string) $from)
-                ->whereDate('d.released_at', '<=', (string) $to);
+            $query->whereDate('d.stock_deducted_at', '>=', (string) $from)
+                ->whereDate('d.stock_deducted_at', '<=', (string) $to);
         }
 
         return $query
-            ->groupByRaw('COALESCE(pr_out.machine_id, m.id), di.part_id, di.qty_unit')
-            ->selectRaw('COALESCE(pr_out.machine_id, m.id) AS machine_id, di.part_id, di.qty_unit AS uom, SUM(di.qty) AS qty')
+            ->groupByRaw('COALESCE(pr_out.machine_id, m.id), ps.part_id, ps.qty_unit')
+            ->selectRaw('COALESCE(pr_out.machine_id, m.id) AS machine_id, ps.part_id, ps.qty_unit AS uom, SUM(ds.qty) AS qty')
             ->selectRaw('STRING_AGG(DISTINCT d.delivery_no, \' | \') AS invoice')
             ->selectRaw('STRING_AGG(DISTINCT c.customer_name, \' | \') AS supplier')
             ->leftJoin('customers as c', 'c.id', '=', 'd.customer_id')
@@ -750,28 +754,29 @@ final class WipInventoryService
      */
     private function detailFgDeliveryIssued(int $machineId, int $partId, string $from, string $to, ?string $before = null)
     {
-        $query = DB::table('delivery_items as di')
-            ->join('deliveries as d', 'd.id', '=', 'di.delivery_id')
+        $query = DB::table('delivery_scans as ds')
+            ->join('deliveries as d', 'd.id', '=', 'ds.delivery_id')
+            ->join('part_stocks as ps', 'ps.id', '=', 'ds.part_stock_id')
             ->leftJoin('customers as c', 'c.id', '=', 'd.customer_id')
-            ->leftJoin('production_results as pr_out', 'pr_out.output_part_stock_id', '=', 'di.part_stock_id')
+            ->leftJoin('production_results as pr_out', 'pr_out.output_part_stock_id', '=', 'ps.id')
             ->leftJoin('machines as m', fn ($join) => $join
-                ->on(DB::raw('LOWER(m.machine_code)'), '=', DB::raw('LOWER(di.origin_location_code)')))
+                ->on(DB::raw('LOWER(m.machine_code)'), '=', DB::raw('LOWER(ds.origin_location_code)')))
+            ->where('ds.scan_type', DeliveryScan::TYPE_TAG)
             ->whereNull('d.deleted_at')
-            ->whereNotNull('d.released_at')
-            ->where('d.status', 'released')
-            ->where('di.part_id', $partId)
+            ->whereNotNull('d.stock_deducted_at')
+            ->where('ps.part_id', $partId)
             ->whereRaw('COALESCE(pr_out.machine_id, m.id) = ?', [$machineId]);
 
         if ($before !== null) {
-            $query->whereDate('d.released_at', '<', $before);
+            $query->whereDate('d.stock_deducted_at', '<', $before);
         } else {
-            $query->whereDate('d.released_at', '>=', $from)
-                ->whereDate('d.released_at', '<=', $to);
+            $query->whereDate('d.stock_deducted_at', '>=', $from)
+                ->whereDate('d.stock_deducted_at', '<=', $to);
         }
 
         return $query
-            ->groupBy('di.qty_unit', 'd.delivery_no', 'c.customer_name')
-            ->selectRaw('di.qty_unit AS uom, d.delivery_no AS invoice, c.customer_name AS supplier, SUM(di.qty) AS qty')
+            ->groupBy('ps.qty_unit', 'd.delivery_no', 'c.customer_name')
+            ->selectRaw('ps.qty_unit AS uom, d.delivery_no AS invoice, c.customer_name AS supplier, SUM(ds.qty) AS qty')
             ->get();
     }
 

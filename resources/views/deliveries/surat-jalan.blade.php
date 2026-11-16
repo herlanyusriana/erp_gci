@@ -52,6 +52,7 @@
         <div><div class="k">Pengemudi</div><div class="v">{{ $delivery->driver_name ?? '-' }}</div></div>
     </div>
 
+    @php $scannedTags = $delivery->scannedTagsByPart(); @endphp
     <table>
         <thead>
             <tr>
@@ -69,7 +70,7 @@
                     <td class="num">{{ $index + 1 }}</td>
                     <td>{{ $item->part?->part_number ?? '-' }}</td>
                     <td>{{ $item->part?->part_name ?? '-' }}</td>
-                    <td class="tag">{{ $item->tag ?? '-' }}</td>
+                    <td class="tag">{{ implode(', ', $scannedTags[$item->part_id] ?? []) ?: ($item->tag ?? '-') }}</td>
                     <td class="num">{{ rtrim(rtrim(number_format((float) $item->qty, 4, '.', ','), '0'), '.') }}</td>
                     <td>{{ $item->qty_unit ?? '-' }}</td>
                 </tr>

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Delivery;
 use App\Models\DeliveryScan;
+use App\Models\PartStock;
 use App\Services\DeliveryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -14,8 +15,9 @@ use Illuminate\Validation\ValidationException;
 /**
  * JSON API untuk Flutter "Material Tracker" — loading barang jadi ke truk.
  *
- * Operator memindai label troli, lalu memindai label FG hasil produksi.
- * Tahap loading di web tidak bisa dirilis sebelum kedua jenis scan lengkap.
+ * Operator memilih customer/seq dulu, lalu memindai label FG (+ qty) dan label
+ * troli. Stok FG dipotong saat pemindahan selesai; submit hanya mengunci
+ * dokumen.
  */
 class DeliveryApiController extends Controller
 {
@@ -27,26 +29,51 @@ class DeliveryApiController extends Controller
         Gate::authorize('viewAny', Delivery::class);
 
         $deliveries = Delivery::query()
-            ->with('customer:id,customer_code,customer_name')
+            ->with([
+                'customer:id,customer_code,customer_name',
+                'items:id,delivery_id,part_id,qty',
+                'scans:id,delivery_id,scan_type,part_stock_id,qty',
+            ])
             ->whereIn('status', [Delivery::STATUS_DRAFT, Delivery::STATUS_PICKED])
             ->orderBy('delivery_date')
             ->orderBy('id')
             ->limit(50)
-            ->get()
-            ->map(fn (Delivery $delivery): array => [
+            ->get();
+
+        // part_id untuk setiap tag yang dipindai, satu query untuk semua dokumen.
+        $stockParts = PartStock::query()
+            ->whereIn('id', $deliveries->pluck('scans')->flatten()->pluck('part_stock_id')->filter()->unique())
+            ->pluck('part_id', 'id');
+
+        $rows = $deliveries->map(function (Delivery $delivery) use ($stockParts): array {
+            $scannedByPart = $delivery->scans
+                ->where('scan_type', DeliveryScan::TYPE_TAG)
+                ->groupBy(fn (DeliveryScan $scan) => (int) ($stockParts[$scan->part_stock_id] ?? 0))
+                ->map(fn ($group): float => (float) $group->sum('qty'));
+
+            $plannedByPart = $delivery->items
+                ->groupBy('part_id')
+                ->map(fn ($group): float => (float) $group->sum('qty'));
+
+            $covered = $plannedByPart->filter(
+                fn (float $qty, $partId): bool => ($scannedByPart[$partId] ?? 0.0) + 1e-9 >= $qty,
+            );
+
+            return [
                 'id' => (int) $delivery->id,
                 'delivery_no' => (string) $delivery->delivery_no,
+                'picking_list_id' => $delivery->picking_list_id !== null ? (int) $delivery->picking_list_id : null,
                 'delivery_date' => $delivery->delivery_date?->toDateString(),
                 'status' => (string) $delivery->status,
                 'customer_name' => $delivery->customer?->customer_name,
                 'truck_no' => $delivery->truck_no,
-                'scanned_tags' => $delivery->scannedTagCount(),
-                'total_tags' => $delivery->items()->count(),
-                'trolleys' => $delivery->scannedTrolleyCount(),
-            ])
-            ->values();
+                'scanned_tags' => $covered->count(),
+                'total_tags' => $plannedByPart->count(),
+                'trolleys' => $delivery->scans->where('scan_type', DeliveryScan::TYPE_TROLLEY)->count(),
+            ];
+        })->values();
 
-        return response()->json(['data' => $deliveries]);
+        return response()->json(['data' => $rows]);
     }
 
     /** Konteks loading: item, progres scan, dan daftar troli. */
@@ -134,10 +161,11 @@ class DeliveryApiController extends Controller
 
         abort_unless((int) $scan->delivery_id === (int) $delivery->id, 404);
 
-        if (! $delivery->isDraft() && ! $delivery->isPicked()) {
+        // Setelah pindah, stok sudah dipotong; hapus scan akan membuat selisih.
+        if (! $delivery->isDraft()) {
             return response()->json([
                 'ok' => false,
-                'message' => __('Label sudah dirilis; scan tidak dapat dihapus.'),
+                'message' => __('Scan hanya dapat dihapus sebelum barang dipindah ke area pengiriman.'),
             ], 422);
         }
 

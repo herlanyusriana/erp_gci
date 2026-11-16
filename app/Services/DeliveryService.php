@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Models\Delivery;
 use App\Models\DeliveryScan;
 use App\Models\Location;
-use App\Models\Part;
 use App\Models\PartStock;
 use App\Models\ProductionResult;
 use App\Models\Trolley;
@@ -14,83 +13,20 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Pengiriman barang jadi: saran picking FIFO, validasi tag, dan pemindahan
- * lokasi ke area pengiriman.
+ * Pengiriman barang jadi: validasi tag hasil pindai dan pemindahan barang ke
+ * area pengiriman.
  *
- * Stok total tidak berubah saat pemindahan; yang berubah hanya lokasi fisik
- * barang. Barang baru benar-benar keluar dari pabrik saat dokumen dikirim.
+ * Stok FG dipotong sekali saat barang dipindah ke area pengiriman (berdasarkan
+ * tag yang dipindai), bukan saat submit outgoing. Submit hanya menutup dokumen.
  */
 class DeliveryService
 {
     /**
-     * Tag FG yang tersedia untuk dikirim, urut FIFO (tertua dulu).
+     * Pindahkan barang ke area pengiriman dan potong stok sekali.
      *
-     * @return list<array<string, mixed>>
-     */
-    public function availableTags(?int $partId = null, ?string $search = null, int $limit = 50): array
-    {
-        $prepCode = $this->deliveryPrepLocationCode();
-
-        return PartStock::query()
-            ->with(['part:id,part_number,part_name,part_type_id', 'part.partType:id,code'])
-            ->where('qty', '>', 0)
-            ->whereNotNull('tag')
-            ->when($partId !== null, fn ($q) => $q->where('part_id', $partId))
-            ->when($search !== null && $search !== '', fn ($q) => $q
-                ->where(fn ($w) => $w
-                    ->where('tag', 'ilike', "%{$search}%")
-                    ->orWhereHas('part', fn ($p) => $p
-                        ->where('part_number', 'ilike', "%{$search}%")
-                        ->orWhere('part_name', 'ilike', "%{$search}%"))))
-            ->orderByRaw('received_at ASC NULLS LAST')
-            ->orderBy('id')
-            ->limit($limit)
-            ->get()
-            ->filter(fn (PartStock $stock): bool => $this->isFinishedGood($stock))
-            ->map(fn (PartStock $stock): array => [
-                'part_stock_id' => (int) $stock->id,
-                'part_id' => (int) $stock->part_id,
-                'part_number' => $stock->part?->part_number,
-                'part_name' => $stock->part?->part_name,
-                'tag' => (string) $stock->tag,
-                'qty' => round((float) $stock->qty, 4),
-                'qty_unit' => $stock->qty_unit,
-                'location_code' => $stock->location_code,
-                'received_at' => $stock->received_at?->toIso8601String(),
-                'in_prep' => $prepCode !== null && $stock->location_code === $prepCode,
-            ])
-            ->values()
-            ->all();
-    }
-
-    /**
-     * Tag yang sah untuk satu baris pengiriman: harus barang jadi dan berstok.
-     */
-    public function assertDeliverable(PartStock $stock, float $qty): void
-    {
-        if (! $this->isFinishedGood($stock)) {
-            throw ValidationException::withMessages([
-                'items' => __('Tag :tag bukan barang jadi.', ['tag' => $stock->tag ?? '-']),
-            ]);
-        }
-
-        if ((float) $stock->qty + 1e-9 < $qty) {
-            throw ValidationException::withMessages([
-                'items' => __('Qty :qty melebihi stok tag :tag (:available).', [
-                    'qty' => $qty,
-                    'tag' => $stock->tag ?? '-',
-                    'available' => (float) $stock->qty,
-                ]),
-            ]);
-        }
-    }
-
-    /**
-     * Pindahkan seluruh tag pada dokumen ke area pengiriman dan tandai picked.
-     *
-     * Dipanggil otomatis setelah pemindaian loading lengkap (semua label FG +
-     * minimal satu troli). Tahap ini hanya memindahkan lokasi; stok baru
-     * berkurang saat outgoing disubmit.
+     * Dipanggil otomatis setelah pemindaian loading lengkap (seluruh rencana
+     * qty tertutup tag + minimal satu troli). Potongan dihitung dari tag yang
+     * benar-benar dipindai, bukan dari baris rencana.
      */
     public function moveToPreparation(Delivery $delivery): void
     {
@@ -116,9 +52,8 @@ class DeliveryService
             ]);
         }
 
-        // Pemindahan hanya sah setelah bukti pindai lengkap: seluruh label FG
-        // dan minimal satu troli. Tanpa ini tombol web bisa melewati langkah
-        // APK sepenuhnya.
+        // Pemindahan hanya sah setelah bukti pindai lengkap: seluruh rencana
+        // qty tertutup tag FG dan minimal satu troli.
         if ($delivery->scannedTrolleyCount() === 0) {
             throw ValidationException::withMessages([
                 'scans' => __('Pindai minimal satu label troli sebelum memindahkan barang.'),
@@ -126,38 +61,60 @@ class DeliveryService
         }
 
         if (! $delivery->allTagsScanned()) {
-            $missing = $delivery->items()->count() - $delivery->scannedTagCount();
-
             throw ValidationException::withMessages([
-                'scans' => __('Masih ada :count tag FG yang belum dipindai.', ['count' => $missing]),
+                'scans' => __('Masih ada :count baris FG yang belum tertutup tag terpindai.', [
+                    'count' => count($delivery->uncoveredParts()),
+                ]),
             ]);
         }
 
-        foreach ($delivery->items as $item) {
-            $stock = PartStock::query()->lockForUpdate()->find($item->part_stock_id);
+        DB::transaction(function () use ($delivery, $prepCode): void {
+            $delivery->loadMissing('scans');
 
-            if ($stock === null) {
-                throw ValidationException::withMessages([
-                    'items' => __('Stok tag :tag tidak ditemukan.', ['tag' => $item->tag ?? '-']),
-                ]);
+            // Stok hanya dipotong sekali; pemindahan ulang setelah QC menolak
+            // tidak boleh mengurangi stok dua kali.
+            if (! $delivery->stockDeducted()) {
+                foreach ($delivery->scans as $scan) {
+                    if ($scan->scan_type !== DeliveryScan::TYPE_TAG || $scan->part_stock_id === null) {
+                        continue;
+                    }
+
+                    $stock = PartStock::query()->lockForUpdate()->find($scan->part_stock_id);
+
+                    if ($stock === null) {
+                        continue;
+                    }
+
+                    if ($scan->origin_location_code === null) {
+                        $scan->update(['origin_location_code' => $stock->location_code]);
+                    }
+
+                    $stockQty = (float) $stock->qty;
+                    $take = round(min((float) $scan->qty, $stockQty), 4);
+
+                    if ($take <= 0) {
+                        continue;
+                    }
+
+                    // Tag fisik (beserta labelnya) ikut pindah ke area kirim;
+                    // qty berkurang sebesar yang benar-benar diambil.
+                    $stock->update([
+                        'qty' => round($stockQty - $take, 4),
+                        'location_code' => $prepCode,
+                    ]);
+                }
             }
 
-            // Simpan lokasi asal SEBELUM dipindah agar pengembalian presisi.
-            if ($item->origin_location_code === null) {
-                $item->update(['origin_location_code' => $stock->location_code]);
-            }
-
-            $stock->update(['location_code' => $prepCode]);
-        }
-
-        $delivery->update([
-            'status' => Delivery::STATUS_PICKED,
-            'picked_at' => now(),
-        ]);
+            $delivery->update([
+                'status' => Delivery::STATUS_PICKED,
+                'picked_at' => now(),
+                'stock_deducted_at' => $delivery->stock_deducted_at ?? now(),
+            ]);
+        });
     }
 
     /**
-     * Kembalikan tag ke lokasi asal dan turunkan status ke draft.
+     * Kembalikan barang ke lokasi asal dan pulihkan stok yang sudah dipotong.
      */
     public function returnToOrigin(Delivery $delivery): void
     {
@@ -167,26 +124,38 @@ class DeliveryService
             ]);
         }
 
-        $delivery->loadMissing('items');
+        DB::transaction(function () use ($delivery): void {
+            $delivery->loadMissing('scans');
 
-        foreach ($delivery->items as $item) {
-            if ($item->origin_location_code === null) {
-                continue;
+            if ($delivery->stockDeducted()) {
+                foreach ($delivery->scans as $scan) {
+                    if ($scan->scan_type !== DeliveryScan::TYPE_TAG || $scan->part_stock_id === null) {
+                        continue;
+                    }
+
+                    $stock = PartStock::query()->lockForUpdate()->find($scan->part_stock_id);
+
+                    if ($stock === null) {
+                        continue;
+                    }
+
+                    $stock->update([
+                        'qty' => round((float) $stock->qty + (float) $scan->qty, 4),
+                        'location_code' => $scan->origin_location_code ?? $stock->location_code,
+                    ]);
+                }
             }
 
-            PartStock::query()
-                ->whereKey($item->part_stock_id)
-                ->update(['location_code' => $item->origin_location_code]);
-        }
-
-        $delivery->update([
-            'status' => Delivery::STATUS_DRAFT,
-            'picked_at' => null,
-            'qc_status' => Delivery::QC_PENDING,
-            'qc_notes' => null,
-            'qc_checked_at' => null,
-            'qc_checked_by' => null,
-        ]);
+            $delivery->update([
+                'status' => Delivery::STATUS_DRAFT,
+                'picked_at' => null,
+                'stock_deducted_at' => null,
+                'qc_status' => Delivery::QC_PENDING,
+                'qc_notes' => null,
+                'qc_checked_at' => null,
+                'qc_checked_by' => null,
+            ]);
+        });
     }
 
     /**
@@ -328,8 +297,8 @@ class DeliveryService
     /**
      * Tahap akhir — catat sebagai outgoing.
      *
-     * Syarat: OQC lolos dan No. PEN/AJU terisi. Stok baru berkurang di sini,
-     * lalu dokumen (surat jalan, invoice, packing list) boleh dicetak.
+     * Syarat: OQC lolos dan No. PEN/AJU terisi. Stok sudah dipotong saat
+     * barang dipindah ke area pengiriman; submit hanya menutup dokumen.
      */
     public function submitOutgoing(Delivery $delivery): void
     {
@@ -366,17 +335,6 @@ class DeliveryService
         }
 
         DB::transaction(function () use ($delivery): void {
-            foreach ($delivery->items as $item) {
-                $stock = PartStock::query()->lockForUpdate()->find($item->part_stock_id);
-
-                if ($stock === null) {
-                    continue;
-                }
-
-                $remaining = round((float) $stock->qty - (float) $item->qty, 4);
-                $stock->update(['qty' => max(0.0, $remaining)]);
-            }
-
             $delivery->update([
                 'status' => Delivery::STATUS_RELEASED,
                 'released_at' => now(),
@@ -431,9 +389,11 @@ class DeliveryService
             return $this->resolveTrolley($raw);
         }
 
-        $belongs = $delivery->items()->where('part_stock_id', $stock->id)->exists();
+        // Baris pengiriman berupa rencana (part + qty), bukan tag. Tag sah bila
+        // part-nya termasuk dalam rencana pengiriman ini.
+        $planned = (float) $delivery->items()->where('part_id', $stock->part_id)->sum('qty');
 
-        if (! $belongs) {
+        if ($planned <= 0) {
             throw ValidationException::withMessages([
                 'code' => __('Tag :tag bukan bagian dari pengiriman ini.', ['tag' => $stock->tag ?? '-']),
             ]);
@@ -453,41 +413,50 @@ class DeliveryService
      */
     public function recordScan(Delivery $delivery, string $raw, ?int $userId = null, ?float $qty = null): array
     {
-        if ($delivery->isReleased()) {
+        // Pemindaian hanya pada tahap sebelum barang dipindah. Setelah pindah,
+        // stok sudah dipotong sehingga scan tambahan akan membuat selisih.
+        if (! $delivery->isDraft()) {
             throw ValidationException::withMessages([
-                'code' => __('Dokumen sudah dirilis; pemindaian ditutup.'),
-            ]);
-        }
-
-        // Pemindaian terjadi pada tahap pindah ke area pengiriman, yaitu setelah
-        // picking (draft) dan sebelum OQC.
-        if (! $delivery->isDraft() && ! $delivery->isPicked()) {
-            throw ValidationException::withMessages([
-                'code' => __('Pemindaian hanya tersedia pada tahap pindah ke area pengiriman.'),
+                'code' => __('Pemindaian hanya tersedia sebelum barang dipindah ke area pengiriman.'),
             ]);
         }
 
         $resolved = $this->resolveScan($delivery, $raw);
 
-        $scan = DeliveryScan::query()->firstOrCreate(
-            [
-                'delivery_id' => $delivery->id,
+        $existing = $delivery->scans()
+            ->where('scan_type', $resolved['scan_type'])
+            ->where('code', $resolved['code'])
+            ->first();
+
+        if ($existing !== null) {
+            return [
                 'scan_type' => $resolved['scan_type'],
                 'code' => $resolved['code'],
-            ],
-            [
-                'part_stock_id' => $resolved['part_stock_id'],
-                'qty' => $resolved['scan_type'] === DeliveryScan::TYPE_TAG ? $qty : null,
-                'scanned_by' => $userId,
-                'scanned_at' => now(),
-            ],
-        );
+                'duplicate' => true,
+                'loading_complete' => $delivery->loadingComplete(),
+                'status' => (string) $delivery->status,
+            ];
+        }
+
+        $scanQty = $resolved['scan_type'] === DeliveryScan::TYPE_TAG
+            ? $this->resolveScanQty($delivery, (int) $resolved['part_stock_id'], $qty)
+            : null;
+
+        DeliveryScan::create([
+            'delivery_id' => $delivery->id,
+            'scan_type' => $resolved['scan_type'],
+            'code' => $resolved['code'],
+            'part_stock_id' => $resolved['part_stock_id'],
+            'qty' => $scanQty,
+            'scanned_by' => $userId,
+            'scanned_at' => now(),
+        ]);
 
         $fresh = $delivery->fresh();
 
-        // Begitu semua label FG dan minimal satu troli terpindai, barang
-        // dianggap sudah berada di area pengiriman.
-        if ($fresh->isDraft() && $fresh->loadingComplete()) {
+        // Begitu seluruh rencana qty tertutup dan minimal satu troli terpindai,
+        // barang dianggap sudah berada di area pengiriman dan stok dipotong.
+        if ($fresh->loadingComplete()) {
             $this->moveToPreparation($fresh);
             $fresh = $delivery->fresh();
         }
@@ -495,10 +464,119 @@ class DeliveryService
         return [
             'scan_type' => $resolved['scan_type'],
             'code' => $resolved['code'],
-            'duplicate' => ! $scan->wasRecentlyCreated,
+            'duplicate' => false,
             'loading_complete' => $fresh->loadingComplete(),
             'status' => (string) $fresh->status,
         ];
+    }
+
+    /**
+     * Qty tag yang boleh diambil: tidak melebihi stok tag dan sisa rencana.
+     */
+    private function resolveScanQty(Delivery $delivery, int $stockId, ?float $qty): float
+    {
+        $stock = PartStock::query()->find($stockId);
+
+        if ($stock === null) {
+            throw ValidationException::withMessages([
+                'code' => __('Tag tidak ditemukan.'),
+            ]);
+        }
+
+        $available = round((float) $stock->qty, 4);
+
+        if ($available <= 0) {
+            throw ValidationException::withMessages([
+                'qty' => __('Tag :tag sudah tidak punya stok.', ['tag' => $stock->tag ?? '-']),
+            ]);
+        }
+
+        $planned = (float) $delivery->items()->where('part_id', $stock->part_id)->sum('qty');
+        $remaining = round($planned - ($delivery->scannedQtyByPart()[$stock->part_id] ?? 0.0), 4);
+
+        if ($remaining <= 0) {
+            throw ValidationException::withMessages([
+                'qty' => __('Rencana qty part ini sudah terpenuhi.'),
+            ]);
+        }
+
+        // Tanpa qty eksplisit (scan cadangan web), ambil seperlunya saja.
+        $requested = $qty !== null ? round($qty, 4) : min($available, $remaining);
+
+        if ($requested <= 0) {
+            throw ValidationException::withMessages([
+                'qty' => __('Qty hasil pindai harus lebih dari 0.'),
+            ]);
+        }
+
+        if ($requested > $available + 1e-9) {
+            throw ValidationException::withMessages([
+                'qty' => __('Qty :qty melebihi stok tag :tag (:available).', [
+                    'qty' => $requested,
+                    'tag' => $stock->tag ?? '-',
+                    'available' => $available,
+                ]),
+            ]);
+        }
+
+        if ($requested > $remaining + 1e-9) {
+            throw ValidationException::withMessages([
+                'qty' => __('Qty :qty melebihi sisa rencana :remaining.', [
+                    'qty' => $requested,
+                    'remaining' => $remaining,
+                ]),
+            ]);
+        }
+
+        return $requested;
+    }
+
+    /**
+     * Satu label fisik per tag yang dipindai; bila belum ada scan, label
+     * dicetak dari baris rencana supaya dokumen tidak kosong.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function labelEntries(Delivery $delivery): array
+    {
+        $scans = $delivery->scans
+            ->where('scan_type', DeliveryScan::TYPE_TAG)
+            ->filter(fn (DeliveryScan $scan): bool => $scan->part_stock_id !== null);
+
+        if ($scans->isEmpty()) {
+            return $delivery->items->map(fn ($item): array => [
+                'tag' => (string) ($item->tag ?? ''),
+                'part_stock_id' => (int) ($item->part_stock_id ?? 0),
+                'part_id' => (int) $item->part_id,
+                'part_number' => $item->part?->part_number,
+                'part_name' => $item->part?->part_name,
+                'qty' => round((float) $item->qty, 4),
+                'qty_unit' => $item->qty_unit,
+            ])->values()->all();
+        }
+
+        $stocks = PartStock::query()
+            ->with('part:id,part_number,part_name')
+            ->whereIn('id', $scans->pluck('part_stock_id')->unique())
+            ->get()
+            ->keyBy('id');
+
+        return $scans
+            ->map(function (DeliveryScan $scan) use ($stocks): array {
+                $stock = $stocks[$scan->part_stock_id] ?? null;
+
+                return [
+                    'tag' => (string) ($stock?->tag ?? $scan->code),
+                    'part_stock_id' => (int) $scan->part_stock_id,
+                    'part_id' => (int) ($stock?->part_id ?? 0),
+                    'part_number' => $stock?->part?->part_number,
+                    'part_name' => $stock?->part?->part_name,
+                    'qty' => round((float) $scan->qty, 4),
+                    'qty_unit' => $stock?->qty_unit,
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     /**
@@ -510,10 +588,13 @@ class DeliveryService
     {
         $delivery->loadMissing(['customer:id,customer_code,customer_name', 'items.part:id,part_number,part_name']);
 
-        $scannedStockIds = $delivery->scans()
-            ->where('scan_type', DeliveryScan::TYPE_TAG)
-            ->pluck('part_stock_id')
-            ->filter()
+        $scannedByPart = $delivery->scannedQtyByPart();
+
+        // Status per baris rencana: qty part dianggap tertutup bila total tag
+        // terpindai untuk part itu sudah mencapai total rencananya.
+        $covered = $delivery->items
+            ->groupBy('part_id')
+            ->map(fn (Collection $rows, $partId): bool => ($scannedByPart[$partId] ?? 0.0) + 1e-9 >= (float) $rows->sum('qty'))
             ->all();
 
         return [
@@ -545,16 +626,18 @@ class DeliveryService
                 'id' => (int) $item->id,
                 'sequence' => (int) $item->sequence,
                 'is_picked' => (bool) $item->is_picked,
-                'part_stock_id' => (int) $item->part_stock_id,
+                'part_id' => (int) $item->part_id,
+                'part_stock_id' => $item->part_stock_id !== null ? (int) $item->part_stock_id : 0,
                 'tag' => (string) ($item->tag ?? ''),
                 'part_no' => $item->part?->part_number,
                 'part_name' => $item->part?->part_name,
                 'qty' => round((float) $item->qty, 4),
                 'uom' => $item->qty_unit,
-                'scanned' => in_array((int) $item->part_stock_id, $scannedStockIds, true),
+                'scanned_qty' => round($scannedByPart[$item->part_id] ?? 0.0, 4),
+                'scanned' => (bool) ($covered[$item->part_id] ?? false),
             ])->values()->all(),
-            'scanned_tags' => count($scannedStockIds),
-            'total_tags' => $delivery->items->count(),
+            'scanned_tags' => count(array_filter($covered)),
+            'total_tags' => count($covered),
             'loading_complete' => $delivery->loadingComplete(),
         ];
     }
@@ -719,67 +802,5 @@ class DeliveryService
             ->where('is_active', true)
             ->orderBy('code')
             ->value('code');
-    }
-
-    /**
-     * Saran FIFO per part: tag tertua untuk tiap part yang diminta.
-     *
-     * @param  list<int>  $partIds
-     * @return array<int, array<string, mixed>>
-     */
-    public function suggestFifo(array $partIds): array
-    {
-        if ($partIds === []) {
-            return [];
-        }
-
-        return PartStock::query()
-            ->with('part:id,part_number,part_name')
-            ->whereIn('part_id', $partIds)
-            ->where('qty', '>', 0)
-            ->whereNotNull('tag')
-            ->orderByRaw('received_at ASC NULLS LAST')
-            ->orderBy('id')
-            ->get()
-            ->groupBy('part_id')
-            ->map(fn (Collection $group, $partId): array => [
-                'part_id' => (int) $partId,
-                'part_number' => $group->first()?->part?->part_number,
-                'tag' => (string) $group->first()?->tag,
-                'part_stock_id' => (int) $group->first()?->id,
-                'qty' => round((float) $group->first()?->qty, 4),
-                'qty_unit' => $group->first()?->qty_unit,
-                'location_code' => $group->first()?->location_code,
-            ])
-            ->values()
-            ->all();
-    }
-
-    /** Apakah stok ini barang jadi? */
-    public function isFinishedGood(PartStock $stock): bool
-    {
-        $stock->loadMissing('part.partType');
-
-        return strtoupper((string) $stock->part?->partType?->code) === 'FG';
-    }
-
-    /**
-     * Part bertipe FG yang masih punya stok, untuk dropdown pilih part.
-     *
-     * @return list<array<string, mixed>>
-     */
-    public function deliverableParts(): array
-    {
-        return Part::query()
-            ->whereHas('partType', fn ($q) => $q->whereRaw('UPPER(code) = ?', ['FG']))
-            ->whereIn('id', PartStock::query()->where('qty', '>', 0)->select('part_id'))
-            ->orderBy('part_number')
-            ->get(['id', 'part_number', 'part_name'])
-            ->map(fn (Part $part): array => [
-                'id' => (int) $part->id,
-                'part_number' => $part->part_number,
-                'part_name' => $part->part_name,
-            ])
-            ->all();
     }
 }

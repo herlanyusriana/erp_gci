@@ -26,6 +26,7 @@ interface Item {
 interface Delivery {
     id: number;
     delivery_no: string;
+    picking_list_id: number | null;
     delivery_date: string;
     status: string;
     invoice_no: string | null;
@@ -40,7 +41,7 @@ interface Delivery {
     notes: string | null;
     picked_at: string | null;
     released_at: string | null;
-    customer?: { customer_code: string; customer_name: string; address: string | null } | null;
+    customer?: { id: number; customer_code: string; customer_name: string; address: string | null } | null;
     items: Item[];
     scans?: Array<{ id: number; scan_type: string; code: string; scanned_at: string | null; scanner?: { name: string } | null }>;
 }
@@ -273,6 +274,9 @@ function submitOutgoing() {
 }
 
 const totalAmount = computed(() => props.delivery.items.reduce((sum, item) => sum + (item.total_price ?? 0), 0));
+
+// Baris rencana tanpa harga jual akan tercetak 0 di invoice.
+const missingPriceCount = computed(() => props.delivery.items.filter((item) => item.price === null).length);
 </script>
 
 <template>
@@ -287,6 +291,13 @@ const totalAmount = computed(() => props.delivery.items.reduce((sum, item) => su
                     <span>{{ delivery.customer?.customer_name ?? '—' }}</span>
                     <span class="text-xs">({{ delivery.customer?.customer_code ?? '—' }})</span>
                     <span>{{ formatDate(delivery.delivery_date) }}</span>
+                    <Link
+                        v-if="delivery.picking_list_id"
+                        :href="route('picking-lists.show', delivery.picking_list_id)"
+                        class="rounded-md border border-borderline px-2 py-0.5 text-xs font-semibold text-primary transition hover:bg-primary-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                        {{ t('picking.fromPicking') }}
+                    </Link>
                     <StatusBadge :tone="tone()" uppercase>{{ t(`outgoing.status_${delivery.status}`) }}</StatusBadge>
                 </p>
             </div>
@@ -327,11 +338,11 @@ const totalAmount = computed(() => props.delivery.items.reduce((sum, item) => su
                     </Link>
                 </template>
                 <Link
-                    v-if="delivery.status === 'draft'"
-                    :href="route('deliveries.edit', delivery.id)"
+                    v-if="delivery.picking_list_id"
+                    :href="route('picking-lists.show', delivery.picking_list_id)"
                     class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-primary transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                 >
-                    {{ t('outgoing.edit') }}
+                    {{ t('picking.fromPicking') }}
                 </Link>
             </div>
         </div>
@@ -644,6 +655,23 @@ const totalAmount = computed(() => props.delivery.items.reduce((sum, item) => su
                 <div class="mt-1 font-semibold text-ink-primary">{{ t(`outgoing.qc_${delivery.qc_status}`) }}</div>
                 <div class="text-xs text-ink-secondary">{{ delivery.qc_checked_at ? formatDate(delivery.qc_checked_at) : '' }}</div>
             </div>
+        </div>
+
+        <div
+            v-if="missingPriceCount > 0 && delivery.customer"
+            class="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-warning bg-warning/10 px-4 py-3"
+            role="status"
+        >
+            <div>
+                <p class="text-sm font-semibold text-warning-ink">{{ t('customerPrice.missingTitle') }}</p>
+                <p class="mt-0.5 text-xs text-warning-ink">{{ t('customerPrice.missingHint') }}</p>
+            </div>
+            <Link
+                :href="route('customer-prices.index', { customer_id: delivery.customer.id })"
+                class="rounded-md border border-warning px-3 py-1.5 text-xs font-semibold text-warning-ink transition hover:bg-warning/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning"
+            >
+                {{ t('customerPrice.managePrices') }}
+            </Link>
         </div>
 
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">

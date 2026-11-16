@@ -37,17 +37,18 @@ class Delivery extends Model
     public const QC_REJECTED = 'rejected';
 
     protected $fillable = [
-        'delivery_no', 'customer_id', 'delivery_date', 'status', 'invoice_no', 'pen_no', 'aju_no',
+        'delivery_no', 'customer_id', 'picking_list_id', 'delivery_date', 'status', 'invoice_no', 'pen_no', 'aju_no',
         'ceisa_released_at', 'ceisa_released_by',
         'qc_status', 'qc_notes', 'qc_checked_at', 'qc_checked_by',
         'truck_no', 'driver_name', 'notes',
-        'picked_at', 'released_at', 'shipped_at',
+        'picked_at', 'stock_deducted_at', 'released_at', 'shipped_at',
         'created_by', 'updated_by',
     ];
 
     protected $casts = [
         'delivery_date' => 'date',
         'picked_at' => 'datetime',
+        'stock_deducted_at' => 'datetime',
         'ceisa_released_at' => 'datetime',
         'released_at' => 'datetime',
         'qc_checked_at' => 'datetime',
@@ -57,6 +58,12 @@ class Delivery extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    /** Picking list asal pengiriman (null untuk delivery yang dibuat manual). */
+    public function pickingList(): BelongsTo
+    {
+        return $this->belongsTo(PickingList::class);
     }
 
     public function items(): HasMany
@@ -81,18 +88,81 @@ class Delivery extends Model
         return $this->scans()->where('scan_type', DeliveryScan::TYPE_TAG)->count();
     }
 
-    /** Apakah seluruh tag pada dokumen sudah dipindai? */
-    public function allTagsScanned(): bool
+    /** Qty rencana per part (satu part bisa muncul di beberapa baris). */
+    public function plannedQtyByPart(): array
     {
-        $total = $this->items()->count();
-
-        return $total > 0 && $this->scannedTagCount() >= $total;
+        return $this->items()
+            ->selectRaw('part_id, SUM(qty) AS total')
+            ->groupBy('part_id')
+            ->pluck('total', 'part_id')
+            ->map(fn ($value): float => (float) $value)
+            ->all();
     }
 
-    /** Loading sah bila ada troli dan semua tag sudah discan. */
+    /** Qty tag yang sudah dipindai, dikelompokkan per part. */
+    public function scannedQtyByPart(): array
+    {
+        return DeliveryScan::query()
+            ->join('part_stocks', 'part_stocks.id', '=', 'delivery_scans.part_stock_id')
+            ->where('delivery_scans.delivery_id', $this->id)
+            ->where('delivery_scans.scan_type', DeliveryScan::TYPE_TAG)
+            ->groupBy('part_stocks.part_id')
+            ->selectRaw('part_stocks.part_id AS part_id, SUM(delivery_scans.qty) AS total')
+            ->pluck('total', 'part_id')
+            ->map(fn ($value): float => (float) $value)
+            ->all();
+    }
+
+    /**
+     * Tag FG yang benar-benar dipindai, dikelompokkan per part — dipakai
+     * dokumen cetak (surat jalan, invoice, packing list).
+     *
+     * @return array<int, list<string>>
+     */
+    public function scannedTagsByPart(): array
+    {
+        return DeliveryScan::query()
+            ->join('part_stocks', 'part_stocks.id', '=', 'delivery_scans.part_stock_id')
+            ->where('delivery_scans.delivery_id', $this->id)
+            ->where('delivery_scans.scan_type', DeliveryScan::TYPE_TAG)
+            ->orderByRaw('part_stocks.received_at ASC NULLS LAST')
+            ->orderBy('part_stocks.id')
+            ->get(['part_stocks.part_id', 'part_stocks.tag'])
+            ->groupBy('part_id')
+            ->map(fn ($group): array => $group->pluck('tag')->filter()->values()->all())
+            ->all();
+    }
+
+    /** Baris rencana yang qty-nya belum tertutup tag terpindai. */
+    public function uncoveredParts(): array
+    {
+        $scanned = $this->scannedQtyByPart();
+
+        return collect($this->plannedQtyByPart())
+            ->filter(fn (float $qty, $partId): bool => ($scanned[$partId] ?? 0.0) + 1e-9 < $qty)
+            ->keys()
+            ->map(fn ($partId): int => (int) $partId)
+            ->all();
+    }
+
+    /** Apakah seluruh rencana qty sudah tertutup tag yang dipindai? */
+    public function allTagsScanned(): bool
+    {
+        $planned = $this->plannedQtyByPart();
+
+        return $planned !== [] && $this->uncoveredParts() === [];
+    }
+
+    /** Loading sah bila ada troli dan seluruh rencana qty sudah dipindai. */
     public function loadingComplete(): bool
     {
         return $this->scannedTrolleyCount() > 0 && $this->allTagsScanned();
+    }
+
+    /** Stok sudah dipotong saat pemindahan ke area pengiriman? */
+    public function stockDeducted(): bool
+    {
+        return $this->stock_deducted_at !== null;
     }
 
     public function creator(): BelongsTo

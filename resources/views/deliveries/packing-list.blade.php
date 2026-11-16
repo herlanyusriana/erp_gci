@@ -53,6 +53,7 @@
         <div><div class="k">Jumlah Baris</div><div class="v">{{ $delivery->items->count() }}</div></div>
     </div>
 
+    @php $scannedTags = $delivery->scannedTagsByPart(); @endphp
     <table>
         <thead>
             <tr>
@@ -71,7 +72,7 @@
                     <td class="num">{{ $index + 1 }}</td>
                     <td>{{ $item->part?->part_number ?? '-' }}</td>
                     <td>{{ $item->part?->part_name ?? '-' }}</td>
-                    <td class="tag">{{ $item->tag ?? '-' }}</td>
+                    <td class="tag">{{ implode(', ', $scannedTags[$item->part_id] ?? []) ?: ($item->tag ?? '-') }}</td>
                     <td class="num">{{ rtrim(rtrim(number_format((float) $item->qty, 4, '.', ','), '0'), '.') }}</td>
                     <td>{{ $item->qty_unit ?? '-' }}</td>
                     <td>{{ $item->origin_location_code ?? '-' }}</td>

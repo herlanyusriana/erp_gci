@@ -18,6 +18,12 @@ const items = computed(() =>
             permission: ['stock.issue'],
         },
         {
+            href: route('picking-lists.index'),
+            title: 'picking.title',
+            subtitle: 'picking.subtitle',
+            permission: ['delivery.view', 'stock.issue'],
+        },
+        {
             href: route('deliveries.index'),
             title: 'outgoing.deliveryTitle',
             subtitle: 'outgoing.deliveryTile',

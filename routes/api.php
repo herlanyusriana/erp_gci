@@ -56,6 +56,9 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::delete('/deliveries/{delivery}/scans/{scan}', [DeliveryApiController::class, 'destroyScan'])
         ->middleware('permission:delivery.update')
         ->name('api.deliveries.scans.destroy');
+    Route::post('/deliveries/{delivery}/trolley-qc', [DeliveryApiController::class, 'trolleyQc'])
+        ->middleware('permission:delivery.update')
+        ->name('api.deliveries.trolley-qc');
 
     // Production result (WIP per proses)
     Route::get('/work-orders/{workOrder}/result-context', [MaterialIssueApiController::class, 'resultContext']);

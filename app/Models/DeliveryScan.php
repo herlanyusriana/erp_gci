@@ -12,11 +12,15 @@ class DeliveryScan extends Model
     public const TYPE_TAG = 'tag';
 
     protected $fillable = [
-        'delivery_id', 'scan_type', 'code', 'part_stock_id', 'scanned_by', 'scanned_at',
+        'delivery_id', 'scan_type', 'code', 'part_stock_id', 'qty',
+        'qc_status', 'qc_notes', 'qc_checked_at', 'qc_checked_by',
+        'scanned_by', 'scanned_at',
     ];
 
     protected $casts = [
+        'qty' => 'float',
         'scanned_at' => 'datetime',
+        'qc_checked_at' => 'datetime',
     ];
 
     public function delivery(): BelongsTo

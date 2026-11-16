@@ -246,17 +246,7 @@ class DeliveryController extends Controller
         return back()->with('success', __('QC menolak. Perbaiki picking lalu ulangi QC.'));
     }
 
-    /** Tahap 4 — rilis label pengiriman, barang dimuat ke truk. */
-    public function releaseLabel(Delivery $delivery): RedirectResponse
-    {
-        Gate::authorize('update', $delivery);
-
-        $this->deliveryService->releaseLabel($delivery);
-
-        return back()->with('success', __('Label pengiriman dirilis. Barang siap dimuat.'));
-    }
-
-    /** Tahap 4 — pindai manual dari web (cadangan bila kamera APK tidak dipakai). */
+    /** Pindai manual dari web (cadangan bila kamera APK tidak dipakai). */
     public function scan(Request $request, Delivery $delivery): RedirectResponse
     {
         Gate::authorize('update', $delivery);
@@ -277,8 +267,8 @@ class DeliveryController extends Controller
 
         abort_unless((int) $scan->delivery_id === (int) $delivery->id, 404);
 
-        if ($delivery->isLoaded() || $delivery->isReleased()) {
-            return back()->with('error', __('Label sudah dirilis; scan tidak dapat dihapus.'));
+        if (! $delivery->isDraft() && ! $delivery->isPicked()) {
+            return back()->with('error', __('Scan hanya dapat dihapus pada tahap pindah ke area pengiriman.'));
         }
 
         $scan->delete();
@@ -286,28 +276,63 @@ class DeliveryController extends Controller
         return back()->with('success', __('Hasil pindai dihapus.'));
     }
 
-    /** Tahap 5 — rilis surat jalan, invoice, dan packing list. */
-    public function releaseDocuments(Request $request, Delivery $delivery): RedirectResponse
+    /** Picking: centang/lepas centang "FG sudah diambil". */
+    public function toggleItemPicked(Delivery $delivery, DeliveryItem $item): RedirectResponse
+    {
+        Gate::authorize('update', $delivery);
+
+        abort_unless((int) $item->delivery_id === (int) $delivery->id, 404);
+
+        if (! $delivery->isDraft()) {
+            return back()->with('error', __('Centang pengambilan hanya bisa diubah pada tahap picking.'));
+        }
+
+        $item->update(['is_picked' => ! $item->is_picked]);
+
+        return back();
+    }
+
+    /** Simpan No. PEN / AJU / Invoice sebelum submit. */
+    public function updateDocuments(Request $request, Delivery $delivery): RedirectResponse
     {
         Gate::authorize('update', $delivery);
 
         $validated = $request->validate([
+            'pen_no' => ['nullable', 'string', 'max:255'],
+            'aju_no' => ['nullable', 'string', 'max:255'],
             'invoice_no' => ['nullable', 'string', 'max:255'],
         ]);
 
-        if (array_key_exists('invoice_no', $validated) && trim((string) $validated['invoice_no']) !== '') {
-            $delivery->update(['invoice_no' => trim((string) $validated['invoice_no'])]);
+        if ($delivery->isReleased()) {
+            return back()->with('error', __('Outgoing sudah disubmit; dokumen tidak dapat diubah.'));
         }
 
-        $this->deliveryService->releaseDocuments($delivery);
+        $delivery->update([
+            'pen_no' => $validated['pen_no'] ?? null,
+            'aju_no' => $validated['aju_no'] ?? null,
+            'invoice_no' => $validated['invoice_no'] ?? null,
+            'updated_by' => $request->user()?->id,
+        ]);
 
-        return back()->with('success', __('Dokumen pengiriman dirilis.'));
+        return back()->with('success', __('Dokumen pengiriman disimpan.'));
     }
 
-    /** Label pengiriman (QR per baris tag). */
+    /** Submit outgoing: barang keluar, stok berkurang, dokumen bisa dicetak. */
+    public function submitOutgoing(Delivery $delivery): RedirectResponse
+    {
+        Gate::authorize('update', $delivery);
+
+        $this->deliveryService->submitOutgoing($delivery);
+
+        return back()->with('success', __('Outgoing tercatat. Stok sudah berkurang.'));
+    }
+
+    /** Label pengiriman per tag FG: dicetak setelah barang di area pengiriman. */
     public function printLabel(Delivery $delivery)
     {
         Gate::authorize('view', $delivery);
+
+        abort_unless($delivery->labelPrintable(), 403, __('Label dicetak setelah barang dipindah ke area pengiriman.'));
 
         $delivery->load(['customer', 'items.part:id,part_number,part_name']);
 

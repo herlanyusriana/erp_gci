@@ -436,18 +436,18 @@ final class WipInventoryService
             ->join('part_types as pt', 'pt.id', '=', 'p.part_type_id')
             ->whereRaw('UPPER(pt.code) = ?', ['FG'])
             ->whereNull('d.deleted_at')
-            ->whereNotNull('d.picked_at')
-            ->whereIn('d.status', ['picked', 'shipped'])
+            ->whereNotNull('d.released_at')
+            ->where('d.status', 'released')
             ->when($machineId !== null, fn ($q) => $q->whereRaw(
                 'COALESCE(pr_out.machine_id, m.id) = ?',
                 [$machineId],
             ));
 
         if ($before !== null) {
-            $query->whereDate('d.picked_at', '<', $before);
+            $query->whereDate('d.released_at', '<', $before);
         } else {
-            $query->whereDate('d.picked_at', '>=', (string) $from)
-                ->whereDate('d.picked_at', '<=', (string) $to);
+            $query->whereDate('d.released_at', '>=', (string) $from)
+                ->whereDate('d.released_at', '<=', (string) $to);
         }
 
         return $query
@@ -757,16 +757,16 @@ final class WipInventoryService
             ->leftJoin('machines as m', fn ($join) => $join
                 ->on(DB::raw('LOWER(m.machine_code)'), '=', DB::raw('LOWER(di.origin_location_code)')))
             ->whereNull('d.deleted_at')
-            ->whereNotNull('d.picked_at')
-            ->whereIn('d.status', ['picked', 'shipped'])
+            ->whereNotNull('d.released_at')
+            ->where('d.status', 'released')
             ->where('di.part_id', $partId)
             ->whereRaw('COALESCE(pr_out.machine_id, m.id) = ?', [$machineId]);
 
         if ($before !== null) {
-            $query->whereDate('d.picked_at', '<', $before);
+            $query->whereDate('d.released_at', '<', $before);
         } else {
-            $query->whereDate('d.picked_at', '>=', $from)
-                ->whereDate('d.picked_at', '<=', $to);
+            $query->whereDate('d.released_at', '>=', $from)
+                ->whereDate('d.released_at', '<=', $to);
         }
 
         return $query

@@ -83,8 +83,9 @@ Route::middleware(['auth'])->group(function () {
     Route::post('deliveries/{delivery}/qc/reject', [DeliveryController::class, 'rejectQc'])->name('deliveries.qc.reject');
     Route::post('deliveries/{delivery}/scan', [DeliveryController::class, 'scan'])->name('deliveries.scan');
     Route::delete('deliveries/{delivery}/scans/{scan}', [DeliveryController::class, 'destroyScan'])->name('deliveries.scans.destroy');
-    Route::post('deliveries/{delivery}/release-label', [DeliveryController::class, 'releaseLabel'])->name('deliveries.release-label');
-    Route::post('deliveries/{delivery}/release-documents', [DeliveryController::class, 'releaseDocuments'])->name('deliveries.release-documents');
+    Route::post('deliveries/{delivery}/items/{item}/toggle-picked', [DeliveryController::class, 'toggleItemPicked'])->name('deliveries.items.toggle-picked');
+    Route::put('deliveries/{delivery}/documents', [DeliveryController::class, 'updateDocuments'])->name('deliveries.documents.update');
+    Route::post('deliveries/{delivery}/submit', [DeliveryController::class, 'submitOutgoing'])->name('deliveries.submit');
     Route::get('deliveries/{delivery}/label', [DeliveryController::class, 'printLabel'])->name('deliveries.label');
     Route::get('deliveries/{delivery}/print', [DeliveryController::class, 'print'])->name('deliveries.print');
     Route::get('deliveries/{delivery}/invoice', [DeliveryController::class, 'printInvoice'])->name('deliveries.invoice');

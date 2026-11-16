@@ -10,6 +10,7 @@ use App\Models\PartStock;
 use App\Models\ProductionResult;
 use App\Models\Trolley;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -86,6 +87,10 @@ class DeliveryService
 
     /**
      * Pindahkan seluruh tag pada dokumen ke area pengiriman dan tandai picked.
+     *
+     * Dipanggil otomatis setelah pemindaian loading lengkap (semua label FG +
+     * minimal satu troli). Tahap ini hanya memindahkan lokasi; stok baru
+     * berkurang saat outgoing disubmit.
      */
     public function moveToPreparation(Delivery $delivery): void
     {
@@ -99,7 +104,7 @@ class DeliveryService
 
         if ($delivery->isReleased()) {
             throw ValidationException::withMessages([
-                'status' => __('Dokumen pengiriman sudah dirilis; barang tidak dapat dipindah lagi.'),
+                'status' => __('Outgoing sudah disubmit; barang tidak dapat dipindah lagi.'),
             ]);
         }
 
@@ -164,18 +169,76 @@ class DeliveryService
             'qc_notes' => null,
             'qc_checked_at' => null,
             'qc_checked_by' => null,
-            'loaded_at' => null,
         ]);
     }
 
     /**
-     * Tahap 3 — QC memeriksa barang di area pengiriman.
+     * OQC per troli: tandai satu troli OK atau NG.
+     */
+    public function setTrolleyQc(
+        Delivery $delivery,
+        string $trolleyCode,
+        string $status,
+        ?int $inspectorId = null,
+        ?string $notes = null,
+    ): void {
+        if ($delivery->isReleased()) {
+            throw ValidationException::withMessages([
+                'status' => __('Outgoing sudah disubmit; OQC ditutup.'),
+            ]);
+        }
+
+        $code = $this->normalizeScanCode($trolleyCode);
+
+        $scan = $delivery->scans()
+            ->where('scan_type', DeliveryScan::TYPE_TROLLEY)
+            ->whereRaw('UPPER(code) = ?', [$code])
+            ->first();
+
+        if ($scan === null) {
+            throw ValidationException::withMessages([
+                'code' => __('Troli :code belum dipindai pada pengiriman ini.', ['code' => $code]),
+            ]);
+        }
+
+        $scan->update([
+            'qc_status' => $status,
+            'qc_notes' => $notes,
+            'qc_checked_at' => now(),
+            'qc_checked_by' => $inspectorId,
+        ]);
+    }
+
+    /**
+     * Tahap 3 — OQC menyatakan seluruh troli lolos.
      */
     public function passQc(Delivery $delivery, ?int $inspectorId = null, ?string $notes = null): void
     {
         if (! $delivery->isPicked()) {
             throw ValidationException::withMessages([
-                'status' => __('QC hanya bisa dilakukan setelah barang berada di area pengiriman.'),
+                'status' => __('OQC hanya bisa dilakukan setelah barang berada di area pengiriman.'),
+            ]);
+        }
+
+        $trolleys = $delivery->scans()->where('scan_type', DeliveryScan::TYPE_TROLLEY)->get();
+
+        if ($trolleys->isEmpty()) {
+            throw ValidationException::withMessages([
+                'status' => __('Belum ada troli yang dipindai.'),
+            ]);
+        }
+
+        $unchecked = $trolleys->whereNull('qc_status')->count();
+        if ($unchecked > 0) {
+            throw ValidationException::withMessages([
+                'status' => __('Masih ada :count troli yang belum diperiksa OQC.', ['count' => $unchecked]),
+            ]);
+        }
+
+        $rejected = $trolleys->where('qc_status', Delivery::QC_REJECTED)->count();
+        if ($rejected > 0) {
+            throw ValidationException::withMessages([
+                'status' => __('Masih ada :count troli berstatus NG.', ['count' => $rejected]),
             ]);
         }
 
@@ -199,6 +262,10 @@ class DeliveryService
             ]);
         }
 
+        $delivery->scans()
+            ->where('scan_type', DeliveryScan::TYPE_TROLLEY)
+            ->update(['qc_status' => null, 'qc_notes' => null, 'qc_checked_at' => null, 'qc_checked_by' => null]);
+
         $delivery->update([
             'status' => Delivery::STATUS_DRAFT,
             'qc_status' => Delivery::QC_REJECTED,
@@ -210,35 +277,56 @@ class DeliveryService
     }
 
     /**
-     * Tahap 4 — rilis label pengiriman dan tandai barang dimuat ke truk.
+     * Tahap akhir — catat sebagai outgoing.
+     *
+     * Syarat: OQC lolos dan No. PEN/AJU terisi. Stok baru berkurang di sini,
+     * lalu dokumen (surat jalan, invoice, packing list) boleh dicetak.
      */
-    public function releaseLabel(Delivery $delivery): void
+    public function submitOutgoing(Delivery $delivery): void
     {
+        if ($delivery->isReleased()) {
+            throw ValidationException::withMessages([
+                'status' => __('Outgoing ini sudah disubmit.'),
+            ]);
+        }
+
         if (! $delivery->isQcPassed()) {
             throw ValidationException::withMessages([
-                'status' => __('Label hanya bisa dirilis setelah QC menyatakan lolos.'),
+                'status' => __('Outgoing hanya bisa disubmit setelah OQC lolos.'),
             ]);
         }
 
-        // Loading harus dibuktikan lewat scan troli dan scan label FG.
-        if ($delivery->scannedTrolleyCount() === 0) {
+        if (trim((string) $delivery->pen_no) === '' || trim((string) $delivery->aju_no) === '') {
             throw ValidationException::withMessages([
-                'scans' => __('Pindai minimal satu label troli sebelum merilis label.'),
+                'pen_no' => __('No. PEN dan No. AJU wajib diisi sebelum submit.'),
             ]);
         }
 
-        if (! $delivery->allTagsScanned()) {
-            $missing = $delivery->items()->count() - $delivery->scannedTagCount();
+        $delivery->loadMissing('items');
 
+        if ($delivery->items->isEmpty()) {
             throw ValidationException::withMessages([
-                'scans' => __('Masih ada :count tag FG yang belum dipindai.', ['count' => $missing]),
+                'items' => __('Tambahkan minimal satu barang sebelum submit.'),
             ]);
         }
 
-        $delivery->update([
-            'status' => Delivery::STATUS_LOADED,
-            'loaded_at' => now(),
-        ]);
+        DB::transaction(function () use ($delivery): void {
+            foreach ($delivery->items as $item) {
+                $stock = PartStock::query()->lockForUpdate()->find($item->part_stock_id);
+
+                if ($stock === null) {
+                    continue;
+                }
+
+                $remaining = round((float) $stock->qty - (float) $item->qty, 4);
+                $stock->update(['qty' => max(0.0, $remaining)]);
+            }
+
+            $delivery->update([
+                'status' => Delivery::STATUS_RELEASED,
+                'released_at' => now(),
+            ]);
+        });
     }
 
     /**
@@ -308,7 +396,7 @@ class DeliveryService
      *
      * @return array{scan_type: string, code: string, duplicate: bool, loading_complete: bool}
      */
-    public function recordScan(Delivery $delivery, string $raw, ?int $userId = null): array
+    public function recordScan(Delivery $delivery, string $raw, ?int $userId = null, ?float $qty = null): array
     {
         if ($delivery->isReleased()) {
             throw ValidationException::withMessages([
@@ -316,9 +404,11 @@ class DeliveryService
             ]);
         }
 
-        if (! $delivery->isQcPassed() && ! $delivery->isLoaded()) {
+        // Pemindaian terjadi pada tahap pindah ke area pengiriman, yaitu setelah
+        // picking (draft) dan sebelum OQC.
+        if (! $delivery->isDraft() && ! $delivery->isPicked()) {
             throw ValidationException::withMessages([
-                'code' => __('Pemindaian loading hanya tersedia setelah QC lolos.'),
+                'code' => __('Pemindaian hanya tersedia pada tahap pindah ke area pengiriman.'),
             ]);
         }
 
@@ -332,16 +422,27 @@ class DeliveryService
             ],
             [
                 'part_stock_id' => $resolved['part_stock_id'],
+                'qty' => $resolved['scan_type'] === DeliveryScan::TYPE_TAG ? $qty : null,
                 'scanned_by' => $userId,
                 'scanned_at' => now(),
             ],
         );
 
+        $fresh = $delivery->fresh();
+
+        // Begitu semua label FG dan minimal satu troli terpindai, barang
+        // dianggap sudah berada di area pengiriman.
+        if ($fresh->isDraft() && $fresh->loadingComplete()) {
+            $this->moveToPreparation($fresh);
+            $fresh = $delivery->fresh();
+        }
+
         return [
             'scan_type' => $resolved['scan_type'],
             'code' => $resolved['code'],
             'duplicate' => ! $scan->wasRecentlyCreated,
-            'loading_complete' => $delivery->fresh()->loadingComplete(),
+            'loading_complete' => $fresh->loadingComplete(),
+            'status' => (string) $fresh->status,
         ];
     }
 
@@ -371,10 +472,24 @@ class DeliveryService
             'trolleys' => $delivery->scans()
                 ->where('scan_type', DeliveryScan::TYPE_TROLLEY)
                 ->orderBy('id')
+                ->get()
+                ->map(fn (DeliveryScan $scan): array => [
+                    'code' => (string) $scan->code,
+                    'qc_status' => $scan->qc_status,
+                    'qc_notes' => $scan->qc_notes,
+                ])
+                ->all(),
+            'trolley_codes' => $delivery->scans()
+                ->where('scan_type', DeliveryScan::TYPE_TROLLEY)
+                ->orderBy('id')
                 ->pluck('code')
                 ->all(),
-            'items' => $delivery->items->map(fn ($item): array => [
+            'pen_no' => $delivery->pen_no,
+            'aju_no' => $delivery->aju_no,
+            'items' => $delivery->items->sortBy('sequence')->map(fn ($item): array => [
                 'id' => (int) $item->id,
+                'sequence' => (int) $item->sequence,
+                'is_picked' => (bool) $item->is_picked,
                 'part_stock_id' => (int) $item->part_stock_id,
                 'tag' => (string) ($item->tag ?? ''),
                 'part_no' => $item->part?->part_number,
@@ -495,26 +610,17 @@ class DeliveryService
     }
 
     /**
-     * Tahap 5 — rilis surat jalan, invoice, dan packing list.
+     * Invoice hanya pelengkap dokumen; nomornya boleh diisi sebelum cetak.
      */
-    public function releaseDocuments(Delivery $delivery): void
+    public function setInvoiceNo(Delivery $delivery, ?string $invoiceNo): void
     {
-        if (! $delivery->isLoaded()) {
+        if ($delivery->isReleased()) {
             throw ValidationException::withMessages([
-                'status' => __('Dokumen hanya bisa dirilis setelah label dirilis dan barang dimuat.'),
+                'invoice_no' => __('Outgoing sudah disubmit; invoice tidak dapat diubah.'),
             ]);
         }
 
-        if (trim((string) $delivery->invoice_no) === '') {
-            throw ValidationException::withMessages([
-                'invoice_no' => __('Isi nomor invoice sebelum merilis dokumen.'),
-            ]);
-        }
-
-        $delivery->update([
-            'status' => Delivery::STATUS_RELEASED,
-            'released_at' => now(),
-        ]);
+        $delivery->update(['invoice_no' => $invoiceNo !== null ? trim($invoiceNo) : null]);
     }
 
     /** Kode lokasi bertipe area pengiriman. */

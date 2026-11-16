@@ -28,7 +28,7 @@ class DeliveryApiController extends Controller
 
         $deliveries = Delivery::query()
             ->with('customer:id,customer_code,customer_name')
-            ->whereIn('status', [Delivery::STATUS_QC_PASSED, Delivery::STATUS_LOADED])
+            ->whereIn('status', [Delivery::STATUS_DRAFT, Delivery::STATUS_PICKED])
             ->orderBy('delivery_date')
             ->orderBy('id')
             ->limit(50)
@@ -67,6 +67,7 @@ class DeliveryApiController extends Controller
 
         $validated = $request->validate([
             'code' => ['required', 'string', 'max:1000'],
+            'qty' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         try {
@@ -74,6 +75,7 @@ class DeliveryApiController extends Controller
                 $delivery,
                 $validated['code'],
                 $request->user()?->id,
+                isset($validated['qty']) ? (float) $validated['qty'] : null,
             );
         } catch (ValidationException $e) {
             return response()->json([
@@ -92,6 +94,39 @@ class DeliveryApiController extends Controller
         ]);
     }
 
+    /** OQC per troli: ok / ng. */
+    public function trolleyQc(Request $request, Delivery $delivery): JsonResponse
+    {
+        Gate::authorize('update', $delivery);
+
+        $validated = $request->validate([
+            'trolley_code' => ['required', 'string', 'max:100'],
+            'status' => ['required', 'in:ok,ng'],
+            'notes' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        try {
+            $this->deliveryService->setTrolleyQc(
+                $delivery,
+                $validated['trolley_code'],
+                $validated['status'] === 'ok' ? Delivery::QC_PASSED : Delivery::QC_REJECTED,
+                $request->user()?->id,
+                $validated['notes'] ?? null,
+            );
+        } catch (ValidationException $e) {
+            return response()->json([
+                'ok' => false,
+                'message' => collect($e->errors())->flatten()->first(),
+                'errors' => $e->errors(),
+            ], 422);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'data' => $this->deliveryService->loadingContext($delivery->fresh()),
+        ]);
+    }
+
     /** Hapus satu scan (salah pindai). */
     public function destroyScan(Delivery $delivery, DeliveryScan $scan): JsonResponse
     {
@@ -99,7 +134,7 @@ class DeliveryApiController extends Controller
 
         abort_unless((int) $scan->delivery_id === (int) $delivery->id, 404);
 
-        if ($delivery->isLoaded() || $delivery->isReleased()) {
+        if (! $delivery->isDraft() && ! $delivery->isPicked()) {
             return response()->json([
                 'ok' => false,
                 'message' => __('Label sudah dirilis; scan tidak dapat dihapus.'),

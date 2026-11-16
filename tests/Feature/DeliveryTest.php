@@ -9,10 +9,8 @@ use App\Models\Location;
 use App\Models\Machine;
 use App\Models\Part;
 use App\Models\PartStock;
-use App\Models\ProductionResult;
 use App\Models\Trolley;
 use App\Models\User;
-use App\Models\WorkOrder;
 use App\Services\DeliveryService;
 use App\Services\WipInventoryService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -221,12 +219,10 @@ class DeliveryTest extends TestCase
         $this->assertSame($this->machineLocation->code, $stock->fresh()->location_code);
     }
 
-    public function test_picked_delivery_contributes_to_fg_issue_in_wip_inventory(): void
+    public function test_submitted_outgoing_contributes_to_fg_issue_in_wip_inventory(): void
     {
         $stock = $this->fgStock('TAG-WIP-'.uniqid(), 40);
-        $delivery = $this->makeDelivery($stock, 25);
-
-        $this->post(route('deliveries.pick', $delivery))->assertRedirect();
+        $delivery = $this->releasedDelivery($stock, 25, 'INV/WIP/1');
 
         $machine = Machine::where('machine_code', $this->machineLocation->code)->firstOrFail();
         $today = now()->toDateString();
@@ -239,40 +235,48 @@ class DeliveryTest extends TestCase
         $this->assertEqualsWithDelta(25.0, (float) $row['issued_qty'], 1e-6);
     }
 
-    public function test_full_flow_from_do_to_released_documents(): void
+    public function test_full_flow_from_picking_to_submitted_outgoing(): void
     {
         $tag = 'TAG-FLOW-'.uniqid();
         $stock = $this->fgStock($tag, 40);
 
-        // 1. Delivery Order
+        // 1. Picking (web)
         $delivery = $this->makeDelivery($stock, 25, invoiceNo: 'INV/FLOW/001');
         $this->assertSame(Delivery::STATUS_DRAFT, $delivery->status);
 
-        // 2. Pindah ke area pengiriman
-        $this->post(route('deliveries.pick', $delivery))->assertRedirect();
-        $this->assertSame(Delivery::STATUS_PICKED, $delivery->fresh()->status);
+        // 2. Pindah ke area pengiriman: scan label FG + scan troli
+        $this->scanTrolley($delivery, $tag);
+        $fresh = $delivery->fresh();
+        $this->assertSame(Delivery::STATUS_PICKED, $fresh->status);
+        $this->assertNotNull($fresh->picked_at);
+        $this->assertSame($this->prepLocation->code, $stock->fresh()->location_code);
 
-        // 3. QC lolos
-        $this->post(route('deliveries.qc.pass', $delivery), ['qc_notes' => 'Fisik sesuai'])->assertRedirect();
+        // 3. OQC per troli lalu dinyatakan lolos
+        $this->passOqc($delivery);
         $fresh = $delivery->fresh();
         $this->assertSame(Delivery::STATUS_QC_PASSED, $fresh->status);
         $this->assertSame(Delivery::QC_PASSED, $fresh->qc_status);
-        $this->assertNotNull($fresh->qc_checked_at);
 
-        // 4. Scan troli + label FG, lalu rilis label
-        $this->scanTrolley($delivery, $tag);
-        $this->post(route('deliveries.release-label', $delivery))->assertRedirect();
-        $this->assertSame(Delivery::STATUS_LOADED, $delivery->fresh()->status);
-        $this->assertNotNull($delivery->fresh()->loaded_at);
+        // 4. Isi PEN/AJU lalu submit
+        $this->put(route('deliveries.documents.update', $delivery), [
+            'pen_no' => 'PEN-99',
+            'aju_no' => 'AJU-99',
+            'invoice_no' => 'INV/FLOW/001',
+        ])->assertRedirect();
 
-        // 5. Rilis dokumen
-        $this->post(route('deliveries.release-documents', $delivery))->assertRedirect();
+        $this->post(route('deliveries.submit', $delivery))->assertRedirect();
+
         $fresh = $delivery->fresh();
         $this->assertSame(Delivery::STATUS_RELEASED, $fresh->status);
         $this->assertNotNull($fresh->released_at);
+        $this->assertSame('PEN-99', $fresh->pen_no);
+        $this->assertSame('AJU-99', $fresh->aju_no);
+
+        // 5. Stok berkurang sebesar qty yang dikirim (40 - 25).
+        $this->assertEqualsWithDelta(15.0, (float) $stock->fresh()->qty, 1e-6);
     }
 
-    public function test_qc_cannot_run_before_goods_are_in_the_delivery_area(): void
+    public function test_oqc_cannot_run_before_goods_are_in_the_delivery_area(): void
     {
         $stock = $this->fgStock('TAG-QC-EARLY-'.uniqid(), 40);
         $delivery = $this->makeDelivery($stock, 25);
@@ -281,12 +285,12 @@ class DeliveryTest extends TestCase
         $this->assertSame(Delivery::STATUS_DRAFT, $delivery->fresh()->status);
     }
 
-    public function test_qc_rejection_returns_delivery_to_draft_with_reason(): void
+    public function test_oqc_rejection_returns_delivery_to_draft_with_reason(): void
     {
         $stock = $this->fgStock('TAG-QC-REJ-'.uniqid(), 40);
         $delivery = $this->makeDelivery($stock, 25);
 
-        $this->post(route('deliveries.pick', $delivery))->assertRedirect();
+        $this->scanTrolley($delivery, (string) $stock->tag);
         $this->post(route('deliveries.qc.reject', $delivery), ['qc_notes' => 'Kemasan rusak'])->assertRedirect();
 
         $fresh = $delivery->fresh();
@@ -296,52 +300,71 @@ class DeliveryTest extends TestCase
         $this->assertNull($fresh->picked_at);
     }
 
-    public function test_qc_rejection_requires_a_reason(): void
+    public function test_oqc_rejection_requires_a_reason(): void
     {
         $stock = $this->fgStock('TAG-QC-NOREASON-'.uniqid(), 40);
         $delivery = $this->makeDelivery($stock, 25);
 
-        $this->post(route('deliveries.pick', $delivery))->assertRedirect();
+        $this->scanTrolley($delivery, (string) $stock->tag);
         $this->post(route('deliveries.qc.reject', $delivery), ['qc_notes' => ''])->assertSessionHasErrors('qc_notes');
 
         $this->assertSame(Delivery::STATUS_PICKED, $delivery->fresh()->status);
     }
 
-    public function test_label_cannot_be_released_before_qc_passes(): void
+    public function test_submit_requires_pen_and_aju(): void
     {
-        $stock = $this->fgStock('TAG-LBL-EARLY-'.uniqid(), 40);
-        $delivery = $this->makeDelivery($stock, 25);
+        $stock = $this->fgStock('TAG-NOPEN-'.uniqid(), 40);
+        $delivery = $this->qcPassedDelivery($stock, 25);
 
-        $this->post(route('deliveries.pick', $delivery))->assertRedirect();
-        $this->post(route('deliveries.release-label', $delivery))->assertSessionHasErrors('status');
-
-        $this->assertSame(Delivery::STATUS_PICKED, $delivery->fresh()->status);
-    }
-
-    public function test_documents_cannot_be_released_before_loading(): void
-    {
-        $stock = $this->fgStock('TAG-DOC-EARLY-'.uniqid(), 40);
-        $delivery = $this->makeDelivery($stock, 25, invoiceNo: 'INV/EARLY/1');
-
-        $this->post(route('deliveries.pick', $delivery))->assertRedirect();
-        $this->post(route('deliveries.qc.pass', $delivery))->assertRedirect();
-        $this->post(route('deliveries.release-documents', $delivery))->assertSessionHasErrors('status');
-
+        $this->post(route('deliveries.submit', $delivery))->assertSessionHasErrors('pen_no');
         $this->assertSame(Delivery::STATUS_QC_PASSED, $delivery->fresh()->status);
     }
 
-    public function test_documents_require_an_invoice_number(): void
+    public function test_submit_requires_oqc_to_pass_first(): void
     {
-        $stock = $this->fgStock('TAG-DOC-NOINV-'.uniqid(), 40);
+        $stock = $this->fgStock('TAG-SUBMIT-EARLY-'.uniqid(), 40);
         $delivery = $this->makeDelivery($stock, 25);
 
-        $this->post(route('deliveries.pick', $delivery))->assertRedirect();
-        $this->post(route('deliveries.qc.pass', $delivery))->assertRedirect();
         $this->scanTrolley($delivery, (string) $stock->tag);
-        $this->post(route('deliveries.release-label', $delivery))->assertRedirect();
-        $this->post(route('deliveries.release-documents', $delivery))->assertSessionHasErrors('invoice_no');
 
-        $this->assertSame(Delivery::STATUS_LOADED, $delivery->fresh()->status);
+        $this->put(route('deliveries.documents.update', $delivery), [
+            'pen_no' => 'PEN-1',
+            'aju_no' => 'AJU-1',
+        ])->assertRedirect();
+
+        $this->post(route('deliveries.submit', $delivery))->assertSessionHasErrors('status');
+        $this->assertSame(Delivery::STATUS_PICKED, $delivery->fresh()->status);
+    }
+
+    public function test_trolley_qc_must_be_complete_and_ok_before_passing(): void
+    {
+        $stock = $this->fgStock('TAG-QC-CHECK-'.uniqid(), 40);
+        $delivery = $this->makeDelivery($stock, 25);
+
+        $this->scanTrolley($delivery, (string) $stock->tag);
+
+        // Belum ada checklist troli -> belum boleh lolos.
+        $this->post(route('deliveries.qc.pass', $delivery))->assertSessionHasErrors('status');
+
+        // Troli ditandai NG -> tetap tidak boleh lolos.
+        app(DeliveryService::class)->setTrolleyQc($delivery->fresh(), 'TRL-1', Delivery::QC_REJECTED, $this->admin->id);
+        $this->post(route('deliveries.qc.pass', $delivery))->assertSessionHasErrors('status');
+
+        // Semua OK -> lolos.
+        app(DeliveryService::class)->setTrolleyQc($delivery->fresh(), 'TRL-1', Delivery::QC_PASSED, $this->admin->id);
+        $this->post(route('deliveries.qc.pass', $delivery))->assertRedirect();
+        $this->assertSame(Delivery::STATUS_QC_PASSED, $delivery->fresh()->status);
+    }
+
+    public function test_outgoing_cannot_be_submitted_twice(): void
+    {
+        $stock = $this->fgStock('TAG-TWICE-'.uniqid(), 40);
+        $delivery = $this->releasedDelivery($stock, 25, 'INV/TWICE/1');
+
+        $this->post(route('deliveries.submit', $delivery))->assertSessionHasErrors('status');
+
+        // Stok hanya berkurang sekali.
+        $this->assertEqualsWithDelta(15.0, (float) $stock->fresh()->qty, 1e-6);
     }
 
     public function test_documents_cannot_be_printed_before_release(): void
@@ -385,7 +408,8 @@ class DeliveryTest extends TestCase
         $stock = $this->fgStock($tag, 40);
         $delivery = $this->makeDelivery($stock, 25);
 
-        $this->post(route('deliveries.pick', $delivery))->assertRedirect();
+        $this->scanTrolley($delivery, $tag);
+        $this->assertSame(Delivery::STATUS_PICKED, $delivery->fresh()->status);
 
         $this->get(route('deliveries.label', $delivery))
             ->assertOk()
@@ -411,244 +435,50 @@ class DeliveryTest extends TestCase
         $this->assertEqualsWithDelta(125000.0, (float) $item->total_price, 1e-6);
     }
 
-    /** Scan satu troli dan satu tag FG lewat endpoint web. */
+    /** Scan satu troli dan satu tag FG lewat endpoint web (tahap pindah ke prep). */
     private function scanTrolley(Delivery $delivery, string $tag, string $trolleyCode = 'TRL-1'): void
     {
         $this->post(route('deliveries.scan', $delivery), ['code' => $trolleyCode])->assertRedirect();
         $this->post(route('deliveries.scan', $delivery), ['code' => $tag])->assertRedirect();
     }
 
-    public function test_release_label_requires_a_trolley_scan(): void
+    /** OQC: tandai semua troli OK lalu nyatakan lolos. */
+    private function passOqc(Delivery $delivery): void
     {
-        $stock = $this->fgStock('TAG-NOTROLLEY-'.uniqid(), 40);
-        $delivery = $this->makeDelivery($stock, 25);
+        $service = app(DeliveryService::class);
 
-        $this->post(route('deliveries.pick', $delivery))->assertRedirect();
+        foreach ($delivery->scans()->where('scan_type', DeliveryScan::TYPE_TROLLEY)->pluck('code') as $code) {
+            $service->setTrolleyQc($delivery->fresh(), $code, Delivery::QC_PASSED, $this->admin->id);
+        }
+
         $this->post(route('deliveries.qc.pass', $delivery))->assertRedirect();
-
-        // Tag sudah discan, tapi troli belum.
-        $this->post(route('deliveries.scan', $delivery), ['code' => (string) $stock->tag])->assertRedirect();
-        $this->post(route('deliveries.release-label', $delivery))->assertSessionHasErrors('scans');
-
-        $this->assertSame(Delivery::STATUS_QC_PASSED, $delivery->fresh()->status);
     }
 
-    public function test_release_label_requires_every_tag_scanned(): void
+    /** Delivery yang sudah sampai tahap OQC lolos, siap submit. */
+    private function qcPassedDelivery(PartStock $stock, float $qty, string $invoiceNo = 'INV/FLOW/001'): Delivery
     {
-        $first = $this->fgStock('TAG-MULTI-1-'.uniqid(), 20);
-        $second = $this->fgStock('TAG-MULTI-2-'.uniqid(), 20);
+        $delivery = $this->makeDelivery($stock, $qty, $invoiceNo);
 
-        $this->post(route('deliveries.store'), [
-            'customer_id' => $this->customer->id,
-            'delivery_date' => now()->toDateString(),
-            'items' => [
-                ['part_stock_id' => $first->id, 'qty' => 10],
-                ['part_stock_id' => $second->id, 'qty' => 10],
-            ],
+        $this->scanTrolley($delivery, (string) $stock->tag);
+        $this->passOqc($delivery);
+
+        return $delivery->fresh();
+    }
+
+    /** Delivery yang sudah disubmit (stok berkurang, dokumen bisa dicetak). */
+    private function releasedDelivery(PartStock $stock, float $qty, string $invoiceNo): Delivery
+    {
+        $delivery = $this->qcPassedDelivery($stock, $qty, $invoiceNo);
+
+        $this->put(route('deliveries.documents.update', $delivery), [
+            'pen_no' => 'PEN-1',
+            'aju_no' => 'AJU-1',
+            'invoice_no' => $invoiceNo,
         ])->assertRedirect();
 
-        $delivery = Delivery::latest('id')->firstOrFail();
+        $this->post(route('deliveries.submit', $delivery))->assertRedirect();
 
-        $this->post(route('deliveries.pick', $delivery))->assertRedirect();
-        $this->post(route('deliveries.qc.pass', $delivery))->assertRedirect();
-        $this->post(route('deliveries.scan', $delivery), ['code' => 'TRL-1'])->assertRedirect();
-        $this->post(route('deliveries.scan', $delivery), ['code' => (string) $first->tag])->assertRedirect();
-
-        // Satu tag belum discan.
-        $this->post(route('deliveries.release-label', $delivery))->assertSessionHasErrors('scans');
-
-        $this->post(route('deliveries.scan', $delivery), ['code' => (string) $second->tag])->assertRedirect();
-        $this->post(route('deliveries.release-label', $delivery))->assertRedirect();
-
-        $this->assertSame(Delivery::STATUS_LOADED, $delivery->fresh()->status);
-    }
-
-    public function test_scan_accepts_trolley_qr_payload(): void
-    {
-        $stock = $this->fgStock('TAG-QR-'.uniqid(), 40);
-        $delivery = $this->makeDelivery($stock, 25);
-
-        $this->post(route('deliveries.pick', $delivery))->assertRedirect();
-        $this->post(route('deliveries.qc.pass', $delivery))->assertRedirect();
-
-        $trolleyCode = $delivery->delivery_no.'-T1';
-        Trolley::create([
-            'code' => $trolleyCode,
-            'type' => 'internal',
-            'kind' => 'backplate',
-        ]);
-
-        $payload = json_encode([
-            'type' => 'trolley',
-            'delivery_id' => $delivery->id,
-            'code' => $trolleyCode,
-        ]);
-
-        $this->post(route('deliveries.scan', $delivery), ['code' => $payload])->assertRedirect();
-
-        $this->assertDatabaseHas('delivery_scans', [
-            'delivery_id' => $delivery->id,
-            'scan_type' => DeliveryScan::TYPE_TROLLEY,
-            'code' => $trolleyCode,
-        ]);
-    }
-
-    public function test_scan_resolves_fg_label_qr_from_production(): void
-    {
-        $stock = $this->fgStock('TAG-FGQR-'.uniqid(), 40);
-        $delivery = $this->makeDelivery($stock, 25);
-
-        $this->post(route('deliveries.pick', $delivery))->assertRedirect();
-        $this->post(route('deliveries.qc.pass', $delivery))->assertRedirect();
-
-        $result = ProductionResult::create([
-            'work_order_id' => WorkOrder::create([
-                'wo_no' => 'WO-QR-'.uniqid(),
-                'part_id' => $this->fgPart()->id,
-                'qty' => 10,
-                'status' => 'in_progress',
-            ])->id,
-            'parent_part_id' => $this->fgPart()->id,
-            'result_date' => now()->toDateString(),
-            'qty_good' => 10,
-            'qty_reject' => 0,
-            'uom' => 'PCS',
-            'label_status' => 'pending',
-            'output_part_stock_id' => $stock->id,
-        ]);
-
-        $payload = json_encode(['type' => 'fg', 'result_id' => $result->id, 'part_id' => $this->fgPart()->id]);
-
-        $this->post(route('deliveries.scan', $delivery), ['code' => $payload])->assertRedirect();
-
-        $this->assertDatabaseHas('delivery_scans', [
-            'delivery_id' => $delivery->id,
-            'scan_type' => DeliveryScan::TYPE_TAG,
-            'part_stock_id' => $stock->id,
-        ]);
-    }
-
-    public function test_scan_rejects_a_tag_from_another_delivery(): void
-    {
-        $mine = $this->fgStock('TAG-MINE-'.uniqid(), 40);
-        $other = $this->fgStock('TAG-OTHER-'.uniqid(), 40);
-
-        $delivery = $this->makeDelivery($mine, 25);
-
-        $this->post(route('deliveries.pick', $delivery))->assertRedirect();
-        $this->post(route('deliveries.qc.pass', $delivery))->assertRedirect();
-
-        $this->post(route('deliveries.scan', $delivery), ['code' => (string) $other->tag])
-            ->assertSessionHasErrors('code');
-
-        $this->assertSame(0, DeliveryScan::where('delivery_id', $delivery->id)->count());
-    }
-
-    public function test_duplicate_scan_is_recorded_once(): void
-    {
-        $stock = $this->fgStock('TAG-DUPSCAN-'.uniqid(), 40);
-        $delivery = $this->makeDelivery($stock, 25);
-
-        $this->post(route('deliveries.pick', $delivery))->assertRedirect();
-        $this->post(route('deliveries.qc.pass', $delivery))->assertRedirect();
-
-        Trolley::create([
-            'code' => 'TRL-X',
-            'type' => 'internal',
-            'kind' => 'compbase',
-        ]);
-
-        $this->post(route('deliveries.scan', $delivery), ['code' => 'TRL-X'])->assertRedirect();
-        $this->post(route('deliveries.scan', $delivery), ['code' => 'TRL-X'])->assertRedirect();
-
-        $this->assertSame(1, DeliveryScan::where('delivery_id', $delivery->id)->where('scan_type', DeliveryScan::TYPE_TROLLEY)->count());
-    }
-
-    public function test_scan_is_rejected_before_qc_passes(): void
-    {
-        $stock = $this->fgStock('TAG-EARLYSCAN-'.uniqid(), 40);
-        $delivery = $this->makeDelivery($stock, 25);
-
-        $this->post(route('deliveries.scan', $delivery), ['code' => 'TRL-1'])->assertSessionHasErrors('code');
-
-        $this->assertSame(0, DeliveryScan::where('delivery_id', $delivery->id)->count());
-    }
-
-    public function test_api_scan_and_loading_context_work_for_mobile(): void
-    {
-        $tag = 'TAG-API-'.uniqid();
-        $stock = $this->fgStock($tag, 40);
-        $delivery = $this->makeDelivery($stock, 25);
-
-        $this->post(route('deliveries.pick', $delivery))->assertRedirect();
-        $this->post(route('deliveries.qc.pass', $delivery))->assertRedirect();
-
-        $this->getJson(route('api.deliveries.loading-context', $delivery))
-            ->assertOk()
-            ->assertJsonPath('ok', true)
-            ->assertJsonPath('data.total_tags', 1)
-            ->assertJsonPath('data.scanned_tags', 0);
-
-        Trolley::create([
-            'code' => 'TRL-API-1',
-            'type' => 'internal',
-            'kind' => 'compbase',
-        ]);
-
-        $this->postJson(route('api.deliveries.scan', $delivery), ['code' => 'TRL-API-1'])
-            ->assertOk()
-            ->assertJsonPath('data.scan_type', DeliveryScan::TYPE_TROLLEY);
-
-        $this->postJson(route('api.deliveries.scan', $delivery), ['code' => $tag])
-            ->assertOk()
-            ->assertJsonPath('data.scan_type', DeliveryScan::TYPE_TAG)
-            ->assertJsonPath('data.loading_complete', true);
-
-        $this->getJson(route('api.deliveries.index'))
-            ->assertOk()
-            ->assertJsonPath('data.0.id', $delivery->id);
-    }
-
-    public function test_trolley_scan_is_validated_against_the_synced_master(): void
-    {
-        Trolley::create([
-            'code' => 'TRL-07',
-            'type' => 'internal',
-            'kind' => 'compbase',
-        ]);
-
-        $stock = $this->fgStock('TAG-MASTER-'.uniqid(), 40);
-        $delivery = $this->makeDelivery($stock, 25);
-
-        $this->post(route('deliveries.pick', $delivery))->assertRedirect();
-        $this->post(route('deliveries.qc.pass', $delivery))->assertRedirect();
-
-        // Kode tidak ada di master -> ditolak.
-        $this->post(route('deliveries.scan', $delivery), ['code' => 'TRL-999'])
-            ->assertSessionHasErrors('code');
-
-        // Kode ada di master -> diterima.
-        $this->post(route('deliveries.scan', $delivery), ['code' => 'trl-07'])->assertRedirect();
-
-        $this->assertDatabaseHas('delivery_scans', [
-            'delivery_id' => $delivery->id,
-            'scan_type' => DeliveryScan::TYPE_TROLLEY,
-            'code' => 'TRL-07',
-        ]);
-    }
-
-    public function test_trolley_scan_is_accepted_before_the_master_is_synced(): void
-    {
-        Trolley::query()->delete();
-
-        // Master kosong: validasi dilewati supaya loading tidak terkunci.
-        $stock = $this->fgStock('TAG-EMPTY-'.uniqid(), 40);
-        $delivery = $this->makeDelivery($stock, 25);
-
-        $this->post(route('deliveries.pick', $delivery))->assertRedirect();
-        $this->post(route('deliveries.qc.pass', $delivery))->assertRedirect();
-
-        $this->post(route('deliveries.scan', $delivery), ['code' => 'ANY-TROLLEY-1'])->assertRedirect();
+        return $delivery->fresh();
     }
 
     public function test_creating_a_delivery_requires_permission(): void
@@ -694,19 +524,5 @@ class DeliveryTest extends TestCase
         ])->assertRedirect();
 
         return Delivery::latest('id')->firstOrFail();
-    }
-
-    /** Delivery yang sudah melewati seluruh tahap sampai dokumen dirilis. */
-    private function releasedDelivery(PartStock $stock, float $qty, string $invoiceNo): Delivery
-    {
-        $delivery = $this->makeDelivery($stock, $qty, $invoiceNo);
-
-        $this->post(route('deliveries.pick', $delivery))->assertRedirect();
-        $this->post(route('deliveries.qc.pass', $delivery))->assertRedirect();
-        $this->scanTrolley($delivery, (string) $stock->tag);
-        $this->post(route('deliveries.release-label', $delivery))->assertRedirect();
-        $this->post(route('deliveries.release-documents', $delivery))->assertRedirect();
-
-        return $delivery->fresh();
     }
 }

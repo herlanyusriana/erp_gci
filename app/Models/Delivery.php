@@ -20,17 +20,13 @@ class Delivery extends Model
     /** QC menyatakan barang lolos. */
     public const STATUS_QC_PASSED = 'qc_passed';
 
-    /** Label pengiriman dirilis dan barang dimuat ke truk. */
-    public const STATUS_LOADED = 'loaded';
-
-    /** Surat jalan, invoice, dan packing list dirilis. */
+    /** Outgoing disubmit: barang keluar dan stok berkurang. */
     public const STATUS_RELEASED = 'released';
 
     public const STATUSES = [
         self::STATUS_DRAFT,
         self::STATUS_PICKED,
         self::STATUS_QC_PASSED,
-        self::STATUS_LOADED,
         self::STATUS_RELEASED,
     ];
 
@@ -41,17 +37,16 @@ class Delivery extends Model
     public const QC_REJECTED = 'rejected';
 
     protected $fillable = [
-        'delivery_no', 'customer_id', 'delivery_date', 'status', 'invoice_no',
+        'delivery_no', 'customer_id', 'delivery_date', 'status', 'invoice_no', 'pen_no', 'aju_no',
         'qc_status', 'qc_notes', 'qc_checked_at', 'qc_checked_by',
         'truck_no', 'driver_name', 'notes',
-        'picked_at', 'loaded_at', 'released_at', 'shipped_at',
+        'picked_at', 'released_at', 'shipped_at',
         'created_by', 'updated_by',
     ];
 
     protected $casts = [
         'delivery_date' => 'date',
         'picked_at' => 'datetime',
-        'loaded_at' => 'datetime',
         'released_at' => 'datetime',
         'qc_checked_at' => 'datetime',
         'shipped_at' => 'datetime',
@@ -123,20 +118,21 @@ class Delivery extends Model
         return $this->status === self::STATUS_QC_PASSED;
     }
 
-    public function isLoaded(): bool
-    {
-        return $this->status === self::STATUS_LOADED;
-    }
-
     public function isReleased(): bool
     {
         return $this->status === self::STATUS_RELEASED;
     }
 
-    /** Dokumen belum boleh dicetak sebelum tahap rilis. */
+    /** Dokumen (SJ, invoice, packing list) hanya boleh dicetak setelah submit. */
     public function documentsReleased(): bool
     {
         return $this->isReleased();
+    }
+
+    /** Label pengiriman boleh dicetak setelah barang ada di area pengiriman. */
+    public function labelPrintable(): bool
+    {
+        return $this->status !== self::STATUS_DRAFT;
     }
 
     /**

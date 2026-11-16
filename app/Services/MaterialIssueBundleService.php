@@ -35,7 +35,7 @@ class MaterialIssueBundleService
     public function forTag(WorkOrderItem $item, WorkOrder $workOrder, string $tag): array
     {
         $stock = PartStock::query()
-            ->with(['receive:id,invoice_no,arrival_item_id,bundle_count,bundle_qty,bundle_unit,packing_count,packing_type,packing_qty', 'receive.arrivalItem:id,arrival_id,part_id,material_group,size,unit_goods'])
+            ->with(['receive:id,invoice_no,arrival_item_id,bundle_count,bundle_qty,bundle_unit,packing_count,packing_type,packing_qty', 'receive.packings', 'receive.arrivalItem:id,arrival_id,part_id,material_group,size,unit_goods'])
             ->whereRaw('LOWER(COALESCE(tag, \'\')) = ?', [mb_strtolower(trim($tag))])
             ->where('qty', '>', 0)
             ->whereIn('part_id', $this->allowedPartIds($item))
@@ -60,7 +60,7 @@ class MaterialIssueBundleService
     public function forStock(WorkOrderItem $item, WorkOrder $workOrder, int $partStockId): ?array
     {
         $stock = PartStock::query()
-            ->with(['receive:id,invoice_no,arrival_item_id,bundle_count,bundle_qty,bundle_unit,packing_count,packing_type,packing_qty', 'receive.arrivalItem:id,arrival_id,part_id,material_group,size,unit_goods'])
+            ->with(['receive:id,invoice_no,arrival_item_id,bundle_count,bundle_qty,bundle_unit,packing_count,packing_type,packing_qty', 'receive.packings', 'receive.arrivalItem:id,arrival_id,part_id,material_group,size,unit_goods'])
             ->whereKey($partStockId)
             ->where('qty', '>', 0)
             ->first();
@@ -198,6 +198,7 @@ class MaterialIssueBundleService
             'packing_qty' => $plan['packing_qty'],
             'packaging_text' => $this->packagingSummary($receive),
             'bundles' => $plan['bundles'],
+            'packings' => $this->packingRows($receive, $uom, $plan['net_requirement']),
             'net_requirement' => $plan['net_requirement'],
             'required_qty' => $net['required_qty'],
             'issued_qty' => $net['issued_qty'],
@@ -211,6 +212,50 @@ class MaterialIssueBundleService
             ],
             'work_order_item_id' => (int) $item->id,
         ];
+    }
+
+    /**
+     * Daftar packing riil hasil penerimaan (TAG/1, TAG/2, ...) dengan centang
+     * otomatis: packing diambil berurutan sampai kebutuhan bersih terpenuhi.
+     *
+     * Bila penerimaan lama belum menyimpan rincian packing, hasilnya kosong dan
+     * aplikasi memakai daftar `bundles` sintetis seperti sebelumnya.
+     *
+     * @return list<array{packing_no: string, sequence: int, qty: float, uom: string|null, net_weight: float|null, gross_weight: float|null, checked: bool}>
+     */
+    private function packingRows(?IncomingReceive $receive, ?string $uom, float $netRequirement): array
+    {
+        if ($receive === null) {
+            return [];
+        }
+
+        $packings = $receive->packings->sortBy('sequence')->values();
+        if ($packings->isEmpty()) {
+            return [];
+        }
+
+        $remaining = max(0.0, $netRequirement);
+        $rows = [];
+
+        foreach ($packings as $packing) {
+            $qty = (float) $packing->qty;
+            $checked = $remaining > 1e-9 && $qty > 1e-9;
+            if ($checked) {
+                $remaining = round($remaining - $qty, 4);
+            }
+
+            $rows[] = [
+                'packing_no' => (string) $packing->packing_no,
+                'sequence' => (int) $packing->sequence,
+                'qty' => round($qty, 4),
+                'uom' => UomCatalog::normalize((string) $packing->uom) ?? $uom,
+                'net_weight' => $packing->net_weight !== null ? round((float) $packing->net_weight, 4) : null,
+                'gross_weight' => $packing->gross_weight !== null ? round((float) $packing->gross_weight, 4) : null,
+                'checked' => $checked,
+            ];
+        }
+
+        return $rows;
     }
 
     private function packagingSummary(?IncomingReceive $receive): ?string

@@ -192,3 +192,86 @@ it('rejects a confirm whose total issue exceeds the net requirement when the bun
         ]],
     ])->assertStatus(422);
 });
+
+it('returns real packings with auto check by net requirement', function () {
+    [$wo, $item, $stock, $receive] = bundleIssueContext(16000, 16000, 20000, 10);
+
+    $receive->update([
+        'bundle_count' => 1,
+        'packing_count' => 3,
+        'packing_type' => 'COIL',
+        'packing_qty' => 2000,
+    ]);
+
+    foreach ([1 => 2000, 2 => 2000, 3 => 1000] as $seq => $qty) {
+        $receive->packings()->create([
+            'packing_no' => 'TAG-REAL/'.$seq,
+            'sequence' => $seq,
+            'qty' => $qty,
+            'uom' => 'KGM',
+            'net_weight' => $qty,
+            'gross_weight' => $qty + 20,
+        ]);
+    }
+
+    $plan = app(MaterialIssueBundleService::class)->forTag($item, $wo, $receive->tag);
+
+    expect($plan['packings'])->toHaveCount(3)
+        ->and($plan['packings'][0]['packing_no'])->toBe('TAG-REAL/1')
+        ->and($plan['packings'][0]['qty'])->toBe(2000.0)
+        ->and($plan['packings'][0]['checked'])->toBeTrue()
+        ->and($plan['packings'][2]['packing_no'])->toBe('TAG-REAL/3')
+        ->and($plan['packings'][2]['qty'])->toBe(1000.0)
+        ->and($plan['packings'][2]['net_weight'])->toBe(1000.0);
+});
+
+it('stops checking packings once the net requirement is covered', function () {
+    [$wo, $item, $stock, $receive] = bundleIssueContext(3000, 3000, 6000, 6);
+
+    $receive->update([
+        'bundle_count' => 1,
+        'packing_count' => 3,
+        'packing_type' => 'COIL',
+        'packing_qty' => 2000,
+    ]);
+
+    foreach ([1 => 2000, 2 => 2000, 3 => 2000] as $seq => $qty) {
+        $receive->packings()->create([
+            'packing_no' => 'TAG-PART/'.$seq,
+            'sequence' => $seq,
+            'qty' => $qty,
+            'uom' => 'KGM',
+            'net_weight' => $qty,
+        ]);
+    }
+
+    $plan = app(MaterialIssueBundleService::class)->forTag($item, $wo, $receive->tag);
+
+    expect($plan['packings'][0]['checked'])->toBeTrue()
+        ->and($plan['packings'][1]['checked'])->toBeTrue()
+        ->and($plan['packings'][2]['checked'])->toBeFalse();
+});
+
+it('serves packings over the issue-plan api', function () {
+    [$wo, $item, $stock, $receive] = bundleIssueContext(16000, 16000, 20000, 10);
+
+    $receive->update(['bundle_count' => 1, 'packing_count' => 2, 'packing_type' => 'COIL', 'packing_qty' => 2000]);
+
+    foreach ([1 => 2000, 2 => 2000] as $seq => $qty) {
+        $receive->packings()->create([
+            'packing_no' => 'TAG-API/'.$seq,
+            'sequence' => $seq,
+            'qty' => $qty,
+            'uom' => 'KGM',
+            'net_weight' => $qty,
+        ]);
+    }
+
+    $this->actingAs(User::where('email', 'admin@geumcheon.local')->firstOrFail());
+
+    $this->getJson("/api/work-orders/{$wo->id}/items/{$item->id}/issue-plan?tag={$receive->tag}")
+        ->assertOk()
+        ->assertJsonPath('data.packings.0.packing_no', 'TAG-API/1')
+        ->assertJsonPath('data.packings.1.packing_no', 'TAG-API/2')
+        ->assertJsonPath('data.packings.0.checked', true);
+});

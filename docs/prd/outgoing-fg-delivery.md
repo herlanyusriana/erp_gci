@@ -6,7 +6,7 @@ Barang jadi yang sudah dilaporkan produksi punya tag dan stok, tetapi tidak ada 
 
 ## Solution
 
-Modul Outgoing FG tempat user membuat pengiriman secara manual: pilih customer, tentukan barang jadi yang dikirim, sistem menyarankan tag FG tertua (FIFO) yang bisa diganti, user mencari barang tersebut di lokasi mesin asalnya lalu memindahkannya ke **Delivery Preparation Area**. Setelah dipindah, **Surat Jalan** bisa dicetak. Invoice dan Packing List ditunda sampai konsepnya final.
+Modul Outgoing FG tempat user membuat pengiriman secara manual: pilih customer, tentukan barang jadi yang dikirim, sistem menyarankan tag FG tertua (FIFO) yang bisa diganti, user mencari barang tersebut di lokasi mesin asalnya lalu memindahkannya ke **Delivery Preparation Area**. Alurnya lima tahap: Delivery Order (picking qty) -> pindah ke Delivery Preparation Area -> QC check -> **loading terbukti lewat scan** (label troli + label FG produksi) lalu rilis label -> rilis Surat Jalan, Invoice, dan Packing List. Dokumen kepabeanan (PEN/AJU) tidak dipakai pada pengiriman ini.
 
 ## User Stories
 
@@ -36,14 +36,16 @@ Menyediakan jalur keluar barang jadi yang tercatat, sehingga stok FG berkurang s
 - `location` (perluasan) — tipe lokasi (`storage`, `machine`, `delivery_prep`) dan lokasi Delivery Preparation Area.
 - `delivery` — dokumen pengiriman FG beserta baris per tag.
 - `stock location` — pencatatan lokasi tag FG pada stok.
-- `document` — cetak Surat Jalan (Invoice dan Packing List ditunda).
+- `document` — cetak label pengiriman, Surat Jalan, Invoice, dan Packing List.
 
 **Perubahan skema**
 
 - Tabel baru `customers`: `customer_code` (unik), `customer_name`, `address`, `phone`, `email`, `is_active`, timestamps, soft deletes.
 - Tabel `locations`: tambah kolom `type` (`storage` | `machine` | `delivery_prep`, default `storage`).
-- Tabel baru `deliveries`: `delivery_no` (unik, `DO-YYYYMM-####`), `customer_id`, `delivery_date`, `status` (`draft` | `picked` | `shipped`), `invoice_no` (nullable, disiapkan untuk fase invoice), `truck_no`, `driver_name`, `notes`, `picked_at`, `shipped_at`, `created_by`, `updated_by`, timestamps, soft deletes.
-- Tabel baru `delivery_items`: `delivery_id`, `part_stock_id`, `part_id`, `tag`, `qty`, `qty_unit`, `origin_location_code`, `price`, `total_price` (keduanya disiapkan untuk fase invoice), `notes`.
+- Tabel baru `deliveries`: `delivery_no` (unik, `DO-YYYYMM-####`), `customer_id`, `delivery_date`, `status` (`draft` | `picked` | `qc_passed` | `loaded` | `released`), `invoice_no` (diisi manual), `qc_status` (`pending` | `passed` | `rejected`), `qc_notes`, `qc_checked_at`, `qc_checked_by`, `truck_no`, `driver_name`, `notes`, `picked_at`, `loaded_at`, `released_at`, `created_by`, `updated_by`, timestamps, soft deletes.
+- Tabel baru `delivery_items`: `delivery_id`, `part_stock_id`, `part_id`, `tag`, `qty`, `qty_unit`, `origin_location_code`, `price`, `total_price`, `notes`.
+- Tabel baru `delivery_scans`: `delivery_id`, `scan_type` (`trolley` | `tag`), `code`, `part_stock_id` (nullable), `scanned_by`, `scanned_at`; unik per (`delivery_id`, `scan_type`, `code`).
+- Tabel baru `trolleys` (mirror): `external_id`, `code` (unik), `type`, `kind`, `capacity`, `location`, `notes`, `synced_at`. Tanpa `status` (pergerakan, bukan master).
 - Tabel `part_stocks`: tambah kolom `location_code` (nullable, mengacu ke `locations.code`).
 - Satu lokasi bertipe `machine` dibuat untuk setiap mesin aktif, dengan `code` = kode mesin dan `name` = nama mesin.
 
@@ -55,7 +57,19 @@ Menyediakan jalur keluar barang jadi yang tercatat, sehingga stok FG berkurang s
 - **Issue FG di WIP Inventory** = qty yang sudah dipindah ke Delivery Preparation Area (`deliveries.picked_at`), diatribusikan ke mesin pembuat tag tersebut; nota/supplier pada kartu stok menampilkan nomor DO dan nama customer.
 - **Status dokumen**: `draft` (boleh diubah/dihapus, stok belum berpindah) → `picked` (tag sudah di prep) → `shipped` (barang sudah dimuat).
 - **Pembatalan**: `draft` boleh dihapus; `picked` boleh dikembalikan ke lokasi asal; `shipped` tidak dapat dibatalkan pada fase ini.
-- **Harga**: belum dipakai di fase ini. Kolom `price`/`total_price` disiapkan nullable agar fase invoice tidak perlu migrasi ulang.
+- **Harga**: input manual per baris; `total_price` = `qty × price`. Dipakai pada Invoice.
+- **QC**: hanya bisa dilakukan saat status `picked`. Lolos → `qc_passed`; ditolak → kembali `draft` dengan alasan wajib diisi.
+- **Troli**: master dan label QR diterbitkan oleh aplikasi terpisah **Trolley Scan** (Laravel, DB sendiri). ERP tidak membuat atau mencetak troli.
+- **Mirror master troli**: snapshot JSON disimpan di `database/seeders/data/trolleys.json` lalu di-seed ke tabel `trolleys`. Tidak ada panggilan API saat runtime.
+- **Loading (tahap 4)**: operator memindai label troli (QR dari aplikasi Trolley Scan) lalu setiap label FG. Label FG dikenali dari QR produksi (`type: fg`, `result_id`) atau tag stok FG. Scan disimpan di `delivery_scans`; satu kode dihitung sekali per dokumen.
+- **Validasi troli**: kode harus terdaftar di master. Status `in/out` **tidak** disimpan di master karena itu pergerakan (checkout/checkin) yang berubah terus di aplikasi Trolley Scan; menyimpannya di ERP hanya membuat data basi dan memblokir pemindaian yang sah.
+- **Sumber master**: snapshot JSON `database/seeders/data/trolleys.json` (dari Export CSV aplikasi trolley) di-seed lewat `php artisan db:seed --class=TrolleySeeder`. Untuk pembaruan ad-hoc: `php artisan trolleys:import <csv>`. Keduanya idempoten.
+- **Pilihan troli di web**: daftar troli `in` diurutkan sesuai jenis (`kind`: reinforce/backplate/compbase) yang cocok dengan model FG pengiriman.
+- **Rilis label**: hanya dari `qc_passed` **dan** setelah minimal satu troli serta seluruh tag FG dipindai; menandai `loaded_at`.
+- **Scan ditolak** bila tag bukan milik pengiriman ini, bila belum QC lolos, atau bila dokumen sudah dirilis.
+- **APK**: layar loading membaca `GET /api/deliveries` + `loading-context`, memindai lewat `POST /api/deliveries/{id}/scan`. Web menyediakan input scan manual sebagai cadangan.
+- **Rilis dokumen**: hanya dari `loaded` dan wajib `invoice_no`; mencetak Surat Jalan, Invoice, Packing List hanya boleh setelah `released`.
+- **Tanpa PEN/AJU**: dokumen pengiriman tidak memuat nomor kepabeanan.
 - **Validasi**: minimal satu baris; customer wajib; qty tidak boleh melebihi stok tag; tag harus milik part yang dikirim dan masih berstok; satu tag hanya boleh muncul sekali per dokumen.
 - **Permission** baru: `delivery.view`, `delivery.create`, `delivery.update`, `delivery.delete`, plus `customer.*` mengikuti pola master lain. Role `warehouse`, `ppic`, `management` mendapat akses.
 
@@ -63,9 +77,10 @@ Menyediakan jalur keluar barang jadi yang tercatat, sehingga stok FG berkurang s
 
 - Outgoing launcher menambah tile **Pengiriman Barang Jadi**.
 - Halaman daftar pengiriman: filter tanggal, customer, status; kolom nomor DO, tanggal, customer, jumlah baris, status, aksi.
-- Halaman form pengiriman: header (customer, tanggal, truk, driver, catatan) dan tabel baris (part, tag saran FIFO, tag terpilih, qty, satuan, lokasi asal).
+- Halaman form pengiriman: header (customer, tanggal, no. invoice, truk, driver, catatan) dan tabel baris (part, tag saran FIFO, tag terpilih, qty, satuan, harga, lokasi asal).
 - Aksi baris: pindahkan ke preparation (per baris atau semua sekaligus).
-- Cetak: **Surat Jalan** saja pada fase ini.
+- Halaman detail menampilkan lima tahap beserta panel aksi sesuai status: pindah ke preparation, QC lolos/tolak, rilis label, rilis dokumen.
+- Cetak: label pengiriman (per tag), Surat Jalan, Invoice, Packing List.
 
 ## Project Structure
 
@@ -77,7 +92,7 @@ Menyediakan jalur keluar barang jadi yang tercatat, sehingga stok FG berkurang s
     app/Services/DeliveryService.php            -> picking FIFO, pemindahan lokasi, nomor DO
     resources/js/Pages/Master/Customer/         -> halaman master customer
     resources/js/Pages/Outgoing/Delivery/       -> halaman pengiriman
-    resources/views/deliveries/                 -> template surat jalan
+    resources/views/deliveries/                 -> label, label troli, surat jalan, invoice, packing list
     tests/Feature/                              -> test fitur modul ini
     docs/prd/outgoing-fg-delivery.md            -> PRD ini
 
@@ -99,7 +114,9 @@ Test fitur Pest pada level HTTP dan service, mengikuti pola test yang sudah ada 
 - Pemindahan mengubah `part_stocks.location_code` ke lokasi `delivery_prep` dan status menjadi `picked`.
 - Draft boleh dihapus tanpa mengubah lokasi; `picked` yang dikembalikan memulihkan lokasi asal.
 - Issue FG di WIP Inventory bertambah setelah pemindahan.
-- Surat Jalan memuat nomor DO, customer, alamat, dan tag yang benar.
+- Surat Jalan, Invoice, dan Packing List memuat nomor DO, customer, dan tag yang benar.
+- Setiap tahap menolak aksi yang belum waktunya (QC sebelum picked, label sebelum QC, dokumen sebelum loaded, cetak sebelum released).
+- QC ditolak mengembalikan dokumen ke draft dan menyimpan alasan.
 - Otorisasi: user tanpa permission `delivery.*` ditolak.
 
 ## Boundaries
@@ -114,9 +131,9 @@ Test fitur Pest pada level HTTP dan service, mengikuti pola test yang sudah ada 
 - Gudang FG khusus (lokasi FG sementara = lokasi mesin).
 - Sales Order / Delivery Order berbasis pesanan.
 - Retur barang dari customer.
-- **Invoice dan Packing List** (konsep belum final; kolom harga disiapkan tetapi belum dipakai).
-- Master harga jual per customer.
+- Master harga jual per customer (harga masih input manual).
 - Perhitungan pajak, diskon, dan integrasi finance.
+- Nomor PEN/AJU pada dokumen pengiriman (memang tidak dipakai).
 - Pembatalan pengiriman yang sudah `shipped`.
 - Data kemasan pada Packing List (Production Result belum menyimpan bundle/packing).
 
@@ -129,7 +146,13 @@ Test fitur Pest pada level HTTP dan service, mengikuti pola test yang sudah ada 
 - [ ] Picking FIFO menyarankan tag tertua dan saran dapat diganti.
 - [ ] Pemindahan ke Delivery Preparation Area mengubah lokasi tag dan status dokumen menjadi `picked`, tanpa mengubah total stok.
 - [ ] Issue FG pada tab WIP & FG bertambah sebesar qty yang dipindah.
-- [ ] Surat Jalan dapat dicetak dan isinya konsisten dengan dokumen.
+- [ ] Lima tahap berjalan berurutan: DO -> pindah prep -> QC -> label & loading -> rilis dokumen.
+- [ ] Loading hanya bisa dirilis setelah minimal satu label troli dan seluruh label FG dipindai.
+- [ ] Master troli ter-seed dari snapshot (202 troli) dan hasil pindai tervalidasi terhadap kode yang terdaftar.
+- [ ] APK dapat memindai troli dan label FG lewat endpoint delivery.
+- [ ] QC dapat menolak dan mengembalikan dokumen ke tahap DO dengan alasan tersimpan.
+- [ ] Label pengiriman dapat dicetak setelah picking.
+- [ ] Surat Jalan, Invoice, dan Packing List hanya dapat dicetak setelah dokumen dirilis, dan isinya konsisten.
 - [ ] Draft dapat dihapus tanpa efek stok; `picked` dapat dikembalikan ke lokasi asal.
 - [ ] `php artisan test --compact` hijau dan `npm run build` sukses.
 
@@ -138,4 +161,5 @@ Test fitur Pest pada level HTTP dan service, mengikuti pola test yang sudah ada 
 - **Pembatalan setelah `shipped`:** apakah boleh dibatalkan dengan mengembalikan tag ke lokasi asal, atau wajib lewat proses retur yang belum ada? Fase ini memilih tidak boleh.
 - **Inventory movement menyeluruh:** pemindahan lokasi antar-rak/mesin di luar konteks pengiriman akan dibangun nanti; desain `part_stocks.location_code` sudah disiapkan untuk itu.
 - **Gudang FG khusus:** jika nanti ada gudang FG fisik, lokasi mesin dapat dipindahkan massal ke gudang tersebut tanpa mengubah struktur dokumen.
-- **Invoice & Packing List:** ditunda. Perlu keputusan format, sumber harga, penomoran invoice, dan isi packing list (Production Result belum menyimpan data kemasan). Kolom `invoice_no`, `price`, dan `total_price` sudah disiapkan agar fase ini tidak perlu migrasi ulang.
+- **Penomoran invoice:** diisi manual; bila finance punya aturan otomatis, sistem dapat diubah.
+- **Data kemasan pada Packing List:** Production Result belum menyimpan bundle/packing, sehingga packing list menampilkan tag, qty, satuan, dan lokasi asal.

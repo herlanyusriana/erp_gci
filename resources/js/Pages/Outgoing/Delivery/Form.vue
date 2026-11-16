@@ -30,6 +30,8 @@ interface DeliveryItem {
     qty: number;
     qty_unit: string | null;
     origin_location_code: string | null;
+    price: number | null;
+    total_price: number | null;
     part?: { id: number; part_number: string; part_name: string } | null;
 }
 
@@ -39,6 +41,7 @@ interface Delivery {
     customer_id: number;
     delivery_date: string;
     status: string;
+    invoice_no: string | null;
     truck_no: string | null;
     driver_name: string | null;
     notes: string | null;
@@ -50,6 +53,7 @@ interface Row {
     uid: string;
     part_stock_id: number | '';
     qty: number | '';
+    price: number | '';
 }
 
 const props = defineProps<{
@@ -65,6 +69,7 @@ const backHref = () => (props.delivery ? route('deliveries.show', props.delivery
 const form = useForm({
     customer_id: (props.delivery?.customer_id ?? '') as number | '',
     delivery_date: props.delivery?.delivery_date?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
+    invoice_no: props.delivery?.invoice_no ?? '',
     truck_no: props.delivery?.truck_no ?? '',
     driver_name: props.delivery?.driver_name ?? '',
     notes: props.delivery?.notes ?? '',
@@ -80,8 +85,9 @@ const rows = ref<Row[]>(
               uid: nextUid(),
               part_stock_id: item.part_stock_id,
               qty: item.qty,
+              price: item.price ?? '',
           }))
-        : [{ uid: nextUid(), part_stock_id: '', qty: '' }],
+        : [{ uid: nextUid(), part_stock_id: '', qty: '', price: '' }],
 );
 
 /** Tag yang sudah dipakai baris lain tidak ditawarkan lagi. */
@@ -113,7 +119,7 @@ function onPickTag(row: Row, value: number | '') {
 }
 
 function addRow() {
-    rows.value.push({ uid: nextUid(), part_stock_id: '', qty: '' });
+    rows.value.push({ uid: nextUid(), part_stock_id: '', qty: '', price: '' });
 }
 
 function removeRow(index: number) {
@@ -144,6 +150,7 @@ function submit() {
         .map((r) => ({
             part_stock_id: Number(r.part_stock_id),
             qty: r.qty === '' ? 0 : Number(r.qty),
+            price: r.price === '' ? null : Number(r.price),
         })) as any;
 
     if (props.delivery) {
@@ -204,6 +211,11 @@ function removeDelivery() {
                         <InputError :message="form.errors.delivery_date" class="mt-1" />
                     </div>
                     <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('outgoing.invoiceNo') }}</label>
+                        <input v-model="form.invoice_no" type="text" :aria-label="t('outgoing.invoiceNo')" :placeholder="t('outgoing.invoiceNoHint')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <InputError :message="(form.errors as any).invoice_no" class="mt-1" />
+                    </div>
+                    <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('outgoing.truckNo') }}</label>
                         <input v-model="form.truck_no" type="text" placeholder="B 9123 GCI" :aria-label="t('outgoing.truckNo')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     </div>
@@ -222,17 +234,17 @@ function removeDelivery() {
             <div class="rounded-xl border border-borderline bg-surface p-5">
                 <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
                     <div>
-                        <h2 class="text-base font-bold text-ink-primary">{{ t('outgoing.items') }}</h2>
+                        <h2 class="text-base font-bold text-ink-primary">{{ t('outgoing.deliveryItems') }}</h2>
                         <p class="text-xs text-ink-secondary">{{ t('outgoing.itemsHint') }}</p>
                     </div>
-                    <button type="button" @click="addRow" class="inline-flex items-center gap-1.5 rounded-md border border-primary px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-primary-light">
+                    <button type="button" @click="addRow" class="inline-flex items-center gap-1.5 rounded-md border border-primary px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-primary-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
                         <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
                         {{ t('outgoing.addRow') }}
                     </button>
                 </div>
 
                 <InputError :message="form.errors.items" class="mb-3" />
-                <p v-if="!suggestedTags.length" class="mb-3 rounded-lg bg-warning/10 px-3 py-2 text-xs font-medium text-warning">
+                <p v-if="!suggestedTags.length" class="mb-3 rounded-lg bg-warning/10 px-3 py-2 text-xs font-medium text-warning-ink">
                     {{ t('outgoing.noStock') }}
                 </p>
 
@@ -247,14 +259,14 @@ function removeDelivery() {
                                 type="button"
                                 @click="removeRow(index)"
                                 :disabled="rows.length <= 1"
-                                class="rounded px-2 py-1 text-xs font-medium text-danger transition hover:bg-danger/10 disabled:opacity-30"
+                                class="rounded px-2 py-1 text-xs font-medium text-danger transition hover:bg-danger/10 disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                             >
                                 {{ t('outgoing.removeRow') }}
                             </button>
                         </div>
 
                         <div class="grid gap-3 sm:grid-cols-12">
-                            <div class="sm:col-span-8">
+                            <div class="sm:col-span-6">
                                 <label class="text-xs font-semibold text-ink-secondary">{{ t('outgoing.tag') }}</label>
                                 <div class="mt-1">
                                     <SearchableSelect
@@ -280,12 +292,24 @@ function removeDelivery() {
                                     class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm font-semibold text-ink-primary focus:border-primary focus:ring-primary"
                                 />
                             </div>
+                            <div class="sm:col-span-2">
+                                <label class="text-xs font-semibold text-ink-secondary">{{ t('outgoing.deliveryPrice') }}</label>
+                                <input
+                                    v-model="row.price"
+                                    type="number"
+                                    step="any"
+                                    min="0"
+                                    :aria-label="t('outgoing.deliveryPrice')"
+                                    placeholder="0"
+                                    class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                                />
+                            </div>
                             <div class="flex items-end sm:col-span-2">
                                 <button
                                     type="button"
                                     @click="applyFifo(row)"
                                     :disabled="!row.part_stock_id"
-                                    class="w-full rounded-lg border border-borderline px-3 py-2 text-xs font-semibold text-primary transition hover:bg-primary-light disabled:opacity-40"
+                                    class="w-full rounded-lg border border-borderline px-3 py-2 text-xs font-semibold text-primary transition hover:bg-primary-light disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                                     :title="t('outgoing.fifoTip')"
                                 >
                                     FIFO
@@ -307,7 +331,7 @@ function removeDelivery() {
                     v-if="delivery"
                     type="button"
                     @click="removeDelivery"
-                    class="rounded-md border border-danger px-4 py-2 text-sm font-medium text-danger transition hover:bg-danger/10"
+                    class="rounded-md border border-danger px-4 py-2 text-sm font-medium text-danger transition hover:bg-danger/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                 >
                     {{ t('outgoing.delete') }}
                 </button>
@@ -316,7 +340,7 @@ function removeDelivery() {
                     <button
                         type="submit"
                         :disabled="form.processing || totalRows === 0"
-                        class="rounded-md bg-primary px-5 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60"
+                        class="rounded-md bg-primary px-5 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                     >
                         {{ form.processing ? t('outgoing.saving') : t('outgoing.save') }}
                     </button>

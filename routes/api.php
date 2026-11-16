@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\DeliveryApiController;
 use App\Http\Controllers\Api\IncomingApiController;
 use App\Http\Controllers\Api\LocationApiController;
 use App\Http\Controllers\Api\MaterialBoardApiController;
@@ -41,6 +42,20 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::post('/stock-tags/resolve', [MaterialIssueApiController::class, 'resolveTag']);
     Route::post('/machines/resolve', [MaterialIssueApiController::class, 'resolveMachine']);
     Route::post('/locations/resolve', [LocationApiController::class, 'resolve']);
+
+    // Loading barang jadi ke truk: scan label troli + label FG produksi.
+    Route::get('/deliveries', [DeliveryApiController::class, 'index'])
+        ->middleware('permission:delivery.view')
+        ->name('api.deliveries.index');
+    Route::get('/deliveries/{delivery}/loading-context', [DeliveryApiController::class, 'loadingContext'])
+        ->middleware('permission:delivery.view')
+        ->name('api.deliveries.loading-context');
+    Route::post('/deliveries/{delivery}/scan', [DeliveryApiController::class, 'scan'])
+        ->middleware('permission:delivery.update')
+        ->name('api.deliveries.scan');
+    Route::delete('/deliveries/{delivery}/scans/{scan}', [DeliveryApiController::class, 'destroyScan'])
+        ->middleware('permission:delivery.update')
+        ->name('api.deliveries.scans.destroy');
 
     // Production result (WIP per proses)
     Route::get('/work-orders/{workOrder}/result-context', [MaterialIssueApiController::class, 'resultContext']);

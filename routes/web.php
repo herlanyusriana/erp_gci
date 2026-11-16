@@ -79,8 +79,16 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('deliveries/{delivery}', [DeliveryController::class, 'destroy'])->name('deliveries.destroy');
     Route::post('deliveries/{delivery}/pick', [DeliveryController::class, 'pick'])->name('deliveries.pick');
     Route::post('deliveries/{delivery}/return', [DeliveryController::class, 'returnToOrigin'])->name('deliveries.return');
-    Route::post('deliveries/{delivery}/ship', [DeliveryController::class, 'ship'])->name('deliveries.ship');
+    Route::post('deliveries/{delivery}/qc/pass', [DeliveryController::class, 'passQc'])->name('deliveries.qc.pass');
+    Route::post('deliveries/{delivery}/qc/reject', [DeliveryController::class, 'rejectQc'])->name('deliveries.qc.reject');
+    Route::post('deliveries/{delivery}/scan', [DeliveryController::class, 'scan'])->name('deliveries.scan');
+    Route::delete('deliveries/{delivery}/scans/{scan}', [DeliveryController::class, 'destroyScan'])->name('deliveries.scans.destroy');
+    Route::post('deliveries/{delivery}/release-label', [DeliveryController::class, 'releaseLabel'])->name('deliveries.release-label');
+    Route::post('deliveries/{delivery}/release-documents', [DeliveryController::class, 'releaseDocuments'])->name('deliveries.release-documents');
+    Route::get('deliveries/{delivery}/label', [DeliveryController::class, 'printLabel'])->name('deliveries.label');
     Route::get('deliveries/{delivery}/print', [DeliveryController::class, 'print'])->name('deliveries.print');
+    Route::get('deliveries/{delivery}/invoice', [DeliveryController::class, 'printInvoice'])->name('deliveries.invoice');
+    Route::get('deliveries/{delivery}/packing-list', [DeliveryController::class, 'printPackingList'])->name('deliveries.packing-list');
 
     // Master Data — CRUD
     Route::resource('parts', PartController::class)->except(['show']);

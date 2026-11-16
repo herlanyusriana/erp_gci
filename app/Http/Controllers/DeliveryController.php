@@ -6,6 +6,7 @@ use App\Models\ConfigMaster;
 use App\Models\Customer;
 use App\Models\Delivery;
 use App\Models\DeliveryItem;
+use App\Models\DeliveryScan;
 use App\Models\PartStock;
 use App\Services\DeliveryService;
 use Illuminate\Http\RedirectResponse;
@@ -80,6 +81,7 @@ class DeliveryController extends Controller
                 'customer_id' => $validated['customer_id'],
                 'delivery_date' => $validated['delivery_date'],
                 'status' => Delivery::STATUS_DRAFT,
+                'invoice_no' => $validated['invoice_no'] ?? null,
                 'truck_no' => $validated['truck_no'] ?? null,
                 'driver_name' => $validated['driver_name'] ?? null,
                 'notes' => $validated['notes'] ?? null,
@@ -103,11 +105,15 @@ class DeliveryController extends Controller
         $delivery->load([
             'customer',
             'items.part:id,part_number,part_name',
+            'scans.scanner:id,name',
         ]);
 
         return Inertia::render('Outgoing/Delivery/Show', [
             'delivery' => $delivery,
             'prepLocation' => $this->deliveryService->deliveryPrepLocationCode(),
+            'loading' => $this->deliveryService->loadingContext($delivery),
+            'trolleys' => $this->deliveryService->availableTrolleys($this->preferredTrolleyKind($delivery)),
+            'trolleyMasterEmpty' => $this->deliveryService->trolleyMasterIsEmpty(),
         ]);
     }
 
@@ -130,9 +136,9 @@ class DeliveryController extends Controller
     {
         Gate::authorize('update', $delivery);
 
-        if ($delivery->isShipped()) {
+        if (! $delivery->isDraft()) {
             throw ValidationException::withMessages([
-                'status' => __('Pengiriman yang sudah dikirim tidak dapat diubah.'),
+                'status' => __('Pengiriman hanya bisa diubah pada tahap Delivery Order.'),
             ]);
         }
 
@@ -142,6 +148,7 @@ class DeliveryController extends Controller
             $delivery->update([
                 'customer_id' => $validated['customer_id'],
                 'delivery_date' => $validated['delivery_date'],
+                'invoice_no' => $validated['invoice_no'] ?? null,
                 'truck_no' => $validated['truck_no'] ?? null,
                 'driver_name' => $validated['driver_name'] ?? null,
                 'notes' => $validated['notes'] ?? null,
@@ -167,8 +174,8 @@ class DeliveryController extends Controller
     {
         Gate::authorize('delete', $delivery);
 
-        if ($delivery->isShipped()) {
-            return back()->with('error', __('Pengiriman yang sudah dikirim tidak dapat dihapus.'));
+        if ($delivery->isReleased()) {
+            return back()->with('error', __('Pengiriman yang dokumennya sudah dirilis tidak dapat dihapus.'));
         }
 
         // Barang yang sudah dipindah dikembalikan ke lokasi asal sebelum dokumen hilang.
@@ -201,28 +208,104 @@ class DeliveryController extends Controller
         return back()->with('success', __('Barang dikembalikan ke lokasi asal.'));
     }
 
-    /** Tandai dokumen sudah terkirim. */
-    public function ship(Delivery $delivery): RedirectResponse
+    /** Tahap 3 — QC menyatakan barang lolos. */
+    public function passQc(Request $request, Delivery $delivery): RedirectResponse
     {
         Gate::authorize('update', $delivery);
 
-        if ($delivery->isShipped()) {
-            return back()->with('error', __('Pengiriman ini sudah ditandai terkirim.'));
-        }
-
-        if ($delivery->items()->count() === 0) {
-            return back()->with('error', __('Tambahkan minimal satu barang sebelum mengirim.'));
-        }
-
-        $delivery->update([
-            'status' => Delivery::STATUS_SHIPPED,
-            'shipped_at' => now(),
+        $validated = $request->validate([
+            'qc_notes' => ['nullable', 'string', 'max:500'],
         ]);
 
-        return back()->with('success', __('Pengiriman ditandai terkirim.'));
+        $this->deliveryService->passQc(
+            $delivery,
+            $request->user()?->id,
+            $validated['qc_notes'] ?? null,
+        );
+
+        return back()->with('success', __('QC lolos. Label pengiriman bisa dirilis.'));
     }
 
-    public function print(Delivery $delivery)
+    /** Tahap 3 — QC menolak, picking harus diperbaiki. */
+    public function rejectQc(Request $request, Delivery $delivery): RedirectResponse
+    {
+        Gate::authorize('update', $delivery);
+
+        $validated = $request->validate([
+            'qc_notes' => ['required', 'string', 'max:500'],
+        ], [
+            'qc_notes.required' => __('Isi alasan penolakan QC.'),
+        ]);
+
+        $this->deliveryService->rejectQc(
+            $delivery,
+            $request->user()?->id,
+            $validated['qc_notes'],
+        );
+
+        return back()->with('success', __('QC menolak. Perbaiki picking lalu ulangi QC.'));
+    }
+
+    /** Tahap 4 — rilis label pengiriman, barang dimuat ke truk. */
+    public function releaseLabel(Delivery $delivery): RedirectResponse
+    {
+        Gate::authorize('update', $delivery);
+
+        $this->deliveryService->releaseLabel($delivery);
+
+        return back()->with('success', __('Label pengiriman dirilis. Barang siap dimuat.'));
+    }
+
+    /** Tahap 4 — pindai manual dari web (cadangan bila kamera APK tidak dipakai). */
+    public function scan(Request $request, Delivery $delivery): RedirectResponse
+    {
+        Gate::authorize('update', $delivery);
+
+        $validated = $request->validate([
+            'code' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $this->deliveryService->recordScan($delivery, $validated['code'], $request->user()?->id);
+
+        return back()->with('success', __('Hasil pindai tersimpan.'));
+    }
+
+    /** Hapus satu hasil pindai yang salah. */
+    public function destroyScan(Delivery $delivery, DeliveryScan $scan): RedirectResponse
+    {
+        Gate::authorize('update', $delivery);
+
+        abort_unless((int) $scan->delivery_id === (int) $delivery->id, 404);
+
+        if ($delivery->isLoaded() || $delivery->isReleased()) {
+            return back()->with('error', __('Label sudah dirilis; scan tidak dapat dihapus.'));
+        }
+
+        $scan->delete();
+
+        return back()->with('success', __('Hasil pindai dihapus.'));
+    }
+
+    /** Tahap 5 — rilis surat jalan, invoice, dan packing list. */
+    public function releaseDocuments(Request $request, Delivery $delivery): RedirectResponse
+    {
+        Gate::authorize('update', $delivery);
+
+        $validated = $request->validate([
+            'invoice_no' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        if (array_key_exists('invoice_no', $validated) && trim((string) $validated['invoice_no']) !== '') {
+            $delivery->update(['invoice_no' => trim((string) $validated['invoice_no'])]);
+        }
+
+        $this->deliveryService->releaseDocuments($delivery);
+
+        return back()->with('success', __('Dokumen pengiriman dirilis.'));
+    }
+
+    /** Label pengiriman (QR per baris tag). */
+    public function printLabel(Delivery $delivery)
     {
         Gate::authorize('view', $delivery);
 
@@ -230,7 +313,49 @@ class DeliveryController extends Controller
 
         $companyName = (string) ConfigMaster::getValue('SYSTEM', 'company_name', 'PT. GEUM CHEON INDO');
 
+        return view('deliveries.label', compact('delivery', 'companyName'));
+    }
+
+    /** Surat jalan — hanya setelah dokumen dirilis. */
+    public function print(Delivery $delivery)
+    {
+        Gate::authorize('view', $delivery);
+
+        abort_unless($delivery->documentsReleased(), 403, __('Dokumen belum dirilis.'));
+
+        $delivery->load(['customer', 'items.part:id,part_number,part_name']);
+
+        $companyName = (string) ConfigMaster::getValue('SYSTEM', 'company_name', 'PT. GEUM CHEON INDO');
+
         return view('deliveries.surat-jalan', compact('delivery', 'companyName'));
+    }
+
+    /** Invoice — hanya setelah dokumen dirilis. */
+    public function printInvoice(Delivery $delivery)
+    {
+        Gate::authorize('view', $delivery);
+
+        abort_unless($delivery->documentsReleased(), 403, __('Dokumen belum dirilis.'));
+
+        $delivery->load(['customer', 'items.part:id,part_number,part_name']);
+
+        $companyName = (string) ConfigMaster::getValue('SYSTEM', 'company_name', 'PT. GEUM CHEON INDO');
+
+        return view('deliveries.invoice', compact('delivery', 'companyName'));
+    }
+
+    /** Packing list — hanya setelah dokumen dirilis. */
+    public function printPackingList(Delivery $delivery)
+    {
+        Gate::authorize('view', $delivery);
+
+        abort_unless($delivery->documentsReleased(), 403, __('Dokumen belum dirilis.'));
+
+        $delivery->load(['customer', 'items.part:id,part_number,part_name']);
+
+        $companyName = (string) ConfigMaster::getValue('SYSTEM', 'company_name', 'PT. GEUM CHEON INDO');
+
+        return view('deliveries.packing-list', compact('delivery', 'companyName'));
     }
 
     /**
@@ -241,12 +366,14 @@ class DeliveryController extends Controller
         return $request->validate([
             'customer_id' => ['required', 'exists:customers,id'],
             'delivery_date' => ['required', 'date'],
+            'invoice_no' => ['nullable', 'string', 'max:255'],
             'truck_no' => ['nullable', 'string', 'max:50'],
             'driver_name' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.part_stock_id' => ['required', 'integer', 'exists:part_stocks,id'],
             'items.*.qty' => ['required', 'numeric', 'min:0.0001'],
+            'items.*.price' => ['nullable', 'numeric', 'min:0'],
             'items.*.notes' => ['nullable', 'string', 'max:255'],
         ], [
             'items.required' => __('Tambahkan minimal satu barang.'),
@@ -281,17 +408,46 @@ class DeliveryController extends Controller
 
             $this->deliveryService->assertDeliverable($stock, (float) $row['qty']);
 
+            $price = isset($row['price']) && $row['price'] !== null ? (float) $row['price'] : null;
+            $qty = (float) $row['qty'];
+
             DeliveryItem::create([
                 'delivery_id' => $delivery->id,
                 'part_stock_id' => $stock->id,
                 'part_id' => $stock->part_id,
                 'tag' => $stock->tag,
-                'qty' => (float) $row['qty'],
+                'qty' => $qty,
                 'qty_unit' => $stock->qty_unit,
                 'origin_location_code' => $stock->location_code,
+                'price' => $price,
+                'total_price' => $price !== null ? round($qty * $price, 4) : null,
                 'notes' => $row['notes'] ?? null,
             ]);
         }
+    }
+
+    /**
+     * Jenis troli yang paling cocok untuk pengiriman ini, diambil dari model
+     * part FG pertama (mis. "CompBase" -> compbase).
+     */
+    private function preferredTrolleyKind(Delivery $delivery): ?string
+    {
+        $model = $delivery->items()
+            ->join('parts', 'parts.id', '=', 'delivery_items.part_id')
+            ->value('parts.model');
+
+        $model = strtolower(trim((string) $model));
+        if ($model === '') {
+            return null;
+        }
+
+        foreach (['reinforce', 'backplate', 'compbase'] as $kind) {
+            if (str_contains($model, $kind)) {
+                return $kind;
+            }
+        }
+
+        return null;
     }
 
     /**

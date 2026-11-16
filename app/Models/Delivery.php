@@ -11,23 +11,49 @@ class Delivery extends Model
 {
     use SoftDeletes;
 
+    /** Delivery Order: picking qty sudah ditetapkan. */
     public const STATUS_DRAFT = 'draft';
 
+    /** Barang sudah dipindah ke area pengiriman. */
     public const STATUS_PICKED = 'picked';
 
-    public const STATUS_SHIPPED = 'shipped';
+    /** QC menyatakan barang lolos. */
+    public const STATUS_QC_PASSED = 'qc_passed';
 
-    public const STATUSES = [self::STATUS_DRAFT, self::STATUS_PICKED, self::STATUS_SHIPPED];
+    /** Label pengiriman dirilis dan barang dimuat ke truk. */
+    public const STATUS_LOADED = 'loaded';
+
+    /** Surat jalan, invoice, dan packing list dirilis. */
+    public const STATUS_RELEASED = 'released';
+
+    public const STATUSES = [
+        self::STATUS_DRAFT,
+        self::STATUS_PICKED,
+        self::STATUS_QC_PASSED,
+        self::STATUS_LOADED,
+        self::STATUS_RELEASED,
+    ];
+
+    public const QC_PENDING = 'pending';
+
+    public const QC_PASSED = 'passed';
+
+    public const QC_REJECTED = 'rejected';
 
     protected $fillable = [
         'delivery_no', 'customer_id', 'delivery_date', 'status', 'invoice_no',
-        'truck_no', 'driver_name', 'notes', 'picked_at', 'shipped_at',
+        'qc_status', 'qc_notes', 'qc_checked_at', 'qc_checked_by',
+        'truck_no', 'driver_name', 'notes',
+        'picked_at', 'loaded_at', 'released_at', 'shipped_at',
         'created_by', 'updated_by',
     ];
 
     protected $casts = [
         'delivery_date' => 'date',
         'picked_at' => 'datetime',
+        'loaded_at' => 'datetime',
+        'released_at' => 'datetime',
+        'qc_checked_at' => 'datetime',
         'shipped_at' => 'datetime',
     ];
 
@@ -41,9 +67,45 @@ class Delivery extends Model
         return $this->hasMany(DeliveryItem::class);
     }
 
+    public function scans(): HasMany
+    {
+        return $this->hasMany(DeliveryScan::class);
+    }
+
+    /** Jumlah troli yang sudah dipindai pada tahap loading. */
+    public function scannedTrolleyCount(): int
+    {
+        return $this->scans()->where('scan_type', DeliveryScan::TYPE_TROLLEY)->count();
+    }
+
+    /** Tag pengiriman yang sudah dipindai. */
+    public function scannedTagCount(): int
+    {
+        return $this->scans()->where('scan_type', DeliveryScan::TYPE_TAG)->count();
+    }
+
+    /** Apakah seluruh tag pada dokumen sudah dipindai? */
+    public function allTagsScanned(): bool
+    {
+        $total = $this->items()->count();
+
+        return $total > 0 && $this->scannedTagCount() >= $total;
+    }
+
+    /** Loading sah bila ada troli dan semua tag sudah discan. */
+    public function loadingComplete(): bool
+    {
+        return $this->scannedTrolleyCount() > 0 && $this->allTagsScanned();
+    }
+
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function qcInspector(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'qc_checked_by');
     }
 
     public function isDraft(): bool
@@ -56,9 +118,25 @@ class Delivery extends Model
         return $this->status === self::STATUS_PICKED;
     }
 
-    public function isShipped(): bool
+    public function isQcPassed(): bool
     {
-        return $this->status === self::STATUS_SHIPPED;
+        return $this->status === self::STATUS_QC_PASSED;
+    }
+
+    public function isLoaded(): bool
+    {
+        return $this->status === self::STATUS_LOADED;
+    }
+
+    public function isReleased(): bool
+    {
+        return $this->status === self::STATUS_RELEASED;
+    }
+
+    /** Dokumen belum boleh dicetak sebelum tahap rilis. */
+    public function documentsReleased(): bool
+    {
+        return $this->isReleased();
     }
 
     /**

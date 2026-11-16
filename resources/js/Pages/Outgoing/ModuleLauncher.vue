@@ -21,7 +21,10 @@ const items = computed(() =>
             href: route('deliveries.index'),
             title: 'outgoing.deliveryTitle',
             subtitle: 'outgoing.deliveryTile',
-            permission: ['delivery.view'],
+            // Samakan dengan DeliveryPolicy: `delivery.view` ATAU `stock.issue`.
+            // Tanpa cadangan ini, tile hilang diam-diam bila permission
+            // `delivery.view` belum ter-seed di server hasil deploy.
+            permission: ['delivery.view', 'stock.issue'],
         },
     ].filter((it) => hasAnyPermission(it.permission)),
 );

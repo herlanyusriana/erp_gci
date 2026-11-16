@@ -55,7 +55,15 @@ function applyFilters() {
 }
 
 const tone = (value: string) =>
-    value === 'shipped' ? 'success' : value === 'picked' ? 'warning' : 'neutral';
+    value === 'released'
+        ? 'success'
+        : value === 'loaded'
+          ? 'info'
+          : value === 'qc_passed'
+            ? 'info'
+            : value === 'picked'
+              ? 'warning'
+              : 'neutral';
 </script>
 
 <template>
@@ -70,7 +78,7 @@ const tone = (value: string) =>
             </div>
             <Link
                 :href="route('deliveries.create')"
-                class="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover"
+                class="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
             >
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
                 {{ t('outgoing.newDelivery') }}
@@ -79,8 +87,8 @@ const tone = (value: string) =>
 
         <div class="mb-4 flex flex-wrap items-end gap-3 rounded-xl border border-borderline bg-surface p-3">
             <div class="w-full sm:w-64">
-                <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('outgoing.search') }}</label>
-                <input v-model="search" @input="applyFilters" type="search" :aria-label="t('outgoing.search')" :placeholder="t('outgoing.searchPlaceholder')" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('outgoing.deliverySearch') }}</label>
+                <input v-model="search" @input="applyFilters" type="search" :aria-label="t('outgoing.deliverySearch')" :placeholder="t('outgoing.searchPlaceholder')" class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
             </div>
             <div>
                 <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('outgoing.status') }}</label>
@@ -126,7 +134,7 @@ const tone = (value: string) =>
                             </td>
                             <td class="px-4 py-3">
                                 <div class="flex justify-end gap-1.5">
-                                    <ActionButton :href="route('deliveries.show', d.id)" :label="t('outgoing.detail')" variant="view" />
+                                    <ActionButton :href="route('deliveries.show', d.id)" :label="t('outgoing.deliveryDetail')" variant="view" />
                                     <ActionButton :href="route('deliveries.print', d.id)" :label="t('outgoing.printSj')" variant="print" />
                                 </div>
                             </td>

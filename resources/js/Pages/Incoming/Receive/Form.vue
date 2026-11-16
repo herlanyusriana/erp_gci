@@ -5,16 +5,20 @@ import { Head, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import InputError from '@/Components/InputError.vue';
-import SearchableSelect from '@/Components/SearchableSelect.vue';
 import type { IncomingArrivalItem } from '@/types';
 
 const { t } = useI18n();
 
-interface TagRow {
-    tag: string;
+interface PackingSubRow {
     qty: number | '';
+    uom: string;
     net_weight: number | '';
     gross_weight: number | '';
+}
+
+interface BundleGroup {
+    tag: string;
+    packings: PackingSubRow[];
 }
 
 const props = defineProps<{
@@ -31,164 +35,157 @@ const props = defineProps<{
     packingTypes: string[];
     weightUnit: string;
     locations: Array<{ code: string; name: string }>;
+    defaultLocation?: string | null;
 }>();
 
 const backHref = () => route('receive.show', props.arrivalItem.arrival_id);
 
-const unitLabel = () => (props.weightBasis ? props.weightUnit : (props.arrivalItem.unit_goods ?? '').toUpperCase());
-const unitLabelValue = unitLabel();
+const defaultUom = () =>
+    (props.arrivalItem.unit_goods ?? (props.weightBasis ? props.weightUnit : 'PCS')).toUpperCase();
+
+const isWeightUnit = (code: string) => ['KGM', 'KG'].includes((code || '').toUpperCase());
+
+// Pilihan Tipe Bundle & Packing dari master katalog
+const bundleTypeOptions = computed(() =>
+    props.packingUnits?.length ? props.packingUnits : ['PALLET', 'BUNDLE', 'SKID', 'BOX'],
+);
 
 const packingTypeOptions = computed(() =>
-    props.packingTypes?.length ? props.packingTypes : props.packingUnits,
+    props.packingTypes?.length ? props.packingTypes : ['COIL', 'SHEET', 'BOX', 'DRUM', 'PALLET'],
 );
-
-const bundleUnitOptions = computed(() =>
-    props.packingUnits?.length ? props.packingUnits : packingTypeOptions.value,
-);
-
-const defaultPackingType = () =>
-    packingTypeOptions.value.includes('BOX') ? 'BOX' : (packingTypeOptions.value[0] ?? 'BOX');
 
 const initialBundleUnit = () => {
     const fromArrival = (props.arrivalItem.unit_bundle ?? '').toUpperCase();
-    const list = bundleUnitOptions.value;
-
-    return list.includes(fromArrival) ? fromArrival : (list[0] ?? 'PALLET');
+    return bundleTypeOptions.value.includes(fromArrival) ? fromArrival : (bundleTypeOptions.value[0] ?? 'BUNDLE');
 };
 
 const initialBundleCount = () => {
     const count = Math.floor(Number(props.arrivalItem.qty_bundle) || 0);
-
-    return count > 0 ? Math.min(count, 100) : 1;
+    return count > 0 ? Math.min(count, 50) : 4;
 };
 
-const round4 = (value: number) => Math.round(value * 10000) / 10000;
-
-const plan = reactive({
+// Section 2 State
+const bundleConfig = reactive({
     bundle_count: initialBundleCount() as number | '',
     bundle_unit: initialBundleUnit(),
-    packing_count: 1 as number | '',
-    packing_type: defaultPackingType(),
-    packing_qty: '' as number | '',
-    net_total: (props.weightBasis ? props.maxReceivable : '') as number | '',
-    gross_total: '' as number | '',
+    packing_count: 3 as number | '',
+    packing_type: packingTypeOptions.value.includes('COIL') ? 'COIL' : (packingTypeOptions.value[0] ?? 'BOX'),
 });
 
-/** Prefiks kode tag: nomor faktur, atau nomor part bila faktur kosong. */
-const tagPrefix = computed(() => {
-    const raw = props.arrivalItem.arrival?.invoice_no || props.arrivalItem.part?.part_number || 'TAG';
-    const cleaned = String(raw).toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-
-    return cleaned.slice(0, 24) || 'TAG';
-});
-
-const bundleTarget = computed(() => {
-    const count = Math.floor(Number(plan.bundle_count) || 0);
-
-    return Math.min(Math.max(count, 0), 100);
-});
-
-const qtyPerTag = computed(() =>
-    round4((Number(plan.packing_count) || 0) * (Number(plan.packing_qty) || 0)),
-);
-
-const planTotalQty = computed(() =>
-    round4((Number(plan.bundle_count) || 0) * qtyPerTag.value),
-);
-
-const suggestedTag = (index: number) => `${tagPrefix.value}-B${String(index + 1).padStart(2, '0')}`;
-
-/** Bagi rata total ke sejumlah baris; sisa pembulatan masuk ke baris terakhir. */
-function distribute(total: number, count: number): number[] {
-    if (count <= 0 || total <= 0) {
-        return Array.from({ length: Math.max(count, 0) }, () => 0);
-    }
-
-    const each = round4(Math.floor((total * 10000) / count) / 10000);
-    const values = Array.from({ length: count }, () => each);
-    values[count - 1] = round4(values[count - 1] + (total - each * count));
-
-    return values;
-}
-
-const rows = ref<TagRow[]>([]);
-
-function makeRow(index: number): TagRow {
-    return {
-        tag: suggestedTag(index),
-        qty: qtyPerTag.value || '',
-        net_weight: (props.weightBasis ? 0 : '') as number | '',
-        gross_weight: '' as number | '',
-    };
-}
-
-/** Sesuaikan qty & berat tiap tag dengan rencana kemasan. */
-function syncAmounts() {
-    const count = rows.value.length;
-    if (count === 0) {
-        return;
-    }
-
-    const netShares = distribute(Number(plan.net_total) || 0, count);
-    const grossShares = distribute(Number(plan.gross_total) || 0, count);
-
-    rows.value.forEach((row, index) => {
-        row.qty = qtyPerTag.value;
-        if (props.weightBasis || plan.net_total !== '') {
-            row.net_weight = round4(netShares[index]);
-        }
-        if (plan.gross_total !== '') {
-            row.gross_weight = round4(grossShares[index]);
-        }
-    });
-}
-
-/** Satu tag = satu bundle: jumlah baris tag mengikuti jumlah bundle. */
-function rebuildTags() {
-    const target = bundleTarget.value;
-    const current = rows.value;
-
-    if (current.length > target) {
-        rows.value = current.slice(0, target);
-    } else if (current.length < target) {
-        const additions = Array.from({ length: target - current.length }, (_, offset) =>
-            makeRow(current.length + offset),
-        );
-        rows.value = [...current, ...additions];
-    }
-
-    syncAmounts();
-}
-
-watch(() => plan.bundle_count, rebuildTags);
-watch(() => [plan.packing_count, plan.packing_qty], syncAmounts);
-watch(() => [plan.net_total, plan.gross_total], syncAmounts);
-
-rebuildTags();
-
-const tagQtyTotal = computed(() =>
-    round4(rows.value.reduce((sum, row) => sum + (Number(row.qty) || 0), 0)),
-);
-
-const tagNetTotal = computed(() =>
-    round4(rows.value.reduce((sum, row) => sum + (Number(row.net_weight) || 0), 0)),
-);
-
-const qtyMismatch = computed(() => Math.abs(tagQtyTotal.value - planTotalQty.value) > 0.00005);
-
-const receivedBasis = computed(() =>
-    props.weightBasis ? tagNetTotal.value : tagQtyTotal.value,
-);
-
-const exceedsRemaining = computed(() => receivedBasis.value > props.maxReceivable + 1e-9);
-
+// Section 1 Form State
 const form = useForm({
     receive_date: new Date().toISOString().slice(0, 10),
     truck_no: '',
-    location_code: '',
+    driver_name: '',
+    location_code: props.defaultLocation ?? 'BULK-AREA',
     pen_no: props.arrivalItem.arrival?.pen_no ?? '',
     aju_no: props.arrivalItem.arrival?.aju_no ?? '',
     tags: [] as any[],
+});
+
+// Prefix default Tag
+const tagPrefix = computed(() => {
+    const raw = props.arrivalItem.arrival?.invoice_no || props.arrivalItem.part?.part_number || 'TAG';
+    return String(raw).toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 20) || 'TAG';
+});
+
+// Bundles reactive list
+const bundles = ref<BundleGroup[]>([]);
+
+function createPackingRow(): PackingSubRow {
+    return {
+        qty: '',
+        uom: defaultUom(),
+        net_weight: '',
+        gross_weight: '',
+    };
+}
+
+function resizeBundles() {
+    let nb = Math.floor(Number(bundleConfig.bundle_count) || 1);
+    let np = Math.floor(Number(bundleConfig.packing_count) || 1);
+    nb = Math.min(50, Math.max(1, nb));
+    np = Math.min(30, Math.max(1, np));
+
+    bundleConfig.bundle_count = nb;
+    bundleConfig.packing_count = np;
+
+    const current = bundles.value;
+    while (current.length < nb) {
+        const idx = current.length + 1;
+        current.push({
+            tag: `${tagPrefix.value}-B${String(idx).padStart(2, '0')}`,
+            packings: [],
+        });
+    }
+    current.length = nb;
+
+    current.forEach((b) => {
+        while (b.packings.length < np) {
+            b.packings.push(createPackingRow());
+        }
+        b.packings.length = np;
+    });
+}
+
+watch(() => [bundleConfig.bundle_count, bundleConfig.packing_count], resizeBundles);
+
+// Otomasi Qty -> Net weight jika UOM = KGM/KG
+function onQtyChange(r: PackingSubRow) {
+    if (isWeightUnit(r.uom) && r.qty !== '' && (r.net_weight === '' || r.net_weight === 0)) {
+        r.net_weight = r.qty;
+    }
+}
+
+// Otomasi pembagian sisa rata ke seluruh baris
+function autoDistributeRemaining() {
+    const totalRemaining = Number(props.maxReceivable) || 0;
+    const totalRows = (Number(bundleConfig.bundle_count) || 1) * (Number(bundleConfig.packing_count) || 1);
+    if (totalRemaining <= 0 || totalRows <= 0) return;
+
+    const eachQty = Math.floor((totalRemaining / totalRows) * 10000) / 10000;
+    let remainder = Math.round((totalRemaining - (eachQty * totalRows)) * 10000) / 10000;
+
+    bundles.value.forEach((b, bi) => {
+        b.packings.forEach((p, pi) => {
+            let q = eachQty;
+            if (bi === bundles.value.length - 1 && pi === b.packings.length - 1) {
+                q = Math.round((q + remainder) * 10000) / 10000;
+            }
+            p.qty = q;
+            if (isWeightUnit(p.uom) || props.weightBasis) {
+                p.net_weight = q;
+            }
+        });
+    });
+}
+
+resizeBundles();
+
+// Summary Totals
+const totals = computed(() => {
+    let totQty = 0;
+    let totNet = 0;
+    let totGross = 0;
+    let totPack = 0;
+
+    bundles.value.forEach((b) => {
+        b.packings.forEach((p) => {
+            totPack++;
+            totQty += Number(p.qty) || 0;
+            totNet += Number(p.net_weight) || 0;
+            totGross += Number(p.gross_weight) || 0;
+        });
+    });
+
+    const round4 = (n: number) => Math.round(n * 10000) / 10000;
+    return {
+        bundles: bundles.value.length,
+        packings: totPack,
+        qty: round4(totQty),
+        net: round4(totNet),
+        gross: round4(totGross),
+    };
 });
 
 const clientError = ref('');
@@ -196,36 +193,69 @@ const clientError = ref('');
 function submit() {
     clientError.value = '';
 
-    if (rows.value.length === 0) {
-        clientError.value = t('incoming.noTagsYet');
+    if (!form.truck_no.trim()) {
+        clientError.value = t('incoming.truckNoRequired', { default: 'Nomor Truk # wajib diisi.' });
         return;
     }
 
-    if (tagQtyTotal.value <= 0) {
-        clientError.value = t('incoming.tagQtyRequired');
+    const emptyTagIdx = bundles.value.findIndex((b) => !b.tag.trim());
+    if (emptyTagIdx !== -1) {
+        clientError.value = `Tag # pada bundle ke-${emptyTagIdx + 1} belum diisi.`;
         return;
     }
 
-    if (props.weightBasis && tagNetTotal.value <= 0) {
-        clientError.value = t('incoming.netWeightRequired');
+    if (totals.value.qty <= 0) {
+        clientError.value = 'Total kuantitas barang harus lebih dari 0.';
         return;
     }
 
-    form.tags = rows.value.map((row) => ({
-        tag: row.tag.trim(),
-        qty: row.qty === '' ? 0 : Number(row.qty),
-        bundle_count: 1,
-        bundle_qty: 1,
-        bundle_unit: plan.bundle_unit,
-        packing_count: Number(plan.packing_count) || 1,
-        packing_type: plan.packing_type,
-        packing_qty: plan.packing_qty === '' ? null : Number(plan.packing_qty),
-        net_weight: props.weightBasis
-            ? (row.net_weight === '' ? 0 : Number(row.net_weight))
-            : (row.net_weight === '' ? null : Number(row.net_weight)),
-        gross_weight: row.gross_weight === '' ? null : Number(row.gross_weight),
-        qty_unit: unitLabelValue,
-    })) as any;
+    if (props.weightBasis && totals.value.net <= 0) {
+        clientError.value = 'Material berbasis berat wajib memiliki Net weight.';
+        return;
+    }
+
+    // Bentuk payload tags per bundle (1 incoming_receive per tag bundle, berisi list sub-packings)
+    form.tags = bundles.value.map((b) => {
+        let bQty = 0;
+        let bNet = 0;
+        let bGross = 0;
+
+        const packingsData = b.packings.map((p, pi) => {
+            const q = Number(p.qty) || 0;
+            const nw = p.net_weight === '' ? null : Number(p.net_weight);
+            const gw = p.gross_weight === '' ? null : Number(p.gross_weight);
+
+            bQty += q;
+            if (nw !== null) bNet += nw;
+            if (gw !== null) bGross += gw;
+
+            return {
+                packing_no: `${b.tag}/${pi + 1}`,
+                sequence: pi + 1,
+                qty: q,
+                uom: p.uom,
+                net_weight: nw,
+                gross_weight: gw,
+            };
+        });
+
+        const round4 = (n: number) => Math.round(n * 10000) / 10000;
+
+        return {
+            tag: b.tag.trim(),
+            qty: round4(bQty),
+            qty_unit: defaultUom(),
+            bundle_count: 1,
+            bundle_qty: 1,
+            bundle_unit: bundleConfig.bundle_unit,
+            packing_count: b.packings.length,
+            packing_type: bundleConfig.packing_type,
+            packing_qty: b.packings.length > 0 ? round4(bQty / b.packings.length) : round4(bQty),
+            net_weight: props.weightBasis ? round4(bNet) : (bNet > 0 ? round4(bNet) : null),
+            gross_weight: bGross > 0 ? round4(bGross) : null,
+            packings: packingsData,
+        };
+    }) as any;
 
     form.post(route('receive.store', props.arrivalItem.id));
 }
@@ -236,295 +266,320 @@ function submit() {
     <AppLayout>
         <BackButton :href="backHref()" class="mb-4" />
 
-        <h1 class="mb-6 text-2xl font-bold tracking-tight text-ink-primary">{{ t('incoming.receiveGoods') }}</h1>
-
-        <!-- Info Material & Rencana -->
-        <div class="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div class="rounded-xl border border-borderline bg-surface p-4">
-                <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('incoming.part') }}</div>
-                <div class="mt-1 font-semibold text-ink-primary">{{ arrivalItem.part?.part_number ?? '—' }}</div>
-                <div class="text-xs text-ink-secondary">{{ arrivalItem.material_group ?? '' }} · {{ arrivalItem.size ?? '' }}</div>
+        <div class="mb-6 flex flex-wrap items-end justify-between gap-4 border-b-2 border-ink-primary pb-3">
+            <div>
+                <h1 class="text-2xl font-bold tracking-tight text-ink-primary">{{ t('incoming.receiveGoods') }}</h1>
+                <p class="text-xs text-ink-secondary">Formulir penerimaan barang masuk ke gudang.</p>
             </div>
-            <div class="rounded-xl border border-borderline bg-surface p-4">
-                <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('incoming.plannedUnit', { unit: unitLabel() }) }}</div>
-                <div class="mt-1 font-semibold tabular-nums text-ink-primary">{{ totalPlanned }}</div>
-            </div>
-            <div class="rounded-xl border border-borderline bg-surface p-4">
-                <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('incoming.remainingUnit', { unit: unitLabel() }) }}</div>
-                <div class="mt-1 text-lg font-bold tabular-nums" :class="remainingQty > 0 ? 'text-warning' : 'text-success'">{{ remainingQty.toFixed(2) }}</div>
-            </div>
-            <div v-if="poLimit" class="rounded-xl border border-borderline bg-surface p-4">
-                <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('incoming.poQty') }}</div>
-                <div class="mt-1 font-semibold text-ink-primary tabular-nums">{{ poLimit.po_qty }}</div>
-                <div class="text-xs text-ink-secondary">{{ t('incoming.maxReceivable', { unit: unitLabel() }) }}: <span class="font-semibold tabular-nums text-ink-primary">{{ maxReceivable.toFixed(2) }}</span></div>
+            <div class="rounded-lg bg-primary-light px-3 py-1.5 text-xs font-semibold text-primary">
+                Lokasi default: Bulk Area (BULK-AREA)
             </div>
         </div>
 
-        <form @submit.prevent="submit" class="space-y-6">
-            <!-- Header Dokumen Penerimaan -->
-            <div class="rounded-xl border border-borderline bg-surface p-5">
-                <div class="grid gap-4 sm:grid-cols-3">
+        <form @submit.prevent="submit" class="space-y-5">
+            <!-- 1. Informasi Penerimaan -->
+            <section class="rounded-xl border border-borderline bg-surface p-5">
+                <h2 class="mb-4 flex items-center gap-2 text-sm font-bold text-ink-primary">
+                    <span class="inline-grid h-6 w-6 place-items-center rounded-full bg-primary text-xs text-white">1</span>
+                    Informasi Penerimaan
+                </h2>
+
+                <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">Part</label>
+                        <input
+                            type="text"
+                            :value="arrivalItem.part?.part_name ?? '—'"
+                            readonly
+                            class="mt-1 w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm font-medium text-ink-primary"
+                        />
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">Part #</label>
+                        <input
+                            type="text"
+                            :value="arrivalItem.part?.part_number ?? '—'"
+                            readonly
+                            class="mt-1 w-full rounded-lg border-borderline bg-background px-3 py-2 font-mono text-sm font-bold text-ink-primary"
+                        />
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">Group / Ukuran</label>
+                        <input
+                            type="text"
+                            :value="`${arrivalItem.material_group ?? '—'} · ${arrivalItem.size ?? '—'}`"
+                            readonly
+                            class="mt-1 w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-secondary"
+                        />
+                    </div>
+
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.receiveDate') }}</label>
-                        <input :aria-label="t('incoming.receiveDate')" v-model="form.receive_date" type="date" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input
+                            v-model="form.receive_date"
+                            type="date"
+                            :aria-label="t('incoming.receiveDate')"
+                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                        />
                         <InputError :message="form.errors.receive_date" class="mt-1" />
                     </div>
                     <div>
-                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.truckNo') }}</label>
-                        <input :aria-label="t('incoming.truckNo')" v-model="form.truck_no" type="text" placeholder="B 9123 GCI" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
-                    </div>
-                    <div>
-                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.location') }}</label>
-                        <div class="mt-1">
-                            <SearchableSelect
-                                v-model="form.location_code"
-                                :options="locations"
-                                value-key="code"
-                                label-key="code"
-                                sublabel-key="name"
-                                :placeholder="t('incoming.locationNone')"
-                                :aria-label="t('incoming.location')"
-                                :error="form.errors.location_code"
-                            />
-                        </div>
-                        <InputError :message="form.errors.location_code" class="mt-1" />
-                    </div>
-                </div>
-
-                <!-- Dokumen kepabeanan diisi saat penerimaan -->
-                <div class="mt-4 grid gap-4 border-t border-borderline pt-4 sm:grid-cols-2">
-                    <div>
-                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.penNo') }}</label>
+                        <label class="text-xs font-semibold text-ink-secondary">
+                            {{ t('incoming.truckNo') }} <span class="text-danger">*</span>
+                        </label>
                         <input
-                            :aria-label="t('incoming.penNo')"
-                            v-model="form.pen_no"
+                            v-model="form.truck_no"
                             type="text"
-                            placeholder="No. PEN Bea Cukai"
+                            placeholder="Contoh: B 9123 GCI"
+                            :aria-label="t('incoming.truckNo')"
+                            required
+                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm font-semibold text-ink-primary focus:border-primary focus:ring-primary"
+                        />
+                        <InputError :message="form.errors.truck_no" class="mt-1" />
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">Nama Driver</label>
+                        <input
+                            v-model="form.driver_name"
+                            type="text"
+                            placeholder="Nama driver pengirim"
                             class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
                         />
-                        <InputError :message="(form.errors as any).pen_no" class="mt-1" />
+                    </div>
+
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.poNo') }}</label>
+                        <input
+                            type="text"
+                            :value="arrivalItem.arrival?.purchase_order?.po_no ?? arrivalItem.arrival?.po_no ?? '—'"
+                            readonly
+                            class="mt-1 w-full rounded-lg border-borderline bg-background px-3 py-2 font-mono text-sm font-medium text-ink-primary"
+                        />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.ajuNo') }}</label>
                         <input
-                            :aria-label="t('incoming.ajuNo')"
                             v-model="form.aju_no"
                             type="text"
                             placeholder="No. AJU Bea Cukai"
+                            :aria-label="t('incoming.ajuNo')"
                             class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
                         />
                         <InputError :message="(form.errors as any).aju_no" class="mt-1" />
                     </div>
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">Lokasi</label>
+                        <input
+                            type="text"
+                            :value="form.location_code || 'BULK-AREA'"
+                            readonly
+                            class="mt-1 w-full rounded-lg border-primary/30 bg-primary-light/40 px-3 py-2 font-mono text-sm font-bold text-primary"
+                        />
+                        <p class="mt-1 text-[11px] text-ink-secondary">Otomatis default Bulk area</p>
+                    </div>
                 </div>
-            </div>
+            </section>
 
-            <!-- Tahap 1: Rencana Kemasan -->
-            <div class="rounded-xl border border-borderline bg-surface p-5">
-                <div class="mb-4">
-                    <h2 class="text-base font-bold text-ink-primary">{{ t('incoming.packagingPlan') }}</h2>
-                    <p class="text-xs text-ink-secondary">{{ t('incoming.packagingPlanHint') }}</p>
-                </div>
+            <!-- 2. Bundle & Packing -->
+            <section class="rounded-xl border border-borderline bg-surface p-5">
+                <h2 class="mb-4 flex items-center gap-2 text-sm font-bold text-ink-primary">
+                    <span class="inline-grid h-6 w-6 place-items-center rounded-full bg-primary text-xs text-white">2</span>
+                    Bundle & Packing
+                </h2>
 
                 <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <div>
-                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.bundleQty') }}</label>
+                        <label class="text-xs font-semibold text-ink-secondary">
+                            {{ t('incoming.bundleQty') }}
+                        </label>
                         <input
-                            v-model="plan.bundle_count"
+                            v-model="bundleConfig.bundle_count"
                             type="number"
-                            step="1"
                             min="1"
-                            max="100"
-                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm font-semibold text-ink-primary focus:border-primary focus:ring-primary"
+                            max="50"
+                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm font-bold text-ink-primary focus:border-primary focus:ring-primary"
                         />
-                        <p class="mt-1 text-[11px] text-ink-secondary">{{ t('incoming.bundleCountHint') }}</p>
+                        <p class="mt-1 text-[11px] text-ink-secondary">Jumlah baris bundle / tag</p>
                     </div>
+
                     <div>
-                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.bundleUnit') }}</label>
+                        <label class="text-xs font-semibold text-ink-secondary">
+                            {{ t('incoming.bundleUnit') }}
+                        </label>
                         <select
-                            v-model="plan.bundle_unit"
-                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                            v-model="bundleConfig.bundle_unit"
+                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm font-medium text-ink-primary focus:border-primary focus:ring-primary"
                         >
-                            <option v-for="unit in bundleUnitOptions" :key="unit" :value="unit">{{ unit }}</option>
+                            <option v-for="u in bundleTypeOptions" :key="u" :value="u">{{ u }}</option>
                         </select>
                     </div>
+
                     <div>
-                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.packingPerBundle') }}</label>
+                        <label class="text-xs font-semibold text-ink-secondary">Jumlah Packing</label>
                         <input
-                            v-model="plan.packing_count"
+                            v-model="bundleConfig.packing_count"
                             type="number"
-                            step="1"
                             min="1"
-                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm font-semibold text-ink-primary focus:border-primary focus:ring-primary"
+                            max="30"
+                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm font-bold text-ink-primary focus:border-primary focus:ring-primary"
                         />
-                        <p class="mt-1 text-[11px] text-ink-secondary">{{ t('incoming.packingPerBundleHint') }}</p>
+                        <p class="mt-1 text-[11px] text-ink-secondary">Packing per bundle</p>
                     </div>
+
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.packingType') }}</label>
                         <select
-                            v-model="plan.packing_type"
-                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                            v-model="bundleConfig.packing_type"
+                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm font-medium text-ink-primary focus:border-primary focus:ring-primary"
                         >
-                            <option v-for="type in packingTypeOptions" :key="type" :value="type">{{ type }}</option>
+                            <option v-for="p in packingTypeOptions" :key="p" :value="p">{{ p }}</option>
                         </select>
                     </div>
-                    <div>
-                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.qtyPerPacking') }} ({{ unitLabelValue || '—' }})</label>
-                        <input
-                            v-model="plan.packing_qty"
-                            type="number"
-                            step="any"
-                            min="0"
-                            placeholder="2000"
-                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm font-semibold text-ink-primary focus:border-primary focus:ring-primary"
-                        />
-                    </div>
-                    <div>
-                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.packagingTotal') }}</label>
-                        <div class="mt-1 flex min-h-10 items-center rounded-lg border border-primary/40 bg-primary-light/40 px-3 py-2 text-sm font-bold tabular-nums text-primary">
-                            {{ planTotalQty.toLocaleString() }} {{ unitLabelValue }}
-                        </div>
-                    </div>
-                    <div>
-                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.netWeightTotal') }}</label>
-                        <input
-                            v-model="plan.net_total"
-                            type="number"
-                            step="any"
-                            min="0"
-                            placeholder="KGM"
-                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
-                        />
-                    </div>
-                    <div>
-                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.grossWeightTotal') }}</label>
-                        <input
-                            v-model="plan.gross_total"
-                            type="number"
-                            step="any"
-                            min="0"
-                            placeholder="KGM"
-                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
-                        />
-                    </div>
                 </div>
-            </div>
+            </section>
 
-            <!-- Tahap 2: Identifikasi per Tag -->
-            <div class="rounded-xl border border-borderline bg-surface p-5">
+            <!-- 3. Detail Bundle (Tabel Ber-Rowspan) -->
+            <section class="rounded-xl border border-borderline bg-surface p-5">
                 <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
                     <div>
-                        <h2 class="text-base font-bold text-ink-primary">{{ t('incoming.tagIdentification') }}</h2>
-                        <p class="text-xs text-ink-secondary">{{ t('incoming.autoTagHint') }}</p>
+                        <h2 class="flex items-center gap-2 text-sm font-bold text-ink-primary">
+                            <span class="inline-grid h-6 w-6 place-items-center rounded-full bg-primary text-xs text-white">3</span>
+                            Detail Bundle & Sub-Packing
+                        </h2>
+                        <p class="text-xs text-ink-secondary">
+                            Penomoran packing otomatis {TAG}/{1..N}. Tag Bundle adalah identitas utama saat scan fisik.
+                        </p>
                     </div>
-                    <div class="flex items-center gap-3 text-sm tabular-nums">
-                        <span class="rounded-full bg-background px-3 py-1 text-xs font-semibold text-ink-secondary">
-                            {{ t('incoming.tagCount') }}: <span class="text-ink-primary">{{ rows.length }}</span>
-                        </span>
-                        <span class="text-ink-secondary">
-                            {{ t('incoming.tagTotal') }}:
-                            <span class="font-bold" :class="qtyMismatch ? 'text-warning' : 'text-success'">{{ tagQtyTotal.toLocaleString() }} {{ unitLabelValue }}</span>
-                        </span>
-                    </div>
+                    <button
+                        type="button"
+                        @click="autoDistributeRemaining"
+                        class="rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary-light"
+                    >
+                        ⚡ Auto-distribusikan Sisa ({{ maxReceivable.toLocaleString() }} {{ defaultUom() }})
+                    </button>
                 </div>
-
-                <p v-if="rows.length" class="mb-3 rounded-lg border border-borderline bg-background/60 px-3 py-2 text-xs text-ink-secondary">
-                    {{ t('incoming.tagPackSummary', {
-                        tags: rows.length,
-                        bundleUnit: plan.bundle_unit,
-                        packingCount: Number(plan.packing_count) || 0,
-                        packingType: plan.packing_type,
-                        packingQty: Number(plan.packing_qty) || 0,
-                        perTag: qtyPerTag,
-                        unit: unitLabelValue,
-                    }) }}
-                </p>
 
                 <InputError :message="form.errors.tags" class="mb-3" />
                 <p v-if="clientError" class="mb-3 rounded-lg bg-danger/10 px-3 py-2 text-xs font-medium text-danger">{{ clientError }}</p>
 
-                <div v-if="qtyMismatch" class="mb-3 rounded-lg bg-warning/10 px-3 py-2 text-xs font-medium text-warning">
-                    {{ t('incoming.tagMismatch', { total: tagQtyTotal, expected: planTotalQty }) }}
-                </div>
-                <div v-if="exceedsRemaining" class="mb-3 rounded-lg bg-danger/10 px-3 py-2 text-xs font-medium text-danger">
-                    {{ t('incoming.exceedsRemaining', { remaining: maxReceivable, unit: unitLabel() }) }}
-                </div>
-
-                <div v-if="!rows.length" class="rounded-lg border border-dashed border-borderline bg-background/60 px-4 py-10 text-center text-sm text-ink-secondary">
-                    {{ t('incoming.noTagsYet') }}
-                </div>
-
-                <div v-else class="overflow-x-auto">
-                    <table class="min-w-full text-sm">
-                        <thead>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-borderline border border-borderline text-sm">
+                        <thead class="bg-background">
                             <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-                                <th scope="col" class="px-2 py-2">#</th>
-                                <th scope="col" class="px-2 py-2">{{ t('incoming.tag') }}</th>
-                                <th scope="col" class="px-2 py-2 text-right">{{ t('incoming.tagQty') }} ({{ unitLabelValue }})</th>
-                                <th scope="col" class="px-2 py-2 text-right">{{ t('incoming.netWeight') }} ({{ weightUnit }})</th>
-                                <th scope="col" class="px-2 py-2 text-right">{{ t('incoming.grossWeight') }} ({{ weightUnit }})</th>
+                                <th class="w-12 border border-borderline px-3 py-2.5 text-center">No</th>
+                                <th class="w-40 border border-borderline px-3 py-2.5">Tag # (Bundle)</th>
+                                <th class="w-36 border border-borderline px-3 py-2.5">Packing #</th>
+                                <th class="w-32 border border-borderline px-3 py-2.5 text-right">Qty/packing</th>
+                                <th class="w-24 border border-borderline px-3 py-2.5">UOM</th>
+                                <th class="w-36 border border-borderline px-3 py-2.5 text-right">Net weight (kg)</th>
+                                <th class="w-36 border border-borderline px-3 py-2.5 text-right">Gross weight (kg)</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-borderline">
-                            <tr v-for="(row, index) in rows" :key="index" class="hover:bg-primary-light/30">
-                                <td class="px-2 py-2">
-                                    <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">{{ index + 1 }}</span>
-                                </td>
-                                <td class="px-2 py-2">
-                                    <input
-                                        v-model="row.tag"
-                                        type="text"
-                                        :aria-label="t('incoming.tag')"
-                                        class="w-full rounded-lg border-borderline bg-surface px-2.5 py-1.5 font-mono text-sm text-ink-primary focus:border-primary focus:ring-primary"
-                                    />
-                                </td>
-                                <td class="px-2 py-2">
-                                    <input
-                                        v-model="row.qty"
-                                        type="number"
-                                        step="any"
-                                        min="0"
-                                        :aria-label="t('incoming.tagQty')"
-                                        class="w-28 rounded-lg border-borderline bg-surface px-2.5 py-1.5 text-right text-sm font-semibold text-ink-primary focus:border-primary focus:ring-primary"
-                                    />
-                                </td>
-                                <td class="px-2 py-2">
-                                    <input
-                                        v-model="row.net_weight"
-                                        type="number"
-                                        step="any"
-                                        min="0"
-                                        :aria-label="t('incoming.netWeight')"
-                                        class="w-28 rounded-lg border-borderline bg-surface px-2.5 py-1.5 text-right text-sm text-ink-primary focus:border-primary focus:ring-primary"
-                                    />
-                                </td>
-                                <td class="px-2 py-2">
-                                    <input
-                                        v-model="row.gross_weight"
-                                        type="number"
-                                        step="any"
-                                        min="0"
-                                        :aria-label="t('incoming.grossWeight')"
-                                        class="w-28 rounded-lg border-borderline bg-surface px-2.5 py-1.5 text-right text-sm text-ink-primary focus:border-primary focus:ring-primary"
-                                    />
-                                </td>
-                            </tr>
+                        <tbody>
+                            <template v-for="(b, bi) in bundles" :key="bi">
+                                <tr
+                                    v-for="(r, ri) in b.packings"
+                                    :key="`${bi}-${ri}`"
+                                    :class="[ri === 0 ? 'border-t-2 border-ink-primary' : '', 'hover:bg-primary-light/20']"
+                                >
+                                    <!-- Kolom No & Tag # menggunakan rowspan setinggi jumlah packing -->
+                                    <td
+                                        v-if="ri === 0"
+                                        :rowspan="b.packings.length"
+                                        class="border border-borderline bg-surface px-3 py-2 text-center font-bold text-ink-primary align-middle"
+                                    >
+                                        {{ bi + 1 }}
+                                    </td>
+                                    <td
+                                        v-if="ri === 0"
+                                        :rowspan="b.packings.length"
+                                        class="border border-borderline bg-surface p-2 align-middle"
+                                    >
+                                        <input
+                                            v-model="b.tag"
+                                            type="text"
+                                            placeholder="Tag bundle"
+                                            class="w-full rounded border-borderline bg-surface px-2.5 py-1.5 font-mono text-xs font-bold text-ink-primary focus:border-primary focus:ring-primary"
+                                        />
+                                    </td>
+
+                                    <!-- Kolom per Packing -->
+                                    <td class="border border-borderline px-3 py-2 font-mono text-xs font-semibold text-primary">
+                                        {{ b.tag || '-' }}/{{ ri + 1 }}
+                                    </td>
+                                    <td class="border border-borderline p-1 text-right">
+                                        <input
+                                            v-model="r.qty"
+                                            type="number"
+                                            step="any"
+                                            min="0"
+                                            @input="onQtyChange(r)"
+                                            placeholder="0"
+                                            class="w-full rounded border-borderline bg-surface px-2 py-1 text-right text-xs font-bold text-ink-primary focus:border-primary focus:ring-primary"
+                                        />
+                                    </td>
+                                    <td class="border border-borderline p-1">
+                                        <select
+                                            v-model="r.uom"
+                                            class="w-full rounded border-borderline bg-surface px-1.5 py-1 text-xs text-ink-primary focus:border-primary focus:ring-primary"
+                                        >
+                                            <option v-for="u in uomCodes" :key="u" :value="u">{{ u }}</option>
+                                        </select>
+                                    </td>
+                                    <td class="border border-borderline p-1 text-right">
+                                        <input
+                                            v-model="r.net_weight"
+                                            type="number"
+                                            step="any"
+                                            min="0"
+                                            placeholder="0.00"
+                                            class="w-full rounded border-borderline bg-surface px-2 py-1 text-right text-xs text-ink-primary focus:border-primary focus:ring-primary"
+                                        />
+                                    </td>
+                                    <td class="border border-borderline p-1 text-right">
+                                        <input
+                                            v-model="r.gross_weight"
+                                            type="number"
+                                            step="any"
+                                            min="0"
+                                            placeholder="0.00"
+                                            class="w-full rounded border-borderline bg-surface px-2 py-1 text-right text-xs text-ink-primary focus:border-primary focus:ring-primary"
+                                        />
+                                    </td>
+                                </tr>
+                            </template>
                         </tbody>
-                        <tfoot>
-                            <tr class="border-t-2 border-borderline text-xs font-semibold text-ink-secondary">
-                                <td colspan="2" class="px-2 py-2 text-right">{{ t('incoming.tagTotal') }}</td>
-                                <td class="px-2 py-2 text-right tabular-nums text-ink-primary">{{ tagQtyTotal.toLocaleString() }}</td>
-                                <td class="px-2 py-2 text-right tabular-nums text-ink-primary">{{ tagNetTotal.toLocaleString() }}</td>
-                                <td class="px-2 py-2"></td>
+                        <tfoot class="border-t-2 border-ink-primary bg-background font-bold text-ink-primary">
+                            <tr>
+                                <td colspan="3" class="border border-borderline px-3 py-2 text-right text-xs uppercase">
+                                    TOTAL ({{ totals.bundles }} Bundle, {{ totals.packings }} Packing) :
+                                </td>
+                                <td class="border border-borderline px-3 py-2 text-right tabular-nums text-primary text-xs font-bold">
+                                    {{ totals.qty.toLocaleString() }}
+                                </td>
+                                <td class="border border-borderline px-3 py-2 text-xs">
+                                    {{ defaultUom() }}
+                                </td>
+                                <td class="border border-borderline px-3 py-2 text-right tabular-nums text-xs">
+                                    {{ totals.net.toLocaleString() }} kg
+                                </td>
+                                <td class="border border-borderline px-3 py-2 text-right tabular-nums text-xs">
+                                    {{ totals.gross.toLocaleString() }} kg
+                                </td>
                             </tr>
                         </tfoot>
                     </table>
                 </div>
-            </div>
+            </section>
 
-            <!-- Tombol Aksi -->
-            <div class="flex items-center justify-end gap-3">
+            <!-- Aksi Tombol -->
+            <div class="flex items-center justify-end gap-3 pt-2">
                 <BackButton :href="backHref()">{{ t('incoming.cancel') }}</BackButton>
-                <button type="submit" :disabled="form.processing || !rows.length" class="rounded-md bg-primary px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
+                <button
+                    type="submit"
+                    :disabled="form.processing"
+                    class="rounded-md bg-primary px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                >
                     {{ form.processing ? t('incoming.saving') : t('incoming.saveReceive') }}
                 </button>
             </div>

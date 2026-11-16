@@ -51,6 +51,7 @@ class ReceiveStockUnitTest extends TestCase
 
         $this->post(route('receive.store', $item), [
             'receive_date' => now()->toDateString(),
+            'truck_no' => 'B 9001 GCI',
             'tags' => [[
                 'tag' => 'T-SHEET-UNIT-1',
                 'qty' => 800,
@@ -76,6 +77,7 @@ class ReceiveStockUnitTest extends TestCase
 
         $this->post(route('receive.store', $item), [
             'receive_date' => now()->toDateString(),
+            'truck_no' => 'B 9001 GCI',
             'tags' => [[
                 'tag' => 'T-KGM-UNIT-1',
                 'qty' => 1868,
@@ -96,6 +98,7 @@ class ReceiveStockUnitTest extends TestCase
 
         $this->post(route('receive.store', $item), [
             'receive_date' => now()->toDateString(),
+            'truck_no' => 'B 9001 GCI',
             'tags' => [[
                 'tag' => 'T-SHEET-UNIT-2',
                 'qty' => 400,

@@ -123,11 +123,13 @@ class LocalPoTest extends TestCase
         // Basis berat: net_weight wajib.
         $this->post(route('receive.store', $item), [
             'receive_date' => now()->toDateString(),
+            'truck_no' => 'B 9001 GCI',
             'tags' => [['tag' => 'T-LOCAL-001', 'qty' => 100, 'qty_unit' => 'BAG']],
         ])->assertSessionHasErrors('tags.0.net_weight');
 
         $this->post(route('receive.store', $item), [
             'receive_date' => now()->toDateString(),
+            'truck_no' => 'B 9001 GCI',
             'tags' => [[
                 'tag' => 'T-LOCAL-001',
                 'qty' => 100,

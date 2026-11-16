@@ -224,6 +224,7 @@ class LocationTest extends TestCase
     {
         return [
             'receive_date' => now()->toDateString(),
+            'truck_no' => 'B 9001 GCI',
             'location_code' => $locationCode,
             'tags' => [[
                 'tag' => $tag,

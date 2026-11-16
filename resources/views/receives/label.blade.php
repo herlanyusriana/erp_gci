@@ -19,14 +19,20 @@
         $packagingText = null;
     }
 
+    // Rincian sub-packing (TAG/1, TAG/2, ...) bila penerimaan mencatatnya.
+    $packings = $receive->relationLoaded('packings') ? $receive->packings : $receive->packings()->orderBy('sequence')->get();
+    $packingText = $packings->isNotEmpty()
+        ? $packings->map(fn ($p) => $p->packing_no . ' (' . number_format((float) $p->qty, 0) . ' ' . ($p->uom ?? $goodsUnit) . ')')->implode(', ')
+        : null;
+
     if ($weightBasis) {
         // Basis berat (KGM): baris utama = berat; baris sekunder = kemasan / qty barang.
         $qtyWeightText = number_format((float) ($receive->net_weight ?? $receive->weight ?? 0), 2) . ' KGM';
-        $qtySecondaryText = $packagingText ?: (number_format((float) ($receive->qty ?? 0), 0) . ' ' . $goodsUnit);
+        $qtySecondaryText = $packingText ?: ($packagingText ?: (number_format((float) ($receive->qty ?? 0), 0) . ' ' . $goodsUnit));
     } else {
         // Basis qty (local/barang): baris utama = qty; baris sekunder = rincian kemasan.
         $qtyWeightText = number_format((float) ($receive->qty ?? 0), 0) . ' ' . $goodsUnit;
-        $qtySecondaryText = $packagingText ?: '-';
+        $qtySecondaryText = $packingText ?: ($packagingText ?: '-');
     }
 
     $monthBox = str_pad((string) ($monthNumber ?? 1), 2, '0', STR_PAD_LEFT);

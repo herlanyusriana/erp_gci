@@ -82,6 +82,7 @@ class ReceivePoQuantityLimitTest extends TestCase
 
         $this->post(route('receive.store', $item), [
             'receive_date' => now()->toDateString(),
+            'truck_no' => 'B 9001 GCI',
             'tags' => [[
                 'tag' => 'T-PO-LIMIT-1',
                 'qty' => 500,
@@ -99,6 +100,7 @@ class ReceivePoQuantityLimitTest extends TestCase
 
         $this->post(route('receive.store', $item), [
             'receive_date' => now()->toDateString(),
+            'truck_no' => 'B 9001 GCI',
             'tags' => [[
                 'tag' => 'T-PO-LIMIT-2',
                 'qty' => 100,
@@ -110,6 +112,7 @@ class ReceivePoQuantityLimitTest extends TestCase
 
         $this->post(route('receive.store', $item), [
             'receive_date' => now()->toDateString(),
+            'truck_no' => 'B 9001 GCI',
             'tags' => [[
                 'tag' => 'T-PO-LIMIT-3',
                 'qty' => 1,
@@ -148,12 +151,14 @@ class ReceivePoQuantityLimitTest extends TestCase
 
         $this->post(route('receive.store', $first), [
             'receive_date' => now()->toDateString(),
+            'truck_no' => 'B 9001 GCI',
             'tags' => [['tag' => 'T-PO-SPLIT-1', 'qty' => 60, 'qty_unit' => 'PCS']],
         ])->assertSessionHasNoErrors();
 
         // 41 melebihi sisa PO (40) walau masih di bawah qty Arrival kedua.
         $this->post(route('receive.store', $second), [
             'receive_date' => now()->toDateString(),
+            'truck_no' => 'B 9001 GCI',
             'tags' => [['tag' => 'T-PO-SPLIT-2', 'qty' => 41, 'qty_unit' => 'PCS']],
         ])->assertSessionHasErrors('tags');
 

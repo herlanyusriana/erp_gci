@@ -80,7 +80,7 @@ class ReceiveController extends Controller
     {
         Gate::authorize('create', IncomingReceive::class);
 
-        $arrivalItem->load(['part', 'arrival.supplier', 'receives']);
+        $arrivalItem->load(['part.uom', 'arrival.supplier', 'arrival.purchaseOrder', 'receives']);
 
         if ($arrivalItem->iqc_status === 'rejected' || $arrivalItem->arrival?->iqc_status === 'rejected') {
             abort(422, __('Material ini ditolak oleh tim Quality.'));
@@ -109,6 +109,7 @@ class ReceiveController extends Controller
             'packingTypes' => UomCatalog::packingTypes(),
             'weightUnit' => UomCatalog::WEIGHT,
             'locations' => $this->activeLocations(),
+            'defaultLocation' => $this->bulkAreaCode(),
         ]);
     }
 
@@ -127,7 +128,8 @@ class ReceiveController extends Controller
 
         $validated = $request->validate([
             'receive_date' => ['required', 'date'],
-            'truck_no' => ['nullable', 'string', 'max:50'],
+            'truck_no' => ['required', 'string', 'max:50'],
+            'driver_name' => ['nullable', 'string', 'max:100'],
             'location_code' => $this->locationRule(),
             'pen_no' => ['nullable', 'string', 'max:255'],
             'aju_no' => ['nullable', 'string', 'max:255'],
@@ -145,6 +147,13 @@ class ReceiveController extends Controller
                 : ['nullable', 'numeric'],
             'tags.*.gross_weight' => ['nullable', 'numeric'],
             'tags.*.qty_unit' => ['required', 'string', 'max:20', new UomCode],
+            'tags.*.packings' => ['nullable', 'array'],
+            'tags.*.packings.*.packing_no' => ['nullable', 'string', 'max:100'],
+            'tags.*.packings.*.sequence' => ['nullable', 'integer'],
+            'tags.*.packings.*.qty' => ['nullable', 'numeric', 'min:0'],
+            'tags.*.packings.*.uom' => ['nullable', 'string', 'max:20'],
+            'tags.*.packings.*.net_weight' => ['nullable', 'numeric', 'min:0'],
+            'tags.*.packings.*.gross_weight' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         $this->receiveService->ensureTagsUniqueForArrivalItem($arrivalItem, $validated['tags'], 'tags');
@@ -222,6 +231,23 @@ class ReceiveController extends Controller
                 $resolved = $this->receiveService->resolveReceiveTag($tag, (int) $receive->id, $receiveAt);
                 if ($resolved !== null && $receive->tag !== $resolved) {
                     $receive->update(['tag' => $resolved]);
+                }
+
+                if (! empty($tagData['packings']) && is_array($tagData['packings'])) {
+                    $currentTag = $receive->tag ?: 'TAG';
+                    foreach ($tagData['packings'] as $pIdx => $pData) {
+                        $seq = (int) ($pData['sequence'] ?? ($pIdx + 1));
+                        $pNo = ! empty($pData['packing_no']) ? trim((string) $pData['packing_no']) : "{$currentTag}/{$seq}";
+
+                        $receive->packings()->create([
+                            'packing_no' => $pNo,
+                            'sequence' => $seq,
+                            'qty' => (float) ($pData['qty'] ?? 0),
+                            'uom' => ! empty($pData['uom']) ? UomCatalog::normalize($pData['uom']) : $goodsUnit,
+                            'net_weight' => isset($pData['net_weight']) && $pData['net_weight'] !== '' ? (float) $pData['net_weight'] : null,
+                            'gross_weight' => isset($pData['gross_weight']) && $pData['gross_weight'] !== '' ? (float) $pData['gross_weight'] : null,
+                        ]);
+                    }
                 }
 
                 $this->receiveService->postStock($receive);
@@ -435,6 +461,18 @@ class ReceiveController extends Controller
     private function locationRule(): array
     {
         return ['nullable', 'string', 'max:40', Rule::exists('locations', 'code')->where('is_active', true)];
+    }
+
+    /**
+     * Lokasi penampungan awal. Default BULK-AREA; kalau master belum punya,
+     * biarkan kosong agar validasi lokasi tidak memblokir penerimaan.
+     */
+    private function bulkAreaCode(): ?string
+    {
+        return Location::query()
+            ->where('code', 'BULK-AREA')
+            ->where('is_active', true)
+            ->value('code');
     }
 
     private function normalizeLocationCode(?string $code): ?string

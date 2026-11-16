@@ -58,6 +58,7 @@ class TieredReceiveTest extends TestCase
         // Input 2 Pallet x 5 Box x 2000 EA = 20.000 EA
         $response = $this->post(route('receive.store', $item), [
             'receive_date' => now()->toDateString(),
+            'truck_no' => 'B 9001 GCI',
             'tags' => [
                 [
                     'tag' => 'TAG-TIER-01',
@@ -97,6 +98,7 @@ class TieredReceiveTest extends TestCase
         // Rencana: 2 PALLET @ 5 COIL @ 500 KGM. Satu tag = satu bundle.
         $response = $this->post(route('receive.store', $item), [
             'receive_date' => now()->toDateString(),
+            'truck_no' => 'B 9001 GCI',
             'tags' => [
                 [
                     'tag' => 'INV-COIL-B01',
@@ -145,6 +147,7 @@ class TieredReceiveTest extends TestCase
 
         $this->post(route('receive.store', $item), [
             'receive_date' => now()->toDateString(),
+            'truck_no' => 'B 9001 GCI',
             'tags' => [
                 [
                     'tag' => '',
@@ -169,6 +172,7 @@ class TieredReceiveTest extends TestCase
 
         $this->post(route('receive.store', $item), [
             'receive_date' => now()->toDateString(),
+            'truck_no' => 'B 9001 GCI',
             'pen_no' => 'PEN-RECV-1',
             'aju_no' => 'AJU-RECV-1',
             'tags' => [
@@ -258,5 +262,110 @@ class TieredReceiveTest extends TestCase
 
         // Label memuat baris ringkasan kemasan bertingkat
         $response->assertSee('2 PALLET @ 5 BOX @ 2,000 EA');
+    }
+
+    public function test_receive_stores_sub_packings_per_bundle(): void
+    {
+        [$arrival, $item] = $this->createArrivalWithItem('KGM');
+
+        $this->post(route('receive.store', $item), [
+            'receive_date' => now()->toDateString(),
+            'truck_no' => 'B 9001 GCI',
+            'driver_name' => 'Slamet',
+            'location_code' => 'BULK-AREA',
+            'tags' => [
+                [
+                    'tag' => 'TAG-SUB-01',
+                    'qty' => 3000,
+                    'qty_unit' => 'KGM',
+                    'bundle_count' => 1,
+                    'bundle_unit' => 'PALLET',
+                    'packing_count' => 3,
+                    'packing_type' => 'COIL',
+                    'packing_qty' => 1000,
+                    'net_weight' => 3000,
+                    'gross_weight' => 3100,
+                    'packings' => [
+                        ['packing_no' => 'TAG-SUB-01/1', 'sequence' => 1, 'qty' => 1000, 'uom' => 'KGM', 'net_weight' => 1000, 'gross_weight' => 1030],
+                        ['packing_no' => 'TAG-SUB-01/2', 'sequence' => 2, 'qty' => 1000, 'uom' => 'KGM', 'net_weight' => 1000, 'gross_weight' => 1035],
+                        ['packing_no' => 'TAG-SUB-01/3', 'sequence' => 3, 'qty' => 1000, 'uom' => 'KGM', 'net_weight' => 1000, 'gross_weight' => 1035],
+                    ],
+                ],
+            ],
+        ])->assertRedirect(route('receive.show', $arrival));
+
+        $receive = IncomingReceive::where('tag', 'TAG-SUB-01')->firstOrFail();
+
+        $this->assertSame(3, $receive->packings()->count());
+        $this->assertSame('BULK-AREA', $receive->location_code);
+        $this->assertSame('B 9001 GCI', $receive->truck_no);
+
+        $first = $receive->packings()->orderBy('sequence')->first();
+        $this->assertSame('TAG-SUB-01/1', $first->packing_no);
+        $this->assertEqualsWithDelta(1000.0, $first->qty, 1e-6);
+        $this->assertSame('KGM', $first->uom);
+        $this->assertEqualsWithDelta(1030.0, $first->gross_weight, 1e-6);
+    }
+
+    public function test_receive_requires_a_truck_number(): void
+    {
+        [$arrival, $item] = $this->createArrivalWithItem('EA');
+
+        $this->post(route('receive.store', $item), [
+            'receive_date' => now()->toDateString(),
+            'tags' => [
+                ['tag' => 'TAG-NOTRUCK', 'qty' => 100, 'qty_unit' => 'EA'],
+            ],
+        ])->assertSessionHasErrors('truck_no');
+
+        $this->assertSame(0, $item->receives()->count());
+    }
+
+    public function test_receive_form_defaults_to_bulk_area_and_exposes_packing_catalogs(): void
+    {
+        [$arrival, $item] = $this->createArrivalWithItem('EA');
+
+        $this->get(route('receive.create', $item))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Incoming/Receive/Form')
+                ->where('defaultLocation', 'BULK-AREA')
+                ->where('packingTypes', fn ($types) => collect($types)->contains('COIL'))
+                ->where('packingUnits', fn ($units) => collect($units)->contains('PALLET')));
+    }
+
+    public function test_label_lists_sub_packing_numbers(): void
+    {
+        [$arrival, $item] = $this->createArrivalWithItem('KGM');
+
+        $this->post(route('receive.store', $item), [
+            'receive_date' => now()->toDateString(),
+            'truck_no' => 'B 9001 GCI',
+            'location_code' => 'BULK-AREA',
+            'tags' => [
+                [
+                    'tag' => 'TAG-LBL-01',
+                    'qty' => 2000,
+                    'qty_unit' => 'KGM',
+                    'bundle_count' => 1,
+                    'bundle_unit' => 'PALLET',
+                    'packing_count' => 2,
+                    'packing_type' => 'COIL',
+                    'packing_qty' => 1000,
+                    'net_weight' => 2000,
+                    'packings' => [
+                        ['packing_no' => 'TAG-LBL-01/1', 'sequence' => 1, 'qty' => 1000, 'uom' => 'KGM', 'net_weight' => 1000],
+                        ['packing_no' => 'TAG-LBL-01/2', 'sequence' => 2, 'qty' => 1000, 'uom' => 'KGM', 'net_weight' => 1000],
+                    ],
+                ],
+            ],
+        ])->assertRedirect();
+
+        $receive = IncomingReceive::where('tag', 'TAG-LBL-01')->firstOrFail();
+
+        $this->get(route('receive.label', $receive))
+            ->assertOk()
+            ->assertSee('TAG-LBL-01/1')
+            ->assertSee('TAG-LBL-01/2');
     }
 }

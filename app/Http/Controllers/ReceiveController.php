@@ -6,6 +6,7 @@ use App\Models\IncomingArrival;
 use App\Models\IncomingArrivalItem;
 use App\Models\IncomingReceive;
 use App\Models\Location;
+use App\Models\PartSubstitute;
 use App\Rules\UomCode;
 use App\Services\ReceiveMaterialService;
 use App\Support\PurchaseOrderLimit;
@@ -59,6 +60,8 @@ class ReceiveController extends Controller
             'items.receives',
             'containers.inspection',
         ]);
+
+        $this->attachMaterialGroupLabels($arrival);
 
         $pending = collect($arrival->items)->map(function ($item) {
             return [
@@ -461,6 +464,48 @@ class ReceiveController extends Controller
     private function locationRule(): array
     {
         return ['nullable', 'string', 'max:40', Rule::exists('locations', 'code')->where('is_active', true)];
+    }
+
+    /**
+     * Lengkapi label kelompok material untuk halaman detail penerimaan.
+     *
+     * Kelompok material ("STEEL IN SHEET", "STEEL IN COIL", ...) berasal dari
+     * pemetaan substitute supplier, bukan dari part number. Data lama sempat
+     * menyimpan part number di kolom `material_group`, jadi nilainya diganti
+     * bila kosong atau sama dengan part number.
+     */
+    private function attachMaterialGroupLabels(IncomingArrival $arrival): void
+    {
+        $supplierId = $arrival->supplier_id;
+
+        $partIds = $arrival->items
+            ->pluck('part_id')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        $groups = $partIds === [] || $supplierId === null
+            ? collect()
+            : PartSubstitute::query()
+                ->where('is_active', true)
+                ->where('supplier_id', $supplierId)
+                ->whereIn('substitute_part_id', $partIds)
+                ->orderByRaw("NULLIF(TRIM(COALESCE(material_group, '')), '') IS NULL")
+                ->get(['substitute_part_id', 'material_group'])
+                ->mapWithKeys(fn (PartSubstitute $mapping): array => [
+                    (int) $mapping->substitute_part_id => trim((string) $mapping->material_group),
+                ]);
+
+        foreach ($arrival->items as $item) {
+            $stored = trim((string) ($item->material_group ?? ''));
+            $partNumber = trim((string) ($item->part?->part_number ?? ''));
+            $mapped = $groups->get((int) $item->part_id, '');
+
+            $label = $stored !== '' && $stored !== $partNumber ? $stored : $mapped;
+
+            $item->setAttribute('material_group_label', $label !== '' ? $label : null);
+        }
     }
 
     /**

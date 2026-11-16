@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\IncomingArrival;
 use App\Models\IncomingArrivalItem;
 use App\Models\IncomingReceive;
+use App\Models\PartSubstitute;
 use App\Models\Supplier;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -367,5 +368,41 @@ class TieredReceiveTest extends TestCase
             ->assertOk()
             ->assertSee('TAG-LBL-01/1')
             ->assertSee('TAG-LBL-01/2');
+    }
+
+    public function test_receive_show_uses_the_supplier_material_group_not_the_part_number(): void
+    {
+        $mapping = PartSubstitute::query()
+            ->where('is_active', true)
+            ->whereNotNull('supplier_id')
+            ->whereNotNull('material_group')
+            ->whereRaw("TRIM(material_group) <> ''")
+            ->with('substitutePart')
+            ->firstOrFail();
+
+        $arrival = IncomingArrival::create([
+            'arrival_no' => 'ARV-GRP-'.uniqid(),
+            'supplier_id' => $mapping->supplier_id,
+            'is_local' => false,
+            'status' => 'pending',
+            'iqc_status' => 'passed',
+        ]);
+
+        // Data lama: kolom material_group berisi part number.
+        IncomingArrivalItem::create([
+            'arrival_id' => $arrival->id,
+            'part_id' => $mapping->substitute_part_id,
+            'material_group' => $mapping->substitutePart->part_number,
+            'size' => '1.2MM',
+            'qty_goods' => 100,
+            'unit_goods' => 'KGM',
+            'weight_nett' => 100,
+            'unit_weight' => 'KGM',
+        ]);
+
+        $this->get(route('receive.show', $arrival))
+            ->assertOk()
+            ->assertSee($mapping->material_group)
+            ->assertDontSee($mapping->substitutePart->part_number.' · 1.2MM');
     }
 }

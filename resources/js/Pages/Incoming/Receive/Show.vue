@@ -118,7 +118,9 @@ function removeReceive(r: IncomingReceive) {
                                     {{ p.item.part?.part_number ?? '—' }}
                                     <div class="text-xs text-ink-secondary">{{ p.item.part?.part_name ?? '' }}</div>
                                 </td>
-                                <td class="px-4 py-3 text-ink-primary">{{ p.item.material_group ?? '—' }} · {{ p.item.size ?? '—' }}</td>
+                                <td class="px-4 py-3 text-ink-primary">
+                                    {{ p.item.material_group_label ?? p.item.material_group ?? '—' }} · {{ p.item.size ?? '—' }}
+                                </td>
                                 <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ p.planned }}</td>
                                 <td class="px-4 py-3 text-ink-primary">{{ p.item.unit_goods ?? '—' }}</td>
                                 <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ p.received }}</td>
@@ -171,7 +173,7 @@ function removeReceive(r: IncomingReceive) {
                             <tr v-for="r in receiveRows" :key="r.receive.id" class="hover:bg-primary-light/40">
                                 <td class="px-4 py-3 font-medium text-ink-primary">
                                     {{ r.item.part?.part_number ?? '—' }}
-                                    <div class="text-xs text-ink-secondary">{{ r.item.material_group ?? '' }}</div>
+                                    <div class="text-xs text-ink-secondary">{{ r.item.material_group_label ?? r.item.material_group ?? '' }}</div>
                                 </td>
                                 <td class="px-4 py-3 text-ink-primary font-mono font-medium">{{ r.receive.tag ?? '—' }}</td>
                                 <td class="px-4 py-3 text-right tabular-nums text-ink-primary font-semibold">

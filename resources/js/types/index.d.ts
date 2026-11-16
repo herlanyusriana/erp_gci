@@ -114,6 +114,7 @@ export interface PartSubstitute {
     substitute_part_id: number;
     supplier_id: number | null;
     material_group: string | null;
+    material_group_label?: string | null;
     size: string | null;
     packing_type: string | null;
     source: string | null;
@@ -237,6 +238,7 @@ export interface IncomingArrivalItem {
     arrival_id: number;
     part_id: number | null;
     material_group: string | null;
+    material_group_label?: string | null;
     size: string | null;
     qty_goods: number;
     unit_goods: string | null;

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\IncomingArrival;
 use App\Models\IncomingArrivalItem;
 use App\Models\Part;
+use App\Models\PartSubstitute;
 use App\Models\PurchaseOrder;
 use App\Models\Supplier;
 use App\Models\User;
@@ -97,6 +98,40 @@ class IncomingPoArrivalTest extends TestCase
         $this->assertSame('AJU-112233', $arrival->aju_no);
         $this->assertSame('pending', $arrival->iqc_status);
         $this->assertSame(0, $arrival->containers()->count());
+    }
+
+    public function test_arrival_item_group_comes_from_supplier_mapping_not_part_number(): void
+    {
+        $mapping = PartSubstitute::where('is_active', true)
+            ->whereNotNull('supplier_id')
+            ->whereNotNull('material_group')
+            ->whereRaw("TRIM(material_group) <> ''")
+            ->with('substitutePart')
+            ->firstOrFail();
+
+        $supplier = Supplier::findOrFail($mapping->supplier_id);
+        $part = $mapping->substitutePart;
+
+        $this->post(route('incoming-arrivals.store'), [
+            'is_local' => false,
+            'supplier_id' => $supplier->id,
+            'invoice_no' => 'INV-GROUP-'.uniqid(),
+            'invoice_date' => now()->toDateString(),
+            'items' => [
+                [
+                    'part_id' => $part->id,
+                    'qty_goods' => 10,
+                    'unit_goods' => 'KGM',
+                ],
+            ],
+            'containers' => [],
+        ])->assertSessionHasNoErrors();
+
+        $item = IncomingArrivalItem::latest('id')->firstOrFail();
+
+        // Kelompok material harus dari pemetaan substitute supplier, bukan part number.
+        $this->assertSame($mapping->material_group, $item->material_group);
+        $this->assertNotSame($part->part_number, $item->material_group);
     }
 
     public function test_arrival_stores_port_of_loading(): void

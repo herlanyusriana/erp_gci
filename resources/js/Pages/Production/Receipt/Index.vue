@@ -136,7 +136,7 @@ const tabLabel = (value: string) =>
                                 <span
                                     v-if="r.part_type"
                                     class="rounded px-1.5 py-0.5 text-[10px] font-bold uppercase"
-                                    :class="r.part_type === 'FG' ? 'bg-success/15 text-success' : 'bg-primary/10 text-primary'"
+                                    :class="r.part_type === 'FG' ? 'bg-success/15 text-success-ink' : 'bg-primary/10 text-primary'"
                                 >
                                     {{ r.part_type === 'FG' ? t('production.finishedGood') : t('production.wipPart') }}
                                 </span>

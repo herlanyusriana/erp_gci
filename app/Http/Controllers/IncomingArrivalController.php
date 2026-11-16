@@ -64,12 +64,24 @@ class IncomingArrivalController extends Controller
     private function resolveMaterialItems(array $items, int $supplierId): array
     {
         return collect($items)->map(function (array $item, int $index) use ($supplierId) {
-            // Jika part_id sudah disertakan langsung (misal dari PO auto-fill), validasi ke part yang bersangkutan
+            // Jika part_id sudah disertakan langsung (misal dari PO auto-fill),
+            // group & size tetap diambil dari pemetaan substitute supplier, bukan
+            // dari part number. Part number bukan "kelompok material".
             if (! empty($item['part_id'])) {
                 $part = Part::find((int) $item['part_id']);
                 if ($part) {
-                    $item['material_group'] = $item['material_group'] ?? $part->part_number;
-                    $item['size'] = $item['size'] ?? ($part->size ?: 'STD');
+                    $mapping = PartSubstitute::query()
+                        ->where('is_active', true)
+                        ->where('supplier_id', $supplierId)
+                        ->where('substitute_part_id', $part->id)
+                        ->orderByRaw("NULLIF(TRIM(COALESCE(material_group, '')), '') IS NULL")
+                        ->first();
+
+                    $group = trim((string) ($mapping?->material_group ?? ''));
+                    $mappedSize = trim((string) ($mapping?->size ?? ''));
+
+                    $item['material_group'] = $group !== '' ? $group : $part->part_number;
+                    $item['size'] = $item['size'] ?? ($mappedSize !== '' ? $mappedSize : ($part->size ?: 'STD'));
 
                     return $item;
                 }

@@ -182,26 +182,34 @@ function onPurchaseOrderChange() {
 
     // Auto-populate items dari PO
     if (po.items && Array.isArray(po.items) && po.items.length > 0) {
-        itemRows.value = po.items.map((it: any) => ({
-            id: null,
-            part_id: it.part_id ?? null,
-            part_number: it.part?.part_number ?? '',
-            part_name: it.part?.part_name ?? '',
-            material_group: it.part?.part_number ?? it.material_group ?? '',
-            size: it.size ?? it.part?.size ?? 'STD',
-            qty_goods: it.qty ?? '',
-            po_qty_ref: it.qty ?? 0,
-            unit_goods: it.unit ?? it.part?.uom?.code ?? 'KGM',
-            qty_bundle: '',
-            unit_bundle: props.packingUnits[0] ?? 'PALLET',
-            weight_nett: it.unit === 'KGM' || !it.unit ? it.qty : '',
-            unit_weight: 'KGM',
-            weight_gross: '',
-            price: it.price ?? '',
-            total_price: (Number(it.qty) || 0) * (Number(it.price) || 0) || '',
-            is_foc: false,
-            notes: it.notes ?? '',
-        }));
+        itemRows.value = po.items.map((it: any) => {
+            // Kelompok material diambil dari pemetaan substitute supplier untuk
+            // part ini — part number BUKAN kelompok material.
+            const mapped = props.materialOptions.find(
+                (m) => m.supplier_id === Number(po.supplier_id) && m.part_id === Number(it.part_id),
+            );
+
+            return {
+                id: null,
+                part_id: it.part_id ?? null,
+                part_number: it.part?.part_number ?? '',
+                part_name: it.part?.part_name ?? '',
+                material_group: mapped?.group ?? it.material_group ?? '',
+                size: it.size ?? mapped?.size ?? it.part?.size ?? 'STD',
+                qty_goods: it.qty ?? '',
+                po_qty_ref: it.qty ?? 0,
+                unit_goods: it.unit ?? it.part?.uom?.code ?? 'KGM',
+                qty_bundle: '',
+                unit_bundle: props.packingUnits[0] ?? 'PALLET',
+                weight_nett: it.unit === 'KGM' || !it.unit ? it.qty : '',
+                unit_weight: 'KGM',
+                weight_gross: '',
+                price: it.price ?? '',
+                total_price: (Number(it.qty) || 0) * (Number(it.price) || 0) || '',
+                is_foc: false,
+                notes: it.notes ?? '',
+            };
+        });
     }
 }
 

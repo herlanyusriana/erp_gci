@@ -20,6 +20,22 @@ const props = defineProps<{
     pending: PendingRow[];
     weightUnit: string;
 }>();
+
+/**
+ * Kolom "Kelompok / Ukuran" hanya boleh berisi kelompok material.
+ * Data lama sempat menyimpan part number di kolom ini; bila isinya sama
+ * dengan part number, tampilkan tanda hubung agar tidak menyesatkan.
+ */
+function groupLabel(item: PendingRow['item']): string {
+    const group = (item.material_group ?? '').trim();
+    const partNumber = (item.part?.part_number ?? '').trim();
+
+    if (group === '') {
+        return '—';
+    }
+
+    return partNumber !== '' && group.toUpperCase() === partNumber.toUpperCase() ? '—' : group;
+}
 </script>
 
 <template>
@@ -85,10 +101,12 @@ const props = defineProps<{
                     <tbody class="divide-y divide-borderline">
                         <tr v-for="p in pending" :key="p.item.id" class="hover:bg-primary-light/40">
                             <td class="px-4 py-3 font-medium text-ink-primary">
-                                <span class="font-mono font-bold">{{ p.item.part?.part_number ?? p.item.material_group ?? '—' }}</span>
+                                <span class="font-mono font-bold">{{ p.item.part?.part_number ?? '—' }}</span>
                                 <div class="text-xs text-ink-secondary">{{ p.item.part?.part_name ?? '' }}</div>
                             </td>
-                            <td class="px-4 py-3 text-ink-primary">{{ p.item.material_group ?? '—' }} · {{ p.item.size ?? '—' }}</td>
+                            <td class="px-4 py-3 text-ink-primary">
+                                {{ groupLabel(p.item) }} · {{ p.item.size ?? '—' }}
+                            </td>
                             <td class="px-4 py-3 text-ink-primary">
                                 <span v-if="p.item.qty_bundle" class="font-medium">{{ p.item.qty_bundle }} {{ p.item.unit_bundle ?? '' }}</span>
                                 <span v-else class="text-ink-secondary">—</span>

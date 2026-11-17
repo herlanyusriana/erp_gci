@@ -59,7 +59,7 @@ function pick(step: Step) {
 }
 
 function submit() {
-    form.post(route('work-orders.results.store', props.workOrder.id), {
+    form.post(route('production-results.store', props.workOrder.id), {
         preserveScroll: true,
         onSuccess: () => form.reset('qty_good', 'qty_reject', 'notes'),
     });
@@ -67,7 +67,7 @@ function submit() {
 
 function remove(row: ResultRow) {
     if (confirm(t('production.resultDeleteConfirm'))) {
-        router.delete(route('work-orders.results.destroy', [props.workOrder.id, row.id]), { preserveScroll: true });
+        router.delete(route('production-results.destroy', [props.workOrder.id, row.id]), { preserveScroll: true });
     }
 }
 </script>

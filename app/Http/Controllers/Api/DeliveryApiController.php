@@ -171,6 +171,13 @@ class DeliveryApiController extends Controller
             ], 422);
         }
 
+        if ($scan->deducted_qty !== null) {
+            return response()->json([
+                'ok' => false,
+                'message' => __('Scan ini sudah memotong stok. Kembalikan barang ke lokasi asal sebelum menghapusnya.'),
+            ], 422);
+        }
+
         $scan->delete();
 
         return response()->json([

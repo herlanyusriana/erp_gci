@@ -179,6 +179,12 @@ class DeliveryController extends Controller
             return back()->with('error', __('Scan hanya dapat dihapus sebelum barang dipindah ke area pengiriman.'));
         }
 
+        // Scan yang stoknya sudah dipotong (mis. setelah OQC ditolak) tidak boleh
+        // dihapus begitu saja: stoknya harus dipulihkan dulu lewat "Kembalikan".
+        if ($scan->deducted_qty !== null) {
+            return back()->with('error', __('Scan ini sudah memotong stok. Kembalikan barang ke lokasi asal sebelum menghapusnya.'));
+        }
+
         $scan->delete();
 
         return back()->with('success', __('Hasil pindai dihapus.'));

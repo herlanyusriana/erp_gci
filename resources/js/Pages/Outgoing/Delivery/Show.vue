@@ -41,6 +41,7 @@ interface Delivery {
     driver_name: string | null;
     notes: string | null;
     picked_at: string | null;
+    stock_deducted_at: string | null;
     released_at: string | null;
     customer?: { id: number; customer_code: string; customer_name: string; address: string | null } | null;
     items: Item[];
@@ -466,17 +467,28 @@ const missingPriceCount = computed(() => props.delivery.items.filter((item) => i
                     <button
                         type="button"
                         @click="pick"
-                        :disabled="!loading.loading_complete"
+                        :disabled="!loading.loading_complete || !!delivery.stock_deducted_at"
                         class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                     >
                         {{ t('outgoing.pick') }}
+                    </button>
+                    <button
+                        v-if="delivery.stock_deducted_at"
+                        type="button"
+                        @click="returnToOrigin"
+                        class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-secondary transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                    >
+                        {{ t('outgoing.returnToOrigin') }}
                     </button>
                     <span v-if="prepLocation" class="text-xs text-ink-secondary">
                         {{ t('outgoing.prepLocation') }}: <span class="font-mono font-semibold text-ink-primary">{{ prepLocation }}</span>
                     </span>
                 </div>
 
-                <p v-if="!loading.loading_complete" class="mt-2 rounded-lg bg-warning/10 px-3 py-2 text-xs font-medium text-warning-ink">
+                <p v-if="delivery.stock_deducted_at" class="mt-2 rounded-lg bg-warning/10 px-3 py-2 text-xs font-medium text-warning-ink">
+                    {{ t('outgoing.stockDeductedHint') }}
+                </p>
+                <p v-else-if="!loading.loading_complete" class="mt-2 rounded-lg bg-warning/10 px-3 py-2 text-xs font-medium text-warning-ink">
                     {{ t('outgoing.pickLocked') }}
                 </p>
 

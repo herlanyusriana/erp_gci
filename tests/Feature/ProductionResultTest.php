@@ -17,6 +17,7 @@ use Illuminate\Foundation\Http\Middleware\ValidateCsrfInterceptor;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Route;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -106,6 +107,31 @@ class ProductionResultTest extends TestCase
                 ->where('workOrders.data', fn ($list) => collect($list)->pluck('id')->contains($wo->id)));
     }
 
+    public function test_create_page_renders_for_released_work_order(): void
+    {
+        $wo = $this->releasedWorkOrder();
+
+        $this->get(route('production-results.create', $wo))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Production/Result/Create')
+                ->where('workOrder.id', $wo->id));
+    }
+
+    public function test_create_page_only_calls_existing_route_names(): void
+    {
+        $source = file_get_contents(resource_path('js/Pages/Production/Result/Create.vue'));
+        $this->assertNotFalse($source);
+
+        preg_match_all("/route\(\s*['\"]([^'\"]+)['\"]/", $source, $matches);
+
+        $this->assertNotEmpty($matches[1], 'Create.vue should call route() with literal names.');
+
+        foreach (array_unique($matches[1]) as $name) {
+            $this->assertTrue(Route::has($name), "Route name [{$name}] used by Create.vue does not exist.");
+        }
+    }
+
     public function test_report_step_posts_wip_output(): void
     {
         $wo = $this->releasedWorkOrder();
@@ -128,6 +154,26 @@ class ProductionResultTest extends TestCase
         // Output WIP1 masuk stok.
         $wipStock = PartStock::where('part_id', $first)->where('qty', '>', 0)->sum('qty');
         $this->assertEqualsWithDelta(10.0, (float) $wipStock, 0.001);
+    }
+
+    public function test_delete_result_reverses_output_and_soft_deletes_row(): void
+    {
+        $wo = $this->releasedWorkOrder();
+        $first = $this->stepIds($wo)->first()['parent_part_id'];
+
+        $this->post(route('production-results.store', $wo), [
+            'parent_part_id' => $first,
+            'qty_good' => 10,
+        ])->assertSessionHasNoErrors();
+
+        $result = $wo->results()->latest('id')->firstOrFail();
+
+        $this->delete(route('production-results.destroy', [$wo, $result]))
+            ->assertRedirect(route('production-results.create', $wo))
+            ->assertSessionHas('success');
+
+        $this->assertSoftDeleted('production_results', ['id' => $result->id]);
+        $this->assertEqualsWithDelta(0.0, (float) PartStock::where('part_id', $first)->sum('qty'), 0.001);
     }
 
     public function test_reporting_step_without_previous_wip_is_rejected(): void

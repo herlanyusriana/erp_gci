@@ -69,40 +69,70 @@ class DeliveryService
         }
 
         DB::transaction(function () use ($delivery, $prepCode): void {
+            // Kunci dokumen supaya tombol "Pindahkan" di web dan scan terakhir
+            // dari APK tidak memotong stok bersamaan.
+            $delivery = Delivery::query()->lockForUpdate()->findOrFail($delivery->id);
+
+            if ($delivery->isReleased()) {
+                throw ValidationException::withMessages([
+                    'status' => __('Outgoing sudah disubmit; barang tidak dapat dipindah lagi.'),
+                ]);
+            }
+
+            // Potongan dijaga per scan (`deducted_qty`), bukan per dokumen:
+            // setelah OQC menolak, tag pengganti tetap harus dipotong, dan
+            // pemindahan ulang tidak boleh memotong tag yang sama dua kali.
             $delivery->loadMissing('scans');
 
-            // Stok hanya dipotong sekali; pemindahan ulang setelah QC menolak
-            // tidak boleh mengurangi stok dua kali.
-            if (! $delivery->stockDeducted()) {
-                foreach ($delivery->scans as $scan) {
-                    if ($scan->scan_type !== DeliveryScan::TYPE_TAG || $scan->part_stock_id === null) {
-                        continue;
-                    }
+            foreach ($delivery->scans as $scan) {
+                if ($scan->scan_type !== DeliveryScan::TYPE_TAG || $scan->part_stock_id === null) {
+                    continue;
+                }
 
-                    $stock = PartStock::query()->lockForUpdate()->find($scan->part_stock_id);
+                if ($scan->deducted_qty !== null) {
+                    continue;
+                }
 
-                    if ($stock === null) {
-                        continue;
-                    }
+                $stock = PartStock::query()->lockForUpdate()->find($scan->part_stock_id);
 
-                    if ($scan->origin_location_code === null) {
-                        $scan->update(['origin_location_code' => $stock->location_code]);
-                    }
-
-                    $stockQty = (float) $stock->qty;
-                    $take = round(min((float) $scan->qty, $stockQty), 4);
-
-                    if ($take <= 0) {
-                        continue;
-                    }
-
-                    // Tag fisik (beserta labelnya) ikut pindah ke area kirim;
-                    // qty berkurang sebesar yang benar-benar diambil.
-                    $stock->update([
-                        'qty' => round($stockQty - $take, 4),
-                        'location_code' => $prepCode,
+                if ($stock === null) {
+                    throw ValidationException::withMessages([
+                        'scans' => __('Stok tag :tag tidak ditemukan; tag mungkin sudah dihapus.', [
+                            'tag' => $scan->code,
+                        ]),
                     ]);
                 }
+
+                if ($scan->origin_location_code === null) {
+                    $scan->update(['origin_location_code' => $stock->location_code]);
+                }
+
+                $need = round((float) $scan->qty, 4);
+
+                if ($need <= 0) {
+                    continue;
+                }
+
+                $available = round((float) $stock->qty, 4);
+
+                if ($available + 1e-9 < $need) {
+                    throw ValidationException::withMessages([
+                        'scans' => __('Stok tag :tag tidak mencukupi: butuh :need, tersedia :available.', [
+                            'tag' => $stock->tag ?? $scan->code,
+                            'need' => $need,
+                            'available' => $available,
+                        ]),
+                    ]);
+                }
+
+                // Tag fisik (beserta labelnya) ikut pindah ke area kirim;
+                // qty berkurang sebesar yang benar-benar diambil.
+                $stock->update([
+                    'qty' => round($available - $need, 4),
+                    'location_code' => $prepCode,
+                ]);
+
+                $scan->update(['deducted_qty' => $need]);
             }
 
             $delivery->update([
@@ -125,25 +155,48 @@ class DeliveryService
         }
 
         DB::transaction(function () use ($delivery): void {
+            $delivery = Delivery::query()->lockForUpdate()->findOrFail($delivery->id);
+
+            if ($delivery->isReleased()) {
+                throw ValidationException::withMessages([
+                    'status' => __('Dokumen pengiriman sudah dirilis; barang tidak dapat dikembalikan.'),
+                ]);
+            }
+
             $delivery->loadMissing('scans');
 
-            if ($delivery->stockDeducted()) {
-                foreach ($delivery->scans as $scan) {
-                    if ($scan->scan_type !== DeliveryScan::TYPE_TAG || $scan->part_stock_id === null) {
-                        continue;
-                    }
+            foreach ($delivery->scans as $scan) {
+                if ($scan->scan_type !== DeliveryScan::TYPE_TAG || $scan->part_stock_id === null) {
+                    continue;
+                }
 
-                    $stock = PartStock::query()->lockForUpdate()->find($scan->part_stock_id);
+                // Hanya scan yang benar-benar memotong stok yang dikembalikan.
+                // Memakai `qty` sebagai cadangan akan menambah stok untuk scan
+                // yang belum pernah dipotong.
+                if ($scan->deducted_qty === null) {
+                    continue;
+                }
 
-                    if ($stock === null) {
-                        continue;
+                $restore = round((float) $scan->deducted_qty, 4);
+
+                $stock = PartStock::query()->withTrashed()->lockForUpdate()->find($scan->part_stock_id);
+
+                if ($stock === null) {
+                    continue;
+                }
+
+                if ($restore > 0) {
+                    if ($stock->trashed()) {
+                        $stock->restore();
                     }
 
                     $stock->update([
-                        'qty' => round((float) $stock->qty + (float) $scan->qty, 4),
+                        'qty' => round((float) $stock->qty + $restore, 4),
                         'location_code' => $scan->origin_location_code ?? $stock->location_code,
                     ]);
                 }
+
+                $scan->update(['deducted_qty' => null]);
             }
 
             $delivery->update([
@@ -413,61 +466,67 @@ class DeliveryService
      */
     public function recordScan(Delivery $delivery, string $raw, ?int $userId = null, ?float $qty = null): array
     {
-        // Pemindaian hanya pada tahap sebelum barang dipindah. Setelah pindah,
-        // stok sudah dipotong sehingga scan tambahan akan membuat selisih.
-        if (! $delivery->isDraft()) {
-            throw ValidationException::withMessages([
-                'code' => __('Pemindaian hanya tersedia sebelum barang dipindah ke area pengiriman.'),
+        return DB::transaction(function () use ($delivery, $raw, $userId, $qty): array {
+            // Kunci dokumen supaya pemindaian terakhir dari APK dan tombol
+            // "Pindahkan" di web tidak memotong stok bersamaan.
+            $delivery = Delivery::query()->lockForUpdate()->findOrFail($delivery->id);
+
+            // Pemindaian hanya pada tahap sebelum barang dipindah. Setelah pindah,
+            // stok sudah dipotong sehingga scan tambahan akan membuat selisih.
+            if (! $delivery->isDraft()) {
+                throw ValidationException::withMessages([
+                    'code' => __('Pemindaian hanya tersedia sebelum barang dipindah ke area pengiriman.'),
+                ]);
+            }
+
+            $resolved = $this->resolveScan($delivery, $raw);
+
+            $existing = $delivery->scans()
+                ->where('scan_type', $resolved['scan_type'])
+                ->where('code', $resolved['code'])
+                ->first();
+
+            if ($existing !== null) {
+                return [
+                    'scan_type' => $resolved['scan_type'],
+                    'code' => $resolved['code'],
+                    'duplicate' => true,
+                    'loading_complete' => $delivery->loadingComplete(),
+                    'status' => (string) $delivery->status,
+                ];
+            }
+
+            $scanQty = $resolved['scan_type'] === DeliveryScan::TYPE_TAG
+                ? $this->resolveScanQty($delivery, (int) $resolved['part_stock_id'], $qty)
+                : null;
+
+            DeliveryScan::create([
+                'delivery_id' => $delivery->id,
+                'scan_type' => $resolved['scan_type'],
+                'code' => $resolved['code'],
+                'part_stock_id' => $resolved['part_stock_id'],
+                'qty' => $scanQty,
+                'scanned_by' => $userId,
+                'scanned_at' => now(),
             ]);
-        }
 
-        $resolved = $this->resolveScan($delivery, $raw);
+            $fresh = $delivery->fresh();
 
-        $existing = $delivery->scans()
-            ->where('scan_type', $resolved['scan_type'])
-            ->where('code', $resolved['code'])
-            ->first();
+            // Begitu seluruh rencana qty tertutup dan minimal satu troli terpindai,
+            // barang dianggap sudah berada di area pengiriman dan stok dipotong.
+            if ($fresh->loadingComplete()) {
+                $this->moveToPreparation($fresh);
+                $fresh = $delivery->fresh();
+            }
 
-        if ($existing !== null) {
             return [
                 'scan_type' => $resolved['scan_type'],
                 'code' => $resolved['code'],
-                'duplicate' => true,
-                'loading_complete' => $delivery->loadingComplete(),
-                'status' => (string) $delivery->status,
+                'duplicate' => false,
+                'loading_complete' => $fresh->loadingComplete(),
+                'status' => (string) $fresh->status,
             ];
-        }
-
-        $scanQty = $resolved['scan_type'] === DeliveryScan::TYPE_TAG
-            ? $this->resolveScanQty($delivery, (int) $resolved['part_stock_id'], $qty)
-            : null;
-
-        DeliveryScan::create([
-            'delivery_id' => $delivery->id,
-            'scan_type' => $resolved['scan_type'],
-            'code' => $resolved['code'],
-            'part_stock_id' => $resolved['part_stock_id'],
-            'qty' => $scanQty,
-            'scanned_by' => $userId,
-            'scanned_at' => now(),
-        ]);
-
-        $fresh = $delivery->fresh();
-
-        // Begitu seluruh rencana qty tertutup dan minimal satu troli terpindai,
-        // barang dianggap sudah berada di area pengiriman dan stok dipotong.
-        if ($fresh->loadingComplete()) {
-            $this->moveToPreparation($fresh);
-            $fresh = $delivery->fresh();
-        }
-
-        return [
-            'scan_type' => $resolved['scan_type'],
-            'code' => $resolved['code'],
-            'duplicate' => false,
-            'loading_complete' => $fresh->loadingComplete(),
-            'status' => (string) $fresh->status,
-        ];
+        });
     }
 
     /**

@@ -15,6 +15,7 @@ use App\Models\User;
 use App\Services\DeliveryService;
 use App\Services\WipInventoryService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class DeliveryTest extends TestCase
@@ -156,6 +157,69 @@ class DeliveryTest extends TestCase
         $this->assertSame($this->machineLocation->code, $stock->fresh()->location_code);
         $this->assertSame(Delivery::STATUS_DRAFT, $delivery->fresh()->status);
         $this->assertNull($delivery->fresh()->picked_at);
+    }
+
+    public function test_second_delivery_cannot_move_the_same_tag_when_stock_is_gone(): void
+    {
+        $stock = $this->fgStock('TAG-SHARED-'.uniqid(), 25);
+
+        // Dua dokumen sudah memindai tag yang sama; pemotongan baru terjadi
+        // saat dokumen dipindah ke area pengiriman.
+        $first = $this->makeScannedDelivery($stock, 25);
+        $second = $this->makeScannedDelivery($stock, 25);
+
+        $service = app(DeliveryService::class);
+        $service->moveToPreparation($first);
+        $this->assertEqualsWithDelta(0.0, (float) $stock->fresh()->qty, 1e-6);
+
+        try {
+            $service->moveToPreparation($second);
+            $this->fail('Pemindahan dokumen kedua seharusnya ditolak karena stok habis.');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('scans', $e->errors());
+        }
+
+        $this->assertEqualsWithDelta(0.0, (float) $stock->fresh()->qty, 1e-6, 'Stok tidak boleh negatif');
+        $this->assertSame(Delivery::STATUS_DRAFT, $second->fresh()->status);
+    }
+
+    public function test_return_restores_the_deducted_qty_not_the_scan_qty(): void
+    {
+        $stock = $this->fgStock('TAG-PARTIAL-'.uniqid(), 25);
+        $delivery = $this->makeScannedDelivery($stock, 25);
+
+        // Simulasikan potongan parsial: hanya 10 yang benar-benar dipotong
+        // walau qty scan 25.
+        $scan = $delivery->scans()->where('scan_type', DeliveryScan::TYPE_TAG)->firstOrFail();
+        $scan->update(['deducted_qty' => 10, 'origin_location_code' => $this->machineLocation->code]);
+        $stock->update(['qty' => 15, 'location_code' => $this->prepLocation->code]);
+        $delivery->update([
+            'status' => Delivery::STATUS_PICKED,
+            'picked_at' => now(),
+            'stock_deducted_at' => now(),
+        ]);
+
+        $this->post(route('deliveries.return', $delivery))->assertRedirect();
+
+        // 15 + 10 (qty potong nyata), bukan 15 + 25 (qty scan).
+        $this->assertEqualsWithDelta(25.0, (float) $stock->fresh()->qty, 1e-6);
+        $this->assertSame($this->machineLocation->code, $stock->fresh()->location_code);
+        $this->assertNull($scan->fresh()->deducted_qty);
+    }
+
+    public function test_moving_to_preparation_twice_deducts_only_once(): void
+    {
+        $stock = $this->fgStock('TAG-TWICE-PICK-'.uniqid(), 40);
+        $delivery = $this->makeDelivery($stock, 25);
+
+        $this->scanTrolley($delivery, (string) $stock->tag);
+        $this->assertSame(Delivery::STATUS_PICKED, $delivery->fresh()->status);
+        $this->assertEqualsWithDelta(15.0, (float) $stock->fresh()->qty, 1e-6);
+
+        app(DeliveryService::class)->moveToPreparation($delivery->fresh());
+
+        $this->assertEqualsWithDelta(15.0, (float) $stock->fresh()->qty, 1e-6, 'Stok tidak boleh dipotong dua kali');
+        $this->assertSame(Delivery::STATUS_PICKED, $delivery->fresh()->status);
     }
 
     public function test_deleting_a_draft_does_not_change_stock_location(): void
@@ -431,6 +495,57 @@ class DeliveryTest extends TestCase
         $this->assertSame('Customer Diubah', $customer->fresh()->customer_name);
     }
 
+    public function test_replacement_tag_is_deducted_after_qc_rejection(): void
+    {
+        $first = $this->fgStock('TAG-REJ-A-'.uniqid(), 40);
+        $second = $this->fgStock('TAG-REJ-B-'.uniqid(), 40);
+        $delivery = $this->makeDelivery($first, 25);
+
+        // Pindah pertama: tag A terpotong.
+        $this->scanTrolley($delivery, (string) $first->tag);
+        $this->assertEqualsWithDelta(15.0, (float) $first->fresh()->qty, 1e-6);
+
+        // OQC menolak: dokumen kembali draft, stok tetap terpotong.
+        $this->post(route('deliveries.qc.reject', $delivery), ['qc_notes' => 'Kemasan rusak'])->assertRedirect();
+        $this->assertSame(Delivery::STATUS_DRAFT, $delivery->fresh()->status);
+        $this->assertEqualsWithDelta(15.0, (float) $first->fresh()->qty, 1e-6);
+
+        // Kembalikan ke asal: stok A pulih, penanda potong hilang.
+        $this->post(route('deliveries.return', $delivery))->assertRedirect();
+        $this->assertEqualsWithDelta(40.0, (float) $first->fresh()->qty, 1e-6);
+        $this->assertNull($delivery->fresh()->stock_deducted_at);
+
+        // Scan tag lama boleh dihapus setelah dikembalikan (deducted_qty kosong).
+        $oldScan = $delivery->scans()->where('scan_type', DeliveryScan::TYPE_TAG)->firstOrFail();
+        $this->delete(route('deliveries.scans.destroy', [$delivery, $oldScan]))->assertSessionHas('success');
+
+        // Scan tag pengganti lalu pindah lagi: tag B harus dipotong.
+        $this->post(route('deliveries.scan', $delivery), ['code' => (string) $second->tag])->assertRedirect();
+
+        $this->assertSame(Delivery::STATUS_PICKED, $delivery->fresh()->status);
+        $this->assertEqualsWithDelta(15.0, (float) $second->fresh()->qty, 1e-6, 'Tag pengganti harus dipotong');
+        $this->assertEqualsWithDelta(40.0, (float) $first->fresh()->qty, 1e-6, 'Tag lama sudah dikembalikan');
+    }
+
+    public function test_scan_that_already_deducted_stock_cannot_be_deleted(): void
+    {
+        $stock = $this->fgStock('TAG-DEL-DED-'.uniqid(), 40);
+        $delivery = $this->makeDelivery($stock, 25);
+
+        $this->scanTrolley($delivery, (string) $stock->tag);
+        $this->assertEqualsWithDelta(15.0, (float) $stock->fresh()->qty, 1e-6);
+
+        $this->post(route('deliveries.qc.reject', $delivery), ['qc_notes' => 'Salah tag'])->assertRedirect();
+
+        $scan = $delivery->scans()->where('scan_type', DeliveryScan::TYPE_TAG)->firstOrFail();
+
+        $this->delete(route('deliveries.scans.destroy', [$delivery, $scan]))
+            ->assertSessionHas('error');
+
+        $this->assertNotNull($scan->fresh(), 'Scan ber-potongan tidak boleh terhapus');
+        $this->assertEqualsWithDelta(15.0, (float) $stock->fresh()->qty, 1e-6, 'Stok tidak boleh berubah');
+    }
+
     /** Scan satu troli dan satu tag FG lewat endpoint web (tahap pindah ke prep). */
     private function scanTrolley(Delivery $delivery, string $tag, string $trolleyCode = 'TRL-1'): void
     {
@@ -506,5 +621,32 @@ class DeliveryTest extends TestCase
         ]);
 
         return $delivery;
+    }
+
+    /**
+     * Delivery draft yang troli dan tag FG-nya sudah tercatat, tanpa memicu
+     * pemindahan otomatis — dipakai untuk menguji jalur moveToPreparation.
+     */
+    private function makeScannedDelivery(PartStock $stock, float $qty): Delivery
+    {
+        $delivery = $this->makeDelivery($stock, $qty);
+
+        DeliveryScan::create([
+            'delivery_id' => $delivery->id,
+            'scan_type' => DeliveryScan::TYPE_TROLLEY,
+            'code' => 'TRL-1',
+            'scanned_at' => now(),
+        ]);
+
+        DeliveryScan::create([
+            'delivery_id' => $delivery->id,
+            'scan_type' => DeliveryScan::TYPE_TAG,
+            'code' => strtoupper((string) $stock->tag),
+            'part_stock_id' => $stock->id,
+            'qty' => $qty,
+            'scanned_at' => now(),
+        ]);
+
+        return $delivery->fresh();
     }
 }

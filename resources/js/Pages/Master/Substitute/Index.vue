@@ -148,8 +148,28 @@ const substituteUom = computed(() => {
 /** Daftar part pengganti untuk props lama yang belum memuat katalog. */
 const missingPackingCatalog = computed(() => props.packingTypes[String(form.substitute_part_id)] === undefined);
 
+/**
+ * Size master part pengganti (placeholder `-` dianggap kosong).
+ * `null` berarti master belum punya size.
+ */
+function masterSizeOf(partId: string | number | ''): string | null {
+    if (partId === '' || partId === null || partId === undefined) return null;
+
+    const all = [...(props.substituteParts ?? []), ...(props.parts ?? [])];
+    const value = String(all.find((p) => String(p.id) === String(partId))?.size ?? '').trim();
+
+    return value !== '' && value !== '-' ? value : null;
+}
+
+/** Size terisi otomatis dari master (bukan diketik)? */
+const sizeFromMaster = computed(() => form.size !== '' && form.size === masterSizeOf(form.substitute_part_id));
+
 function onSubstitutePartChange() {
     form.packing_type = '';
+
+    // Size relasi hanya khusus supplier; default-nya tetap dari master part
+    // supaya tidak ada ketikan bebas yang menyimpang dari master.
+    form.size = masterSizeOf(form.substitute_part_id) ?? '';
 }
 
 function openPackingForm() {
@@ -340,7 +360,17 @@ function remove(s: PartSubstitute) {
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('master.size') }}</label>
-                        <input :aria-label="t('master.size')" v-model="form.size" type="text" :placeholder="t('master.sizeExample')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <input
+                            :aria-label="t('master.size')"
+                            v-model="form.size"
+                            type="text"
+                            :placeholder="masterSizeOf(form.substitute_part_id) ?? t('master.sizeExample')"
+                            :aria-describedby="'substitute-size-hint'"
+                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                        />
+                        <p id="substitute-size-hint" class="mt-1 text-xs text-ink-secondary">
+                            {{ sizeFromMaster ? t('master.sizeFromMaster') : t('master.sizeOverrideHint') }}
+                        </p>
                         <InputError :message="form.errors.size" class="mt-1" />
                     </div>
                     <div>

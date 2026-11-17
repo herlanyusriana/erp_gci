@@ -59,7 +59,7 @@ class BomController extends Controller
             'materials' => Part::query()
                 ->with('uom:id,code')
                 ->orderBy('part_number')
-                ->get(['id', 'part_number', 'part_name', 'part_type_id', 'uom_id']),
+                ->get(['id', 'part_number', 'part_name', 'model', 'size', 'part_type_id', 'uom_id']),
             'processes' => Process::query()->orderBy('process_name')->get(['id', 'process_code', 'process_name']),
             'machines' => Machine::query()
                 ->where('is_active', true)
@@ -201,7 +201,7 @@ class BomController extends Controller
 
         $parts = Part::query()
             ->whereIn('id', array_filter([$normalized['child_part_id'], $normalized['parent_part_id']]))
-            ->get(['id', 'part_number', 'part_name'])
+            ->get(['id', 'part_number', 'part_name', 'size'])
             ->keyBy('id');
 
         if ($normalized['child_part_name'] === null) {
@@ -209,6 +209,13 @@ class BomController extends Controller
         }
         if ($normalized['parent_part_id'] !== null && $normalized['parent_part_name'] === null) {
             $normalized['parent_part_name'] = $parts[(int) $normalized['parent_part_id']]?->part_name;
+        }
+
+        // Size mengikuti master material (child part); placeholder `-` dianggap
+        // kosong. Nilai kiriman hanya dipakai bila master belum punya size.
+        $masterSize = trim((string) $parts[(int) $normalized['child_part_id']]?->size);
+        if ($masterSize !== '' && $masterSize !== '-') {
+            $normalized['size'] = $masterSize;
         }
 
         return $normalized;
@@ -248,7 +255,7 @@ class BomController extends Controller
             'materials' => Part::query()
                 ->with('uom:id,code')
                 ->orderBy('part_number')
-                ->get(['id', 'part_number', 'part_name', 'part_type_id', 'uom_id']),
+                ->get(['id', 'part_number', 'part_name', 'model', 'size', 'part_type_id', 'uom_id']),
             'processes' => Process::query()->orderBy('process_name')->get(['id', 'process_code', 'process_name']),
             'machines' => Machine::query()
                 ->where('is_active', true)

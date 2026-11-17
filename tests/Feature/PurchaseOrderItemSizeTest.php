@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\PartSubstitute;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
 use App\Models\Supplier;
@@ -9,6 +10,14 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
+/**
+ * Size pada baris PO adalah snapshot master material, bukan isian bebas.
+ *
+ * Aturan ini sengaja diubah: sebelumnya size diketik manual di form PO sehingga
+ * nilainya bisa menyimpang dari master part dan tidak bisa dicocokkan dengan
+ * penerimaan/produksi. Sekarang master (atau size khusus supplier) yang menang,
+ * dan isian manual hanya dipakai bila master belum punya size.
+ */
 class PurchaseOrderItemSizeTest extends TestCase
 {
     use DatabaseTransactions;
@@ -26,6 +35,13 @@ class PurchaseOrderItemSizeTest extends TestCase
     {
         $supplier = Supplier::where('is_active', true)->firstOrFail();
         $part = $supplier->partSubstitutes()->where('is_active', true)->firstOrFail()->substitutePart;
+
+        // Pastikan size datang dari master, bukan dari isian form.
+        PartSubstitute::query()
+            ->where('supplier_id', $supplier->id)
+            ->where('substitute_part_id', $part->id)
+            ->update(['size' => null]);
+        $part->update(['size' => 'MASTER-20X30']);
 
         $response = $this->post(route('purchase-orders.store'), [
             'po_no' => 'PO-SIZE-'.uniqid(),
@@ -45,11 +61,11 @@ class PurchaseOrderItemSizeTest extends TestCase
         $po = PurchaseOrder::where('po_no', 'like', 'PO-SIZE-%')->latest('id')->firstOrFail();
         $item = PurchaseOrderItem::where('purchase_order_id', $po->id)->firstOrFail();
 
-        $this->assertSame('20 x 30 x 1.2', $item->size);
+        $this->assertSame('MASTER-20X30', $item->size, 'Size PO harus mengikuti master part');
         $response->assertRedirect(route('purchase-orders.show', $po));
         $this->get(route('purchase-orders.show', $po))
             ->assertOk()
-            ->assertSee('20 x 30 x 1.2');
+            ->assertSee('MASTER-20X30');
     }
 
     public function test_purchase_order_update_persists_item_size(): void
@@ -62,6 +78,12 @@ class PurchaseOrderItemSizeTest extends TestCase
             'status' => 'draft',
         ]);
 
+        PartSubstitute::query()
+            ->where('supplier_id', $supplier->id)
+            ->where('substitute_part_id', $part->id)
+            ->update(['size' => 'SIZE-SUPPLIER-M8']);
+        $part->update(['size' => 'M8 x 25']);
+
         $this->put(route('purchase-orders.update', $po), [
             'po_no' => $po->po_no,
             'supplier_id' => $supplier->id,
@@ -69,17 +91,18 @@ class PurchaseOrderItemSizeTest extends TestCase
             'items' => [
                 [
                     'part_id' => $part->id,
-                    'size' => 'M8 x 25',
+                    'size' => 'DIKETIK-BEBAS',
                     'qty' => 24,
                     'unit' => 'PCS',
                 ],
             ],
         ])->assertRedirect(route('purchase-orders.show', $po));
 
+        // Size khusus supplier menang atas master part dan atas isian form.
         $this->assertDatabaseHas('purchase_order_items', [
             'purchase_order_id' => $po->id,
             'part_id' => $part->id,
-            'size' => 'M8 x 25',
+            'size' => 'SIZE-SUPPLIER-M8',
         ]);
     }
 }

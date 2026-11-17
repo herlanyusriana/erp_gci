@@ -52,7 +52,7 @@ class PurchaseOrderController extends Controller
             'purchaseOrder' => null,
             'suppliers' => Supplier::select('id', 'supplier_code', 'supplier_name', 'source')
                 ->where('is_active', true)->orderBy('supplier_name')->get(),
-            'parts' => Part::select('id', 'part_number', 'part_name')
+            'parts' => Part::select('id', 'part_number', 'part_name', 'model', 'size')
                 ->where('is_active', true)
                 ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))
                 ->orderBy('part_number')->get(),
@@ -107,7 +107,7 @@ class PurchaseOrderController extends Controller
             'purchaseOrder' => $purchaseOrder,
             'suppliers' => Supplier::select('id', 'supplier_code', 'supplier_name', 'source')
                 ->where('is_active', true)->orderBy('supplier_name')->get(),
-            'parts' => Part::select('id', 'part_number', 'part_name')
+            'parts' => Part::select('id', 'part_number', 'part_name', 'model', 'size')
                 ->where('is_active', true)
                 ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))
                 ->orderBy('part_number')->get(),
@@ -136,7 +136,9 @@ class PurchaseOrderController extends Controller
                 PurchaseOrderItem::create([
                     'purchase_order_id' => $po->id,
                     'part_id' => $item['part_id'] ?? null,
-                    'size' => $item['size'] ?? null,
+                    // Size selalu diambil dari master; nilai kiriman hanya dipakai
+                    // bila master belum punya size sama sekali.
+                    'size' => $this->resolveSize((int) $data['supplier_id'], (int) $item['part_id'], $item['size'] ?? null),
                     'qty' => $item['qty'],
                     'unit' => $item['unit'] ?? null,
                     'price' => $item['price'] ?? null,
@@ -176,7 +178,7 @@ class PurchaseOrderController extends Controller
                 PurchaseOrderItem::create([
                     'purchase_order_id' => $purchaseOrder->id,
                     'part_id' => $item['part_id'] ?? null,
-                    'size' => $item['size'] ?? null,
+                    'size' => $this->resolveSize((int) $data['supplier_id'], (int) $item['part_id'], $item['size'] ?? null),
                     'qty' => $item['qty'],
                     'unit' => $item['unit'] ?? null,
                     'price' => $item['price'] ?? null,
@@ -238,6 +240,25 @@ class PurchaseOrderController extends Controller
         } catch (ValidationException $exception) {
             RowErrorKeys::remap($exception, (array) $request->input('items', []));
         }
+    }
+
+    /**
+     * Size final satu baris PO.
+     *
+     * Master menang supaya dokumen tidak menyimpang dari master data; nilai
+     * kiriman hanya dipakai bila supplier + part belum punya size.
+     */
+    private function resolveSize(int $supplierId, int $partId, ?string $submitted): ?string
+    {
+        $fromMaster = PartSubstitute::resolveSize($supplierId, $partId);
+
+        if ($fromMaster !== null) {
+            return $fromMaster;
+        }
+
+        $value = trim((string) $submitted);
+
+        return $value !== '' ? $value : null;
     }
 
     /**

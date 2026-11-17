@@ -59,7 +59,7 @@ class PartSubstituteController extends Controller
             ->whereDoesntHave('partType', fn ($q) => $q->whereRaw('LOWER(code) = ?', ['wip']))
             ->with('uom:id,code')
             ->orderBy('part_number')
-            ->get(['id', 'part_number', 'part_name', 'uom_id']);
+            ->get(['id', 'part_number', 'part_name', 'model', 'size', 'uom_id']);
 
         // Substitute parts: part non-FG yang didaftarkan sebagai pengganti supplier, atau belum menjadi main part
         $substituteParts = Part::whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))
@@ -70,7 +70,7 @@ class PartSubstituteController extends Controller
             ->whereDoesntHave('partType', fn ($q) => $q->whereRaw('LOWER(code) = ?', ['wip']))
             ->with('uom:id,code')
             ->orderBy('part_number')
-            ->get(['id', 'part_number', 'part_name', 'uom_id']);
+            ->get(['id', 'part_number', 'part_name', 'model', 'size', 'uom_id']);
 
         return Inertia::render('Master/Substitute/Index', [
             'substitutes' => $substitutes,

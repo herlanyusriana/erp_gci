@@ -26,6 +26,8 @@ interface SupplierPart {
     part_id: number;
     part_number: string | null;
     part_name: string | null;
+    model: string | null;
+    size: string | null;
     uom: string | null;
 }
 
@@ -39,7 +41,7 @@ interface ActivePrice {
 const props = defineProps<{
     purchaseOrder: PurchaseOrder | null;
     suppliers: Array<Pick<Supplier, 'id' | 'supplier_code' | 'supplier_name'>>;
-    parts: Array<Pick<Part, 'id' | 'part_number' | 'part_name'>>;
+    parts: Array<Pick<Part, 'id' | 'part_number' | 'part_name' | 'model' | 'size'>>;
     uomCodes: string[];
     supplierParts: SupplierPart[];
     activePrices: ActivePrice[];
@@ -115,10 +117,43 @@ function onSupplierChange() {
     }
 }
 
-/** Pilih part → isi satuan (bila kosong) & harga dari price master. */
+/**
+ * Size master untuk baris ini: size khusus supplier (`part_substitutes.size`)
+ * dulu, lalu master part. `null` berarti master belum punya size.
+ */
+function masterSizeFor(partId: number | ''): string | null {
+    const id = Number(partId);
+    if (!id) return null;
+
+    const sp = props.supplierParts.find(
+        (s) => s.supplier_id === Number(form.supplier_id) && s.part_id === id,
+    );
+
+    for (const candidate of [sp?.size, props.parts.find((p) => p.id === id)?.size]) {
+        const value = String(candidate ?? '').trim();
+        if (value !== '' && value !== '-') return value;
+    }
+
+    return null;
+}
+
+/** Baris ini memakai size dari master (bukan diketik manual)? */
+const sizeFromMaster = (r: ItemRow) => r.size !== '' && r.size === masterSizeFor(r.part_id);
+
+/**
+ * Pilih part → isi size, satuan (bila kosong) & harga dari master.
+ *
+ * Size sengaja ditimpa setiap kali part berganti supaya tidak pernah tertinggal
+ * nilai part sebelumnya. Kalau master belum punya size, kolom dibiarkan kosong
+ * dan boleh diisi manual.
+ */
 function onPartChange(r: ItemRow) {
-    const sp = props.supplierParts.find((s) => s.supplier_id === Number(form.supplier_id) && s.part_id === Number(r.part_id));
+    const sp = props.supplierParts.find(
+        (s) => s.supplier_id === Number(form.supplier_id) && s.part_id === Number(r.part_id),
+    );
     if (sp?.uom && r.unit === '') r.unit = sp.uom;
+
+    r.size = masterSizeFor(r.part_id) ?? '';
 
     const price = priceFor(r.part_id);
     if (price) r.price = price.price;
@@ -255,8 +290,25 @@ function submit() {
                         <InputError :message="rowError(r, 'part_id')" class="mt-1" />
                     </div>
                     <div class="sm:col-span-2">
-                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.size') }}</label>
-                        <input :aria-label="t('incoming.size')" v-model="r.size" type="text" maxlength="100" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <label class="text-xs font-semibold text-ink-secondary" :for="`po-size-${r.uid}`">{{ t('incoming.size') }}</label>
+                        <input
+                            :id="`po-size-${r.uid}`"
+                            v-model="r.size"
+                            type="text"
+                            maxlength="100"
+                            :aria-label="t('incoming.size')"
+                            :aria-describedby="`po-size-hint-${r.uid}`"
+                            :readonly="sizeFromMaster(r)"
+                            :class="[
+                                'mt-1 w-full rounded-lg border px-3 py-2 text-sm text-ink-primary focus:ring-primary',
+                                sizeFromMaster(r)
+                                    ? 'border-borderline bg-background text-ink-secondary focus:border-primary'
+                                    : 'border-borderline bg-surface focus:border-primary',
+                            ]"
+                        />
+                        <p :id="`po-size-hint-${r.uid}`" class="mt-1 text-xs text-ink-secondary">
+                            {{ sizeFromMaster(r) ? t('incoming.sizeFromMaster') : t('incoming.sizeManual') }}
+                        </p>
                         <InputError :message="rowError(r, 'size')" class="mt-1" />
                     </div>
                     <div class="sm:col-span-2">

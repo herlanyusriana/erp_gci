@@ -11,7 +11,7 @@ import type { IncomingArrival } from '@/types';
 
 const { t } = useI18n();
 
-interface PartOpt { id: number; part_number: string; part_name: string; }
+interface PartOpt { id: number; part_number: string; part_name: string; model?: string | null; size?: string | null; }
 interface SupplierOpt { id: number; supplier_code: string | null; supplier_name: string; }
 interface ItemRow {
     uid: number;
@@ -28,7 +28,7 @@ interface ItemRow {
     notes: string;
 }
 
-interface SupplierPart { supplier_id: number; part_id: number; part_number: string | null; part_name: string | null; }
+interface SupplierPart { supplier_id: number; part_id: number; part_number: string | null; part_name: string | null; model?: string | null; size?: string | null; uom?: string | null; }
 
 const props = defineProps<{
     arrival?: IncomingArrival | null;
@@ -110,7 +110,41 @@ const partOptions = computed(() => {
 function onSupplierChange() {
     for (const r of rows.value) {
         r.part_id = '';
+        r.size = '';
     }
+}
+
+/**
+ * Size master untuk baris ini: size khusus supplier (`part_substitutes.size`)
+ * dulu, lalu master part. `null` berarti master belum punya size.
+ */
+function masterSizeFor(partId: number | ''): string | null {
+    const id = Number(partId);
+    if (!id) return null;
+
+    const sp = props.supplierParts.find(
+        (x) => x.supplier_id === Number(form.supplier_id) && x.part_id === id,
+    );
+
+    for (const candidate of [sp?.size, props.parts.find((p) => p.id === id)?.size]) {
+        const value = String(candidate ?? '').trim();
+        if (value !== '' && value !== '-') return value;
+    }
+
+    return null;
+}
+
+/** Baris ini memakai size dari master (bukan diketik manual)? */
+const sizeFromMaster = (r: ItemRow) => r.size !== '' && r.size === masterSizeFor(r.part_id);
+
+/** Pilih part → isi size dari master (ditimpa, tidak diakumulasi). */
+function onPartChange(r: ItemRow) {
+    r.size = masterSizeFor(r.part_id) ?? '';
+}
+
+function onPartSelected(r: ItemRow, value: number | '') {
+    r.part_id = value;
+    onPartChange(r);
 }
 
 function rowHasData(r: ItemRow): boolean {
@@ -254,15 +288,31 @@ function submit() {
                                 :aria-label="t('incoming.part')"
                                 :placeholder="t('incoming.searchPart')"
                                 :disabled="!form.supplier_id"
-                                @update:model-value="r.part_id = $event"
+                                @update:model-value="onPartSelected(r, $event)"
                             />
                             <p v-if="isLocked" class="mt-1 text-xs text-ink-secondary">{{ t('incoming.supplierLocked') }}</p>
                             <p v-if="form.supplier_id && partOptions.length === 0" class="mt-1 text-xs text-warning">{{ t('incoming.supplierNoParts') }}</p>
                             <InputError :message="rowError(r, 'part_id')" class="mt-1" />
                         </div>
                         <div class="sm:col-span-2">
-                            <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.size') }}</label>
-                            <input :aria-label="t('incoming.size')" v-model="r.size" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                            <label class="text-xs font-semibold text-ink-secondary" :for="`lpo-size-${r.uid}`">{{ t('incoming.size') }}</label>
+                            <input
+                                :id="`lpo-size-${r.uid}`"
+                                v-model="r.size"
+                                type="text"
+                                :aria-label="t('incoming.size')"
+                                :aria-describedby="`lpo-size-hint-${r.uid}`"
+                                :readonly="sizeFromMaster(r)"
+                                :class="[
+                                    'mt-1 w-full rounded-lg border px-3 py-2 text-sm text-ink-primary focus:ring-primary',
+                                    sizeFromMaster(r)
+                                        ? 'border-borderline bg-background text-ink-secondary focus:border-primary'
+                                        : 'border-borderline bg-surface focus:border-primary',
+                                ]"
+                            />
+                            <p :id="`lpo-size-hint-${r.uid}`" class="mt-1 text-xs text-ink-secondary">
+                                {{ sizeFromMaster(r) ? t('incoming.sizeFromMaster') : t('incoming.sizeManual') }}
+                            </p>
                             <InputError :message="rowError(r, 'size')" class="mt-1" />
                         </div>
                         <div class="sm:col-span-2">

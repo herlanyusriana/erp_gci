@@ -79,7 +79,7 @@ class LocalPoController extends Controller
             'suppliers' => Supplier::select('id', 'supplier_code', 'supplier_name', 'source')
                 ->where('source', Supplier::SOURCE_LOCAL)
                 ->where('is_active', true)->orderBy('supplier_name')->get(),
-            'parts' => Part::select('id', 'part_number', 'part_name')
+            'parts' => Part::select('id', 'part_number', 'part_name', 'model', 'size')
                 ->where('is_active', true)
                 ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))
                 ->orderBy('part_number')->get(),
@@ -143,8 +143,9 @@ class LocalPoController extends Controller
 
                 $arrival->items()->create([
                     'part_id' => (int) $item['part_id'],
-                    'size' => isset($item['size']) && trim((string) $item['size']) !== ''
-                        ? strtoupper(trim((string) $item['size'])) : null,
+                    // Size selalu diambil dari master; nilai kiriman hanya dipakai
+                    // bila supplier + part belum punya size.
+                    'size' => $this->resolveSize((int) $validated['supplier_id'], (int) $item['part_id'], $item['size'] ?? null),
                     'qty_goods' => $qtyGoods,
                     'unit_goods' => UomCatalog::normalize((string) $item['unit_goods']),
                     'qty_bundle' => (float) ($item['qty_bundle'] ?? 0),
@@ -162,6 +163,25 @@ class LocalPoController extends Controller
         });
 
         return redirect()->route('local-pos.show', $arrival)->with('success', __('Local PO created. Silakan lakukan receive.'));
+    }
+
+    /**
+     * Size final satu baris Local PO.
+     *
+     * Master menang supaya dokumen tidak menyimpang dari master data; nilai
+     * kiriman hanya dipakai bila supplier + part belum punya size.
+     */
+    private function resolveSize(int $supplierId, int $partId, ?string $submitted): ?string
+    {
+        $fromMaster = PartSubstitute::resolveSize($supplierId, $partId);
+
+        if ($fromMaster !== null) {
+            return $fromMaster;
+        }
+
+        $value = trim((string) $submitted);
+
+        return $value !== '' ? $value : null;
     }
 
     /**
@@ -214,7 +234,7 @@ class LocalPoController extends Controller
             'suppliers' => Supplier::select('id', 'supplier_code', 'supplier_name', 'source')
                 ->where('source', Supplier::SOURCE_LOCAL)
                 ->where('is_active', true)->orderBy('supplier_name')->get(),
-            'parts' => Part::select('id', 'part_number', 'part_name')
+            'parts' => Part::select('id', 'part_number', 'part_name', 'model', 'size')
                 ->where('is_active', true)
                 ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))
                 ->orderBy('part_number')->get(),
@@ -288,8 +308,7 @@ class LocalPoController extends Controller
 
                 $data = [
                     'part_id' => (int) $itemData['part_id'],
-                    'size' => isset($itemData['size']) && trim((string) $itemData['size']) !== ''
-                        ? strtoupper(trim((string) $itemData['size'])) : null,
+                    'size' => $this->resolveSize((int) $validated['supplier_id'], (int) $itemData['part_id'], $itemData['size'] ?? null),
                     'qty_goods' => $qtyGoods,
                     'unit_goods' => UomCatalog::normalize((string) $itemData['unit_goods']),
                     'qty_bundle' => (float) ($itemData['qty_bundle'] ?? 0),

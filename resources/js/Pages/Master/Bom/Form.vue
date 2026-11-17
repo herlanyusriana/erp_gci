@@ -33,7 +33,9 @@ const props = defineProps<{
     bom: Bom | null;
     items?: BomItem[];
     fgParts: Array<Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'>>;
-    materials: Array<Pick<Part, 'id' | 'part_number' | 'part_name'> & { uom?: { code?: string | null } | null }>;
+    materials: Array<
+        Pick<Part, 'id' | 'part_number' | 'part_name' | 'model' | 'size'> & { uom?: { code?: string | null } | null }
+    >;
     processes: Array<Pick<Process, 'id' | 'process_code' | 'process_name'>>;
     machines: Array<Pick<Machine, 'id' | 'machine_code' | 'machine_name'>>;
     uoms: string[];
@@ -120,12 +122,36 @@ function removeRow(i: number) {
     rows.value.splice(i, 1);
 }
 
-/** Pilih child part → isi nama dan UOM bila belum diisi. */
+/**
+ * Size master satu material. Placeholder `-` dianggap kosong.
+ * `null` berarti master belum punya size.
+ */
+function masterSizeFor(partId: number | ''): string | null {
+    const id = Number(partId);
+    if (!id) return null;
+
+    const value = String(props.materials.find((p) => p.id === id)?.size ?? '').trim();
+
+    return value !== '' && value !== '-' ? value : null;
+}
+
+/** Baris ini memakai size dari master (bukan diketik manual)? */
+const sizeFromMaster = (r: ItemRow) => r.size !== '' && r.size === masterSizeFor(r.child_part_id);
+
+/**
+ * Pilih child part → isi nama, UOM, dan size dari master.
+ *
+ * Size selalu ditimpa saat part berganti supaya tidak tertinggal nilai part
+ * sebelumnya; kalau master belum punya size, kolom dibiarkan kosong dan boleh
+ * diisi manual.
+ */
 function onChildChange(r: ItemRow) {
     const part = props.materials.find((p) => p.id === Number(r.child_part_id));
     if (!part) return;
     if (r.child_part_name === '') r.child_part_name = part.part_name;
     if (r.uom_rm === '') r.uom_rm = part.uom?.code ?? '';
+
+    r.size = masterSizeFor(r.child_part_id) ?? '';
 }
 
 function onParentChange(r: ItemRow) {
@@ -316,8 +342,19 @@ const fieldClass = 'mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-
                         </div>
 
                         <div class="sm:col-span-4">
-                            <label class="text-xs font-semibold text-ink-secondary">{{ t('master.size') }}</label>
-                            <input :aria-label="t('master.size')" v-model="r.size" type="text" :class="fieldClass" />
+                            <label class="text-xs font-semibold text-ink-secondary" :for="`bom-size-${r.uid}`">{{ t('master.size') }}</label>
+                            <input
+                                :id="`bom-size-${r.uid}`"
+                                v-model="r.size"
+                                type="text"
+                                :aria-label="t('master.size')"
+                                :aria-describedby="`bom-size-hint-${r.uid}`"
+                                :readonly="sizeFromMaster(r)"
+                                :class="[fieldClass, sizeFromMaster(r) ? 'bg-background text-ink-secondary' : '']"
+                            />
+                            <p :id="`bom-size-hint-${r.uid}`" class="mt-1 text-xs text-ink-secondary">
+                                {{ sizeFromMaster(r) ? t('incoming.sizeFromMaster') : t('incoming.sizeManual') }}
+                            </p>
                             <InputError :message="form.errors[`items.${i}.size`]" class="mt-1" />
                         </div>
                         <div class="sm:col-span-4">

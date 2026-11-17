@@ -133,6 +133,67 @@ restore_services_on_exit() {
 }
 trap restore_services_on_exit EXIT
 
+# Hitung baris langsung lewat psql. `artisan tinker` tidak dipakai karena psysh
+# menulis config ke $HOME/.config/psysh, yang gagal saat skrip jalan sebagai
+# www-data (HOME=/var/www tidak writable) — verifikasi jadi gagal padahal reset
+# sukses.
+verify_counts() {
+    local transaction_tables=(purchase_orders incoming_arrivals incoming_receives
+        part_stocks work_orders production_results material_issues picking_lists deliveries)
+    local master_tables=(parts suppliers customers users)
+
+    if [[ "$DB_CONNECTION" == "pgsql" ]] && command -v psql >/dev/null && [[ -n "$DB_PASSWORD" ]]; then
+        local sql="" table
+        for table in "${transaction_tables[@]}"; do
+            sql+="select '${table}' as label, count(*) as n from ${table} union all "
+        done
+        sql+="select 'TOTAL transaksi', sum(n) from ("
+        local first=1
+        for table in "${transaction_tables[@]}"; do
+            [[ $first -eq 0 ]] && sql+=" union all "
+            sql+="select count(*) as n from ${table}"
+            first=0
+        done
+        sql+=") x union all select '--- MASTER ---', null"
+        for table in "${master_tables[@]}"; do
+            sql+=" union all select '${table}', count(*) from ${table}"
+        done
+
+        local out
+        if out="$(PGPASSWORD="$DB_PASSWORD" psql -h "${DB_HOST:-127.0.0.1}" -p "${DB_PORT:-5432}" \
+                -U "$DB_USERNAME" -d "$DB_DATABASE" -tAF'|' -c "$sql" 2>&1)"; then
+            while IFS='|' read -r label value; do
+                [[ -z "$label" ]] && continue
+                if [[ "$label" == "--- MASTER ---" ]]; then
+                    log "  --- MASTER (harus tetap) ---"
+                    continue
+                fi
+                printf '  %-24s %s\n' "$label" "${value:-}"
+            done <<<"$out"
+
+            return 0
+        fi
+
+        printf '%s\n' "$out" >&2
+        return 1
+    fi
+
+    # Fallback: tinker dengan HOME yang writable, untuk DB non-pgsql.
+    XDG_CONFIG_HOME="${TMPDIR:-/tmp}" HOME="${TMPDIR:-/tmp}" artisan tinker --execute '
+$rows = 0;
+foreach (["purchase_orders","incoming_arrivals","incoming_receives","part_stocks","work_orders","production_results","material_issues","picking_lists","deliveries"] as $t) {
+    $n = \Illuminate\Support\Facades\DB::table($t)->count();
+    $rows += $n;
+    echo "  ".str_pad($t, 24).$n."\n";
+}
+echo "  ".str_pad("TOTAL transaksi", 24).$rows."\n";
+echo "  --- MASTER (harus tetap) ---\n";
+foreach (["parts","suppliers","customers","users"] as $t) {
+    echo "  ".str_pad($t, 24).\Illuminate\Support\Facades\DB::table($t)->count()."\n";
+}
+'
+}
+
 # --- 1. Preflight -----------------------------------------------------------
 
 step "1/7 Preflight"
@@ -285,20 +346,7 @@ fi
 
 log ""
 log "Ringkasan baris (transaksi harus 0, master harus tetap):"
-artisan tinker --execute '
-$tables = ["purchase_orders","incoming_arrivals","incoming_receives","part_stocks","work_orders","production_results","material_issues","picking_lists","deliveries"];
-$rows = 0;
-foreach ($tables as $t) {
-    $n = \Illuminate\Support\Facades\DB::table($t)->count();
-    $rows += $n;
-    echo "  ".str_pad($t, 24).$n."\n";
-}
-echo "  ".str_pad("TOTAL transaksi", 24).$rows."\n";
-echo "  ".str_pad("parts", 24).\App\Models\Part::count()."\n";
-echo "  ".str_pad("suppliers", 24).\App\Models\Supplier::count()."\n";
-echo "  ".str_pad("customers", 24).\App\Models\Customer::count()."\n";
-echo "  ".str_pad("users", 24).\App\Models\User::count()."\n";
-' 2>/dev/null || warn "Verifikasi otomatis gagal; cek manual lewat tinker."
+verify_counts || warn "Verifikasi otomatis gagal; jalankan psql manual (perintah di bawah)."
 
 log ""
 if [[ -n "$BACKUP_FILE" ]]; then

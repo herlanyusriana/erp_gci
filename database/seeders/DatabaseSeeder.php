@@ -17,6 +17,7 @@ class DatabaseSeeder extends Seeder
             ConfigMasterSeeder::class,
             UomSeeder::class,
             MasterDataSeeder::class,
+            CustomerSeeder::class,
             LocationSeeder::class,
             DeliveryLocationSeeder::class,
             TrolleySeeder::class,

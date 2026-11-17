@@ -16,9 +16,13 @@ interface Customer {
     id: number;
     customer_code: string;
     customer_name: string;
+    short_name: string | null;
     address: string | null;
     phone: string | null;
+    contact_person: string | null;
     email: string | null;
+    npwp: string | null;
+    bc_facility: string | null;
     is_active: boolean;
 }
 
@@ -30,6 +34,7 @@ interface Paginated<T> {
 const props = defineProps<{
     customers: Paginated<Customer>;
     filters: { search?: string };
+    bcFacilities: string[];
 }>();
 
 const search = ref(props.filters.search ?? '');
@@ -42,9 +47,13 @@ function doSearch() {
 const form = useForm({
     customer_code: '',
     customer_name: '',
+    short_name: '',
     address: '',
     phone: '',
+    contact_person: '',
     email: '',
+    npwp: '',
+    bc_facility: '' as string,
     is_active: true,
 });
 const showForm = ref(false);
@@ -62,9 +71,13 @@ function openEdit(c: Customer) {
     form.clearErrors();
     form.customer_code = c.customer_code;
     form.customer_name = c.customer_name;
+    form.short_name = c.short_name ?? '';
     form.address = c.address ?? '';
     form.phone = c.phone ?? '';
+    form.contact_person = c.contact_person ?? '';
     form.email = c.email ?? '';
+    form.npwp = c.npwp ?? '';
+    form.bc_facility = c.bc_facility ?? '';
     form.is_active = c.is_active;
     showForm.value = true;
 }
@@ -132,8 +145,16 @@ function remove(c: Customer) {
                     <tbody class="divide-y divide-borderline">
                         <tr v-for="c in customers.data" :key="c.id" class="hover:bg-primary-light/40">
                             <td class="px-4 py-3 font-mono font-medium text-ink-primary">{{ c.customer_code }}</td>
-                            <td class="px-4 py-3 text-ink-primary">{{ c.customer_name }}</td>
+                            <td class="px-4 py-3 text-ink-primary">
+                                {{ c.customer_name }}
+                                <div class="text-xs text-ink-secondary">
+                                    <span v-if="c.short_name">{{ c.short_name }}</span>
+                                    <span v-if="c.npwp" class="ml-2 font-mono">{{ c.npwp }}</span>
+                                    <span v-if="c.bc_facility" class="ml-2 rounded bg-primary-light px-1.5 py-0.5 text-[10px] font-bold uppercase text-primary">{{ c.bc_facility }}</span>
+                                </div>
+                            </td>
                             <td class="px-4 py-3 text-ink-secondary">
+                                <div v-if="c.contact_person" class="text-xs font-semibold text-ink-primary">{{ c.contact_person }}</div>
                                 <div>{{ c.phone ?? '—' }}</div>
                                 <div class="text-xs">{{ c.email ?? '' }}</div>
                             </td>
@@ -158,7 +179,7 @@ function remove(c: Customer) {
 
         <Pagination :links="customers.links" />
 
-        <Modal :show="showForm" max-width="md" @close="closeForm">
+        <Modal :show="showForm" max-width="lg" @close="closeForm">
             <form @submit.prevent="submit" class="p-6">
                 <h2 class="mb-4 text-base font-semibold text-ink-primary">
                     {{ editing ? t('outgoing.editCustomer') : t('outgoing.addCustomer') }}
@@ -174,10 +195,33 @@ function remove(c: Customer) {
                         <input v-model="form.customer_name" type="text" :aria-label="t('outgoing.customerName')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.customer_name" class="mt-1" />
                     </div>
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary" for="customer-short-name">{{ t('outgoing.customerShortName') }}</label>
+                        <input id="customer-short-name" v-model="form.short_name" type="text" :aria-label="t('outgoing.customerShortName')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm uppercase text-ink-primary focus:border-primary focus:ring-primary" />
+                        <InputError :message="form.errors.short_name" class="mt-1" />
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary" for="customer-npwp">{{ t('outgoing.customerNpwp') }}</label>
+                        <input id="customer-npwp" v-model="form.npwp" type="text" inputmode="numeric" :aria-label="t('outgoing.customerNpwp')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 font-mono text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <InputError :message="form.errors.npwp" class="mt-1" />
+                    </div>
                     <div class="sm:col-span-2">
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('outgoing.customerAddress') }}</label>
                         <input v-model="form.address" type="text" :aria-label="t('outgoing.customerAddress')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <InputError :message="form.errors.address" class="mt-1" />
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary" for="customer-contact-person">{{ t('outgoing.customerContactPerson') }}</label>
+                        <input id="customer-contact-person" v-model="form.contact_person" type="text" :aria-label="t('outgoing.customerContactPerson')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <InputError :message="form.errors.contact_person" class="mt-1" />
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary" for="customer-bc-facility">{{ t('outgoing.customerBcFacility') }}</label>
+                        <select id="customer-bc-facility" v-model="form.bc_facility" :aria-label="t('outgoing.customerBcFacility')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                            <option value="">—</option>
+                            <option v-for="value in bcFacilities" :key="value" :value="value">{{ value }}</option>
+                        </select>
+                        <InputError :message="form.errors.bc_facility" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('outgoing.customerPhone') }}</label>

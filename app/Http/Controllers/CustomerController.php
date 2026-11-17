@@ -20,7 +20,9 @@ class CustomerController extends Controller
             ->when($request->input('search'), fn ($q, $s) => $q
                 ->where(fn ($w) => $w
                     ->where('customer_code', 'ilike', "%{$s}%")
-                    ->orWhere('customer_name', 'ilike', "%{$s}%")))
+                    ->orWhere('customer_name', 'ilike', "%{$s}%")
+                    ->orWhere('short_name', 'ilike', "%{$s}%")
+                    ->orWhere('npwp', 'ilike', "%{$s}%")))
             ->orderBy('customer_code')
             ->paginate(10)
             ->withQueryString();
@@ -28,6 +30,7 @@ class CustomerController extends Controller
         return Inertia::render('Master/Customer/Index', [
             'customers' => $customers,
             'filters' => $request->only('search'),
+            'bcFacilities' => Customer::BC_FACILITIES,
         ]);
     }
 
@@ -38,9 +41,13 @@ class CustomerController extends Controller
         $data = $request->validate([
             'customer_code' => ['required', 'string', 'max:50', 'unique:customers,customer_code'],
             'customer_name' => ['required', 'string', 'max:255'],
+            'short_name' => ['nullable', 'string', 'max:100'],
             'address' => ['nullable', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
+            'contact_person' => ['nullable', 'string', 'max:150'],
             'email' => ['nullable', 'email', 'max:255'],
+            'npwp' => ['nullable', 'string', 'max:32'],
+            'bc_facility' => ['nullable', Rule::in(Customer::BC_FACILITIES)],
             'is_active' => ['sometimes', 'boolean'],
         ]);
 
@@ -57,9 +64,13 @@ class CustomerController extends Controller
         $data = $request->validate([
             'customer_code' => ['required', 'string', 'max:50', Rule::unique('customers', 'customer_code')->ignore($customer->id)],
             'customer_name' => ['required', 'string', 'max:255'],
+            'short_name' => ['nullable', 'string', 'max:100'],
             'address' => ['nullable', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
+            'contact_person' => ['nullable', 'string', 'max:150'],
             'email' => ['nullable', 'email', 'max:255'],
+            'npwp' => ['nullable', 'string', 'max:32'],
+            'bc_facility' => ['nullable', Rule::in(Customer::BC_FACILITIES)],
             'is_active' => ['sometimes', 'boolean'],
         ]);
 

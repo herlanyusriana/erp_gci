@@ -20,7 +20,9 @@ mengubah pola tanpa alasan jelas.
 - Migrate + seed: `php artisan migrate --seed`
 - Reset data trial (master tetap): `php artisan erp:reset-data` (dry run) →
   `php artisan erp:reset-data --force` (hapus). Opsi `--keep-sessions` menjaga
-  sesi web & token APK tetap login.
+  sesi web & token APK tetap login. Di VPS pakai `scripts/reset-trial.sh`
+  (backup → dry run → konfirmasi `RESET` → stop service → reset → start →
+  verifikasi); lihat `bash scripts/reset-trial.sh --help`.
 
 Selalu jalankan `vendor/bin/pint` dan `npm run build` setelah perubahan PHP/Vue.
 

@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Picking List (Plan)</title>
+<style>
+  :root{
+    --paper:#F6F4EF; --card:#FFFFFF; --ink:#1E2430; --muted:#6B7280;
+    --line:#D9D5CB; --field:#BFBAAE; --head:#F0EDE5; --accent:#1F4E79;
+    --ok:#2F6B3A; --ok-soft:#E7F3EA; --warn:#B45309; --warn-soft:#FBEFE3; --bad:#9B1C1C; --bad-soft:#FBE7E7;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--paper); color:var(--ink);
+    font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-size:14px; line-height:1.45}
+  .wrap{max-width:1300px; margin:0 auto; padding:24px 16px 96px}
+  header{display:flex; justify-content:space-between; align-items:flex-end; gap:8px;
+    border-bottom:2px solid var(--ink); padding-bottom:12px; margin-bottom:20px}
+  h1{font-size:22px; margin:0; font-weight:600; letter-spacing:-.01em}
+  .sub{color:var(--muted); font-size:13px}
+  section{background:var(--card); border:1px solid var(--line); border-radius:6px; padding:18px; margin-bottom:16px}
+  h2{font-size:14px; margin:0 0 14px; font-weight:600; display:flex; align-items:center; gap:8px}
+  .n{width:22px; height:22px; border-radius:50%; background:var(--ink); color:#fff;
+    display:inline-grid; place-items:center; font-size:12px}
+  label{display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--muted)}
+  input,select{font:inherit; color:var(--ink); background:#fff; width:100%; min-height:36px;
+    border:1px solid var(--field); border-radius:4px; padding:8px 10px}
+  input:focus,select:focus{outline:2px solid var(--accent); outline-offset:1px; border-color:transparent}
+  input[readonly]{background:#F0F3F7; color:var(--accent); font-weight:600}
+  .grid{display:grid; gap:12px 16px; grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+
+  .seq-card{border:1px solid var(--line); border-radius:6px; margin-bottom:14px; overflow:hidden}
+  .seq-head{display:flex; align-items:center; justify-content:space-between; background:var(--head);
+    padding:10px 14px; border-bottom:1px solid var(--line)}
+  .seq-head .title{font-weight:600}
+  .seq-body{padding:12px 14px}
+  .table-wrap{overflow-x:auto}
+  table{width:100%; border-collapse:collapse; min-width:900px}
+  th,td{border:1px solid var(--line); padding:6px; text-align:left; vertical-align:middle; background:#fff}
+  th{background:var(--head); font-size:12px; font-weight:600; color:var(--muted); white-space:nowrap}
+  td input,td select{padding:6px 8px; min-height:32px}
+  td.qty{width:110px}
+  td.uom{width:100px}
+  td.del{width:52px; text-align:center}
+  .row-actions{display:flex; gap:8px; margin-top:10px; flex-wrap:wrap}
+  .actions{display:flex; gap:10px; justify-content:flex-end; align-items:center; flex-wrap:wrap; margin-top:12px}
+  .msg{margin-right:auto; color:var(--muted); font-size:13px}
+  .msg.err{color:var(--warn)}
+  .msg.ok{color:var(--ok)}
+  .empty{color:var(--muted); font-size:13px; padding:8px 0}
+
+  .banner{border-radius:6px; padding:12px 14px; margin-bottom:12px; font-size:13px; border:1px solid}
+  .banner.warn{background:var(--warn-soft); border-color:#E9C9A6; color:#7A3E06}
+  .banner.ok{background:var(--ok-soft); border-color:#B9D9C1; color:var(--ok)}
+  .banner ul{margin:6px 0 0 18px; padding:0}
+
+  .badge{display:inline-block; font-size:12px; padding:2px 8px; border-radius:3px; border:1px solid; white-space:nowrap}
+  .badge.ok{color:var(--ok); background:var(--ok-soft); border-color:#B9D9C1}
+  .badge.inprod{color:#7A3E06; background:var(--warn-soft); border-color:#E9C9A6}
+  .badge.noprod{color:var(--bad); background:var(--bad-soft); border-color:#E7B8B8}
+  .badge.nodata{color:var(--muted); background:#F3F4F6; border-color:var(--line)}
+  td.num{text-align:right; font-variant-numeric:tabular-nums}
+  tr.short td{background:#FFFBF6}
+
+  button{font:inherit; cursor:pointer; padding:10px 18px; border-radius:4px;
+    border:1px solid var(--ink); background:transparent; color:var(--ink)}
+  button.primary{background:var(--ink); color:#fff}
+  button.small{padding:6px 10px; font-size:12px}
+  button.danger{border-color:var(--warn); color:var(--warn)}
+  button:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+  @media (max-width:600px){ header{flex-direction:column; align-items:flex-start} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <h1>Picking List (Plan)</h1>
+      <div class="sub">Seq adalah urutan picking. Customer diisi per baris FG.</div>
+    </div>
+  </header>
+
+  <form id="f" autocomplete="off">
+
+    <section>
+      <h2><span class="n">1</span>Informasi picking</h2>
+      <div class="grid">
+        <label>Date / Tgl <input id="date" type="date"></label>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="n">2</span>Detail picking</h2>
+      <div id="seqs"></div>
+      <div class="row-actions">
+        <button type="button" id="addSeq">+ Tambah seq</button>
+      </div>
+    </section>
+
+    <div class="actions">
+      <span id="msg" class="msg"></span>
+      <button type="button" id="reset">Reset</button>
+      <button type="button" id="createBtn" class="primary">Create Picking</button>
+    </div>
+  </form>
+
+  <section id="warnSec" style="display:none; margin-top:16px">
+    <h2><span class="n">!</span>Warning stok</h2>
+    <div id="warnBox"></div>
+  </section>
+
+  <section style="margin-top:16px">
+    <h2><span class="n">3</span>Data picking list
+      <span class="sub" style="margin-left:auto" id="listCount"></span>
+    </h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th><th>Seq</th><th>Customer</th><th>FG Name</th><th>Model</th><th>Part No</th>
+            <th>Qty</th><th>UOM</th><th>Stok tersedia</th><th>Status</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="listRows"></tbody>
+      </table>
+    </div>
+    <div class="actions">
+      <button type="button" id="clearList" class="small danger">Kosongkan list</button>
+    </div>
+  </section>
+
+</div>
+
+<script>
+  const UOMS = ["PCS", "KG", "M", "ROLL", "SET"];
+
+  // Master stok contoh. Ganti dengan data stok asli.
+  // production: "IN" = sedang diproduksi, "NO" = tidak ada produksi.
+  const STOCK = {
+    "001A": { stock: 150, production: "IN" },
+    "002B": { stock: 0,   production: "NO" },
+    "003C": { stock: 500, production: "NO" },
+    "004D": { stock: 200, production: "IN" }
+  };
+
+  const $ = s => document.querySelector(s);
+  const esc = v => String(v ?? "").replace(/"/g, "&quot;");
+  const seqsEl = $("#seqs");
+  const msg = $("#msg");
+
+  let seqs = [];
+  let list = []; // data picking list (sudah dibuat)
+
+  const newItem = () => ({ customer: "", fg: "", model: "", partNo: "", qty: "", uom: "PCS" });
+  const newSeq = () => ({ items: [newItem()] });
+  const keyOf = fg => String(fg || "").trim().toUpperCase();
+
+  function setMsg(text, kind = "") {
+    msg.textContent = text;
+    msg.className = "msg " + kind;
+    if (kind === "err") msg.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  /* ---------- Form ---------- */
+
+  function render() {
+    seqsEl.innerHTML = "";
+    if (!seqs.length) seqsEl.innerHTML = `<div class="empty">Belum ada seq. Klik "+ Tambah seq".</div>`;
+    seqs.forEach((s, si) => {
+      const card = document.createElement("div");
+      card.className = "seq-card";
+      const rowsHtml = s.items.map((it, ii) => `
+        <tr>
+          <td><input type="text" data-s="${si}" data-i="${ii}" data-k="customer" value="${esc(it.customer)}" placeholder="Customer"></td>
+          <td><input type="text" data-s="${si}" data-i="${ii}" data-k="fg" value="${esc(it.fg)}" placeholder="FG name"></td>
+          <td><input type="text" data-s="${si}" data-i="${ii}" data-k="model" value="${esc(it.model)}" placeholder="Model"></td>
+          <td><input type="text" data-s="${si}" data-i="${ii}" data-k="partNo" value="${esc(it.partNo)}" placeholder="Part no"></td>
+          <td class="qty"><input type="number" min="0" step="any" data-s="${si}" data-i="${ii}" data-k="qty" value="${esc(it.qty)}"></td>
+          <td class="uom"><select data-s="${si}" data-i="${ii}" data-k="uom">
+            ${UOMS.map(u => `<option ${u === it.uom ? "selected" : ""}>${u}</option>`).join("")}
+          </select></td>
+          <td class="del"><button type="button" class="small danger" data-delrow="${si}:${ii}" aria-label="Hapus baris">&times;</button></td>
+        </tr>`).join("");
+
+      card.innerHTML = `
+        <div class="seq-head">
+          <span class="title">Seq ${si + 1}</span>
+          <button type="button" class="small danger" data-delseq="${si}">Hapus seq</button>
+        </div>
+        <div class="seq-body">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Customer</th><th>FG Name</th><th>Model</th><th>Part No</th><th>Qty</th><th>UOM</th><th></th></tr></thead>
+              <tbody>${rowsHtml}</tbody>
+            </table>
+          </div>
+          <div class="row-actions">
+            <button type="button" class="small" data-addrow="${si}">+ Tambah baris</button>
+          </div>
+        </div>`;
+      seqsEl.appendChild(card);
+    });
+  }
+
+  seqsEl.addEventListener("input", e => {
+    const t = e.target;
+    if (t.dataset.k && t.dataset.i !== undefined) seqs[+t.dataset.s].items[+t.dataset.i][t.dataset.k] = t.value;
+  });
+  seqsEl.addEventListener("change", e => {
+    const t = e.target;
+    if (t.dataset.k && t.dataset.i !== undefined) seqs[+t.dataset.s].items[+t.dataset.i][t.dataset.k] = t.value;
+  });
+  seqsEl.addEventListener("click", e => {
+    const t = e.target;
+    if (t.dataset.addrow !== undefined) {
+      seqs[+t.dataset.addrow].items.push(newItem());
+      render();
+    } else if (t.dataset.delseq !== undefined) {
+      if (confirm(`Hapus seq ${+t.dataset.delseq + 1}?`)) { seqs.splice(+t.dataset.delseq, 1); render(); }
+    } else if (t.dataset.delrow !== undefined) {
+      const [s, i] = t.dataset.delrow.split(":").map(Number);
+      seqs[s].items.splice(i, 1);
+      if (!seqs[s].items.length) seqs[s].items.push(newItem());
+      render();
+    }
+  });
+
+  $("#addSeq").addEventListener("click", () => { seqs.push(newSeq()); render(); });
+
+  /* ---------- Create picking: cek stok, masukkan ke list ---------- */
+
+  function allocatedFor(key) {
+    return list.filter(r => r.key === key).reduce((s, r) => s + r.qty, 0);
+  }
+
+  function stockStatus(key, qty, allocatedNow) {
+    const m = STOCK[key];
+    if (!m) return { status: "NODATA", avail: null, short: 0 };
+    const avail = m.stock - allocatedNow;
+    if (qty <= avail) return { status: "OK", avail, short: 0 };
+    const short = qty - Math.max(avail, 0);
+    return { status: m.production === "IN" ? "INPROD" : "NOPROD", avail, short };
+  }
+
+  const STATUS_LABEL = {
+    OK: `<span class="badge ok">OK</span>`,
+    INPROD: `<span class="badge inprod">Kurang - In production</span>`,
+    NOPROD: `<span class="badge noprod">Kurang - No production</span>`,
+    NODATA: `<span class="badge nodata">Stok tidak ada di master</span>`
+  };
+
+  $("#createBtn").addEventListener("click", e => {
+    e.preventDefault();
+    const date = $("#date").value;
+    if (!date) { setMsg("Date / Tgl wajib diisi.", "err"); $("#date").focus(); return; }
+    if (!seqs.length) { setMsg("Tambahkan minimal satu seq.", "err"); return; }
+
+    for (let si = 0; si < seqs.length; si++) {
+      const s = seqs[si];
+      for (let ii = 0; ii < s.items.length; ii++) {
+        const it = s.items[ii];
+        if (!it.customer.trim() || !it.fg.trim() || !it.partNo.trim() || it.qty === "" || Number(it.qty) < 0) {
+          setMsg(`Seq ${si + 1} baris ${ii + 1}: Customer, FG Name, Part No, dan Qty (0 atau lebih) wajib diisi.`, "err");
+          return;
+        }
+      }
+    }
+
+    // Masukkan ke list dan cek stok per baris. Alokasi dihitung berurutan.
+    const added = [];
+    seqs.forEach((s, si) => {
+      s.items.forEach(it => {
+        const key = keyOf(it.fg);
+        const qty = Number(it.qty);
+        const st = stockStatus(key, qty, allocatedFor(key) + added.filter(a => a.key === key).reduce((x, a) => x + a.qty, 0));
+        added.push({
+          date, seq: si + 1, customer: it.customer.trim(), fg: it.fg.trim(), key,
+          model: it.model.trim(), partNo: it.partNo.trim(), qty, uom: it.uom,
+          avail: st.avail, short: st.short, status: st.status
+        });
+      });
+    });
+
+    list = list.concat(added);
+
+    const shortRows = added.filter(r => r.status !== "OK");
+    renderList();
+    renderWarnings(shortRows);
+
+    seqs = [newSeq()];
+    render();
+    setMsg(`${added.length} baris masuk ke data picking list.${shortRows.length ? " Ada peringatan stok." : ""}`,
+           shortRows.length ? "err" : "ok");
+  });
+
+  function renderWarnings(shortRows) {
+    const sec = $("#warnSec");
+    const box = $("#warnBox");
+    if (!shortRows.length) {
+      sec.style.display = "none";
+      box.innerHTML = "";
+      return;
+    }
+    sec.style.display = "block";
+    const items = shortRows.map(r => {
+      if (r.status === "NODATA") return `<li>Seq ${r.seq} · ${esc(r.fg)}: data stok tidak ditemukan di master.</li>`;
+      const label = r.status === "INPROD" ? "In production" : "No production";
+      return `<li>Seq ${r.seq} · ${esc(r.fg)} · ${esc(r.customer)}: stok kurang ${r.short} ${r.uom} (${label}).</li>`;
+    }).join("");
+    box.innerHTML = `
+      <div class="banner warn">
+        <strong>${shortRows.length} baris stok tidak cukup.</strong>
+        <ul>${items}</ul>
+      </div>`;
+  }
+
+  /* ---------- Data list ---------- */
+
+  function renderList() {
+    const tb = $("#listRows");
+    $("#listCount").textContent = `${list.length} baris`;
+    if (!list.length) {
+      tb.innerHTML = `<tr><td colspan="11" class="empty" style="border:0">Belum ada data picking.</td></tr>`;
+      return;
+    }
+    tb.innerHTML = list.map((r, i) => `
+      <tr class="${r.status !== "OK" ? "short" : ""}">
+        <td>${esc(r.date)}</td>
+        <td>${r.seq}</td>
+        <td>${esc(r.customer)}</td>
+        <td>${esc(r.fg)}</td>
+        <td>${esc(r.model)}</td>
+        <td>${esc(r.partNo)}</td>
+        <td class="num">${r.qty}</td>
+        <td>${esc(r.uom)}</td>
+        <td class="num">${r.avail == null ? "-" : r.avail}</td>
+        <td>${STATUS_LABEL[r.status]}</td>
+        <td class="del"><button type="button" class="small danger" data-dellist="${i}" aria-label="Hapus">&times;</button></td>
+      </tr>`).join("");
+  }
+
+  $("#listRows").addEventListener("click", e => {
+    const d = e.target.dataset.dellist;
+    if (d !== undefined) {
+      list.splice(+d, 1);
+      renderList();
+    }
+  });
+
+  $("#clearList").addEventListener("click", () => {
+    if (!list.length) return;
+    if (!confirm("Kosongkan semua data picking list?")) return;
+    list = [];
+    renderList();
+    $("#warnSec").style.display = "none";
+    $("#warnBox").innerHTML = "";
+    setMsg("");
+  });
+
+  $("#reset").addEventListener("click", () => {
+    if (!confirm("Kosongkan isian form?")) return;
+    $("#date").value = new Date().toISOString().slice(0, 10);
+    seqs = [newSeq()];
+    setMsg("");
+    render();
+  });
+
+  $("#date").value = new Date().toISOString().slice(0, 10);
+  seqs = [newSeq()];
+  render();
+  renderList();
+</script>
+</body>
+</html>

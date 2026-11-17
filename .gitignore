@@ -21,3 +21,6 @@ yarn-error.log
 /.nova
 /.vscode
 /.zed
+
+# Konfigurasi agent lokal (open-code/opencode), bukan bagian aplikasi
+/.opencode

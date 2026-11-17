@@ -210,7 +210,15 @@ export default {
         "truckingValue": "Angkutan Truk {name}",
         "invoiceValue": "Faktur {number}",
         "salesOrder": "SO: {number}",
-        "containerSize": "20 kaki / 40 kaki"
+        "containerSize": "20 kaki / 40 kaki",
+        "inspect": "Inspeksi",
+        "inspectTitle": "Inspeksi Kontainer {number}",
+        "sealCondition": "Kondisi Segel",
+        "sealCondition_ok": "Baik",
+        "sealCondition_broken": "Rusak",
+        "sealCondition_missing": "Hilang",
+        "containerCondition": "Kondisi Kontainer",
+        "driverName": "Nama Pengemudi"
     },
     "en": {
         "purchaseOrder": "Purchase Order",
@@ -423,7 +431,15 @@ export default {
         "truckingValue": "Trucking {name}",
         "invoiceValue": "Invoice {number}",
         "salesOrder": "SO: {number}",
-        "containerSize": "20 ft / 40 ft"
+        "containerSize": "20 ft / 40 ft",
+        "inspect": "Inspect",
+        "inspectTitle": "Inspect Container {number}",
+        "sealCondition": "Seal Condition",
+        "sealCondition_ok": "OK",
+        "sealCondition_broken": "Broken",
+        "sealCondition_missing": "Missing",
+        "containerCondition": "Container Condition",
+        "driverName": "Driver Name"
     },
     "ko": {
         "purchaseOrder": "구매 주문",
@@ -636,6 +652,14 @@ export default {
         "truckingValue": "운송업체 {name}",
         "invoiceValue": "송장 {number}",
         "salesOrder": "판매 주문: {number}",
-        "containerSize": "20피트 / 40피트"
+        "containerSize": "20피트 / 40피트",
+        "inspect": "검사",
+        "inspectTitle": "컨테이너 검사 {number}",
+        "sealCondition": "봉인 상태",
+        "sealCondition_ok": "정상",
+        "sealCondition_broken": "파손",
+        "sealCondition_missing": "분실",
+        "containerCondition": "컨테이너 상태",
+        "driverName": "운전자 이름"
     }
 };

@@ -3,9 +3,13 @@ import StatusBadge from '@/Components/StatusBadge.vue';
 import { useI18n } from 'vue-i18n';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
-import { Head, Link } from '@inertiajs/vue3';
-import { formatDate } from '@/utils/date';
-import type { IncomingArrival } from '@/types';
+import ActionButton from '@/Components/ActionButton.vue';
+import Modal from '@/Components/Modal.vue';
+import InputError from '@/Components/InputError.vue';
+import { Head, Link, useForm } from '@inertiajs/vue3';
+import { ref } from 'vue';
+import { formatDate, formatDateTime } from '@/utils/date';
+import type { IncomingArrival, IncomingArrivalContainer } from '@/types';
 
 const { t } = useI18n();
 
@@ -19,7 +23,47 @@ const props = defineProps<{
     arrival: IncomingArrival;
     pending: PendingRow[];
     weightUnit: string;
+    can: { inspect: boolean };
 }>();
+
+const showInspect = ref(false);
+const inspecting = ref<IncomingArrivalContainer | null>(null);
+
+const inspectForm = useForm({
+    status: 'ok',
+    seal_condition: '',
+    container_condition: '',
+    driver_name: '',
+    notes: '',
+});
+
+function openInspect(container: IncomingArrivalContainer) {
+    inspecting.value = container;
+    const inspection = container.inspection;
+    inspectForm.clearErrors();
+    inspectForm.status = inspection?.status ?? 'ok';
+    inspectForm.seal_condition = inspection?.seal_condition ?? '';
+    inspectForm.container_condition = inspection?.container_condition ?? '';
+    inspectForm.driver_name = inspection?.driver_name ?? '';
+    inspectForm.notes = inspection?.notes ?? '';
+    showInspect.value = true;
+}
+
+function closeInspect() {
+    showInspect.value = false;
+    inspecting.value = null;
+}
+
+function submitInspect() {
+    if (!inspecting.value) {
+        return;
+    }
+
+    inspectForm.post(route('incoming-containers.inspect', inspecting.value.id), {
+        preserveScroll: true,
+        onSuccess: () => closeInspect(),
+    });
+}
 
 /**
  * Kolom "Kelompok / Ukuran" hanya boleh berisi kelompok material.
@@ -139,6 +183,7 @@ function groupLabel(item: PendingRow['item']): string {
                             <th scope="col" class="px-4 py-3">{{ t('incoming.seal') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('incoming.size') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('incoming.inspection') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.actions') }}</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-borderline">
@@ -149,14 +194,67 @@ function groupLabel(item: PendingRow['item']): string {
                             <td class="px-4 py-3">
                                 <StatusBadge v-if="c.inspection" :tone="c.inspection.status === 'ok' ? 'success' : 'danger'" uppercase>{{ t('incoming.status_' + c.inspection.status) }}</StatusBadge>
                                 <StatusBadge v-else tone="warning">{{ t('incoming.notInspected') }}</StatusBadge>
+                                <div v-if="c.inspection?.inspected_at" class="mt-1 text-xs text-ink-secondary">{{ formatDateTime(c.inspection.inspected_at) }}</div>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="flex justify-end">
+                                    <ActionButton v-if="can.inspect" :label="t('incoming.inspect')" variant="view" @click="openInspect(c)" />
+                                </div>
                             </td>
                         </tr>
                         <tr v-if="!arrival.containers?.length">
-                            <td colspan="4" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noContainers') }}</td>
+                            <td colspan="5" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noContainers') }}</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
         </div>
+
+        <Modal :show="showInspect" max-width="md" @close="closeInspect">
+            <form @submit.prevent="submitInspect" class="p-6">
+                <h2 class="mb-4 text-base font-semibold text-ink-primary">{{ t('incoming.inspectTitle', { number: inspecting?.container_no ?? '' }) }}</h2>
+                <div class="grid gap-4">
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.status') }}</label>
+                        <select v-model="inspectForm.status" :aria-label="t('incoming.status')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                            <option value="ok">{{ t('incoming.status_ok') }}</option>
+                            <option value="damage">{{ t('incoming.status_damage') }}</option>
+                        </select>
+                        <InputError :message="inspectForm.errors.status" class="mt-1" />
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.sealCondition') }}</label>
+                        <select v-model="inspectForm.seal_condition" :aria-label="t('incoming.sealCondition')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                            <option value="">{{ t('incoming.choose') }}</option>
+                            <option value="ok">{{ t('incoming.sealCondition_ok') }}</option>
+                            <option value="broken">{{ t('incoming.sealCondition_broken') }}</option>
+                            <option value="missing">{{ t('incoming.sealCondition_missing') }}</option>
+                        </select>
+                        <InputError :message="inspectForm.errors.seal_condition" class="mt-1" />
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.containerCondition') }}</label>
+                        <input v-model="inspectForm.container_condition" type="text" :aria-label="t('incoming.containerCondition')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <InputError :message="inspectForm.errors.container_condition" class="mt-1" />
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.driverName') }}</label>
+                        <input v-model="inspectForm.driver_name" type="text" :aria-label="t('incoming.driverName')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                        <InputError :message="inspectForm.errors.driver_name" class="mt-1" />
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.notes') }}</label>
+                        <textarea v-model="inspectForm.notes" rows="3" :aria-label="t('incoming.notes')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"></textarea>
+                        <InputError :message="inspectForm.errors.notes" class="mt-1" />
+                    </div>
+                </div>
+                <div class="mt-6 flex items-center justify-end gap-3">
+                    <button type="button" @click="closeInspect" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-primary hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">{{ t('incoming.cancel') }}</button>
+                    <button type="submit" :disabled="inspectForm.processing" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
+                        {{ inspectForm.processing ? t('incoming.saving') : t('incoming.save') }}
+                    </button>
+                </div>
+            </form>
+        </Modal>
     </AppLayout>
 </template>

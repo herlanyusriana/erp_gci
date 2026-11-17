@@ -41,13 +41,21 @@ function remove(po: PurchaseOrder) {
                 <h1 class="text-2xl font-bold tracking-tight text-ink-primary">{{ t('incoming.purchaseOrder') }}</h1>
                 <p class="mt-1 text-sm text-ink-secondary">{{ t('incoming.poDescription') }}</p>
             </div>
-            <Link
-                :href="route('purchase-orders.create')"
-                class="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
-            >
-                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                {{ t('incoming.add') }}
-            </Link>
+            <div class="flex items-center gap-2">
+                <Link
+                    :href="route('local-pos.index')"
+                    class="inline-flex items-center gap-1.5 rounded-md border border-borderline bg-surface px-4 py-2 text-sm font-semibold text-ink-primary transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                >
+                    {{ t('incoming.localPo') }}
+                </Link>
+                <Link
+                    :href="route('purchase-orders.create')"
+                    class="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                >
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                    {{ t('incoming.add') }}
+                </Link>
+            </div>
         </div>
 
         <input v-model="search" @input="doSearch" type="search" :placeholder="t('incoming.searchPo')" :aria-label="t('incoming.searchPo')" class="mb-4 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />

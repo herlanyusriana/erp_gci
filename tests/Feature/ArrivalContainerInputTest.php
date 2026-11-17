@@ -116,4 +116,65 @@ class ArrivalContainerInputTest extends TestCase
 
         $this->assertSame(0, IncomingArrivalContainer::where('arrival_id', $arrival->id)->count());
     }
+
+    private function createContainer(): IncomingArrivalContainer
+    {
+        $this->post(route('incoming-arrivals.store'), $this->payload())->assertSessionHasNoErrors();
+        $arrival = IncomingArrival::where('invoice_no', 'like', 'INV-CONT-%')->latest('id')->firstOrFail();
+
+        return $arrival->containers()->firstOrFail();
+    }
+
+    public function test_inspect_container_saves_inspection_and_redirects_back(): void
+    {
+        $container = $this->createContainer();
+
+        $this->from(route('incoming-arrivals.show', $container->arrival_id))
+            ->post(route('incoming-containers.inspect', $container), [
+                'status' => 'ok',
+                'seal_condition' => 'ok',
+                'container_condition' => 'Dry inside',
+                'driver_name' => 'Budi',
+                'notes' => 'No damage',
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('incoming-arrivals.show', $container->arrival_id));
+
+        $this->assertDatabaseHas('incoming_arrival_container_inspections', [
+            'arrival_container_id' => $container->id,
+            'status' => 'ok',
+            'seal_condition' => 'ok',
+            'driver_name' => 'Budi',
+            'inspected_by' => $this->admin->id,
+        ]);
+    }
+
+    public function test_inspect_container_requires_status_and_limits_values(): void
+    {
+        $container = $this->createContainer();
+
+        $this->post(route('incoming-containers.inspect', $container), [])
+            ->assertSessionHasErrors('status');
+
+        $this->post(route('incoming-containers.inspect', $container), ['status' => 'maybe'])
+            ->assertSessionHasErrors('status');
+
+        $this->assertDatabaseMissing('incoming_arrival_container_inspections', [
+            'arrival_container_id' => $container->id,
+        ]);
+    }
+
+    public function test_inspect_container_is_forbidden_without_update_permission(): void
+    {
+        $container = $this->createContainer();
+        $production = User::where('email', 'production@geumcheon.local')->firstOrFail();
+
+        $this->actingAs($production)
+            ->post(route('incoming-containers.inspect', $container), ['status' => 'ok'])
+            ->assertForbidden();
+
+        $this->assertDatabaseMissing('incoming_arrival_container_inspections', [
+            'arrival_container_id' => $container->id,
+        ]);
+    }
 }

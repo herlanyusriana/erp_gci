@@ -385,6 +385,55 @@ class DeliveryTest extends TestCase
         $this->assertSame(Delivery::STATUS_PICKED, $delivery->fresh()->status);
     }
 
+    public function test_qc_role_can_pass_oqc_from_web(): void
+    {
+        $qc = User::where('email', 'qc@geumcheon.local')->firstOrFail();
+        $stock = $this->fgStock('TAG-QC-WEB-'.uniqid(), 40);
+        $delivery = $this->makeDelivery($stock, 25);
+
+        $this->scanTrolley($delivery, (string) $stock->tag);
+        app(DeliveryService::class)->setTrolleyQc($delivery->fresh(), 'TRL-1', Delivery::QC_PASSED, $qc->id);
+
+        $this->actingAs($qc)
+            ->post(route('deliveries.qc.pass', $delivery), ['qc_notes' => 'Sesuai spesifikasi'])
+            ->assertRedirect();
+
+        $fresh = $delivery->fresh();
+        $this->assertSame(Delivery::STATUS_QC_PASSED, $fresh->status);
+        $this->assertSame($qc->id, (int) $fresh->qc_checked_by);
+    }
+
+    public function test_role_without_oqc_permission_is_forbidden(): void
+    {
+        $outsider = User::where('email', 'production@geumcheon.local')->firstOrFail();
+        $stock = $this->fgStock('TAG-QC-FORBID-'.uniqid(), 40);
+        $delivery = $this->makeDelivery($stock, 25);
+
+        $this->scanTrolley($delivery, (string) $stock->tag);
+
+        $this->actingAs($outsider)->post(route('deliveries.qc.pass', $delivery))->assertForbidden();
+        $this->actingAs($outsider)
+            ->post(route('deliveries.qc.reject', $delivery), ['qc_notes' => 'Coba tolak'])
+            ->assertForbidden();
+
+        $this->assertSame(Delivery::STATUS_PICKED, $delivery->fresh()->status);
+    }
+
+    public function test_reject_requires_a_note_from_qc_role(): void
+    {
+        $qc = User::where('email', 'qc@geumcheon.local')->firstOrFail();
+        $stock = $this->fgStock('TAG-QC-NOTE-'.uniqid(), 40);
+        $delivery = $this->makeDelivery($stock, 25);
+
+        $this->scanTrolley($delivery, (string) $stock->tag);
+
+        $this->actingAs($qc)
+            ->post(route('deliveries.qc.reject', $delivery), ['qc_notes' => ''])
+            ->assertSessionHasErrors('qc_notes');
+
+        $this->assertSame(Delivery::STATUS_PICKED, $delivery->fresh()->status);
+    }
+
     public function test_submit_requires_pen_and_aju(): void
     {
         $stock = $this->fgStock('TAG-NOPEN-'.uniqid(), 40);

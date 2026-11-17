@@ -68,6 +68,9 @@ class DeliveryController extends Controller
             'loading' => $this->deliveryService->loadingContext($delivery),
             'trolleys' => $this->deliveryService->availableTrolleys($this->preferredTrolleyKind($delivery)),
             'trolleyMasterEmpty' => $this->deliveryService->trolleyMasterIsEmpty(),
+            'can' => [
+                'oqc' => Gate::allows('oqc', $delivery),
+            ],
         ]);
     }
 
@@ -112,7 +115,7 @@ class DeliveryController extends Controller
     /** Tahap 3 — QC menyatakan barang lolos. */
     public function passQc(Request $request, Delivery $delivery): RedirectResponse
     {
-        Gate::authorize('update', $delivery);
+        Gate::authorize('oqc', $delivery);
 
         $validated = $request->validate([
             'qc_notes' => ['nullable', 'string', 'max:500'],
@@ -130,7 +133,7 @@ class DeliveryController extends Controller
     /** Tahap 3 — QC menolak, picking harus diperbaiki. */
     public function rejectQc(Request $request, Delivery $delivery): RedirectResponse
     {
-        Gate::authorize('update', $delivery);
+        Gate::authorize('oqc', $delivery);
 
         $validated = $request->validate([
             'qc_notes' => ['required', 'string', 'max:500'],

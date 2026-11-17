@@ -92,6 +92,7 @@ const props = defineProps<{
     trolleys: TrolleyOption[];
     trolleyMasterEmpty: boolean;
     scannedTags: Record<string, string[]>;
+    can: { oqc: boolean };
 }>();
 
 /** Tag yang benar-benar dipindai untuk satu part (baris rencana tanpa tag). */
@@ -531,6 +532,43 @@ const missingPriceCount = computed(() => props.delivery.items.filter((item) => i
                         </span>
                     </li>
                 </ul>
+
+                <!-- Cadangan web: OQC tanpa APK -->
+                <div v-if="can.oqc" class="mt-4 border-t border-borderline pt-4">
+                    <h3 class="text-xs font-bold text-ink-primary">{{ t('outgoing.qcTitle') }}</h3>
+                    <p class="mt-1 text-xs text-ink-secondary">{{ t('outgoing.qcHint') }}</p>
+
+                    <div class="mt-2">
+                        <label for="qc-notes" class="text-xs font-semibold text-ink-secondary">{{ t('outgoing.qcNotes') }}</label>
+                        <textarea
+                            id="qc-notes"
+                            v-model="qcNotes"
+                            rows="2"
+                            :aria-label="t('outgoing.qcNotes')"
+                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                        ></textarea>
+                        <p class="mt-1 text-[11px] text-ink-secondary">{{ t('outgoing.qcNotesHint') }}</p>
+                    </div>
+
+                    <div class="mt-3 flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            @click="passQc"
+                            class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                        >
+                            {{ t('outgoing.qcPass') }}
+                        </button>
+                        <button
+                            type="button"
+                            @click="rejectQc"
+                            :disabled="qcNotes.trim() === ''"
+                            class="rounded-md border border-danger px-4 py-2 text-sm font-semibold text-danger transition hover:bg-danger/10 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                        >
+                            {{ t('outgoing.qcReject') }}
+                        </button>
+                    </div>
+                    <p class="mt-1 text-[11px] text-ink-secondary">{{ t('outgoing.qcRejectHint') }}</p>
+                </div>
             </template>
 
             <!-- Tahap 3: OQC lolos — cetak dokumen dulu, lalu rilis CEISA -->

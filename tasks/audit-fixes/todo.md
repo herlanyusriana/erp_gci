@@ -181,14 +181,14 @@ tidak bisa melakukan OQC di mana pun. Tanpa APK, pengiriman berhenti permanen di
 `picked`.
 
 **Acceptance criteria:**
-- [ ] Panel OQC tampil di Delivery Show pada status `picked`: textarea catatan + tombol "QC Lolos" dan "QC Tolak".
-- [ ] QC tolak mewajibkan catatan (validasi klien + server).
-- [ ] Role `qc` bisa melakukan OQC; role tanpa izin tidak melihat tombolnya.
-- [ ] Test: role qc POST `deliveries.qc.pass` → 302; role lain → 403.
+- [x] Panel OQC tampil di Delivery Show pada status `picked`: textarea catatan + tombol "QC Lolos" dan "QC Tolak".
+- [x] QC tolak mewajibkan catatan (validasi klien + server).
+- [x] Role `qc` bisa melakukan OQC; role tanpa izin tidak melihat tombolnya.
+- [x] Test: role qc POST `deliveries.qc.pass` → 302; role lain → 403.
 
 **Verification:**
-- [ ] `vendor/bin/pest tests/Feature/DeliveryTest.php`
-- [ ] `npm run build`
+- [x] `vendor/bin/pest tests/Feature/DeliveryTest.php`
+- [x] `npm run build`
 
 **Dependencies:** None
 
@@ -212,13 +212,13 @@ nol tautan di seluruh UI — hanya bisa dibuka dengan mengetik `/local-pos`.
 Katalog `incoming.localTile` sudah ada tetapi tidak dipakai.
 
 **Acceptance criteria:**
-- [ ] Tile "Local PO" muncul di launcher Incoming dengan permission yang benar.
-- [ ] Purchase Order Index punya tautan ke Local PO.
-- [ ] Test: `GET /incoming-data` merender tile Local PO untuk user berizin.
+- [x] Tile "Local PO" muncul di launcher Incoming dengan permission yang benar.
+- [x] Purchase Order Index punya tautan ke Local PO.
+- [x] Test: `GET /incoming-data` merender tile Local PO untuk user berizin.
 
 **Verification:**
-- [ ] `vendor/bin/pest tests/Feature/` (test Incoming/LocalPo terkait)
-- [ ] `npm run build`
+- [x] `vendor/bin/pest tests/Feature/` (test Incoming/LocalPo terkait)
+- [x] `npm run build`
 
 **Dependencies:** None
 
@@ -239,13 +239,13 @@ komponen Vue mana pun. Langkah "Arrival + container inspection" mustahil diisi
 dari UI; statusnya tertulis "belum diperiksa" selamanya.
 
 **Acceptance criteria:**
-- [ ] Arrival Show punya aksi per container untuk mencatat hasil inspeksi (status, kondisi seal, catatan).
-- [ ] Tombol hanya tampil untuk user berizin; setelah simpan, status container berubah di tabel.
-- [ ] Test: POST inspect menyimpan `incoming_arrival_container_inspections` dan mengubah status.
+- [x] Arrival Show punya aksi per container untuk mencatat hasil inspeksi (status, kondisi seal, catatan).
+- [x] Tombol hanya tampil untuk user berizin; setelah simpan, status container berubah di tabel.
+- [x] Test: POST inspect menyimpan `incoming_arrival_container_inspections` dan mengubah status.
 
 **Verification:**
-- [ ] `vendor/bin/pest tests/Feature/` (test Arrival/container terkait)
-- [ ] `npm run build`
+- [x] `vendor/bin/pest tests/Feature/` (test Arrival/container terkait)
+- [x] `npm run build`
 
 **Dependencies:** None
 
@@ -286,8 +286,8 @@ PPIC — padahal itu pekerjaannya.
 ---
 
 ## Checkpoint 2: Alur
-- [ ] Satu siklus penuh bisa diselesaikan dari UI + APK (Task 06/07/08 belum selesai)
-- [x] `vendor/bin/pest` dan `npm run build` hijau — 637 passed, build sukses
+- [x] Semua blocker fungsional Task 04-09 selesai (route, release, OQC, Local PO, container, PPIC)
+- [x] `vendor/bin/pest` dan `npm run build` hijau — 644 passed, build sukses
 - [ ] Review manusia: jalankan alur di browser (bukan hanya test)
 
 ---

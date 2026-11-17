@@ -12,6 +12,7 @@ const { t } = useI18n();
 const items = computed(() =>
     [
         { href: '/purchase-orders', title: 'incoming.purchaseOrder', subtitle: 'incoming.poTile', permission: ['purchase_order.view'] },
+        { href: '/local-pos', title: 'incoming.localPo', subtitle: 'incoming.localTile', permission: ['incoming.view'] },
         { href: '/incoming-arrivals', title: 'incoming.arrival', subtitle: 'incoming.arrivalTile', permission: ['incoming.view'] },
         { href: '/receive', title: 'incoming.receive', subtitle: 'incoming.receiveTile', permission: ['receive.view'] },
         { href: '/stocks', title: 'incoming.stock', subtitle: 'incoming.stockTile', permission: ['stock.view', 'incoming.view', 'receive.view'] },

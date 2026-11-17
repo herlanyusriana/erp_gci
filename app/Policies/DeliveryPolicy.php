@@ -27,6 +27,12 @@ class DeliveryPolicy
         return $user->hasAnyPermission(['delivery.update']);
     }
 
+    /** OQC (pass/reject) punya izin sendiri supaya role QC tidak perlu delivery.update. */
+    public function oqc(User $user, Delivery $delivery): bool
+    {
+        return $user->hasAnyPermission(['delivery.oqc']);
+    }
+
     public function delete(User $user, Delivery $delivery): bool
     {
         return $user->hasAnyPermission(['delivery.delete']);

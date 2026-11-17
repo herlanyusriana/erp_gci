@@ -428,6 +428,9 @@ class IncomingArrivalController extends Controller
             'arrival' => $arrival,
             'pending' => $pending,
             'weightUnit' => UomCatalog::WEIGHT,
+            'can' => [
+                'inspect' => Gate::allows('update', $arrival),
+            ],
         ]);
     }
 

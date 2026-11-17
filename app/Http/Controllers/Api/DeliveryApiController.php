@@ -126,7 +126,7 @@ class DeliveryApiController extends Controller
     /** OQC per troli: ok / ng. */
     public function trolleyQc(Request $request, Delivery $delivery): JsonResponse
     {
-        Gate::authorize('update', $delivery);
+        Gate::authorize('oqc', $delivery);
 
         $validated = $request->validate([
             'trolley_code' => ['required', 'string', 'max:100'],

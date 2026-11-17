@@ -121,7 +121,7 @@ class IncomingPoUnificationTest extends TestCase
         $this->assertDatabaseHas('purchase_orders', ['supplier_id' => $import->id]);
     }
 
-    public function test_incoming_entry_point_displays_unified_purchase_order_tile(): void
+    public function test_incoming_entry_point_displays_purchase_order_and_local_po_tiles(): void
     {
         $this->get(route('incoming-data'))
             ->assertOk()
@@ -131,7 +131,23 @@ class IncomingPoUnificationTest extends TestCase
 
         $this->assertStringContainsString("href: '/purchase-orders'", $source);
         $this->assertStringContainsString("href: '/incoming-arrivals'", $source);
-        $this->assertStringNotContainsString("href: '/local-pos'", $source);
+        $this->assertStringContainsString("href: '/local-pos'", $source);
+        $this->assertStringContainsString("title: 'incoming.localPo'", $source);
+        $this->assertStringContainsString("subtitle: 'incoming.localTile'", $source);
+    }
+
+    public function test_incoming_launcher_is_reachable_for_a_user_with_incoming_view(): void
+    {
+        $user = User::where('email', 'warehouse@geumcheon.local')->firstOrFail();
+
+        $this->assertTrue($user->hasPermission('incoming.view'));
+
+        $this->actingAs($user)
+            ->get(route('incoming-data'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Incoming/ModuleLauncher')
+                ->where('auth.permissions', fn ($permissions) => $permissions->contains('incoming.view')));
     }
 
     public function test_purchase_order_keeps_its_supplier_on_update(): void

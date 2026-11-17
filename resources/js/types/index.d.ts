@@ -276,6 +276,7 @@ export interface IncomingArrivalContainer {
         container_condition: string | null;
         driver_name: string | null;
         notes: string | null;
+        inspected_at?: string | null;
     } | null;
 }
 

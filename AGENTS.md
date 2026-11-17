@@ -18,6 +18,9 @@ mengubah pola tanpa alasan jelas.
 - Dev frontend: `npm run dev`
 - Dev semua (server+queue+log+vite): `composer run dev`
 - Migrate + seed: `php artisan migrate --seed`
+- Reset data trial (master tetap): `php artisan erp:reset-data` (dry run) →
+  `php artisan erp:reset-data --force` (hapus). Opsi `--keep-sessions` menjaga
+  sesi web & token APK tetap login.
 
 Selalu jalankan `vendor/bin/pint` dan `npm run build` setelah perubahan PHP/Vue.
 
@@ -256,6 +259,13 @@ Catatan penting:
   tag (`DeliveryService::labelEntries`).
 - **Issue FG di WIP Inventory** dihitung dari `delivery_scans` (tag yang
   dipindai) pada `deliveries.stock_deducted_at`, bukan dari baris rencana.
+- **Reset data trial** (`erp:reset-data`): `TRUNCATE ... RESTART IDENTITY
+  CASCADE` untuk tabel transaksi saja (PO, arrival, receive, stok, WO,
+  produksi, issue, picking, delivery) + infrastruktur (sesi, cache, job).
+  Master (parts, supplier, customer, UOM, mesin, proses, BOM, lokasi, troli,
+  user/role, config, harga) dipertahankan. Ada guard: perintah batal bila ada
+  tabel master yang menunjuk ke tabel transaksi. Penomoran (PK/DO/WO/MI) mulai
+  lagi dari 0001 karena baris lama benar-benar dihapus.
 
 ===
 

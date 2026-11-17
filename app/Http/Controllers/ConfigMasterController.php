@@ -33,6 +33,8 @@ class ConfigMasterController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        Gate::authorize('create', ConfigMaster::class);
+
         $data = $request->validate([
             'group' => ['required', 'string', 'max:80'],
             'key' => ['required', 'string', 'max:120'],
@@ -53,6 +55,8 @@ class ConfigMasterController extends Controller
 
     public function update(Request $request, ConfigMaster $config): RedirectResponse
     {
+        Gate::authorize('update', $config);
+
         $data = $request->validate([
             'group' => ['required', 'string', 'max:80'],
             'key' => ['required', 'string', 'max:120'],
@@ -70,6 +74,8 @@ class ConfigMasterController extends Controller
 
     public function destroy(ConfigMaster $config): RedirectResponse
     {
+        Gate::authorize('delete', $config);
+
         $config->delete();
 
         return redirect()->route('config.index')->with('success', __('Config dihapus.'));

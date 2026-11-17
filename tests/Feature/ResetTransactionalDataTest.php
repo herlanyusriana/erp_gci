@@ -147,6 +147,53 @@ class ResetTransactionalDataTest extends TestCase
         $this->assertSame(1, DB::table('personal_access_tokens')->count());
     }
 
+    public function test_force_is_refused_outside_local_and_testing_without_i_know(): void
+    {
+        $this->seedTransaction();
+
+        $before = [
+            'part_stocks' => DB::table('part_stocks')->count(),
+            'picking_lists' => DB::table('picking_lists')->count(),
+            'deliveries' => DB::table('deliveries')->count(),
+        ];
+
+        // Simulasi server produksi: environment container diganti langsung,
+        // tanpa mengubah APP_ENV di phpunit.xml. Selalu dipulihkan di finally
+        // supaya test lain tetap berjalan sebagai `testing`.
+        $this->app['env'] = 'production';
+
+        try {
+            $this->artisan('erp:reset-data', ['--force' => true])
+                ->expectsOutputToContain('--i-know')
+                ->assertFailed();
+        } finally {
+            $this->app['env'] = 'testing';
+        }
+
+        $this->assertSame($before['part_stocks'], DB::table('part_stocks')->count());
+        $this->assertSame($before['picking_lists'], DB::table('picking_lists')->count());
+        $this->assertSame($before['deliveries'], DB::table('deliveries')->count());
+    }
+
+    public function test_force_with_i_know_still_runs_outside_local_and_testing(): void
+    {
+        $this->seedTransaction();
+
+        // Sama seperti test di atas: environment diganti langsung di container.
+        $this->app['env'] = 'production';
+
+        try {
+            $this->artisan('erp:reset-data', ['--force' => true, '--i-know' => true])
+                ->assertSuccessful();
+        } finally {
+            $this->app['env'] = 'testing';
+        }
+
+        foreach (['deliveries', 'picking_lists', 'part_stocks'] as $table) {
+            $this->assertSame(0, DB::table($table)->count(), "Tabel {$table} harus kosong");
+        }
+    }
+
     public function test_guard_blocks_when_master_points_at_transaction_table(): void
     {
         $command = new ResetTransactionalData;

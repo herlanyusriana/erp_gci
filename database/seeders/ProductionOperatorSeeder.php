@@ -6,11 +6,10 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use RuntimeException;
 
 class ProductionOperatorSeeder extends Seeder
 {
-    public const DEFAULT_PASSWORD = 'gci2026';
-
     /**
      * Daftar 92 karyawan Produksi (5 Foreman + 87 Operator) khusus APK.
      *
@@ -128,7 +127,7 @@ class ProductionOperatorSeeder extends Seeder
             ['label' => 'Production'],
         );
 
-        $hashedPassword = Hash::make(self::DEFAULT_PASSWORD);
+        $hashedPassword = Hash::make($this->operatorPassword());
         $now = now();
 
         foreach (self::EMPLOYEES as $name) {
@@ -148,5 +147,23 @@ class ProductionOperatorSeeder extends Seeder
 
             $user->roles()->syncWithoutDetaching([$productionRole->id]);
         }
+    }
+
+    private function operatorPassword(): string
+    {
+        $configured = config('seed.operator_password');
+
+        if (app()->environment('local', 'testing')) {
+            return filled($configured) ? (string) $configured : 'gci2026';
+        }
+
+        if (blank($configured)) {
+            throw new RuntimeException(
+                'SEED_OPERATOR_PASSWORD belum diisi. Set variabel environment tersebut sebelum '
+                .'menjalankan seeder di environment "'.app()->environment().'".'
+            );
+        }
+
+        return (string) $configured;
     }
 }

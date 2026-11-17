@@ -7,6 +7,7 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use RuntimeException;
 
 class RolesAndPermissionsSeeder extends Seeder
 {
@@ -91,20 +92,22 @@ class RolesAndPermissionsSeeder extends Seeder
             $role->permissions()->sync($ids);
         }
 
-        // Create the seed admin user (userId 5 is the real operator's id in other apps;
-        // here we create a deterministic local admin).
-        $admin = User::updateOrCreate(
-            ['email' => 'admin@geumcheon.local'],
-            [
+        // Admin deterministik untuk local/testing. User yang sudah ada tidak
+        // pernah diubah passwordnya supaya re-seed tidak mereset admin produksi.
+        $admin = User::where('email', 'admin@geumcheon.local')->first();
+
+        if ($admin === null) {
+            $admin = User::create([
+                'email' => 'admin@geumcheon.local',
                 'name' => 'Administrator',
-                'password' => Hash::make('password'),
+                'password' => Hash::make($this->adminPassword()),
                 'is_active' => true,
                 'email_verified_at' => now(),
-            ]
-        );
+            ]);
+        }
         $admin->roles()->syncWithoutDetaching([$roleIds['super-admin']]);
 
-        // User demo per role (password = password) untuk pengujian login & audit permission.
+        // User demo per role untuk pengujian login & audit permission.
         $demoUsers = [
             'engineering@geumcheon.local' => 'engineering',
             'it-admin@geumcheon.local' => 'it-admin',
@@ -115,17 +118,60 @@ class RolesAndPermissionsSeeder extends Seeder
             'production@geumcheon.local' => 'production',
             'qc@geumcheon.local' => 'qc',
         ];
-        foreach ($demoUsers as $email => $roleName) {
-            $u = User::firstOrCreate(
-                ['email' => $email],
-                [
-                    'name' => $roleIds[$roleName] ? ucwords(str_replace('-', ' ', $roleName)) : $email,
-                    'password' => Hash::make('password'),
-                    'is_active' => true,
-                    'email_verified_at' => now(),
-                ],
+
+        if ($this->demoUsersAllowed()) {
+            $demoPassword = $this->demoPassword();
+
+            foreach ($demoUsers as $email => $roleName) {
+                $u = User::firstOrCreate(
+                    ['email' => $email],
+                    [
+                        'name' => $roleIds[$roleName] ? ucwords(str_replace('-', ' ', $roleName)) : $email,
+                        'password' => Hash::make($demoPassword),
+                        'is_active' => true,
+                        'email_verified_at' => now(),
+                    ],
+                );
+                $u->roles()->syncWithoutDetaching([$roleIds[$roleName]]);
+            }
+        } else {
+            $this->command?->warn(
+                'User demo dilewati: environment "'.app()->environment().'" bukan local/testing '
+                .'dan SEED_ALLOW_DEMO_USERS tidak aktif.'
             );
-            $u->roles()->syncWithoutDetaching([$roleIds[$roleName]]);
         }
+    }
+
+    private function adminPassword(): string
+    {
+        return $this->passwordFromConfig('seed.admin_password', 'password', 'SEED_ADMIN_PASSWORD');
+    }
+
+    private function demoPassword(): string
+    {
+        return $this->passwordFromConfig('seed.demo_password', 'password', 'SEED_DEMO_PASSWORD');
+    }
+
+    private function passwordFromConfig(string $key, string $localFallback, string $envName): string
+    {
+        $configured = config($key);
+
+        if (app()->environment('local', 'testing')) {
+            return filled($configured) ? (string) $configured : $localFallback;
+        }
+
+        if (blank($configured)) {
+            throw new RuntimeException(
+                "{$envName} belum diisi. Set variabel environment tersebut sebelum menjalankan "
+                .'seeder di environment "'.app()->environment().'".'
+            );
+        }
+
+        return (string) $configured;
+    }
+
+    private function demoUsersAllowed(): bool
+    {
+        return app()->environment('local', 'testing') || (bool) config('seed.allow_demo_users');
     }
 }

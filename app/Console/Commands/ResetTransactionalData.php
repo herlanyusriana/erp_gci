@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Throwable;
 
@@ -21,9 +22,17 @@ class ResetTransactionalData extends Command
 {
     protected $signature = 'erp:reset-data
         {--force : Benar-benar hapus (tanpa ini hanya dry run)}
-        {--keep-sessions : Jangan hapus sesi/token, sehingga user tetap login}';
+        {--keep-sessions : Jangan hapus sesi/token, sehingga user tetap login}
+        {--i-know : Konfirmasi tambahan untuk menjalankan di luar local/testing}';
 
     protected $description = 'Kosongkan data transaksi untuk trial; master data tetap';
+
+    /**
+     * Environment yang boleh direset hanya dengan `--force`.
+     *
+     * @var list<string>
+     */
+    private const SAFE_ENVIRONMENTS = ['local', 'testing'];
 
     /**
      * Tabel transaksi: dokumen, pergerakan stok, dan hasil produksi.
@@ -86,6 +95,7 @@ class ResetTransactionalData extends Command
     public function handle(): int
     {
         $force = (bool) $this->option('force');
+        $keepSessions = (bool) $this->option('keep-sessions');
 
         $tables = $this->existing(self::TRANSACTIONAL);
         $infra = $this->existing(self::INFRASTRUCTURE);
@@ -95,6 +105,8 @@ class ResetTransactionalData extends Command
         }
 
         $this->info('Rencana reset data (master data tetap):');
+        $this->line(sprintf('Database   : %s', $this->databaseName()));
+        $this->line(sprintf('Environment: %s', app()->environment()));
         $this->newLine();
 
         $rows = [];
@@ -127,15 +139,32 @@ class ResetTransactionalData extends Command
         if (! $force) {
             $this->newLine();
             $this->warn('Dry run. Tidak ada data yang dihapus.');
+
+            if ($this->requiresExplicitConfirmation()) {
+                $this->warn(sprintf(
+                    'APP_ENV=%s: di luar local/testing, --force saja tidak cukup; tambahkan --i-know.',
+                    app()->environment(),
+                ));
+            }
+
             $this->line('Jalankan ulang dengan --force untuk benar-benar menghapus.');
 
             return self::SUCCESS;
         }
 
-        // `--force` adalah pernyataan niat eksplisit (seperti migrate:fresh --force),
-        // jadi tidak ada prompt tambahan agar aman dipakai di skrip.
+        if ($this->requiresExplicitConfirmation() && ! $this->option('i-know')) {
+            $this->newLine();
+            $this->error('Dibatalkan: perintah ini menghapus SELURUH data transaksi.');
+            $this->error(sprintf('APP_ENV=%s, bukan local/testing.', app()->environment()));
+            $this->error('Tanpa --i-know tidak ada data yang dihapus.');
+            $this->error('Bila memang disengaja, jalankan: erp:reset-data --force --i-know');
+
+            return self::FAILURE;
+        }
+
         $this->newLine();
         $this->warn(sprintf('Menghapus %d baris transaksi...', $total));
+        $this->line($this->recordAudit($total, $keepSessions));
 
         try {
             // Satu statement: Postgres mengunci semuanya sekaligus, dan CASCADE
@@ -154,6 +183,64 @@ class ResetTransactionalData extends Command
         $this->info('Selesai. Data transaksi kosong, master data utuh.');
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Environment di luar local/testing butuh konfirmasi tambahan `--i-know`.
+     */
+    private function requiresExplicitConfirmation(): bool
+    {
+        return ! app()->environment(self::SAFE_ENVIRONMENTS);
+    }
+
+    /**
+     * Database yang benar-benar dipakai koneksi default, dicetak agar operator
+     * bisa membandingkannya dengan .env sebelum data dihapus.
+     */
+    private function databaseName(): string
+    {
+        return (string) DB::connection()->getDatabaseName();
+    }
+
+    /**
+     * Catat pelaku reset ke log persisten sebelum TRUNCATE, lalu kembalikan
+     * satu baris ringkasan untuk dicetak ke konsol.
+     */
+    private function recordAudit(int $total, bool $keepSessions): string
+    {
+        $line = sprintf(
+            'erp:reset-data dijalankan: user=%s host=%s database=%s baris=%d keep_sessions=%s env=%s',
+            $this->osUser(),
+            gethostname() ?: 'unknown',
+            $this->databaseName(),
+            $total,
+            $keepSessions ? 'ya' : 'tidak',
+            app()->environment(),
+        );
+
+        try {
+            Log::channel('single')->warning($line);
+        } catch (Throwable) {
+            error_log($line);
+        }
+
+        return $line;
+    }
+
+    /**
+     * User OS pelaku: `sudo` menyimpan user asli di SUDO_USER, selain itu pakai
+     * pemilik proses efektif.
+     */
+    private function osUser(): string
+    {
+        $user = $_SERVER['SUDO_USER'] ?? null;
+
+        if ($user === null || $user === '') {
+            $entry = function_exists('posix_getpwuid') ? posix_getpwuid(posix_geteuid()) : false;
+            $user = $entry['name'] ?? get_current_user();
+        }
+
+        return is_string($user) && $user !== '' ? $user : 'unknown';
     }
 
     /**

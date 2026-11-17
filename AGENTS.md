@@ -85,9 +85,17 @@ Catatan penting:
   `ConfigMasterSeeder`, `UomSeeder`. Admin dev: `admin@geumcheon.local`.
   Urutan di `DatabaseSeeder`: Roles → Config → Uom → MasterData → Bom.
   `RolesAndPermissionsSeeder` juga membuat user demo per role
-  (`<role>@geumcheon.local`, password `password`) untuk uji permission.
+  (`<role>@geumcheon.local`) untuk uji permission.
   Matriks akses: `super-admin` semua; `management` semua kecuali `role`/`user`;
   `it-admin` kelola config/role/user; role lain granular (lihat seeder).
+- **Kredensial seeder dari env** (`config/seed.php`): `SEED_ADMIN_PASSWORD`,
+  `SEED_DEMO_PASSWORD`, `SEED_OPERATOR_PASSWORD`, `SEED_ALLOW_DEMO_USERS`.
+  Di `local`/`testing` fallback lama dipertahankan (`password` untuk admin &
+  demo, `gci2026` untuk operator produksi) agar test suite tetap jalan.
+  Di luar `local`/`testing`: password admin & operator **wajib** diisi (seeder
+  melempar `RuntimeException` bila kosong) dan **user demo tidak dibuat**
+  kecuali `SEED_ALLOW_DEMO_USERS=true` (dengan `SEED_DEMO_PASSWORD`). Re-seed
+  tidak pernah mengubah password admin yang sudah ada.
 
 ## Frontend
 

@@ -37,6 +37,8 @@ class SupplierController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        Gate::authorize('create', Supplier::class);
+
         $data = $request->validate([
             'supplier_code' => ['required', 'string', 'max:80', 'unique:suppliers,supplier_code'],
             'supplier_name' => ['required', 'string', 'max:255'],
@@ -61,6 +63,8 @@ class SupplierController extends Controller
 
     public function update(Request $request, Supplier $supplier): RedirectResponse
     {
+        Gate::authorize('update', $supplier);
+
         $data = $request->validate([
             'supplier_code' => ['required', 'string', 'max:80', "unique:suppliers,supplier_code,{$supplier->id}"],
             'supplier_name' => ['required', 'string', 'max:255'],
@@ -106,6 +110,8 @@ class SupplierController extends Controller
 
     public function destroy(Supplier $supplier): RedirectResponse
     {
+        Gate::authorize('delete', $supplier);
+
         $supplier->delete();
 
         return redirect()->route('suppliers.index')->with('success', __('Supplier deleted.'));

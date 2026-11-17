@@ -302,13 +302,13 @@ sekali tidak memanggil `Gate::authorize`; `ConfigMasterController` dan
 menghapus mesin dan UOM — merusak BOM, cycle time, dan label mesin.
 
 **Acceptance criteria:**
-- [ ] Setiap action mutasi di 5 controller memanggil `Gate::authorize` dengan permission modul yang sesuai.
-- [ ] Permission `config.*`, `machine.*`, `process.*`, `uom.*`, `supplier.*` sudah ada di seeder dan diberikan ke role yang tepat.
-- [ ] Test matriks: role `qc` dan `production` ditolak (403) pada create/update/delete kelima modul; `super-admin` diizinkan.
+- [x] Setiap action mutasi di 5 controller memanggil `Gate::authorize` dengan permission modul yang sesuai.
+- [x] Permission `config.*`, `machine.*`, `process.*`, `uom.*`, `supplier.*` sudah ada di seeder dan diberikan ke role yang tepat.
+- [x] Test matriks: role `qc` dan `production` ditolak (403) pada create/update/delete kelima modul; `super-admin` diizinkan.
 
 **Verification:**
-- [ ] `vendor/bin/pest tests/Feature/RolePermissionTest.php`
-- [ ] `vendor/bin/pint --dirty --format agent`
+- [x] `vendor/bin/pest tests/Feature/RolePermissionTest.php`
+- [x] `vendor/bin/pint --dirty --format agent`
 
 **Dependencies:** None
 
@@ -331,15 +331,15 @@ keduanya dan `AGENTS.md` mendokumentasikannya sebagai perintah deploy — jadi
 kredensial publik ini ikut ke server trial.
 
 **Acceptance criteria:**
-- [ ] Password admin diambil dari env (`SEED_ADMIN_PASSWORD`), fallback `password` hanya bila `APP_ENV=local`.
-- [ ] User demo per role tidak dibuat saat `APP_ENV=production`.
-- [ ] Password operator produksi dari env, dengan fallback terdokumentasi.
-- [ ] Seeder tetap idempoten (`updateOrCreate`) dan test suite tetap hijau.
-- [ ] `AGENTS.md` diperbarui: cara mengisi password seed.
+- [x] Password admin diambil dari env (`SEED_ADMIN_PASSWORD`), fallback `password` hanya bila `APP_ENV=local`.
+- [x] User demo per role tidak dibuat saat `APP_ENV=production`.
+- [x] Password operator produksi dari env, dengan fallback terdokumentasi.
+- [x] Seeder tetap idempoten (`updateOrCreate`) dan test suite tetap hijau.
+- [x] `AGENTS.md` diperbarui: cara mengisi password seed.
 
 **Verification:**
-- [ ] `vendor/bin/pest` (suite penuh — seeder dipakai banyak test)
-- [ ] `vendor/bin/pint --dirty --format agent`
+- [x] `vendor/bin/pest` (suite penuh — seeder dipakai banyak test)
+- [x] `vendor/bin/pint --dirty --format agent`
 
 **Dependencies:** None
 
@@ -360,16 +360,16 @@ memeriksa `APP_ENV`, tanpa maintenance mode, dan tanpa mencatat siapa pelakunya.
 Di server produksi, satu perintah salah menghapus seluruh transaksi tanpa jejak.
 
 **Acceptance criteria:**
-- [ ] Perintah menolak berjalan bila `app()->isProduction()` kecuali ada flag eksplisit tambahan (mis. `--i-know`).
-- [ ] Pelaku dicatat: user OS (`$SUDO_USER`/`posix_getpwuid`) + hostname + timestamp ke log persisten.
-- [ ] `scripts/reset-trial.sh` mengaktifkan maintenance mode sebelum truncate dan mematikannya setelah verifikasi.
-- [ ] Skrip menolak lanjut bila `config('database.connections.pgsql.database')` ≠ `DB_DATABASE` di `.env` (mencegah backup DB A lalu truncate DB B).
-- [ ] Test: perintah menolak di environment production tanpa flag eksplisit.
+- [x] Perintah menolak berjalan bila `app()->isProduction()` kecuali ada flag eksplisit tambahan (mis. `--i-know`).
+- [x] Pelaku dicatat: user OS (`$SUDO_USER`/`posix_getpwuid`) + hostname + timestamp ke log persisten.
+- [x] `scripts/reset-trial.sh` mengaktifkan maintenance mode sebelum truncate dan mematikannya setelah verifikasi.
+- [x] Skrip menolak lanjut bila `config('database.connections.pgsql.database')` ≠ `DB_DATABASE` di `.env` (mencegah backup DB A lalu truncate DB B).
+- [x] Test: perintah menolak di environment production tanpa flag eksplisit.
 
 **Verification:**
-- [ ] `vendor/bin/pest tests/Feature/ResetTransactionalDataTest.php`
-- [ ] `bash -n scripts/reset-trial.sh`
-- [ ] `vendor/bin/pint --dirty --format agent`
+- [x] `vendor/bin/pest tests/Feature/ResetTransactionalDataTest.php`
+- [x] `bash -n scripts/reset-trial.sh`
+- [x] `vendor/bin/pint --dirty --format agent`
 
 **Dependencies:** None
 
@@ -383,8 +383,9 @@ Di server produksi, satu perintah salah menghapus seluruh transaksi tanpa jejak.
 ---
 
 ## Checkpoint 3: Keamanan
-- [ ] Test matriks membuktikan role non-admin ditolak di semua mutasi master
-- [ ] Reset menolak berjalan di production tanpa flag eksplisit
+- [x] Test matriks membuktikan role non-admin ditolak di semua mutasi master (13 test, 198 assertions)
+- [x] Reset menolak berjalan di production tanpa flag eksplisit (exit 1, data utuh)
+- [x] Kredensial seed dari env; user demo tidak dibuat di luar local/testing
 - [ ] Review manusia sebelum deploy trial
 
 ---

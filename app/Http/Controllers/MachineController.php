@@ -6,6 +6,7 @@ use App\Models\ConfigMaster;
 use App\Models\Machine;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -13,6 +14,8 @@ class MachineController extends Controller
 {
     public function index(Request $request): Response
     {
+        Gate::authorize('viewAny', Machine::class);
+
         $machines = Machine::query()
             ->when($request->input('search'), fn ($q, $s) => $q
                 ->where('machine_code', 'ilike', "%{$s}%")
@@ -30,6 +33,8 @@ class MachineController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        Gate::authorize('create', Machine::class);
+
         $data = $request->validate([
             'machine_code' => ['required', 'string', 'max:80', 'unique:machines,machine_code'],
             'machine_name' => ['required', 'string', 'max:255'],
@@ -45,6 +50,8 @@ class MachineController extends Controller
 
     public function update(Request $request, Machine $machine): RedirectResponse
     {
+        Gate::authorize('update', $machine);
+
         $data = $request->validate([
             'machine_code' => ['required', 'string', 'max:80', "unique:machines,machine_code,{$machine->id}"],
             'machine_name' => ['required', 'string', 'max:255'],
@@ -60,6 +67,8 @@ class MachineController extends Controller
 
     public function destroy(Machine $machine): RedirectResponse
     {
+        Gate::authorize('delete', $machine);
+
         $machine->delete();
 
         return redirect()->route('machines.index')->with('success', __('Machine deleted.'));
@@ -67,6 +76,8 @@ class MachineController extends Controller
 
     public function printLabel(Machine $machine)
     {
+        Gate::authorize('view', $machine);
+
         return view('machines.label', [
             'machine' => $machine,
             'companyName' => ConfigMaster::getValue('SYSTEM', 'company_name', 'PT Geum Cheon Indo'),

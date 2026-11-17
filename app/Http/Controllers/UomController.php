@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Uom;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -12,6 +13,8 @@ class UomController extends Controller
 {
     public function index(Request $request): Response
     {
+        Gate::authorize('viewAny', Uom::class);
+
         $uoms = Uom::query()
             ->when($request->input('search'), fn ($q, $s) => $q
                 ->where('code', 'ilike', "%{$s}%")
@@ -28,6 +31,8 @@ class UomController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        Gate::authorize('create', Uom::class);
+
         $data = $request->validate([
             'code' => ['required', 'string', 'max:40', 'unique:uoms,code'],
             'name' => ['nullable', 'string', 'max:120'],
@@ -41,6 +46,8 @@ class UomController extends Controller
 
     public function update(Request $request, Uom $uom): RedirectResponse
     {
+        Gate::authorize('update', $uom);
+
         $data = $request->validate([
             'code' => ['required', 'string', 'max:40', "unique:uoms,code,{$uom->id}"],
             'name' => ['nullable', 'string', 'max:120'],
@@ -54,6 +61,8 @@ class UomController extends Controller
 
     public function destroy(Uom $uom): RedirectResponse
     {
+        Gate::authorize('delete', $uom);
+
         $uom->delete();
 
         return redirect()->route('uoms.index')->with('success', __('UOM deleted.'));

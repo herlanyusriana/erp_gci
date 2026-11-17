@@ -2,8 +2,9 @@
 #
 # reset-trial.sh — kosongkan data transaksi ERP GCI untuk trial, master tetap.
 #
-# Urutan: preflight -> backup -> dry run -> konfirmasi -> stop service ->
-# reset --force -> start service -> verifikasi.
+# Urutan: preflight -> config:clear + cek identitas DB -> dry run -> backup ->
+# konfirmasi -> maintenance mode + stop service -> reset --force --i-know ->
+# start service -> verifikasi -> maintenance off.
 #
 # Pemakaian:
 #   bash scripts/reset-trial.sh --dry-run          # hanya lihat rencana
@@ -123,12 +124,18 @@ env_value() {
 }
 
 SERVICES_STOPPED=0
+MAINTENANCE_ON=0
 restore_services_on_exit() {
     if [[ "$SERVICES_STOPPED" -eq 1 ]]; then
         warn "Mengembalikan service yang sempat dihentikan..."
         # shellcheck disable=SC2086
         sudo systemctl start $SERVICES 2>/dev/null || true
         SERVICES_STOPPED=0
+    fi
+    if [[ "$MAINTENANCE_ON" -eq 1 ]]; then
+        warn "Mematikan maintenance mode..."
+        artisan up >/dev/null 2>&1 || true
+        MAINTENANCE_ON=0
     fi
 }
 trap restore_services_on_exit EXIT
@@ -194,6 +201,17 @@ foreach (["parts","suppliers","customers","users"] as $t) {
 '
 }
 
+# Database yang benar-benar dipakai Laravel. Bisa berbeda dari .env bila
+# bootstrap/cache/config.php masih menyimpan nilai lama; nilai inilah yang
+# dipakai backup, truncate, dan verifikasi.
+resolved_database() {
+    local out
+    out="$(XDG_CONFIG_HOME="${TMPDIR:-/tmp}" HOME="${TMPDIR:-/tmp}" artisan_checked tinker --execute \
+        'echo config("database.connections.".config("database.default").".database");')"
+
+    printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | tail -n1 | tr -d '[:space:]' || true
+}
+
 # --- 1. Preflight -----------------------------------------------------------
 
 step "1/7 Preflight"
@@ -228,6 +246,20 @@ if [[ "$DB_CONNECTION" != "pgsql" ]]; then
     warn "DB_CONNECTION=$DB_CONNECTION (bukan pgsql). Backup pg_dump akan dilewati."
     DO_BACKUP=0
 fi
+
+# Buang config cache dulu supaya artisan, pg_dump, dan psql menunjuk database
+# yang sama. Tanpa ini config.php lama bisa mengarahkan truncate ke DB lain.
+artisan_checked config:clear >/dev/null
+ok "config cache dibersihkan"
+
+RESOLVED_DB="$(resolved_database)"
+[[ -n "$RESOLVED_DB" ]] || die "Tidak bisa membaca database dari Laravel. Cek DB_* di $APP_DIR/.env."
+
+if [[ "$RESOLVED_DB" != "$DB_DATABASE" ]]; then
+    die "Database tidak cocok: Laravel memakai '$RESOLVED_DB', .env berisi '$DB_DATABASE'. Backup dan truncate harus menunjuk DB yang sama. Hapus $APP_DIR/bootstrap/cache/config.php lalu ulangi."
+fi
+
+ok "database terverifikasi: $RESOLVED_DB (Laravel = .env)"
 
 # --- 2. Dry run -------------------------------------------------------------
 
@@ -279,6 +311,7 @@ step "4/7 Konfirmasi"
 
 printf '%s' "$C_RED$C_BOLD"
 log "PERINGATAN: langkah berikut MENGHAPUS PERMANEN data transaksi:"
+log "  Database: $RESOLVED_DB (APP_ENV=${APP_ENV:-tidak diset})"
 log "  - PO, kedatangan, penerimaan, stok (part_stocks), WO, produksi,"
 log "  - issue material, picking list, pengiriman, serta sesi/cache/job."
 log "Master (parts, supplier, customer, BOM, mesin, user, harga) TETAP."
@@ -296,9 +329,18 @@ else
     warn "Konfirmasi dilewati karena --yes."
 fi
 
-# --- 5. Stop service --------------------------------------------------------
+# --- 5. Maintenance mode + stop service -------------------------------------
 
-step "5/7 Hentikan service penulis data"
+step "5/7 Maintenance mode & hentikan service penulis data"
+
+# php-fpm tetap melayani request kalau hanya worker yang dihentikan; TRUNCATE
+# butuh ACCESS EXCLUSIVE di banyak tabel, jadi request akan menggantung.
+# Flag diset sebelum `down` supaya trap tetap memanggil `artisan up` bila
+# perintah itu gagal di tengah jalan.
+MAINTENANCE_ON=1
+artisan_checked down --retry=60
+ok "maintenance mode aktif (--retry=60)"
+
 if command -v systemctl >/dev/null; then
     # shellcheck disable=SC2086
     if sudo systemctl stop $SERVICES 2>/dev/null; then
@@ -314,7 +356,9 @@ fi
 # --- 6. Reset ---------------------------------------------------------------
 
 step "6/7 Reset data transaksi"
-RESET_ARGS=(erp:reset-data --force)
+# --i-know: skrip ini sudah meminta konfirmasi RESET dan mengaktifkan
+# maintenance mode, jadi guard environment di perintah artisan terpenuhi.
+RESET_ARGS=(erp:reset-data --force --i-know)
 if [[ "$KEEP_SESSIONS" -eq 1 ]]; then
     RESET_ARGS+=(--keep-sessions)
     log "Sesi web & token APK dipertahankan (--keep-sessions)."
@@ -347,6 +391,15 @@ fi
 log ""
 log "Ringkasan baris (transaksi harus 0, master harus tetap):"
 verify_counts || warn "Verifikasi otomatis gagal; jalankan psql manual (perintah di bawah)."
+
+if [[ "$MAINTENANCE_ON" -eq 1 ]]; then
+    if artisan up >/dev/null 2>&1; then
+        MAINTENANCE_ON=0
+        ok "maintenance mode dimatikan"
+    else
+        fail "Gagal mematikan maintenance mode. Jalankan manual: php $APP_DIR/artisan up"
+    fi
+fi
 
 log ""
 if [[ -n "$BACKUP_FILE" ]]; then

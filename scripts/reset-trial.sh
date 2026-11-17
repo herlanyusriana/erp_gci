@@ -83,6 +83,27 @@ artisan() {
     fi
 }
 
+# Sama seperti artisan(), tapi mengubah kegagalan koneksi DB menjadi pesan yang
+# bisa ditindaklanjuti alih-alih stack trace Laravel.
+artisan_checked() {
+    local out status=0
+    out="$(artisan "$@" 2>&1)" || status=$?
+
+    if [[ "$status" -ne 0 ]]; then
+        # Stack trace Laravel panjang; cukup ekor output untuk konteks.
+        printf '%s\n' "$out" | tail -n 6 >&2
+
+        if grep -qiE 'could not find driver|connection refused|could not connect|password authentication failed|does not exist|SQLSTATE' <<<"$out"; then
+            fail "Koneksi database gagal. Periksa DB_HOST/DB_PORT/DB_DATABASE/DB_USERNAME/DB_PASSWORD di $APP_DIR/.env"
+            fail 'Uji cepat: psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USERNAME" -d "$DB_DATABASE" -c "select 1"'
+        fi
+
+        die "Perintah 'artisan $*' gagal (exit $status)."
+    fi
+
+    printf '%s\n' "$out"
+}
+
 # Baca nilai dari .env tanpa mengeksekusinya (jangan `source .env`).
 # Variabel environment yang sudah diset menang, supaya skrip bisa diarahkan ke
 # database lain (mis. uji coba di DB salinan) tanpa menyentuh .env.
@@ -150,7 +171,7 @@ fi
 # --- 2. Dry run -------------------------------------------------------------
 
 step "2/7 Dry run (tidak mengubah data)"
-artisan erp:reset-data
+artisan_checked erp:reset-data
 
 if [[ "$DRY_RUN" -eq 1 ]]; then
     log ""
@@ -170,13 +191,18 @@ if [[ "$DO_BACKUP" -eq 1 ]]; then
 
     DUMP_HOST="${DB_HOST:-127.0.0.1}"
     DUMP_PORT="${DB_PORT:-5432}"
-    DUMP_ARGS=(-h "$DUMP_HOST" -p "$DUMP_PORT" -U "$DB_USERNAME" -Fc -d "$DB_DATABASE")
+    # `--no-password`: jangan menggantung menunggu prompt. Tanpa ini, DB_PASSWORD
+    # yang kosong/salah membuat skrip diam selamanya alih-alih gagal jelas.
+    DUMP_ARGS=(-h "$DUMP_HOST" -p "$DUMP_PORT" -U "$DB_USERNAME" -Fc -d "$DB_DATABASE" --no-password)
 
     log "Menulis $BACKUP_FILE"
-    if [[ -n "$DB_PASSWORD" ]]; then
-        PGPASSWORD="$DB_PASSWORD" pg_dump "${DUMP_ARGS[@]}" > "$BACKUP_FILE"
-    else
-        pg_dump "${DUMP_ARGS[@]}" > "$BACKUP_FILE"
+    if [[ -z "$DB_PASSWORD" ]]; then
+        die "DB_PASSWORD kosong di .env. Isi dulu, atau pakai --no-backup --yes bila Anda punya backup lain."
+    fi
+
+    if ! PGPASSWORD="$DB_PASSWORD" pg_dump "${DUMP_ARGS[@]}" > "$BACKUP_FILE"; then
+        rm -f "$BACKUP_FILE"
+        die "pg_dump gagal. Cek DB_USERNAME/DB_PASSWORD di .env: kredensial yang sama harus bisa dipakai psql." 
     fi
 
     [[ -s "$BACKUP_FILE" ]] || die "Backup kosong/gagal: $BACKUP_FILE"
@@ -235,7 +261,7 @@ else
     log "Sesi web & token APK ikut dihapus; semua user harus login ulang."
 fi
 
-artisan "${RESET_ARGS[@]}"
+artisan_checked "${RESET_ARGS[@]}"
 ok "reset selesai"
 
 artisan optimize:clear >/dev/null 2>&1 && ok "cache aplikasi dibersihkan"

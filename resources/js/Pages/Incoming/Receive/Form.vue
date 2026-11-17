@@ -190,21 +190,58 @@ const totals = computed(() => {
 
 const clientError = ref('');
 
+/**
+ * Error validasi dari server untuk baris tag (`tags.<index>.<field>`).
+ *
+ * Form ini tidak merender error per field di dalam tabel, jadi tanpa ringkasan
+ * ini penolakan server tidak terlihat sama sekali: pengguna menekan Simpan dan
+ * tidak terjadi apa-apa.
+ */
+const rowErrors = computed(() => {
+    const errors = form.errors as Record<string, string | undefined>;
+    const rows: Array<{ key: string; label: string; message: string }> = [];
+
+    for (const [key, message] of Object.entries(errors)) {
+        const match = key.match(/^tags\.(\d+)\.(.+)$/);
+        if (!match || !message) {
+            continue;
+        }
+
+        const index = Number(match[1]);
+        const bundle = bundles.value[index];
+        const tag = bundle?.tag?.trim();
+
+        rows.push({
+            key,
+            label: tag ? `Bundle ${index + 1} (${tag})` : `Bundle ${index + 1}`,
+            message,
+        });
+    }
+
+    return rows;
+});
+
 function submit() {
     clientError.value = '';
 
     if (!form.truck_no.trim()) {
-        clientError.value = t('incoming.truckNoRequired', { default: 'Nomor Truk # wajib diisi.' });
+        clientError.value = t('incoming.truckNoRequired');
         return;
     }
 
-    const emptyTagIdx = bundles.value.findIndex((b) => !b.tag.trim());
+    // Hanya bundle yang benar-benar berisi qty yang dikirim. Form selalu
+    // menyediakan beberapa baris kosong (default 4 bundle x 3 packing), dan
+    // server menolak tag ber-qty 0 — tanpa filter ini penyimpanan gagal
+    // dengan pesan yang tidak tampil di layar.
+    const filled = bundles.value.filter((b) => b.packings.some((p) => (Number(p.qty) || 0) > 0));
+
+    const emptyTagIdx = filled.findIndex((b) => !b.tag.trim());
     if (emptyTagIdx !== -1) {
         clientError.value = `Tag # pada bundle ke-${emptyTagIdx + 1} belum diisi.`;
         return;
     }
 
-    if (totals.value.qty <= 0) {
+    if (filled.length === 0 || totals.value.qty <= 0) {
         clientError.value = 'Total kuantitas barang harus lebih dari 0.';
         return;
     }
@@ -215,7 +252,7 @@ function submit() {
     }
 
     // Bentuk payload tags per bundle (1 incoming_receive per tag bundle, berisi list sub-packings)
-    form.tags = bundles.value.map((b) => {
+    form.tags = filled.map((b) => {
         let bQty = 0;
         let bNet = 0;
         let bGross = 0;
@@ -571,6 +608,17 @@ function submit() {
                     </table>
                 </div>
             </section>
+
+            <div
+                v-if="rowErrors.length > 0"
+                class="mb-3 rounded-lg border border-danger bg-danger/10 px-4 py-3 text-sm text-danger"
+                role="alert"
+            >
+                <p class="font-semibold">{{ t('incoming.receiveRowErrors', { count: rowErrors.length }) }}</p>
+                <ul class="mt-1 space-y-0.5">
+                    <li v-for="item in rowErrors" :key="item.key">{{ item.label }} — {{ item.message }}</li>
+                </ul>
+            </div>
 
             <!-- Aksi Tombol -->
             <div class="flex items-center justify-end gap-3 pt-2">

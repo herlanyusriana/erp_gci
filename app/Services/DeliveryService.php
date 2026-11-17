@@ -421,7 +421,7 @@ class DeliveryService
         // dokumen. Jadi selain QR produksi (fg/wip), payload berisi `code`
         // diperlakukan sebagai troli.
         if ($payloadType === 'trolley' || (isset($payload['code']) && ! in_array($payloadType, ['fg', 'wip'], true))) {
-            return $this->resolveTrolley(trim((string) ($payload['code'] ?? $raw)));
+            return $this->resolveTrolley($delivery, trim((string) ($payload['code'] ?? $raw)));
         }
 
         // QR label FG produksi: {type: 'fg', result_id, part_id}
@@ -439,7 +439,7 @@ class DeliveryService
 
         if ($stock === null) {
             // Bukan label FG yang dikenal: perlakukan sebagai kode troli.
-            return $this->resolveTrolley($raw);
+            return $this->resolveTrolley($delivery, $raw);
         }
 
         // Baris pengiriman berupa rencana (part + qty), bukan tag. Tag sah bila
@@ -449,6 +449,25 @@ class DeliveryService
         if ($planned <= 0) {
             throw ValidationException::withMessages([
                 'code' => __('Tag :tag bukan bagian dari pengiriman ini.', ['tag' => $stock->tag ?? '-']),
+            ]);
+        }
+
+        // Satu tag FG hanya boleh diklaim satu dokumen yang belum dirilis.
+        // Dokumen lain yang masih draft/picked/qc_passed menahan tag tersebut.
+        $claiming = DeliveryScan::query()
+            ->where('scan_type', DeliveryScan::TYPE_TAG)
+            ->where('part_stock_id', $stock->id)
+            ->where('delivery_id', '!=', $delivery->id)
+            ->whereHas('delivery', fn ($query) => $query->where('status', '!=', Delivery::STATUS_RELEASED))
+            ->with('delivery:id,delivery_no')
+            ->first();
+
+        if ($claiming !== null) {
+            throw ValidationException::withMessages([
+                'code' => __('Tag :tag sudah dipakai pengiriman :no.', [
+                    'tag' => $stock->tag ?? '-',
+                    'no' => $claiming->delivery?->delivery_no ?? '-',
+                ]),
             ]);
         }
 
@@ -713,13 +732,31 @@ class DeliveryService
      *
      * @return array{scan_type: string, code: string, part_stock_id: null}
      */
-    private function resolveTrolley(string $code): array
+    private function resolveTrolley(Delivery $delivery, string $code): array
     {
         $normalized = $this->normalizeScanCode($code);
 
         if ($normalized === '') {
             throw ValidationException::withMessages([
                 'code' => __('Kode troli kosong.'),
+            ]);
+        }
+
+        // Satu troli fisik hanya boleh dipakai satu dokumen yang belum dirilis.
+        $claiming = DeliveryScan::query()
+            ->where('scan_type', DeliveryScan::TYPE_TROLLEY)
+            ->where('code', $normalized)
+            ->where('delivery_id', '!=', $delivery->id)
+            ->whereHas('delivery', fn ($query) => $query->where('status', '!=', Delivery::STATUS_RELEASED))
+            ->with('delivery:id,delivery_no')
+            ->first();
+
+        if ($claiming !== null) {
+            throw ValidationException::withMessages([
+                'code' => __('Troli :code sudah dipakai pengiriman :no.', [
+                    'code' => $normalized,
+                    'no' => $claiming->delivery?->delivery_no ?? '-',
+                ]),
             ]);
         }
 

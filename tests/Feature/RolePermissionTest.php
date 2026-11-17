@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Gate;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 class RolePermissionTest extends TestCase
@@ -111,5 +112,67 @@ class RolePermissionTest extends TestCase
             ])
             ->assertForbidden();
         $this->assertDatabaseMissing('users', ['email' => 'blocked@geumcheon.local']);
+    }
+
+    /**
+     * Task 09: PPIC memegang `delivery.view/create/update/delete` tetapi tidak
+     * memegang `stock.issue`. Gate tile Outgoing harus menerima izin delivery,
+     * bukan hanya `stock.issue`.
+     */
+    public function test_ppic_qualifies_for_the_outgoing_tile_and_can_open_it(): void
+    {
+        $ppic = $this->userFor('ppic');
+
+        $this->assertFalse($ppic->hasPermission('stock.issue'));
+        $this->assertTrue(
+            $ppic->hasAnyPermission(['stock.issue', 'delivery.view', 'delivery.create']),
+            'PPIC harus lolos gate tile Outgoing lewat delivery.view.',
+        );
+
+        $this->actingAs($ppic)
+            ->get(route('launcher'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Launcher')
+                ->where('auth.permissions', fn ($permissions) => $permissions->contains('delivery.view')));
+
+        $this->actingAs($ppic)
+            ->get(route('outgoing-data'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->component('Outgoing/ModuleLauncher'));
+    }
+
+    public function test_user_without_outgoing_permissions_does_not_qualify_for_the_tile(): void
+    {
+        $user = User::factory()->create();
+
+        $this->assertFalse(
+            $user->hasAnyPermission(['stock.issue', 'delivery.view', 'delivery.create']),
+            'User tanpa izin Outgoing tidak boleh lolos gate tile.',
+        );
+
+        $this->actingAs($user)
+            ->get(route('launcher'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Launcher')
+                ->where('auth.permissions', fn ($permissions) => $permissions
+                    ->intersect(['stock.issue', 'delivery.view', 'delivery.create'])
+                    ->isEmpty()));
+    }
+
+    /**
+     * Tidak ada test runner JS di repo ini, jadi guard ini memeriksa sumber
+     * komponen langsung agar gate tile Outgoing tidak kembali ke `stock.issue`.
+     */
+    public function test_outgoing_tile_gate_includes_delivery_permissions(): void
+    {
+        $source = file_get_contents(resource_path('js/Pages/Launcher.vue'));
+
+        $this->assertStringContainsString(
+            "permission: ['stock.issue', 'delivery.view', 'delivery.create']",
+            $source,
+            'Tile Outgoing harus lolos untuk pemegang delivery.view (mis. PPIC).',
+        );
     }
 }

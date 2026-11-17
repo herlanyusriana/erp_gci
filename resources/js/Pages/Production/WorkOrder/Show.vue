@@ -125,16 +125,10 @@ const displayPartInfo = (item: WorkOrderItem) => {
 };
 
 
-const releaseForm = useForm({});
 const completeForm = useForm({});
 const cancelForm = useForm({});
 const deleteForm = useForm({});
 
-function doRelease() {
-    if (confirm(t('production.releaseConfirm'))) {
-        releaseForm.post(route('work-orders.release', props.workOrder.id));
-    }
-}
 function doComplete() {
     if (confirm(t('production.completeConfirm'))) {
         completeForm.post(route('work-orders.complete', props.workOrder.id));
@@ -174,10 +168,6 @@ function doDestroy() {
                     class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
                     {{ t('production.results') }}
                 </a>
-                <button v-if="workOrder.status === 'planned' && can.release" @click="doRelease" :disabled="releaseForm.processing"
-                    class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
-                    {{ releaseForm.processing ? t('production.releasing') : t('production.release') }}
-                </button>
                 <button v-if="workOrder.status === 'in_progress' && can.complete" @click="doComplete" :disabled="completeForm.processing"
                     class="rounded-md bg-success px-4 py-2 text-sm font-semibold text-white transition hover:bg-success/90 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
                     {{ completeForm.processing ? '…' : t('production.complete') }}
@@ -191,6 +181,15 @@ function doDestroy() {
                     {{ t('production.delete') }}
                 </button>
             </div>
+        </div>
+
+        <!-- Release & issue-out happen in the APK (scan material tags) -->
+        <div v-if="workOrder.status === 'planned' && can.release" class="mb-6 rounded-xl border border-borderline bg-surface p-5">
+            <h2 class="text-sm font-bold text-ink-primary">{{ t('production.releaseApkTitle') }}</h2>
+            <p class="mt-1 text-xs text-ink-secondary">{{ t('production.releaseApkHint') }}</p>
+            <p class="mt-3 rounded-lg bg-background px-3 py-2 text-xs text-ink-secondary">
+                {{ t('production.releaseApkResultsHint') }}
+            </p>
         </div>
 
         <!-- Summary -->

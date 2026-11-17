@@ -183,6 +183,58 @@ class DeliveryTest extends TestCase
         $this->assertSame(Delivery::STATUS_DRAFT, $second->fresh()->status);
     }
 
+    public function test_tag_cannot_be_scanned_into_two_deliveries(): void
+    {
+        $stock = $this->fgStock('TAG-EXCL-'.uniqid(), 40);
+        $first = $this->makeDelivery($stock, 25);
+        $second = $this->makeDelivery($stock, 25);
+
+        $this->post(route('deliveries.scan', $first), ['code' => (string) $stock->tag])->assertRedirect();
+
+        $this->post(route('deliveries.scan', $second), ['code' => (string) $stock->tag])
+            ->assertSessionHasErrors('code');
+
+        $this->assertSame(0, $second->scans()->where('scan_type', DeliveryScan::TYPE_TAG)->count());
+    }
+
+    public function test_returned_tag_can_be_reassigned_after_its_scan_is_removed(): void
+    {
+        $stock = $this->fgStock('TAG-MOVE-'.uniqid(), 40);
+        $first = $this->makeDelivery($stock, 25);
+        $second = $this->makeDelivery($stock, 25);
+
+        // Pindah lalu kembalikan: stok pulih, tetapi scan masih menahan tag.
+        $this->scanTrolley($first, (string) $stock->tag);
+        $this->post(route('deliveries.return', $first))->assertRedirect();
+        $this->assertEqualsWithDelta(40.0, (float) $stock->fresh()->qty, 1e-6);
+
+        // Selama scan lama ada, dokumen lain tetap ditolak (tag masih diklaim).
+        $this->post(route('deliveries.scan', $second), ['code' => (string) $stock->tag])
+            ->assertSessionHasErrors('code');
+
+        // Setelah scan lama dihapus (diizinkan karena potongannya sudah dibalik),
+        // tag bisa dipakai dokumen lain.
+        $oldScan = $first->scans()->where('scan_type', DeliveryScan::TYPE_TAG)->firstOrFail();
+        $this->delete(route('deliveries.scans.destroy', [$first, $oldScan]))->assertSessionHas('success');
+
+        $this->post(route('deliveries.scan', $second), ['code' => (string) $stock->tag])->assertRedirect();
+        $this->assertSame(1, $second->scans()->where('scan_type', DeliveryScan::TYPE_TAG)->count());
+    }
+
+    public function test_trolley_cannot_be_used_by_two_deliveries(): void
+    {
+        $stock = $this->fgStock('TAG-TRL-EXCL-'.uniqid(), 40);
+        $first = $this->makeDelivery($stock, 25);
+        $second = $this->makeDelivery($stock, 25);
+
+        $this->post(route('deliveries.scan', $first), ['code' => 'TRL-1'])->assertRedirect();
+
+        $this->post(route('deliveries.scan', $second), ['code' => 'TRL-1'])
+            ->assertSessionHasErrors('code');
+
+        $this->assertSame(0, $second->scans()->where('scan_type', DeliveryScan::TYPE_TROLLEY)->count());
+    }
+
     public function test_return_restores_the_deducted_qty_not_the_scan_qty(): void
     {
         $stock = $this->fgStock('TAG-PARTIAL-'.uniqid(), 25);

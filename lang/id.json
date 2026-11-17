@@ -72,6 +72,7 @@
     ":name (:number) kurang :short :unit": ":name (:number) kurang :short :unit",
     "WO di-release, tapi ada kekurangan: :details": "WO dirilis, tetapi ada kekurangan: :details",
     "WO di-release, material & WIP dikonsumsi FIFO.": "WO dirilis, material dan WIP dikonsumsi secara FIFO.",
+    "WO di-release, material RM di-booking. Stok berkurang saat material diterima di mesin. Hasil produksi baru bisa dilaporkan setelah material di-issue dari APK.": "WO dirilis, material RM di-booking. Stok berkurang saat material diterima di mesin. Hasil produksi baru bisa dilaporkan setelah material di-issue dari APK.",
     "WO selesai.": "WO selesai.",
     "WO dibatalkan.": "WO dibatalkan.",
     "WO dihapus.": "WO dihapus.",

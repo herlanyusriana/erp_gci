@@ -54,7 +54,10 @@ const allModules = computed<ModuleItem[]>(() => [
         href: '/outgoing',
         title: t('account.outgoing'),
         subtitle: t('account.outgoingSubtitle'),
-        permission: ['stock.issue'],
+        // Samakan dengan DeliveryPolicy/PickingListPolicy: `delivery.view` atau
+        // `stock.issue`. PPIC memegang `delivery.*` tanpa `stock.issue`, jadi
+        // tanpa cadangan ini tile hilang dan Picking List/Delivery terkunci.
+        permission: ['stock.issue', 'delivery.view', 'delivery.create'],
     },
     {
         id: 'purchasing',

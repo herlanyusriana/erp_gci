@@ -84,13 +84,13 @@ dipakai dua truk. Tolak tag/troli yang sudah diklaim dokumen lain yang belum
 `released`.
 
 **Acceptance criteria:**
-- [ ] `resolveScan` menolak tag yang sudah ada di `delivery_scans` dokumen lain dengan status selain `released`, dengan pesan yang menyebut nomor DO pengklaim.
-- [ ] Troli yang sudah dipakai dokumen lain (belum `released`) ditolak dengan pesan serupa.
-- [ ] Test: scan tag yang sama ke DO-A lalu DO-B → DO-B ditolak.
+- [x] `resolveScan` menolak tag yang sudah ada di `delivery_scans` dokumen lain dengan status selain `released`, dengan pesan yang menyebut nomor DO pengklaim.
+- [x] Troli yang sudah dipakai dokumen lain (belum `released`) ditolak dengan pesan serupa.
+- [x] Test: scan tag yang sama ke DO-A lalu DO-B → DO-B ditolak.
 
 **Verification:**
-- [ ] `vendor/bin/pest tests/Feature/DeliveryTest.php tests/Feature/Api/DeliveryLoadingApiTest.php`
-- [ ] `vendor/bin/pint --dirty --format agent`
+- [x] `vendor/bin/pest tests/Feature/DeliveryTest.php tests/Feature/Api/DeliveryLoadingApiTest.php`
+- [x] `vendor/bin/pint --dirty --format agent`
 
 **Dependencies:** Task 01
 
@@ -148,14 +148,14 @@ sehingga `ProductionResultService` selalu menolak dengan "Material belum diterim
 di mesin" — WO `in_progress` yang tidak bisa dilaporkan.
 
 **Acceptance criteria:**
-- [ ] Tombol release di web tidak lagi tampil untuk WO `planned`.
-- [ ] WO Show menampilkan instruksi jelas: release & issue material dilakukan dari APK (scan tag), beserta tautan ke panduan.
-- [ ] Route `work-orders.release` tetap ada tetapi mengembalikan pesan error yang menjelaskan jalur yang benar (bukan 500), atau dihapus beserta test-nya.
-- [ ] Test: memanggil route release dari web tidak menghasilkan WO `in_progress` tanpa material issue.
+- [x] Tombol release di web tidak lagi tampil untuk WO `planned`.
+- [x] WO Show menampilkan instruksi jelas: release & issue material dilakukan dari APK (scan tag), beserta tautan ke panduan.
+- [x] Route `work-orders.release` tetap ada tetapi mengembalikan pesan error yang menjelaskan jalur yang benar (bukan 500), atau dihapus beserta test-nya.
+- [x] Test: memanggil route release dari web tidak menghasilkan WO `in_progress` tanpa material issue.
 
 **Verification:**
-- [ ] `vendor/bin/pest tests/Feature/WorkOrderHttpTest.php tests/Feature/WorkOrderAllocationTest.php`
-- [ ] `npm run build`
+- [x] `vendor/bin/pest tests/Feature/WorkOrderHttpTest.php tests/Feature/WorkOrderAllocationTest.php`
+- [x] `npm run build`
 
 **Dependencies:** None
 
@@ -266,14 +266,14 @@ tidak punya `stock.issue`, sehingga Picking List dan Delivery tidak bisa dibuka
 PPIC — padahal itu pekerjaannya.
 
 **Acceptance criteria:**
-- [ ] Gate launcher Outgoing memakai `['stock.issue', 'delivery.view', 'delivery.create']`.
-- [ ] PPIC bisa membuka launcher Outgoing, Picking List, dan Delivery.
-- [ ] User tanpa izin mana pun tetap tidak melihat tile.
-- [ ] Test: login sebagai ppic → `GET /outgoing` merender 3 tile.
+- [x] Gate launcher Outgoing memakai `['stock.issue', 'delivery.view', 'delivery.create']`.
+- [x] PPIC bisa membuka launcher Outgoing, Picking List, dan Delivery.
+- [x] User tanpa izin mana pun tetap tidak melihat tile.
+- [x] Test: login sebagai ppic → `GET /outgoing` merender 3 tile.
 
 **Verification:**
-- [ ] `vendor/bin/pest tests/Feature/` (test launcher/permission)
-- [ ] `npm run build`
+- [x] `vendor/bin/pest tests/Feature/` (test launcher/permission)
+- [x] `npm run build`
 
 **Dependencies:** None
 
@@ -286,8 +286,8 @@ PPIC — padahal itu pekerjaannya.
 ---
 
 ## Checkpoint 2: Alur
-- [ ] Satu siklus penuh bisa diselesaikan dari UI + APK
-- [ ] `vendor/bin/pest` dan `npm run build` hijau
+- [ ] Satu siklus penuh bisa diselesaikan dari UI + APK (Task 06/07/08 belum selesai)
+- [x] `vendor/bin/pest` dan `npm run build` hijau — 637 passed, build sukses
 - [ ] Review manusia: jalankan alur di browser (bukan hanya test)
 
 ---

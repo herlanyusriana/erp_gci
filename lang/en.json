@@ -72,6 +72,7 @@
     ":name (:number) kurang :short :unit": ":name (:number) is short by :short :unit",
     "WO di-release, tapi ada kekurangan: :details": "WO released, but there are shortages: :details",
     "WO di-release, material & WIP dikonsumsi FIFO.": "WO released; materials and WIP consumed using FIFO.",
+    "WO di-release, material RM di-booking. Stok berkurang saat material diterima di mesin. Hasil produksi baru bisa dilaporkan setelah material di-issue dari APK.": "WO released; RM materials booked. Stock decreases when the material is received at the machine. Production results can only be reported after the material is issued from the APK.",
     "WO selesai.": "Work order completed.",
     "WO dibatalkan.": "Work order cancelled.",
     "WO dihapus.": "Work order deleted.",

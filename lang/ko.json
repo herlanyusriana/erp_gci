@@ -72,6 +72,7 @@
     ":name (:number) kurang :short :unit": ":name (:number): :short :unit 부족",
     "WO di-release, tapi ada kekurangan: :details": "작업 지시가 발행되었지만 부족분이 있습니다: :details",
     "WO di-release, material & WIP dikonsumsi FIFO.": "작업 지시가 발행되었습니다. 자재 및 재공품이 선입선출 방식으로 소비되었습니다.",
+    "WO di-release, material RM di-booking. Stok berkurang saat material diterima di mesin. Hasil produksi baru bisa dilaporkan setelah material di-issue dari APK.": "작업 지시가 발행되었습니다. 원자재(RM)가 예약되었습니다. 재고는 자재가 기계에 입고될 때 감소합니다. 생산 실적은 APK에서 자재를 불출한 후에만 보고할 수 있습니다.",
     "WO selesai.": "작업 지시가 완료되었습니다.",
     "WO dibatalkan.": "작업 지시가 취소되었습니다.",
     "WO dihapus.": "작업 지시가 삭제되었습니다.",

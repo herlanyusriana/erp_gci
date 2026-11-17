@@ -57,7 +57,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         ->middleware('permission:delivery.update')
         ->name('api.deliveries.scans.destroy');
     Route::post('/deliveries/{delivery}/trolley-qc', [DeliveryApiController::class, 'trolleyQc'])
-        ->middleware('permission:delivery.update')
+        ->middleware('permission:delivery.oqc')
         ->name('api.deliveries.trolley-qc');
 
     // Production result (WIP per proses)

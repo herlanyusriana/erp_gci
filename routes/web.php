@@ -29,6 +29,7 @@ use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\ReceiveController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\TrolleyController;
 use App\Http\Controllers\TruckingCompanyController;
 use App\Http\Controllers\UomController;
 use App\Http\Controllers\UserController;
@@ -111,6 +112,13 @@ Route::middleware(['auth'])->group(function () {
     Route::resource('trucking-companies', TruckingCompanyController::class)->except(['show'])->parameters(['trucking-companies' => 'trucking']);
     Route::resource('machines', MachineController::class)->except(['show']);
     Route::get('machines/{machine}/label', [MachineController::class, 'printLabel'])->name('machines.label');
+
+    // Master troli — dipakai untuk validasi pindai loading & pilihan troli.
+    Route::get('trolleys', [TrolleyController::class, 'index'])->middleware('permission:trolley.view')->name('trolleys.index');
+    Route::post('trolleys', [TrolleyController::class, 'store'])->middleware('permission:trolley.create')->name('trolleys.store');
+    Route::post('trolleys/import', [TrolleyController::class, 'import'])->middleware('permission:trolley.create')->name('trolleys.import');
+    Route::put('trolleys/{trolley}', [TrolleyController::class, 'update'])->middleware('permission:trolley.update')->name('trolleys.update');
+    Route::delete('trolleys/{trolley}', [TrolleyController::class, 'destroy'])->middleware('permission:trolley.delete')->name('trolleys.destroy');
 
     // Master lokasi rak gudang. Berbeda dari master lain, route ini memakai
     // middleware `permission` sesuai AGENTS.md.

@@ -682,6 +682,12 @@ class DeliveryService
             ]);
         }
 
+        if (! $trolley->is_active) {
+            throw ValidationException::withMessages([
+                'code' => __('Troli :code sedang tidak aktif; hubungi admin master troli.', ['code' => $normalized]),
+            ]);
+        }
+
         return [
             'scan_type' => DeliveryScan::TYPE_TROLLEY,
             'code' => $normalized,
@@ -692,6 +698,9 @@ class DeliveryService
     /** Apakah master troli belum pernah disinkronkan? */
     public function trolleyMasterIsEmpty(): bool
     {
+        // Dihitung dari SEMUA baris, bukan hanya yang aktif: mode longgar hanya
+        // untuk master yang belum pernah diisi. Kalau semua troli dinonaktifkan,
+        // validasi tetap berlaku sehingga pindai ditolak, bukan diterima bebas.
         return ! Trolley::query()->exists();
     }
 
@@ -704,6 +713,7 @@ class DeliveryService
     public function availableTrolleys(?string $preferredKind = null, int $limit = 500): array
     {
         return Trolley::query()
+            ->active()
             ->when($preferredKind !== null && $preferredKind !== '', fn ($q) => $q->orderByRaw(
                 'CASE WHEN LOWER(kind) = ? THEN 0 ELSE 1 END',
                 [strtolower($preferredKind)],

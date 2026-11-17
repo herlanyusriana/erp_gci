@@ -31,7 +31,7 @@ class RolesAndPermissionsSeeder extends Seeder
 
         // Permissions: module.action (spec 0.2)
         $permissions = [];
-        foreach (['part', 'supplier', 'trucking', 'machine', 'process', 'bom', 'production', 'production_plan', 'location', 'customer'] as $module) {
+        foreach (['part', 'supplier', 'trucking', 'machine', 'process', 'bom', 'production', 'production_plan', 'location', 'customer', 'trolley'] as $module) {
             foreach (['view', 'create', 'update', 'delete'] as $action) {
                 $permissions[] = "{$module}.{$action}";
             }
@@ -65,7 +65,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'part_substitute.view', 'uom.view', 'config.view', 'bom.view',
             'work_order.view', 'production.view', 'production_plan.view', 'location.view',
             'purchase_order.view', 'incoming.view', 'receive.view', 'stock.view',
-            'customer.view', 'delivery.view', 'customer_price.view',
+            'customer.view', 'delivery.view', 'customer_price.view', 'trolley.view',
             'role.view', 'user.view',
         ];
 
@@ -76,9 +76,9 @@ class RolesAndPermissionsSeeder extends Seeder
                 fn (string $name) => ! str_starts_with($name, 'role.') && ! str_starts_with($name, 'user.'),
             )),
             'it-admin' => array_merge($viewAll, ['config.update', 'role.create', 'role.update', 'role.delete', 'user.create', 'user.update', 'user.delete']),
-            'ppic' => array_merge($viewAll, ['production.create', 'production.update', 'production.delete', 'production_plan.create', 'production_plan.update', 'production_plan.delete', 'work_order.create', 'work_order.update', 'bom.create', 'bom.update', 'delivery.create', 'delivery.update', 'delivery.delete', 'customer_price.create', 'customer_price.update', 'customer_price.delete']),
+            'ppic' => array_merge($viewAll, ['production.create', 'production.update', 'production.delete', 'production_plan.create', 'production_plan.update', 'production_plan.delete', 'work_order.create', 'work_order.update', 'bom.create', 'bom.update', 'delivery.create', 'delivery.update', 'delivery.delete', 'customer_price.create', 'customer_price.update', 'customer_price.delete', 'trolley.create', 'trolley.update', 'trolley.delete']),
             'purchasing' => array_merge($viewAll, ['supplier.create', 'supplier.update', 'supplier.delete', 'trucking.create', 'trucking.update', 'trucking.delete', 'purchase_order.create', 'purchase_order.update', 'purchase_order.delete', 'incoming.create', 'incoming.update']),
-            'warehouse' => array_merge($viewAll, ['incoming.create', 'incoming.update', 'incoming.delete', 'receive.create', 'receive.update', 'receive.delete', 'stock.issue', 'location.create', 'location.update', 'location.delete', 'delivery.create', 'delivery.update', 'delivery.delete', 'customer.create', 'customer.update']),
+            'warehouse' => array_merge($viewAll, ['incoming.create', 'incoming.update', 'incoming.delete', 'receive.create', 'receive.update', 'receive.delete', 'stock.issue', 'location.create', 'location.update', 'location.delete', 'delivery.create', 'delivery.update', 'delivery.delete', 'customer.create', 'customer.update', 'trolley.create', 'trolley.update', 'trolley.delete']),
             'production' => array_merge($viewAll, ['work_order.create', 'work_order.update', 'work_order.delete', 'production.create', 'production.update', 'production.delete', 'stock.issue']),
             'qc' => array_merge($viewAll, ['incoming.update', 'receive.view']),
             'engineering' => array_merge($viewAll, ['part.create', 'part.update', 'part.delete', 'bom.create', 'bom.update', 'bom.delete', 'machine.create', 'machine.update', 'machine.delete', 'process.create', 'process.update', 'process.delete', 'part_substitute.create', 'part_substitute.update', 'part_substitute.delete', 'uom.create', 'uom.update', 'uom.delete']),

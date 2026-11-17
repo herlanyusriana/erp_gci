@@ -5,10 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Salinan master troli dari aplikasi Trolley Scan.
+ * Master troli.
  *
- * ERP tidak membuat atau mencetak troli: label dan QR sudah diterbitkan di
- * aplikasi tersebut. Baris di sini hanya dipakai untuk memvalidasi hasil
+ * Data awalnya disalin dari aplikasi Trolley Scan (Export CSV) dan tetap bisa
+ * dikelola di ERP lewat Master Data → Troli. Label QR troli tetap diterbitkan
+ * di aplikasi Trolley Scan; ERP memakai baris ini untuk memvalidasi hasil
  * pindai dan menampilkan pilihan troli saat loading.
  */
 class Trolley extends Model
@@ -19,16 +20,27 @@ class Trolley extends Model
         'compbase' => 'CompBase',
     ];
 
+    public const TYPES = ['internal', 'external'];
+
+    public const KINDS = ['reinforce', 'backplate', 'compbase'];
+
     protected $fillable = [
         'external_id', 'code', 'type', 'kind',
-        'capacity', 'location', 'notes', 'synced_at',
+        'capacity', 'location', 'notes', 'is_active', 'synced_at',
     ];
 
     protected $casts = [
         'external_id' => 'integer',
         'capacity' => 'integer',
+        'is_active' => 'boolean',
         'synced_at' => 'datetime',
     ];
+
+    /** Troli yang boleh dipilih/dipindai. */
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
+    }
 
     public function kindLabel(): ?string
     {

@@ -36,7 +36,7 @@ const disabledClass = 'cursor-not-allowed select-none border-borderline bg-surfa
             <div class="flex items-center gap-2">
                 <div class="truncate text-base font-semibold text-ink-secondary">{{ title }}</div>
                 <span
-                    class="shrink-0 rounded-full bg-ink-secondary/10 px-2 py-0.5 text-xs font-semibold text-ink-secondary"
+                    class="shrink-0 rounded-full bg-ink-secondary/10 px-2 py-0.5 text-xs font-semibold text-ink-primary"
                 >
                     {{ badge ?? t('common.soon') }}
                 </span>

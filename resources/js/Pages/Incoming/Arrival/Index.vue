@@ -37,7 +37,7 @@ function pipelineStage(a: IncomingArrival): { label: string; class: string } {
 
     const hasReceives = a.items?.some((it) => it.receives && it.receives.length > 0);
     if (a.status === 'completed' || hasReceives) {
-        return { label: 'Received', class: 'bg-success/15 text-success border border-success/30' };
+        return { label: 'Received', class: 'bg-success/15 text-success-ink border border-success/30' };
     }
 
     if (a.iqc_status === 'passed') {
@@ -47,7 +47,7 @@ function pipelineStage(a: IncomingArrival): { label: string; class: string } {
         return { label: 'IQC Reject', class: 'bg-danger/15 text-danger border border-danger/30' };
     }
 
-    return { label: 'Arrival', class: 'bg-warning/15 text-warning border border-warning/30' };
+    return { label: 'Arrival', class: 'bg-warning/15 text-warning-ink border border-warning/30' };
 }
 </script>
 
@@ -101,7 +101,7 @@ function pipelineStage(a: IncomingArrival): { label: string; class: string } {
                             </td>
                             <td class="px-4 py-3 text-ink-primary">{{ a.invoice_no ?? '—' }}</td>
                             <td class="px-4 py-3 text-ink-primary">{{ a.supplier?.supplier_name ?? '—' }}</td>
-                            <td class="px-4 py-3 text-ink-primary">{{ a.items_count ?? 0 }}</td>
+                            <td class="px-4 py-3 tabular-nums text-ink-primary">{{ a.items_count ?? 0 }}</td>
                             <td class="px-4 py-3 text-ink-primary whitespace-nowrap">{{ formatDate(a.eta_gci ?? a.eta) }}</td>
                             <td class="px-4 py-3">
                                 <span :class="['inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold', pipelineStage(a).class]">

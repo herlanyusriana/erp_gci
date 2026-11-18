@@ -33,7 +33,7 @@ const verificationLinkSent = computed(
 
         <div
             v-if="verificationLinkSent"
-            class="mb-5 rounded-lg border border-success/30 bg-success/10 px-4 py-3 text-sm font-medium text-success"
+            class="mb-5 rounded-lg border border-success/30 bg-success/10 px-4 py-3 text-sm font-medium text-success-ink"
         >
             {{ t('account.verificationSent') }}
         </div>

@@ -34,7 +34,7 @@ const submit = () => {
     <AuthLayout>
         <Head :title="t('account.login')" />
 
-        <div v-if="status" class="mb-5 rounded-lg border border-success/30 bg-success/10 px-4 py-3 text-sm font-medium text-success">
+        <div v-if="status" class="mb-5 rounded-lg border border-success/30 bg-success/10 px-4 py-3 text-sm font-medium text-success-ink">
             {{ status }}
         </div>
 

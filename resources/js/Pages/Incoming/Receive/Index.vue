@@ -48,13 +48,13 @@ defineProps<{
                             <td class="px-4 py-3 text-center whitespace-nowrap">
                                 <span
                                     v-if="a.iqc_status === 'passed'"
-                                    class="inline-flex items-center gap-1 rounded-full bg-success/15 px-2.5 py-0.5 text-xs font-bold text-success"
+                                    class="inline-flex items-center gap-1 rounded-full bg-success/15 px-2.5 py-0.5 text-xs font-bold text-success-ink"
                                 >
                                     ✓ PASS
                                 </span>
                                 <span
                                     v-else
-                                    class="inline-flex items-center gap-1 rounded-full bg-warning/15 px-2.5 py-0.5 text-xs font-semibold text-warning"
+                                    class="inline-flex items-center gap-1 rounded-full bg-warning/15 px-2.5 py-0.5 text-xs font-semibold text-warning-ink"
                                 >
                                     ● MENUNGGU IQC
                                 </span>

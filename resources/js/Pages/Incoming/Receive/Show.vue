@@ -62,13 +62,13 @@ function removeReceive(r: IncomingReceive) {
             <div class="flex items-center gap-2">
                 <span
                     v-if="arrival.iqc_status === 'passed'"
-                    class="inline-flex items-center gap-1 rounded-full bg-success/15 px-3 py-1 text-xs font-bold text-success"
+                    class="inline-flex items-center gap-1 rounded-full bg-success/15 px-3 py-1 text-xs font-bold text-success-ink"
                 >
                     ✓ IQC PASS
                 </span>
                 <span
                     v-else
-                    class="inline-flex items-center gap-1 rounded-full bg-warning/15 px-3 py-1 text-xs font-semibold text-warning"
+                    class="inline-flex items-center gap-1 rounded-full bg-warning/15 px-3 py-1 text-xs font-semibold text-warning-ink"
                 >
                     ● MENUNGGU IQC
                 </span>

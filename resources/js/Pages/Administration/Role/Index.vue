@@ -131,8 +131,8 @@ function remove(role: Role) {
                         <tr v-for="r in roles.data" :key="r.id" class="hover:bg-primary-light/40">
                             <td class="px-4 py-3 font-medium text-ink-primary">{{ r.name }}</td>
                             <td class="px-4 py-3 text-ink-primary">{{ r.label ?? '—' }}</td>
-                            <td class="px-4 py-3 text-ink-primary">{{ r.users_count }}</td>
-                            <td class="px-4 py-3 text-ink-secondary">{{ (r.permissions ?? []).length }}</td>
+                            <td class="px-4 py-3 tabular-nums text-ink-primary">{{ r.users_count }}</td>
+                            <td class="px-4 py-3 tabular-nums text-ink-secondary">{{ (r.permissions ?? []).length }}</td>
                             <td class="px-4 py-3">
                                 <div class="flex justify-end gap-1.5">
                                     <ActionButton v-if="perms.update && r.name !== 'super-admin'" :label="t('account.edit')" variant="edit" @click="openEdit(r)" />

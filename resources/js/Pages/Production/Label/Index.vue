@@ -216,7 +216,7 @@ const canDeliver = (row: LabelRow) => row.label_status === 'printed';
                         <td class="px-4 py-3 text-ink-primary">{{ row.shift ?? '—' }}</td>
                         <td class="px-4 py-3">
                             <div class="tabular-nums font-medium text-ink-primary">{{ formatPeriod(row.period_label) }}</div>
-                            <span v-if="row.is_backfilled" class="mt-1 inline-flex rounded bg-warning/15 px-1.5 py-0.5 text-[11px] font-semibold text-warning">
+                            <span v-if="row.is_backfilled" class="mt-1 inline-flex rounded bg-warning/15 px-1.5 py-0.5 text-[11px] font-semibold text-warning-ink">
                                 {{ t('production.backfilled') }}
                             </span>
                         </td>
@@ -227,7 +227,7 @@ const canDeliver = (row: LabelRow) => row.label_status === 'printed';
                                 <span>{{ row.part_number ?? '—' }}</span>
                                 <span
                                     class="rounded px-1.5 py-0.5 text-[10px] font-bold uppercase"
-                                    :class="row.is_fg ? 'bg-success/15 text-success' : 'bg-primary/10 text-primary'"
+                                    :class="row.is_fg ? 'bg-success/15 text-success-ink' : 'bg-primary/10 text-primary'"
                                 >
                                     {{ row.is_fg ? t('production.finishedGood') : t('production.wipPart') }}
                                 </span>

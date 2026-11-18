@@ -764,6 +764,7 @@ function submit() {
                                 <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.size') }}</label>
                                 <input
                                     v-model="r.size"
+                                    :aria-label="t('incoming.size')"
                                     type="text"
                                     placeholder="STD / 0.5T / ..."
                                     class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
@@ -777,6 +778,7 @@ function submit() {
                                 </div>
                                 <input
                                     v-model="r.qty_goods"
+                                    :aria-label="t('incoming.qtyGoods')"
                                     type="number"
                                     step="0.0001"
                                     min="0"
@@ -789,6 +791,7 @@ function submit() {
                                 <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.unitGoods') }}</label>
                                 <input
                                     v-model="r.unit_goods"
+                                    :aria-label="t('incoming.unitGoods')"
                                     list="uom-codes"
                                     type="text"
                                     placeholder="KGM / PCS"
@@ -803,6 +806,7 @@ function submit() {
                                 <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.bundleQty') }}</label>
                                 <input
                                     v-model="r.qty_bundle"
+                                    :aria-label="t('incoming.bundleQty')"
                                     type="number"
                                     step="1"
                                     min="0"
@@ -816,6 +820,7 @@ function submit() {
                                 <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.bundleUnit') }}</label>
                                 <select
                                     v-model="r.unit_bundle"
+                                    :aria-label="t('incoming.bundleUnit')"
                                     class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
                                 >
                                     <option value="">—</option>
@@ -827,6 +832,7 @@ function submit() {
                                 <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.netWeight') }} (KGM)</label>
                                 <input
                                     v-model="r.weight_nett"
+                                    :aria-label="t('incoming.netWeight')"
                                     type="number"
                                     step="0.0001"
                                     min="0"
@@ -840,6 +846,7 @@ function submit() {
                                 <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.grossWeight') }} (KGM)</label>
                                 <input
                                     v-model="r.weight_gross"
+                                    :aria-label="t('incoming.grossWeight')"
                                     type="number"
                                     step="0.0001"
                                     min="0"
@@ -856,6 +863,7 @@ function submit() {
                                 <label>{{ t('incoming.totalPrice') }}:</label>
                                 <input
                                     v-model="r.total_price"
+                                    :aria-label="t('incoming.totalPrice')"
                                     type="number"
                                     step="0.01"
                                     min="0"
@@ -872,6 +880,7 @@ function submit() {
                                 <label>{{ t('incoming.notes') }}:</label>
                                 <input
                                     v-model="r.notes"
+                                    :aria-label="t('incoming.notes')"
                                     type="text"
                                     :placeholder="t('incoming.notesPlaceholder')"
                                     class="h-7 w-48 rounded border-borderline bg-surface px-2 py-1 text-xs text-ink-primary"

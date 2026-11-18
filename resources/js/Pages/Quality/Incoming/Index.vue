@@ -86,6 +86,7 @@ function passAll(row: ArrivalRow) {
             <input
                 v-model="search"
                 type="search"
+                :aria-label="t('quality.searchArrival')"
                 :placeholder="t('quality.searchArrival')"
                 @input="doFilter"
                 class="w-full rounded-lg border-borderline bg-background px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-72"
@@ -166,13 +167,13 @@ function passAll(row: ArrivalRow) {
                                     </div>
                                     <span
                                         v-if="it.iqc_status === 'passed'"
-                                        class="shrink-0 rounded bg-success/15 px-1.5 py-0.5 text-[10px] font-bold text-success"
+                                        class="shrink-0 rounded bg-success/15 px-1.5 py-0.5 text-[10px] font-bold text-success-ink"
                                     >
                                         ✓ PASS
                                     </span>
                                     <span
                                         v-else
-                                        class="shrink-0 rounded bg-warning/15 px-1.5 py-0.5 text-[10px] font-semibold text-warning"
+                                        class="shrink-0 rounded bg-warning/15 px-1.5 py-0.5 text-[10px] font-semibold text-warning-ink"
                                     >
                                         PENDING
                                     </span>
@@ -185,7 +186,7 @@ function passAll(row: ArrivalRow) {
                         <td class="px-4 py-3 align-top text-center whitespace-nowrap">
                             <div
                                 class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold"
-                                :class="itemsPassedCount(a.items) === (a.items?.length ?? 0) && (a.items?.length ?? 0) > 0 ? 'bg-success/15 text-success' : 'bg-warning/15 text-warning'"
+                                :class="itemsPassedCount(a.items) === (a.items?.length ?? 0) && (a.items?.length ?? 0) > 0 ? 'bg-success/15 text-success-ink' : 'bg-warning/15 text-warning-ink'"
                             >
                                 {{ t('quality.materialItemsCount', { passed: itemsPassedCount(a.items), total: a.items?.length ?? 0 }) }}
                             </div>

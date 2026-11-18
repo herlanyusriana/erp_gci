@@ -31,7 +31,7 @@ const submit = () => {
             <p class="mt-1.5 text-sm leading-relaxed text-ink-secondary">{{ t('account.forgotHelp') }}</p>
         </div>
 
-        <div v-if="status" class="mb-5 rounded-lg border border-success/30 bg-success/10 px-4 py-3 text-sm font-medium text-success">
+        <div v-if="status" class="mb-5 rounded-lg border border-success/30 bg-success/10 px-4 py-3 text-sm font-medium text-success-ink">
             {{ status }}
         </div>
 

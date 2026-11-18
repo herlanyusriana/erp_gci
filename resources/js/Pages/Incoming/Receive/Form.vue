@@ -9,11 +9,15 @@ import type { IncomingArrivalItem } from '@/types';
 
 const { t } = useI18n();
 
+const MAX_BUNDLES = 50;
+const MAX_PACKINGS = 999;
+const MAX_TOTAL_ROWS = 1000;
+const requestedPackingCount = ref<number | null>(null);
+
 interface PackingSubRow {
     qty: number | '';
     uom: string;
     net_weight: number | '';
-    gross_weight: number | '';
 }
 
 interface BundleGroup {
@@ -61,7 +65,7 @@ const initialBundleUnit = () => {
 
 const initialBundleCount = () => {
     const count = Math.floor(Number(props.arrivalItem.qty_bundle) || 0);
-    return count > 0 ? Math.min(count, 50) : 4;
+    return count > 0 ? Math.min(count, MAX_BUNDLES) : 4;
 };
 
 // Section 2 State
@@ -70,6 +74,13 @@ const bundleConfig = reactive({
     bundle_unit: initialBundleUnit(),
     packing_count: 3 as number | '',
     packing_type: packingTypeOptions.value.includes('COIL') ? 'COIL' : (packingTypeOptions.value[0] ?? 'BOX'),
+});
+
+const packingCapNotice = computed(() => {
+    const applied = Number(bundleConfig.packing_count) || 0;
+    const requested = requestedPackingCount.value;
+
+    return requested !== null && requested > applied ? applied : null;
 });
 
 // Section 1 Form State
@@ -97,15 +108,16 @@ function createPackingRow(): PackingSubRow {
         qty: '',
         uom: defaultUom(),
         net_weight: '',
-        gross_weight: '',
     };
 }
 
 function resizeBundles() {
     let nb = Math.floor(Number(bundleConfig.bundle_count) || 1);
-    let np = Math.floor(Number(bundleConfig.packing_count) || 1);
-    nb = Math.min(50, Math.max(1, nb));
-    np = Math.min(30, Math.max(1, np));
+    const requestedPacking = Math.floor(Number(bundleConfig.packing_count) || 1);
+    nb = Math.min(MAX_BUNDLES, Math.max(1, nb));
+
+    const packingCap = Math.max(1, Math.min(MAX_PACKINGS, Math.floor(MAX_TOTAL_ROWS / nb)));
+    const np = Math.min(packingCap, Math.max(1, requestedPacking));
 
     bundleConfig.bundle_count = nb;
     bundleConfig.packing_count = np;
@@ -129,6 +141,11 @@ function resizeBundles() {
 }
 
 watch(() => [bundleConfig.bundle_count, bundleConfig.packing_count], resizeBundles);
+
+function onPackingCountInput(event: Event) {
+    const value = Number((event.target as HTMLInputElement).value);
+    requestedPackingCount.value = Number.isFinite(value) && value > 0 ? Math.floor(value) : null;
+}
 
 // Otomasi Qty -> Net weight jika UOM = KGM/KG
 function onQtyChange(r: PackingSubRow) {
@@ -166,7 +183,6 @@ resizeBundles();
 const totals = computed(() => {
     let totQty = 0;
     let totNet = 0;
-    let totGross = 0;
     let totPack = 0;
 
     bundles.value.forEach((b) => {
@@ -174,7 +190,6 @@ const totals = computed(() => {
             totPack++;
             totQty += Number(p.qty) || 0;
             totNet += Number(p.net_weight) || 0;
-            totGross += Number(p.gross_weight) || 0;
         });
     });
 
@@ -184,7 +199,6 @@ const totals = computed(() => {
         packings: totPack,
         qty: round4(totQty),
         net: round4(totNet),
-        gross: round4(totGross),
     };
 });
 
@@ -283,16 +297,13 @@ function submit() {
     form.tags = filled.map((b) => {
         let bQty = 0;
         let bNet = 0;
-        let bGross = 0;
 
         const packingsData = b.packings.map((p, pi) => {
             const q = Number(p.qty) || 0;
             const nw = p.net_weight === '' ? null : Number(p.net_weight);
-            const gw = p.gross_weight === '' ? null : Number(p.gross_weight);
 
             bQty += q;
             if (nw !== null) bNet += nw;
-            if (gw !== null) bGross += gw;
 
             return {
                 packing_no: `${b.tag}/${pi + 1}`,
@@ -300,7 +311,6 @@ function submit() {
                 qty: q,
                 uom: p.uom,
                 net_weight: nw,
-                gross_weight: gw,
             };
         });
 
@@ -317,7 +327,6 @@ function submit() {
             packing_type: bundleConfig.packing_type,
             packing_qty: b.packings.length > 0 ? round4(bQty / b.packings.length) : round4(bQty),
             net_weight: props.weightBasis ? round4(bNet) : (bNet > 0 ? round4(bNet) : null),
-            gross_weight: bGross > 0 ? round4(bGross) : null,
             packings: packingsData,
         };
     }) as any;
@@ -496,10 +505,14 @@ function submit() {
                             v-model="bundleConfig.packing_count"
                             type="number"
                             min="1"
-                            max="30"
+                            :max="MAX_PACKINGS"
+                            @input="onPackingCountInput"
                             class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm font-bold text-ink-primary focus:border-primary focus:ring-primary"
                         />
-                        <p class="mt-1 text-[11px] text-ink-secondary">Packing per bundle</p>
+                        <p v-if="packingCapNotice" class="mt-1 text-[11px] font-semibold text-warning">
+                            {{ t('incoming.packingRowLimit', { packing: packingCapNotice, max: MAX_TOTAL_ROWS }) }}
+                        </p>
+                        <p v-else class="mt-1 text-[11px] text-ink-secondary">Packing per bundle</p>
                     </div>
 
                     <div>
@@ -549,7 +562,6 @@ function submit() {
                                 <th class="w-32 border border-borderline px-3 py-2.5 text-right">Qty/packing</th>
                                 <th class="w-24 border border-borderline px-3 py-2.5">UOM</th>
                                 <th class="w-36 border border-borderline px-3 py-2.5 text-right">Net weight (kg)</th>
-                                <th class="w-36 border border-borderline px-3 py-2.5 text-right">Gross weight (kg)</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -628,22 +640,12 @@ function submit() {
                                             class="w-full rounded border-borderline bg-surface px-2 py-1 text-right text-xs text-ink-primary focus:border-primary focus:ring-primary"
                                         />
                                     </td>
-                                    <td class="border border-borderline p-1 text-right">
-                                        <input
-                                            v-model="r.gross_weight"
-                                            type="number"
-                                            step="any"
-                                            min="0"
-                                            placeholder="0.00"
-                                            class="w-full rounded border-borderline bg-surface px-2 py-1 text-right text-xs text-ink-primary focus:border-primary focus:ring-primary"
-                                        />
-                                    </td>
                                 </tr>
                             </template>
                         </tbody>
                         <tfoot class="border-t-2 border-ink-primary bg-background font-bold text-ink-primary">
                             <tr>
-                                <td colspan="3" class="border border-borderline px-3 py-2 text-right text-xs uppercase">
+                                <td colspan="5" class="border border-borderline px-3 py-2 text-right text-xs uppercase">
                                     TOTAL ({{ totals.bundles }} Bundle, {{ totals.packings }} Packing) :
                                 </td>
                                 <td class="border border-borderline px-3 py-2 text-right tabular-nums text-primary text-xs font-bold">
@@ -654,9 +656,6 @@ function submit() {
                                 </td>
                                 <td class="border border-borderline px-3 py-2 text-right tabular-nums text-xs">
                                     {{ totals.net.toLocaleString() }} kg
-                                </td>
-                                <td class="border border-borderline px-3 py-2 text-right tabular-nums text-xs">
-                                    {{ totals.gross.toLocaleString() }} kg
                                 </td>
                             </tr>
                         </tfoot>

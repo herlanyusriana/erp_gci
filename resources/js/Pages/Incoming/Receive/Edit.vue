@@ -153,10 +153,6 @@ function submit() {
                     <input v-model="form.net_weight" type="number" step="any" min="0" :placeholder="weightUnit" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     <InputError :message="form.errors.net_weight" class="mt-1" />
                 </div>
-                <div>
-                    <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.grossWeight') }} ({{ weightUnit }})</label>
-                    <input v-model="form.gross_weight" type="number" step="any" min="0" :placeholder="weightUnit" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
-                </div>
             </div>
 
             <div class="flex items-center justify-end gap-3 pt-2">

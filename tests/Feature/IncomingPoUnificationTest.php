@@ -203,4 +203,42 @@ class IncomingPoUnificationTest extends TestCase
             'aju_no' => 'AJU-3344',
         ]);
     }
+
+    /**
+     * Kedatangan lokal punya No. Surat Jalan dan No. Faktur yang terpisah.
+     * Sebelumnya form lokal hanya punya satu field berlabel
+     * "No. Surat Jalan / Invoice" yang menulis ke `delivery_note_no`, sehingga
+     * `invoice_no` tidak pernah terisi dan kolom Faktur selalu kosong.
+     */
+    public function test_local_arrival_stores_delivery_note_and_invoice_separately(): void
+    {
+        [$local, $part] = $this->freshSupplierWithPart(Supplier::SOURCE_LOCAL);
+
+        $this->post(route('incoming-arrivals.store'), [
+            'is_local' => true,
+            'supplier_id' => $local->id,
+            'delivery_note_no' => 'SJ-2026/777',
+            'invoice_no' => 'INV-2026/888',
+            'items' => [[
+                'part_id' => $part->id,
+                'qty_goods' => 5,
+                'unit_goods' => 'PCS',
+            ]],
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('incoming_arrivals', [
+            'supplier_id' => $local->id,
+            'delivery_note_no' => 'SJ-2026/777',
+            'invoice_no' => 'INV-2026/888',
+        ]);
+    }
+
+    public function test_local_arrival_form_renders_the_invoice_input(): void
+    {
+        $source = file_get_contents(resource_path('js/Pages/Incoming/Arrival/Form.vue'));
+        $this->assertNotFalse($source);
+
+        $this->assertStringContainsString('v-model="form.invoice_no"', $source);
+        $this->assertStringContainsString("t('incoming.invoiceNo')", $source);
+    }
 }

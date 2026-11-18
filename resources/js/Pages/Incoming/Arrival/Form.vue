@@ -451,15 +451,27 @@ function submit() {
                     </div>
 
                     <div>
-                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.deliveryNoteInvoiceNo') }}</label>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.deliveryNoteNo') }}</label>
                         <input
-                            :aria-label="t('incoming.deliveryNoteInvoiceNo')"
+                            :aria-label="t('incoming.deliveryNoteNo')"
                             v-model="form.delivery_note_no"
                             type="text"
                             :placeholder="t('incoming.deliveryNotePlaceholder')"
                             class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
                         />
                         <InputError :message="form.errors.delivery_note_no" class="mt-1" />
+                    </div>
+
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.invoiceNo') }}</label>
+                        <input
+                            :aria-label="t('incoming.invoiceNo')"
+                            v-model="form.invoice_no"
+                            type="text"
+                            :placeholder="t('incoming.invoiceNoPlaceholder')"
+                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                        />
+                        <InputError :message="form.errors.invoice_no" class="mt-1" />
                     </div>
 
                     <div>

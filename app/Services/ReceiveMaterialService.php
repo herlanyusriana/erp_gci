@@ -209,12 +209,16 @@ class ReceiveMaterialService
     {
         $partId = $receive->part_id ?? $receive->arrivalItem?->part_id;
         if ($partId === null) {
-            return;
+            throw ValidationException::withMessages([
+                'tags' => __('Penerimaan tidak bisa masuk stok: item kedatangan belum terhubung ke part master.'),
+            ]);
         }
 
         [$contribution, $unit] = $this->stockContribution($receive);
         if ($contribution <= 0) {
-            return;
+            throw ValidationException::withMessages([
+                'tags' => __('Penerimaan tidak bisa masuk stok: qty/berat bersih yang diposting nol.'),
+            ]);
         }
 
         $receivedAt = $receive->ata_date ?? now();

@@ -19,7 +19,7 @@ class IncomingArrival extends Model
         'bill_of_lading', 'pen_no', 'pen_date', 'aju_no',
         'bill_of_lading_file', 'delivery_note_file', 'invoice_file', 'packing_list_file',
         'price_term', 'hs_code', 'port_of_loading', 'country', 'currency',
-        'notes', 'status', 'iqc_status', 'iqc_passed_at', 'iqc_passed_by',
+        'notes', 'remarks', 'status', 'iqc_status', 'iqc_passed_at', 'iqc_passed_by',
         'created_by', 'updated_by',
     ];
 

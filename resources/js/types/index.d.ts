@@ -305,6 +305,7 @@ export interface IncomingArrival {
     country: string | null;
     currency: string | null;
     notes: string | null;
+    remarks?: string | null;
     delivery_note_no?: string | null;
     status: string;
     iqc_status?: string;

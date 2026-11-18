@@ -127,6 +127,11 @@ function groupLabel(item: PendingRow['item']): string {
         </div>
 
         <!-- Items -->
+        <div v-if="arrival.remarks" class="mb-6 rounded-xl border border-borderline bg-surface p-4">
+            <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('incoming.remarks') }}</div>
+            <div class="mt-1 whitespace-pre-line text-ink-primary">{{ arrival.remarks }}</div>
+        </div>
+
         <h2 class="mb-3 text-base font-semibold text-ink-primary">{{ t('incoming.items') }}</h2>
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
             <div class="overflow-x-auto">

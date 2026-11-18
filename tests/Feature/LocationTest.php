@@ -188,6 +188,7 @@ class LocationTest extends TestCase
         ]);
         $arrivalItem = IncomingArrivalItem::create([
             'arrival_id' => $arrival->id,
+            'part_id' => Part::where('part_number', 'AAN30056405')->value('id'),
             'qty_goods' => 10,
             'unit_goods' => 'PCS',
         ]);

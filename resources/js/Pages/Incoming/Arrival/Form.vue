@@ -137,6 +137,7 @@ const form = useForm({
     country: props.arrival?.country ?? '',
     currency: props.arrival?.currency ?? 'IDR',
     notes: props.arrival?.notes ?? '',
+    remarks: props.arrival?.remarks ?? '',
     status: props.arrival?.status ?? 'pending',
     items: [] as any[],
     containers: [] as Array<{ container_no: string; seal_code: string | null; size: string | null }>,
@@ -589,6 +590,18 @@ function submit() {
                             <option value="IDR">IDR</option>
                             <option value="KRW">KRW</option>
                         </select>
+                    </div>
+
+                    <div class="sm:col-span-2 lg:col-span-3">
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.remarks') }}</label>
+                        <textarea
+                            :aria-label="t('incoming.remarks')"
+                            v-model="form.remarks"
+                            rows="2"
+                            :placeholder="t('incoming.remarksPlaceholder')"
+                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                        ></textarea>
+                        <InputError :message="form.errors.remarks" class="mt-1" />
                     </div>
                 </div>
 

@@ -143,4 +143,100 @@ class ReceiveFormDefaultsTest extends TestCase
             'qty' => 100,
         ]);
     }
+
+    /**
+     * No. PEN diisi saat penerimaan, tetapi input-nya sempat hilang dari form
+     * (hanya No. AJU yang dirender) sehingga nilainya tidak pernah bisa diisi.
+     */
+    public function test_receive_form_renders_pen_no_input(): void
+    {
+        $source = file_get_contents(resource_path('js/Pages/Incoming/Receive/Form.vue'));
+        $this->assertNotFalse($source);
+
+        $this->assertStringContainsString('v-model="form.pen_no"', $source);
+        $this->assertStringContainsString("t('incoming.penNo')", $source);
+    }
+
+    /**
+     * Semua penolakan (validasi klien maupun server) harus tampil di dekat
+     * tombol Simpan. Sebelumnya pesan validasi klien dirender di atas tabel —
+     * di luar layar saat pengguna menekan Simpan — sehingga klik Simpan
+     * terlihat "tidak terjadi apa-apa".
+     */
+    public function test_receive_form_renders_blocking_errors_next_to_submit_button(): void
+    {
+        $source = file_get_contents(resource_path('js/Pages/Incoming/Receive/Form.vue'));
+        $this->assertNotFalse($source);
+
+        $alert = 'v-if="clientError || rowErrors.length > 0 || otherErrors.length > 0"';
+        $this->assertStringContainsString($alert, $source, 'Alert harus merangkum error klien, error baris, dan error server.');
+        $this->assertStringContainsString('otherErrors', $source, 'Error server non-tag harus ikut ditampilkan.');
+        $this->assertStringNotContainsString('<p v-if="clientError"', $source, 'Pesan klien tidak boleh dirender jauh di atas tombol Simpan.');
+
+        $alertPos = strpos($source, $alert);
+        $submitPos = strpos($source, 'type="submit"');
+
+        $this->assertNotFalse($alertPos);
+        $this->assertNotFalse($submitPos);
+        $this->assertLessThan($submitPos, $alertPos, 'Alert harus berada tepat sebelum tombol Simpan.');
+    }
+
+    /**
+     * Atribut HTML `required` membuat browser memblokir submit sebelum handler
+     * Vue berjalan. Tooltip validasi native muncul di input yang ada di atas
+     * layar, sehingga tombol Simpan di bagian bawah terlihat "tidak terjadi
+     * apa-apa". Validasi wajib tetap di JS supaya pesannya tampil di dekat
+     * tombol Simpan.
+     */
+    public function test_receive_form_does_not_use_native_required_attribute(): void
+    {
+        $source = file_get_contents(resource_path('js/Pages/Incoming/Receive/Form.vue'));
+        $this->assertNotFalse($source);
+
+        $this->assertDoesNotMatchRegularExpression(
+            '/^\s+required\s*$/m',
+            $source,
+            'Atribut `required` memblokir submit tanpa pesan yang terlihat; pakai validasi JS.'
+        );
+    }
+
+    /**
+     * Item kedatangan boleh dibuat tanpa part master. Dulu `postStock` hanya
+     * `return` untuk kasus itu: penerimaan tersimpan tetapi stok tidak pernah
+     * dibuat. Sekarang harus ditolak dengan pesan yang terlihat.
+     */
+    public function test_receive_without_master_part_is_rejected_instead_of_silently_skipped(): void
+    {
+        $tag = 'NO-PART-'.uniqid();
+        $arrival = IncomingArrival::create([
+            'arrival_no' => 'ARV-NOPART-'.uniqid(),
+            'supplier_id' => Supplier::query()->value('id'),
+            'is_local' => true,
+            'status' => 'pending',
+            'iqc_status' => 'passed',
+        ]);
+        $item = IncomingArrivalItem::create([
+            'arrival_id' => $arrival->id,
+            'part_id' => null,
+            'material_group' => 'STEEL PLATE',
+            'qty_goods' => 10,
+            'unit_goods' => 'KGM',
+            'weight_nett' => 10,
+        ]);
+
+        $this->post(route('receive.store', $item), [
+            'receive_date' => now()->toDateString(),
+            'truck_no' => 'B 1234 GCI',
+            'location_code' => 'BULK-AREA',
+            'tags' => [[
+                'tag' => $tag,
+                'qty' => 10,
+                'qty_unit' => 'KGM',
+                'net_weight' => 10,
+            ]],
+        ])->assertSessionHasErrors('tags');
+
+        $this->assertSame(0, $item->receives()->count(), 'Penerimaan harus dibatalkan, bukan tersimpan tanpa stok.');
+        $this->assertDatabaseMissing('part_stocks', ['tag' => $tag]);
+    }
 }

@@ -164,7 +164,14 @@ class TieredReceiveTest extends TestCase
         ])->assertRedirect(route('receive.show', $arrival));
 
         $receive = $item->receives()->firstOrFail();
-        $this->assertMatchesRegularExpression('/^AUTO-\d{6}-\d{4}$/', (string) $receive->tag);
+
+        // Format: AUTO-<ymd>-<id receive>, id di-pad minimal 4 digit. Id bisa
+        // melewati 9999 pada database yang sudah lama dipakai, jadi lebar
+        // padding tidak boleh diasumsikan tepat 4 digit.
+        $expected = 'AUTO-'.now()->format('ymd').'-'.str_pad((string) $receive->id, 4, '0', STR_PAD_LEFT);
+
+        $this->assertSame($expected, (string) $receive->tag);
+        $this->assertMatchesRegularExpression('/^AUTO-\d{6}-\d{4,}$/', (string) $receive->tag);
     }
 
     public function test_receive_stores_pen_and_aju_on_the_arrival(): void

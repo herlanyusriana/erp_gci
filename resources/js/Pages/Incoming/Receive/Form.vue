@@ -221,12 +221,40 @@ const rowErrors = computed(() => {
     return rows;
 });
 
+/**
+ * Error server yang tidak menempel pada baris tag (mis. tanggal, truk, lokasi).
+ * Tanpa daftar ini pesan hanya muncul di field atas form — di luar layar saat
+ * pengguna menekan Simpan di bagian bawah.
+ */
+const otherErrors = computed(() => {
+    const errors = form.errors as Record<string, string | undefined>;
+
+    return Object.entries(errors)
+        .filter(([key, message]) => Boolean(message) && ! key.startsWith('tags.'))
+        .map(([, message]) => String(message));
+});
+
 function submit() {
     clientError.value = '';
 
     if (!form.truck_no.trim()) {
         clientError.value = t('incoming.truckNoRequired');
         return;
+    }
+
+    // Material berbasis berat: operator sering hanya mengisi Net weight.
+    // Pada item berbasis berat qty memakai satuan yang sama (KGM), jadi qty
+    // diisi dari net weight agar penerimaan tidak tertahan tanpa penjelasan.
+    if (props.weightBasis) {
+        bundles.value.forEach((b) => {
+            b.packings.forEach((p) => {
+                const qty = Number(p.qty) || 0;
+                const net = Number(p.net_weight) || 0;
+                if (qty <= 0 && net > 0) {
+                    p.qty = net;
+                }
+            });
+        });
     }
 
     // Hanya bundle yang benar-benar berisi qty yang dikirim. Form selalu
@@ -237,17 +265,17 @@ function submit() {
 
     const emptyTagIdx = filled.findIndex((b) => !b.tag.trim());
     if (emptyTagIdx !== -1) {
-        clientError.value = `Tag # pada bundle ke-${emptyTagIdx + 1} belum diisi.`;
+        clientError.value = t('incoming.receiveTagRequired', { index: emptyTagIdx + 1 });
         return;
     }
 
     if (filled.length === 0 || totals.value.qty <= 0) {
-        clientError.value = 'Total kuantitas barang harus lebih dari 0.';
+        clientError.value = t('incoming.receiveQtyRequired');
         return;
     }
 
     if (props.weightBasis && totals.value.net <= 0) {
-        clientError.value = 'Material berbasis berat wajib memiliki Net weight.';
+        clientError.value = t('incoming.receiveNetWeightRequired');
         return;
     }
 
@@ -369,7 +397,7 @@ function submit() {
                             type="text"
                             placeholder="Contoh: B 9123 GCI"
                             :aria-label="t('incoming.truckNo')"
-                            required
+                            :aria-required="true"
                             class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm font-semibold text-ink-primary focus:border-primary focus:ring-primary"
                         />
                         <InputError :message="form.errors.truck_no" class="mt-1" />
@@ -392,6 +420,17 @@ function submit() {
                             readonly
                             class="mt-1 w-full rounded-lg border-borderline bg-background px-3 py-2 font-mono text-sm font-medium text-ink-primary"
                         />
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.penNo') }}</label>
+                        <input
+                            v-model="form.pen_no"
+                            type="text"
+                            :placeholder="t('incoming.penNoPlaceholder')"
+                            :aria-label="t('incoming.penNo')"
+                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                        />
+                        <InputError :message="(form.errors as any).pen_no" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.ajuNo') }}</label>
@@ -497,7 +536,6 @@ function submit() {
                 </div>
 
                 <InputError :message="form.errors.tags" class="mb-3" />
-                <p v-if="clientError" class="mb-3 rounded-lg bg-danger/10 px-3 py-2 text-xs font-medium text-danger">{{ clientError }}</p>
 
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-borderline border border-borderline text-sm">
@@ -610,13 +648,18 @@ function submit() {
             </section>
 
             <div
-                v-if="rowErrors.length > 0"
+                v-if="clientError || rowErrors.length > 0 || otherErrors.length > 0"
                 class="mb-3 rounded-lg border border-danger bg-danger/10 px-4 py-3 text-sm text-danger"
                 role="alert"
             >
-                <p class="font-semibold">{{ t('incoming.receiveRowErrors', { count: rowErrors.length }) }}</p>
+                <p class="font-semibold">{{ t('incoming.receiveSaveBlocked') }}</p>
                 <ul class="mt-1 space-y-0.5">
-                    <li v-for="item in rowErrors" :key="item.key">{{ item.label }} — {{ item.message }}</li>
+                    <li v-if="clientError">{{ clientError }}</li>
+                    <template v-else>
+                        <li v-if="rowErrors.length > 0">{{ t('incoming.receiveRowErrors', { count: rowErrors.length }) }}</li>
+                        <li v-for="item in rowErrors" :key="item.key">{{ item.label }} — {{ item.message }}</li>
+                    </template>
+                    <li v-for="message in otherErrors" :key="message">{{ message }}</li>
                 </ul>
             </div>
 

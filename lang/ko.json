@@ -129,5 +129,7 @@
     "Output hasil ini sudah digunakan atau dibooking. Batalkan proses berikutnya terlebih dahulu.": "이 실적의 생산품이 이미 사용되었거나 예약되었습니다. 후속 공정을 먼저 취소해 주세요.",
     "Saldo konsumsi tidak valid. Rekonsiliasi diperlukan.": "소비 잔량이 올바르지 않습니다. 재고 대사가 필요합니다.",
     "Mesin tidak sesuai grup routing item WO.": "이 기계는 작업 지시 항목의 공정 기계 그룹에 속하지 않습니다.",
-    "Qty hasil maksimal empat angka desimal.": "실적 수량은 소수점 이하 네 자리까지 입력할 수 있습니다."
+    "Qty hasil maksimal empat angka desimal.": "실적 수량은 소수점 이하 네 자리까지 입력할 수 있습니다.",
+    "Penerimaan tidak bisa masuk stok: item kedatangan belum terhubung ke part master.": "입고를 재고로 반영할 수 없습니다: 도착 항목이 마스터 품목에 연결되어 있지 않습니다.",
+    "Penerimaan tidak bisa masuk stok: qty/berat bersih yang diposting nol.": "입고를 재고로 반영할 수 없습니다: 반영할 수량/순중량이 0입니다."
 }

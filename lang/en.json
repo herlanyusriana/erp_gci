@@ -129,5 +129,7 @@
     "Output hasil ini sudah digunakan atau dibooking. Batalkan proses berikutnya terlebih dahulu.": "This result's output has been used or booked. Reverse the downstream process first.",
     "Saldo konsumsi tidak valid. Rekonsiliasi diperlukan.": "Invalid consumption balance. Reconciliation is required.",
     "Mesin tidak sesuai grup routing item WO.": "The machine is outside this work order item's routing group.",
-    "Qty hasil maksimal empat angka desimal.": "Result quantities may have at most four decimal places."
+    "Qty hasil maksimal empat angka desimal.": "Result quantities may have at most four decimal places.",
+    "Penerimaan tidak bisa masuk stok: item kedatangan belum terhubung ke part master.": "This receive cannot be posted to stock: the arrival item is not linked to a master part.",
+    "Penerimaan tidak bisa masuk stok: qty/berat bersih yang diposting nol.": "This receive cannot be posted to stock: the posted qty/net weight is zero."
 }

@@ -569,3 +569,64 @@ laporan. `whereDate()` pada kolom `timestamp` memaksa seq scan.
 
 **Bisa paralel:** Task 04 (frontend) dengan Task 01-03 (backend) — file tidak bertabrakan.
 **Harus berurutan:** Task 01 → 02 → 03 (satu file, `DeliveryService`).
+
+---
+
+# Phase 6: Polish Desain (design-only, tanpa ubah perilaku)
+
+Sesi terpisah dari Phase 1-5. Ruang lingkup sengaja dibatasi: hanya token warna,
+tipografi, aksesibilitas, dan konsistensi tabel. Tidak ada perubahan logika,
+route, query, atau teks i18n. Tidak ada dark mode (repo tidak punya `darkMode`
+dan nol kelas `dark:`).
+
+Bukti audit (statis + render nyata, 30 halaman di 1920/1440/1280/1024):
+- Nol warna palet Tailwind mentah. 12 literal hex semuanya warna bendera di
+  `LanguageSelector.vue` (disengaja).
+- Semua `<table>` di `Pages/` punya pembungkus overflow; nol overflow
+  horizontal di 12 halaman terpadat pada 4 lebar.
+- Pola header konsisten di 10 halaman: h1 24px/700 `#17202A`, sub 14px
+  `#64748B`, padding `main` 32px, kartu putih, Figtree termuat.
+- `focus-visible` ada di 56/69 halaman; 13 sisanya tidak punya kontrol fokusable.
+
+## Task 18: Perbaiki kontras WCAG AA pada pill status
+
+**Status:** Selesai — commit `83ca769`
+
+- [x] Ukur kontras terhitung di browser untuk 30 halaman; ditemukan 18 kegagalan AA.
+- [x] Akar masalah: teks `success`/`warning` polos di atas tint warna yang sama
+      10-15% → 4.08-4.39:1 (ambang 4.5:1). `utils/tone.ts` sudah memakai varian
+      `-ink` (5.77-6.23:1); halaman-halaman yang melenceng.
+- [x] Ganti ke `text-success-ink` / `text-warning-ink` di: `Auth/Login`,
+      `Auth/ForgotPassword`, `Auth/VerifyEmail`, `Incoming/Arrival/Index`,
+      `Incoming/Receive/Index`, `Incoming/Receive/Show`,
+      `Production/Label/Index`, `Quality/Incoming/Index`, `Quality/Incoming/Show`.
+- [x] `Components/LauncherTile.vue`: badge `ink-secondary` di atas
+      `ink-secondary/10` (4.21:1) → `ink-primary` (13.5:1).
+- [x] Verifikasi: `npm run build` ✓, `check-i18n` ✓, nol error konsol.
+
+## Task 19: Label aksesibilitas pada input tanpa nama
+
+**Status:** Selesai — commit `83ca769`
+
+- [x] `Incoming/Arrival/Form.vue`: 9 input tanpa nama aksesibel diberi
+      `:aria-label` dari key i18n yang sudah ada → 0 tersisa (19 bernama).
+- [x] `Quality/Incoming/Index.vue`: input pencarian diberi `:aria-label`.
+
+## Task 20: Target sentuh & konsistensi angka
+
+**Status:** Selesai — commit `83ca769`
+
+- [x] `Components/BackButton.vue`: `-my-1.5 py-1.5` → area klik 20px → 32px,
+      posisi visual tidak bergeser (diverifikasi live).
+- [x] `tabular-nums` pada kolom angka: `Administration/Role/Index`,
+      `Incoming/Arrival/Index`.
+
+## Yang sengaja TIDAK diubah
+
+- 48 pemakaian `text-[10px]`/`text-[11px]` di 17 file. Sebagian besar adalah
+  eyebrow/label mikro dan chip filter 28px yang sudah punya peran visual; ukuran
+  teksnya bukan pelanggaran aksesibilitas (kontrasnya sudah lulus). Mengubahnya
+  akan menggeser tinggi baris tabel yang sudah terverifikasi.
+- Chip filter 28px (`incoming-quality`) dan tombol `Simpan` inline 28px
+  (`production-plans`); `ActionButton` 32x32 sudah sesuai desain.
+- Tautan teks inline 17px di dalam tabel (mis. `ARV-VER-...`).

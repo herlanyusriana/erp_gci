@@ -136,6 +136,27 @@ Catatan penting:
 - Tanpa komentar kode kecuali diminta.
 - Query pencarian: pakai `ilike` (Postgres), `when(...)`, `paginate(...)->withQueryString()`.
 - Nama tabel/kolom snake_case; model Eloquent di `app/Models`.
+- **Identitas part wajib lengkap — Part No / Part Name selalu bersama Model.**
+  Setiap data list yang menampilkan `part_number` atau `part_name` **wajib**
+  punya kolom **Model** (`parts.model`) di sebelahnya. Nomor dan nama part
+  tidak unik di lapangan (contoh `BACK PLATE` ada di beberapa model), jadi tanpa
+  model operator bisa membaca atau memilih part yang salah.
+  - Urutan kolom: `Part No → Part Name → Model`, atau `Part Name → Model` bila
+    nomor part tidak ditampilkan. Model tidak pernah berdiri sendiri.
+  - Nilainya **read-only dari master** (`part.model`), bukan input; kosong → `—`.
+    Identitas part tidak boleh diubah dari form transaksi.
+  - Label pakai `t('master.model')` (sudah ada di id/en/ko); jangan hardcode.
+  - Eager load wajib menyertakan `model` (mis.
+    `with('part:id,part_number,part_name,model')`). Kalau lupa, kolom tampil
+    kosong tanpa error — ini kesalahan yang paling sering terjadi.
+  - Tipe TS: setiap `Pick<Part, ...>` yang dipakai di list harus memuat `model`.
+  - Berlaku untuk: halaman Index, halaman Show/detail, tabel di dalam form
+    (bundle/packing/alokasi), opsi picker (`PartSelect`, `SearchableSelect`),
+    dan payload API mobile yang mengirim identitas part.
+  - Pengecualian: dokumen cetak resmi (PDF, Excel, label QR) mengikuti format
+    dokumennya masing-masing.
+  - Verifikasi: test halaman list terkait harus menegaskan header kolom Model
+    ada, bukan hanya kolom part.
 
 ## Testing — penting
 

@@ -10,6 +10,7 @@ use App\Models\PartSubstitute;
 use App\Models\Supplier;
 use App\Rules\PartTypeRule;
 use App\Rules\UomCode;
+use App\Support\DocumentNumber;
 use App\Support\RowErrorKeys;
 use App\Support\UomCatalog;
 use Illuminate\Http\RedirectResponse;
@@ -123,7 +124,7 @@ class LocalPoController extends Controller
             $currency = 'IDR';
         }
 
-        $arrival = DB::transaction(function () use ($validated, $request, $currency) {
+        $createLocalPo = function () use ($validated, $request, $currency) {
             $arrival = IncomingArrival::create([
                 'arrival_no' => IncomingArrival::generateArrivalNo('LPO'),
                 'po_no' => $validated['po_no'],
@@ -160,7 +161,12 @@ class LocalPoController extends Controller
             }
 
             return $arrival;
-        });
+        };
+
+        $arrival = DocumentNumber::retry(
+            fn () => DB::transaction($createLocalPo),
+            'incoming_arrivals_arrival_no_unique',
+        );
 
         return redirect()->route('local-pos.show', $arrival)->with('success', __('Local PO created. Silakan lakukan receive.'));
     }
@@ -346,6 +352,10 @@ class LocalPoController extends Controller
     {
         $arrival = $this->findLocalOrFail($localPo);
         Gate::authorize('delete', $arrival);
+
+        if ($arrival->items()->whereHas('receives')->exists()) {
+            return back()->with('error', __('Local PO tidak dapat dihapus karena sudah memiliki penerimaan. Hapus penerimaan terlebih dahulu.'));
+        }
 
         DB::transaction(function () use ($arrival) {
             $arrival->items()->delete();

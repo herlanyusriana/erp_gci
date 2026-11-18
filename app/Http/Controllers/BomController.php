@@ -6,8 +6,8 @@ use App\Models\Bom;
 use App\Models\Machine;
 use App\Models\Part;
 use App\Models\Process;
+use App\Support\DocumentNumber;
 use App\Support\UomCatalog;
-use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -87,7 +87,7 @@ class BomController extends Controller
         $actorId = $request->user()?->id;
         $items = array_map(fn (array $item): array => $this->normalizeItem($item), $data['items']);
 
-        $bom = $this->withBomNoRetry(function () use ($data, $partId, $actorId, $items): Bom {
+        $bom = DocumentNumber::retry(function () use ($data, $partId, $actorId, $items): Bom {
             return DB::transaction(function () use ($data, $partId, $actorId, $items): Bom {
                 if (Bom::withTrashed()->where('part_id', $partId)->exists()) {
                     throw ValidationException::withMessages([
@@ -114,35 +114,9 @@ class BomController extends Controller
 
                 return $bom;
             });
-        });
+        }, 'boms_bom_no_unique');
 
         return redirect()->route('boms.show', $bom)->with('success', __('BOM dibuat.'));
-    }
-
-    /**
-     * Ulangi pembuatan BOM bila nomor yang dihasilkan bentrok dengan request lain.
-     * bom_no punya unique index, sehingga tabrakan muncul sebagai pelanggaran
-     * integritas alih-alih nomor ganda yang diam-diam.
-     *
-     * @param  callable(): Bom  $callback
-     */
-    private function withBomNoRetry(callable $callback, int $attempts = 3): Bom
-    {
-        for ($attempt = 1; ; $attempt++) {
-            try {
-                return $callback();
-            } catch (QueryException $exception) {
-                if ($attempt >= $attempts || ! $this->isUniqueViolation($exception, 'boms_bom_no_unique')) {
-                    throw $exception;
-                }
-            }
-        }
-    }
-
-    private function isUniqueViolation(QueryException $exception, string $constraint): bool
-    {
-        return (string) $exception->getCode() === '23505'
-            && str_contains($exception->getMessage(), $constraint);
     }
 
     /**

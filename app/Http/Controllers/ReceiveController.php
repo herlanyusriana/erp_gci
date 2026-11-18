@@ -9,6 +9,7 @@ use App\Models\Location;
 use App\Models\PartSubstitute;
 use App\Rules\UomCode;
 use App\Services\ReceiveMaterialService;
+use App\Support\DocumentNumber;
 use App\Support\PurchaseOrderLimit;
 use App\Support\QrSvg;
 use App\Support\UomCatalog;
@@ -272,8 +273,10 @@ class ReceiveController extends Controller
         if ($arrival) {
             $isComplete = ! $this->receiveService->hasPendingReceives($arrival);
             if ($isComplete && empty($arrival->transaction_no)) {
-                $arrival->transaction_no = IncomingArrival::generateTransactionNo($receiveAt->toDateString());
-                $arrival->save();
+                DocumentNumber::retry(function () use ($arrival, $receiveAt): void {
+                    $arrival->transaction_no = IncomingArrival::generateTransactionNo($receiveAt->toDateString());
+                    $arrival->save();
+                }, 'incoming_arrivals_transaction_no_unique');
             }
             $message = $isComplete
                 ? __('Invoice complete receive. Transaction No: :number', ['number' => $arrival->transaction_no])

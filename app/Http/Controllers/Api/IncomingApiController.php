@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\IncomingArrival as Arrival;
 use App\Models\IncomingArrivalItem as ArrivalItem;
 use App\Services\ReceiveMaterialService;
+use App\Support\DocumentNumber;
 use App\Support\PurchaseOrderLimit;
 use App\Support\UomCatalog;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -143,8 +144,10 @@ class IncomingApiController extends Controller
 
         $arrival = $arrivalItem->arrival()->with('items.receives')->first();
         if ($arrival && ! $this->receiveService->hasPendingReceives($arrival) && empty($arrival->transaction_no)) {
-            $arrival->transaction_no = Arrival::generateTransactionNo($receiveAt->toDateString());
-            $arrival->save();
+            DocumentNumber::retry(function () use ($arrival, $receiveAt): void {
+                $arrival->transaction_no = Arrival::generateTransactionNo($receiveAt->toDateString());
+                $arrival->save();
+            }, 'incoming_arrivals_transaction_no_unique');
         }
 
         return response()->json([

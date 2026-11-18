@@ -407,8 +407,8 @@ function submit() {
             <!-- FORM KEDATANGAN LOKAL (RINGKAS) -->
             <div v-if="isLocalArrival" class="rounded-xl border border-borderline bg-surface p-5 space-y-4">
                 <div class="border-b border-borderline pb-3">
-                    <h2 class="text-sm font-bold text-ink-primary">Data Kedatangan Lokal</h2>
-                    <p class="text-xs text-ink-secondary">Pilih nomor PO untuk memuat item otomatis, lalu masukkan No. Surat Jalan. No. PEN dan No. AJU diisi saat penerimaan barang.</p>
+                    <h2 class="text-sm font-bold text-ink-primary">{{ t('incoming.localArrivalTitle') }}</h2>
+                    <p class="text-xs text-ink-secondary">{{ t('incoming.localArrivalHint') }}</p>
                 </div>
 
                 <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -455,7 +455,7 @@ function submit() {
                             :aria-label="t('incoming.deliveryNoteInvoiceNo')"
                             v-model="form.delivery_note_no"
                             type="text"
-                            placeholder="Contoh: SJ-2026/001"
+                            :placeholder="t('incoming.deliveryNotePlaceholder')"
                             class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
                         />
                         <InputError :message="form.errors.delivery_note_no" class="mt-1" />
@@ -478,7 +478,7 @@ function submit() {
                             :aria-label="t('incoming.notes')"
                             v-model="form.notes"
                             type="text"
-                            placeholder="Catatan kedatangan..."
+                            :placeholder="t('incoming.arrivalNotesPlaceholder')"
                             class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
                         />
                     </div>
@@ -488,8 +488,8 @@ function submit() {
             <!-- FORM KEDATANGAN IMPOR (LENGKAP KONT/VESSEL) -->
             <div v-else class="rounded-xl border border-borderline bg-surface p-5 space-y-4">
                 <div class="border-b border-borderline pb-3">
-                    <h2 class="text-sm font-bold text-ink-primary">Data Kedatangan Impor</h2>
-                    <p class="text-xs text-ink-secondary">Lengkapi data kepabeanan impor, BL, kapal, dan kontainer.</p>
+                    <h2 class="text-sm font-bold text-ink-primary">{{ t('incoming.importArrivalTitle') }}</h2>
+                    <p class="text-xs text-ink-secondary">{{ t('incoming.importArrivalHint') }}</p>
                 </div>
 
                 <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -576,7 +576,7 @@ function submit() {
                             :aria-label="t('incoming.portLoading')"
                             v-model="form.port_of_loading"
                             type="text"
-                            placeholder="Contoh: BUSAN"
+                            :placeholder="t('incoming.portPlaceholder')"
                             class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
                         />
                         <InputError :message="form.errors.port_of_loading" class="mt-1" />
@@ -654,7 +654,7 @@ function submit() {
                 <div class="mb-4 flex items-center justify-between">
                     <div>
                         <h2 class="text-base font-semibold text-ink-primary">{{ t('incoming.items') }}</h2>
-                        <p class="text-xs text-ink-secondary">Periksa dan sesuaikan kuantitas datang jika pengiriman parsial/bertahap.</p>
+                        <p class="text-xs text-ink-secondary">{{ t('incoming.itemsHint') }}</p>
                     </div>
                     <button type="button" @click="addItem" class="inline-flex items-center gap-1.5 rounded-md border border-primary px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-primary-light">
                         <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
@@ -710,7 +710,7 @@ function submit() {
                         <!-- Baris 1: Pilihan Part / Material, Ukuran, Qty Barang, Satuan -->
                         <div class="grid gap-3 sm:grid-cols-12">
                             <div class="sm:col-span-5">
-                                <label class="text-xs font-semibold text-ink-secondary">Part / Material</label>
+                                <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.partMaterial') }}</label>
                                 <div v-if="r.part_id && form.purchase_order_id" class="mt-1 flex items-center justify-between rounded-lg border border-borderline bg-surface px-3 py-2 text-sm text-ink-primary">
                                     <div class="truncate">
                                         <span class="font-mono font-bold">{{ r.part_number || r.material_group }}</span>
@@ -725,7 +725,7 @@ function submit() {
                                         value-key="value"
                                         label-key="label"
                                         sublabel-key="sublabel"
-                                        :placeholder="form.supplier_id ? 'Pilih part / material substitute...' : 'Pilih supplier terlebih dahulu'"
+                                        :placeholder="form.supplier_id ? t('incoming.chooseMaterial') : t('incoming.chooseSupplierFirst')"
                                         :disabled="!form.supplier_id"
                                         @update:model-value="onSelectMaterial(r, $event)"
                                     />
@@ -845,7 +845,7 @@ function submit() {
                                 <input
                                     v-model="r.notes"
                                     type="text"
-                                    placeholder="Catatan..."
+                                    :placeholder="t('incoming.notesPlaceholder')"
                                     class="h-7 w-48 rounded border-borderline bg-surface px-2 py-1 text-xs text-ink-primary"
                                 />
                             </div>

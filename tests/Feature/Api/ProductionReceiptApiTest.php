@@ -39,7 +39,7 @@ class ProductionReceiptApiTest extends TestCase
     }
 
     /** Bangun satu item issue untuk testing. */
-    private function seedReceiptFixture(string $tag, ?Part $material = null): MaterialIssueItem
+    private function seedReceiptFixture(string $tag, ?Part $material = null, ?PartStock $stock = null): MaterialIssueItem
     {
         $fg = $material ?? Part::where('part_number', 'AAN30056405')->firstOrFail();
 
@@ -69,7 +69,7 @@ class ProductionReceiptApiTest extends TestCase
             'status' => 'posted',
         ]);
 
-        $stock = PartStock::create([
+        $stock ??= PartStock::create([
             'part_id' => $fg->id, 'tag' => $tag, 'qty' => 10,
             'qty_unit' => 'PCS', 'received_at' => now(),
         ]);
@@ -203,7 +203,7 @@ class ProductionReceiptApiTest extends TestCase
     {
         $first = $this->seedReceiptFixture('REPEAT');
         $second = $this->seedReceiptFixture('REPEAT', Part::where('part_number', 'CBKG07256C')->firstOrFail());
-        $third = $this->seedReceiptFixture('REPEAT');
+        $third = $this->seedReceiptFixture('REPEAT', stock: PartStock::findOrFail($first->part_stock_id));
         $this->postJson('/api/receipts/resolve', ['tag' => 'REPEAT'])->assertOk()->assertJsonCount(3, 'data');
         $this->postJson('/api/receipts/resolve', ['tag' => 'REPEAT', 'part_id' => $first->part_id])->assertOk()->assertJsonCount(2, 'data');
         $this->postJson('/api/receipts/confirm', ['tag' => 'REPEAT', 'machine_id' => $this->machine->id])->assertUnprocessable();
@@ -285,7 +285,7 @@ class ProductionReceiptApiTest extends TestCase
     public function test_receipt_does_not_consume_another_wo_booking_on_the_same_stock(): void
     {
         $decoy = $this->seedReceiptFixture('SHARED');
-        $item = $this->seedReceiptFixture('SHARED');
+        $item = $this->seedReceiptFixture('SHARED', stock: PartStock::findOrFail($decoy->part_stock_id));
         $item->update(['qty' => 4, 'part_stock_id' => $decoy->part_stock_id]);
         WorkOrderMaterialBooking::where('work_order_item_id', $item->work_order_item_id)->update(['part_stock_id' => $decoy->part_stock_id, 'qty' => 4]);
         PartStock::findOrFail($decoy->part_stock_id)->update(['qty' => 14]);
@@ -298,9 +298,10 @@ class ProductionReceiptApiTest extends TestCase
     public function test_resolve_excludes_received_cancelled_and_completed_items(): void
     {
         $received = $this->seedReceiptFixture('FILTERED');
-        $cancelled = $this->seedReceiptFixture('FILTERED');
-        $completed = $this->seedReceiptFixture('FILTERED');
-        $pending = $this->seedReceiptFixture('FILTERED');
+        $shared = PartStock::findOrFail($received->part_stock_id);
+        $cancelled = $this->seedReceiptFixture('FILTERED', stock: $shared);
+        $completed = $this->seedReceiptFixture('FILTERED', stock: $shared);
+        $pending = $this->seedReceiptFixture('FILTERED', stock: $shared);
         $cancelled->materialIssue->update(['status' => 'cancelled']);
         $completed->materialIssue->workOrder->update(['status' => 'completed']);
         $this->postJson('/api/receipts/confirm', ['material_issue_item_id' => $received->id, 'machine_id' => $this->machine->id])->assertOk();

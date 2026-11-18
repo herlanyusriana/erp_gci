@@ -13,6 +13,7 @@ use App\Models\ProductionPlan;
 use App\Models\ProductionPlanHistory;
 use App\Models\WorkOrder;
 use App\Models\WorkOrderItem;
+use App\Support\DocumentNumber;
 use App\Support\MachineRouting;
 use App\Support\UomCatalog;
 use Illuminate\Support\Carbon;
@@ -235,7 +236,10 @@ class WoService
             $leafNeeds[$key]['need'] += $qtyRequired;
         }
 
-        $workOrder = DB::transaction(function () use ($bom, $qty, $plannedDate, $remarks, $creatorId, $requirements, &$warnings, $leafNeeds) {
+        $createWorkOrder = function () use ($bom, $qty, $plannedDate, $remarks, $creatorId, $requirements, &$warnings, $leafNeeds) {
+            // Percobaan ulang harus mulai dari daftar warning yang bersih.
+            $warnings = [];
+
             /** @var WorkOrder $workOrder */
             $workOrder = WorkOrder::create([
                 'wo_no' => WorkOrder::generateWoNo(),
@@ -294,7 +298,12 @@ class WoService
             }
 
             return $workOrder;
-        });
+        };
+
+        $workOrder = DocumentNumber::retry(
+            fn () => DB::transaction($createWorkOrder),
+            'work_orders_wo_no_unique',
+        );
 
         $warnings = array_values(array_unique($warnings));
 
@@ -635,7 +644,10 @@ class WoService
 
             $shortages = [];
 
-            $issue = DB::transaction(function () use ($workOrder, $items, $scansByItem, $postedParentIds, $meta, $actorId, &$shortages) {
+            $createIssue = function () use ($workOrder, $items, $scansByItem, $postedParentIds, $meta, $actorId, &$shortages) {
+                // Percobaan ulang harus mulai dari daftar shortage yang bersih.
+                $shortages = [];
+
                 $releasedAt = now();
                 $issueDate = isset($meta['issue_date']) && $meta['issue_date']
                     ? Carbon::parse($meta['issue_date'])->toDateString()
@@ -717,7 +729,12 @@ class WoService
                 $this->enterProductionPlan($workOrder, (int) $actorId);
 
                 return $issue;
-            });
+            };
+
+            $issue = DocumentNumber::retry(
+                fn () => DB::transaction($createIssue),
+                'material_issues_issue_no_unique',
+            );
 
             $posted = true;
 

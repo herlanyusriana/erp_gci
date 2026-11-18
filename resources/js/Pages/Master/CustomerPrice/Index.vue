@@ -39,27 +39,59 @@ const canEdit = computed(() => hasAnyPermission(['customer_price.create', 'custo
 const customerId = ref<number | ''>(props.filters.customer_id ?? '');
 const search = ref(props.filters.search ?? '');
 
-const form = useForm({
-    customer_id: props.filters.customer_id ?? 0,
-    prices: props.parts.map((part) => ({
+interface PriceRow {
+    part_id: number;
+    price: number | null;
+    currency: string;
+    is_active: boolean;
+}
+
+function toPriceRow(part: PartPriceRow): PriceRow {
+    return {
         part_id: part.id,
         price: part.price,
         currency: part.currency,
         is_active: part.is_active,
-    })),
+    };
+}
+
+const lastSeededCustomer = ref<number>(Number(props.filters.customer_id ?? 0));
+
+const form = useForm({
+    customer_id: props.filters.customer_id ?? 0,
+    prices: props.parts.map(toPriceRow),
 });
 
 watch(
     () => props.parts,
     (parts) => {
-        form.prices = parts.map((part) => ({
-            part_id: part.id,
-            price: part.price,
-            currency: part.currency,
-            is_active: part.is_active,
-        }));
+        const currentCustomer = Number(props.filters.customer_id ?? 0);
+
+        if (currentCustomer !== lastSeededCustomer.value) {
+            lastSeededCustomer.value = currentCustomer;
+            form.prices = parts.map(toPriceRow);
+
+            return;
+        }
+
+        const existing = new Map<number, PriceRow>(form.prices.map((row): [number, PriceRow] => [row.part_id, row]));
+        const merged = parts.map((part) => existing.get(part.id) ?? toPriceRow(part));
+        const visibleIds = new Set(parts.map((part) => part.id));
+        const hidden = form.prices.filter((row) => !visibleIds.has(row.part_id));
+
+        form.prices = [...merged, ...hidden];
     },
 );
+
+const visibleRows = computed(() => {
+    const rowsByPart = new Map<number, PriceRow>(form.prices.map((row): [number, PriceRow] => [row.part_id, row]));
+
+    return props.parts.flatMap((part) => {
+        const row = rowsByPart.get(part.id);
+
+        return row ? [{ part, row }] : [];
+    });
+});
 
 const customerOptions = computed(() =>
     props.customers.map((customer) => ({
@@ -156,11 +188,11 @@ function submit() {
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-borderline">
-                            <tr v-for="(row, index) in form.prices" :key="row.part_id" class="hover:bg-primary-light/40">
-                                <td class="px-4 py-2 font-mono text-xs text-ink-primary">{{ parts[index]?.part_number ?? '—' }}</td>
-                                <td class="px-4 py-2 text-ink-primary">{{ parts[index]?.part_name ?? '—' }}</td>
-                                <td class="px-4 py-2 text-ink-secondary">{{ parts[index]?.model ?? '—' }}</td>
-                                <td class="px-4 py-2 text-xs uppercase text-ink-secondary">{{ parts[index]?.uom ?? '—' }}</td>
+                            <tr v-for="{ part, row } in visibleRows" :key="row.part_id" class="hover:bg-primary-light/40">
+                                <td class="px-4 py-2 font-mono text-xs text-ink-primary">{{ part.part_number }}</td>
+                                <td class="px-4 py-2 text-ink-primary">{{ part.part_name }}</td>
+                                <td class="px-4 py-2 text-ink-secondary">{{ part.model ?? '—' }}</td>
+                                <td class="px-4 py-2 text-xs uppercase text-ink-secondary">{{ part.uom ?? '—' }}</td>
                                 <td class="px-4 py-2">
                                     <input
                                         v-model.number="row.price"
@@ -168,7 +200,7 @@ function submit() {
                                         min="0"
                                         step="0.0001"
                                         :disabled="!canEdit"
-                                        :aria-label="`${t('customerPrice.price')} ${parts[index]?.part_number ?? ''}`"
+                                        :aria-label="`${t('customerPrice.price')} ${part.part_number}`"
                                         class="w-full rounded-lg border-borderline bg-background px-2 py-1.5 text-right text-sm tabular-nums text-ink-primary focus:border-primary focus:ring-primary disabled:opacity-60"
                                     />
                                 </td>
@@ -176,7 +208,7 @@ function submit() {
                                     <select
                                         v-model="row.currency"
                                         :disabled="!canEdit"
-                                        :aria-label="`${t('customerPrice.currency')} ${parts[index]?.part_number ?? ''}`"
+                                        :aria-label="`${t('customerPrice.currency')} ${part.part_number}`"
                                         class="w-full rounded-lg border-borderline bg-background px-2 py-1.5 text-sm text-ink-primary focus:border-primary focus:ring-primary disabled:opacity-60"
                                     >
                                         <option v-for="currency in currencies" :key="currency" :value="currency">{{ currency }}</option>
@@ -187,7 +219,7 @@ function submit() {
                                         v-model="row.is_active"
                                         type="checkbox"
                                         :disabled="!canEdit"
-                                        :aria-label="`${t('customerPrice.active')} ${parts[index]?.part_number ?? ''}`"
+                                        :aria-label="`${t('customerPrice.active')} ${part.part_number}`"
                                         class="h-4 w-4 rounded border-borderline text-primary focus:ring-primary disabled:opacity-50"
                                     />
                                 </td>

@@ -12,6 +12,7 @@ use App\Models\ProductionResult;
 use App\Models\WorkOrderMaterialBooking;
 use App\Support\UomCatalog;
 use Brick\Math\BigDecimal;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -218,32 +219,63 @@ class ReceiveMaterialService
 
         $receivedAt = $receive->ata_date ?? now();
 
-        DB::transaction(function () use ($partId, $receive, $unit, $contribution, $receivedAt) {
-            $stock = PartStock::query()
-                ->where('part_id', $partId)
-                ->where('tag', $receive->tag)
-                ->lockForUpdate()
-                ->first();
+        $this->withUniqueTagRetry(function () use ($partId, $receive, $unit, $contribution, $receivedAt): void {
+            DB::transaction(function () use ($partId, $receive, $unit, $contribution, $receivedAt) {
+                $stock = PartStock::query()
+                    ->where('part_id', $partId)
+                    ->where('tag', $receive->tag)
+                    ->lockForUpdate()
+                    ->first();
 
-            if ($stock) {
-                $stock->increment('qty', $contribution);
-                // FIFO: pertahankan ATA paling awal (first-in).
-                if ($stock->received_at === null || $receivedAt->lt($stock->received_at)) {
-                    $stock->update(['received_at' => $receivedAt, 'receive_id' => $receive->id]);
+                if ($stock) {
+                    $stock->increment('qty', $contribution);
+                    // FIFO: pertahankan ATA paling awal (first-in).
+                    if ($stock->received_at === null || $receivedAt->lt($stock->received_at)) {
+                        $stock->update(['received_at' => $receivedAt, 'receive_id' => $receive->id]);
+                    }
+                } else {
+                    PartStock::create([
+                        'part_id' => $partId,
+                        'tag' => $receive->tag,
+                        'qty' => $contribution,
+                        'qty_unit' => $unit,
+                        'received_at' => $receivedAt,
+                        'receive_id' => $receive->id,
+                        'price' => $receive->arrivalItem?->price ?? null,
+                        'remarks' => 'Receive #'.$receive->id,
+                    ]);
                 }
-            } else {
-                PartStock::create([
-                    'part_id' => $partId,
-                    'tag' => $receive->tag,
-                    'qty' => $contribution,
-                    'qty_unit' => $unit,
-                    'received_at' => $receivedAt,
-                    'receive_id' => $receive->id,
-                    'price' => $receive->arrivalItem?->price ?? null,
-                    'remarks' => 'Receive #'.$receive->id,
-                ]);
-            }
+            });
         });
+    }
+
+    /**
+     * Ulangi posting stok bila baris (part_id, tag) dibuat request lain lebih
+     * dulu. Unique index parsial membuat tabrakan muncul sebagai pelanggaran
+     * integritas, bukan baris ganda. Percobaan ulang akan menemukan baris yang
+     * sudah tersimpan lalu menambah qty-nya.
+     *
+     * @param  callable(): void  $callback
+     */
+    private function withUniqueTagRetry(callable $callback, int $attempts = 3): void
+    {
+        for ($attempt = 1; ; $attempt++) {
+            try {
+                $callback();
+
+                return;
+            } catch (QueryException $exception) {
+                if ($attempt >= $attempts || ! $this->isUniqueTagViolation($exception)) {
+                    throw $exception;
+                }
+            }
+        }
+    }
+
+    private function isUniqueTagViolation(QueryException $exception): bool
+    {
+        return (string) $exception->getCode() === '23505'
+            && str_contains($exception->getMessage(), 'part_stocks_part_id_tag_unique');
     }
 
     /**

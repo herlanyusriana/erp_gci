@@ -107,6 +107,73 @@ class CustomerPriceTest extends TestCase
         $this->assertSame(0, CustomerPrice::count());
     }
 
+    /**
+     * Setiap props baru (POST gagal / pencarian ber-debounce) dulu membangun
+     * ulang seluruh `form.prices`, menghapus harga yang sedang diketik. Re-seed
+     * harus dijaga perbandingan customer; selain itu nilai yang sudah ada
+     * dipertahankan dan baris baru (mis. muncul setelah pencarian) ditambahkan.
+     */
+    public function test_price_form_only_reseeds_rows_when_customer_changes(): void
+    {
+        $source = file_get_contents(resource_path('js/Pages/Master/CustomerPrice/Index.vue'));
+        $this->assertNotFalse($source);
+
+        $watchStart = strpos($source, 'watch(');
+        $guardPos = strpos($source, 'if (currentCustomer !== lastSeededCustomer.value)');
+        $reseedPos = strpos($source, 'form.prices = parts.map(toPriceRow)');
+
+        $this->assertNotFalse($watchStart, 'Halaman harus tetap memakai watch props.');
+        $this->assertNotFalse($guardPos, 'Re-seed harus dijaga perbandingan customer.');
+        $this->assertNotFalse($reseedPos, 'Ganti customer harus memuat ulang harga dari server.');
+        $this->assertGreaterThan($watchStart, $guardPos);
+        $this->assertGreaterThan($guardPos, $reseedPos, 'Re-seed hanya boleh terjadi di cabang ganti customer.');
+
+        $this->assertStringContainsString('existing.get(part.id) ?? toPriceRow(part)', $source);
+        $this->assertStringContainsString('const hidden = form.prices.filter', $source);
+        $this->assertStringContainsString('form.prices = [...merged, ...hidden]', $source);
+        $this->assertSame(
+            1,
+            substr_count($source, 'form.prices = parts.map'),
+            'Hanya cabang ganti customer yang boleh menimpa seluruh baris.',
+        );
+    }
+
+    /**
+     * Server hanya menyentuh `part_id` yang dikirim. Baris yang tersaring
+     * pencarian dan tidak ikut terkirim tetap utuh — jadi keputusan frontend
+     * (menyertakan baris tersembunyi) aman, dan seandainya pun tidak dikirim,
+     * tidak ada harga lain yang terhapus.
+     */
+    public function test_bulk_store_leaves_parts_outside_the_payload_untouched(): void
+    {
+        $other = Part::where('part_number', '4114EAQ1141L')->firstOrFail();
+
+        CustomerPrice::create([
+            'customer_id' => $this->customer->id,
+            'part_id' => $this->fg->id,
+            'price' => 12500,
+            'currency' => 'IDR',
+            'is_active' => true,
+        ]);
+        CustomerPrice::create([
+            'customer_id' => $this->customer->id,
+            'part_id' => $other->id,
+            'price' => 9000,
+            'currency' => 'IDR',
+            'is_active' => true,
+        ]);
+
+        $this->post(route('customer-prices.store'), [
+            'customer_id' => $this->customer->id,
+            'prices' => [
+                ['part_id' => $this->fg->id, 'price' => 15000, 'currency' => 'IDR', 'is_active' => true],
+            ],
+        ])->assertRedirect();
+
+        $this->assertEqualsWithDelta(15000.0, (float) CustomerPrice::where('part_id', $this->fg->id)->value('price'), 1e-6);
+        $this->assertEqualsWithDelta(9000.0, (float) CustomerPrice::where('part_id', $other->id)->value('price'), 1e-6);
+    }
+
     public function test_price_is_copied_into_the_delivery_when_picking_generates_it(): void
     {
         PartStock::create([

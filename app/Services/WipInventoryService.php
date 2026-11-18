@@ -6,6 +6,7 @@ use App\Models\DeliveryScan;
 use App\Models\Part;
 use App\Models\ProductionMaterialReceipt;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -35,11 +36,11 @@ final class WipInventoryService
             ->where('machine_id', $machineId)
             ->where('part_id', $partId)
             ->where('transfer_status', 'transferred')
-            ->whereDate('received_at', '<', $date)
+            ->where('received_at', '<', $this->dayStart($date))
             ->sum('qty');
 
         $issued = $this->issuedQuery($machineId, $partId)
-            ->whereDate('work_order_consumptions.created_at', '<', $date)
+            ->where('work_order_consumptions.created_at', '<', $this->dayStart($date))
             ->sum('work_order_consumptions.qty');
 
         return round($received - (float) $issued, 4);
@@ -52,7 +53,8 @@ final class WipInventoryService
             ->where('machine_id', $machineId)
             ->where('part_id', $partId)
             ->where('transfer_status', 'transferred')
-            ->whereDate('received_at', $date)
+            ->where('received_at', '>=', $this->dayStart($date))
+            ->where('received_at', '<', $this->nextDayStart($date))
             ->sum('qty'), 4);
     }
 
@@ -60,7 +62,8 @@ final class WipInventoryService
     public function issuedQty(int $machineId, int $partId, string $date): float
     {
         return round((float) $this->issuedQuery($machineId, $partId)
-            ->whereDate('work_order_consumptions.created_at', $date)
+            ->where('work_order_consumptions.created_at', '>=', $this->dayStart($date))
+            ->where('work_order_consumptions.created_at', '<', $this->nextDayStart($date))
             ->sum('work_order_consumptions.qty'), 4);
     }
 
@@ -382,10 +385,10 @@ final class WipInventoryService
         $query = $this->outputIssueBaseQuery($machineId);
 
         if ($before !== null) {
-            $query->whereDate('woc.created_at', '<', $before);
+            $query->where('woc.created_at', '<', $this->dayStart($before));
         } else {
-            $query->whereDate('woc.created_at', '>=', (string) $from)
-                ->whereDate('woc.created_at', '<=', (string) $to);
+            $query->where('woc.created_at', '>=', $this->dayStart((string) $from))
+                ->where('woc.created_at', '<', $this->nextDayStart((string) $to));
         }
 
         $rows = $query
@@ -448,10 +451,10 @@ final class WipInventoryService
             ));
 
         if ($before !== null) {
-            $query->whereDate('d.stock_deducted_at', '<', $before);
+            $query->where('d.stock_deducted_at', '<', $this->dayStart($before));
         } else {
-            $query->whereDate('d.stock_deducted_at', '>=', (string) $from)
-                ->whereDate('d.stock_deducted_at', '<=', (string) $to);
+            $query->where('d.stock_deducted_at', '>=', $this->dayStart((string) $from))
+                ->where('d.stock_deducted_at', '<', $this->nextDayStart((string) $to));
         }
 
         return $query
@@ -567,10 +570,10 @@ final class WipInventoryService
         $query = $this->issuedQuery($machineId);
 
         if ($before !== null) {
-            $query->whereDate('work_order_consumptions.created_at', '<', $before);
+            $query->where('work_order_consumptions.created_at', '<', $this->dayStart($before));
         } else {
-            $query->whereDate('work_order_consumptions.created_at', '>=', (string) $from)
-                ->whereDate('work_order_consumptions.created_at', '<=', (string) $to);
+            $query->where('work_order_consumptions.created_at', '>=', $this->dayStart((string) $from))
+                ->where('work_order_consumptions.created_at', '<', $this->nextDayStart((string) $to));
         }
 
         return $query
@@ -636,7 +639,7 @@ final class WipInventoryService
         }
 
         $issued = $this->issuedQuery($machineId, $partId)
-            ->whereDate('work_order_consumptions.created_at', '<', $before)
+            ->where('work_order_consumptions.created_at', '<', $this->dayStart($before))
             ->groupBy('work_order_consumptions.uom', 'work_order_consumptions.invoice_no', 'work_order_consumptions.supplier_name')
             ->selectRaw('work_order_consumptions.uom AS uom')
             ->selectRaw('work_order_consumptions.invoice_no AS invoice')
@@ -682,8 +685,8 @@ final class WipInventoryService
         $map = [];
 
         $rows = $this->issuedQuery($machineId, $partId)
-            ->whereDate('work_order_consumptions.created_at', '>=', $from)
-            ->whereDate('work_order_consumptions.created_at', '<=', $to)
+            ->where('work_order_consumptions.created_at', '>=', $this->dayStart($from))
+            ->where('work_order_consumptions.created_at', '<', $this->nextDayStart($to))
             ->groupBy('work_order_consumptions.uom', 'work_order_consumptions.invoice_no', 'work_order_consumptions.supplier_name')
             ->selectRaw('work_order_consumptions.uom AS uom')
             ->selectRaw('work_order_consumptions.invoice_no AS invoice')
@@ -768,10 +771,10 @@ final class WipInventoryService
             ->whereRaw('COALESCE(pr_out.machine_id, m.id) = ?', [$machineId]);
 
         if ($before !== null) {
-            $query->whereDate('d.stock_deducted_at', '<', $before);
+            $query->where('d.stock_deducted_at', '<', $this->dayStart($before));
         } else {
-            $query->whereDate('d.stock_deducted_at', '>=', $from)
-                ->whereDate('d.stock_deducted_at', '<=', $to);
+            $query->where('d.stock_deducted_at', '>=', $this->dayStart($from))
+                ->where('d.stock_deducted_at', '<', $this->nextDayStart($to));
         }
 
         return $query
@@ -812,10 +815,10 @@ final class WipInventoryService
         $query = $this->outputIssueBaseQuery($machineId)->where('woc.part_id', $partId);
 
         if ($before !== null) {
-            $query->whereDate('woc.created_at', '<', $before);
+            $query->where('woc.created_at', '<', $this->dayStart($before));
         } else {
-            $query->whereDate('woc.created_at', '>=', (string) $from)
-                ->whereDate('woc.created_at', '<=', (string) $to);
+            $query->where('woc.created_at', '>=', $this->dayStart((string) $from))
+                ->where('woc.created_at', '<', $this->nextDayStart((string) $to));
         }
 
         return $query
@@ -862,13 +865,31 @@ final class WipInventoryService
             ->when($machineId !== null, fn ($q) => $q->where('r.machine_id', $machineId));
 
         if ($before !== null) {
-            $query->whereDate('r.received_at', '<', $before);
+            $query->where('r.received_at', '<', $this->dayStart($before));
         } else {
-            $query->whereDate('r.received_at', '>=', (string) $from)
-                ->whereDate('r.received_at', '<=', (string) $to);
+            $query->where('r.received_at', '>=', $this->dayStart((string) $from))
+                ->where('r.received_at', '<', $this->nextDayStart((string) $to));
         }
 
         return $query;
+    }
+
+    /**
+     * Awal hari sebagai literal timestamp.
+     *
+     * whereDate() menghasilkan cast kolom (`created_at::date`) sehingga btree
+     * pada kolom timestamp tidak bisa dipakai. Rentang setengah-terbuka
+     * menghasilkan baris yang sama persis tanpa cast.
+     */
+    private function dayStart(string $date): string
+    {
+        return Carbon::parse($date)->toDateString().' 00:00:00';
+    }
+
+    /** Awal hari berikutnya, batas atas eksklusif untuk rentang tanggal. */
+    private function nextDayStart(string $date): string
+    {
+        return Carbon::parse($date)->addDay()->toDateString().' 00:00:00';
     }
 
     private function matchesCategory(?string $partType, ?string $category): bool

@@ -364,15 +364,15 @@ const canDeliver = (row: LabelRow) => row.label_status === 'printed';
                     <!-- Ringkasan Kalkulasi -->
                     <div class="rounded-lg border border-borderline bg-background p-3 text-xs space-y-1.5">
                         <div class="flex justify-between font-semibold text-ink-primary">
-                            <span>Total Qty:</span>
+                            <span>{{ t('production.packingTotalLabel') }}:</span>
                             <span>{{ fmt(totalQtyToPack) }} {{ selectedRow.uom ?? 'EA' }}</span>
                         </div>
                         <div class="flex justify-between text-ink-secondary">
-                            <span>Kemasan Penuh:</span>
+                            <span>{{ t('production.packingFullLabel') }}:</span>
                             <span>{{ packCalculations.fullPacks }} {{ packingType.toLowerCase() }} (@ {{ packCalculations.capacity }} EA)</span>
                         </div>
                         <div v-if="packCalculations.remainder > 0" class="flex justify-between text-warning font-medium">
-                            <span>Sisa Ganjil:</span>
+                            <span>{{ t('production.packingRemainderLabel') }}:</span>
                             <span>{{ fmt(packCalculations.remainder) }} EA</span>
                         </div>
                     </div>

@@ -401,14 +401,14 @@ menggabungkan qty dari receive berbeda (invoice/supplier jadi salah). Selain itu
 dokumen tanpa memeriksa receive, menyisakan stok yatim.
 
 **Acceptance criteria:**
-- [ ] Cek duplikat `(part_id, tag)` dulu; bila ada, tangani manual sebelum constraint.
-- [ ] Partial unique `(part_id, tag) WHERE deleted_at IS NULL` terpasang.
-- [ ] Hapus Arrival/Local PO yang sudah punya receive ditolak dengan pesan jelas (bukan menghapus header lalu menyisakan stok).
-- [ ] Test: hapus arrival berisi receive → 302 dengan error, data utuh.
+- [x] Cek duplikat `(part_id, tag)` dulu; bila ada, tangani manual sebelum constraint.
+- [x] Partial unique `(part_id, tag) WHERE deleted_at IS NULL` terpasang.
+- [x] Hapus Arrival/Local PO yang sudah punya receive ditolak dengan pesan jelas (bukan menghapus header lalu menyisakan stok).
+- [x] Test: hapus arrival berisi receive → 302 dengan error, data utuh.
 
 **Verification:**
-- [ ] `vendor/bin/pest tests/Feature/` (Arrival, LocalPo, Receive)
-- [ ] `vendor/bin/pint --dirty --format agent`
+- [x] `vendor/bin/pest tests/Feature/` (Arrival, LocalPo, Receive)
+- [x] `vendor/bin/pint --dirty --format agent`
 
 **Dependencies:** None
 
@@ -430,13 +430,13 @@ pola `max/LIKE` + insert tanpa lock atau retry. Dua user membuat dokumen
 bersamaan → unique violation → 500 ke APK. Hanya BOM yang punya retry loop.
 
 **Acceptance criteria:**
-- [ ] Semua generator menangkap SQLSTATE `23505` dan mencoba ulang (maks 3×), mengikuti pola `BomController::withBomNoRetry`.
-- [ ] Nomor tetap tidak dipakai ulang setelah dokumen dihapus (`withTrashed` dipertahankan).
-- [ ] Test: dua pemanggilan berurutan dalam transaksi berbeda menghasilkan nomor berbeda dan tidak melempar exception.
+- [x] Semua generator menangkap SQLSTATE `23505` dan mencoba ulang (maks 3×), mengikuti pola `BomController::withBomNoRetry`.
+- [x] Nomor tetap tidak dipakai ulang setelah dokumen dihapus (`withTrashed` dipertahankan).
+- [x] Test: dua pemanggilan berurutan dalam transaksi berbeda menghasilkan nomor berbeda dan tidak melempar exception.
 
 **Verification:**
-- [ ] `vendor/bin/pest` (test generator yang ada)
-- [ ] `vendor/bin/pint --dirty --format agent`
+- [x] `vendor/bin/pest` (test generator yang ada)
+- [x] `vendor/bin/pint --dirty --format agent`
 
 **Dependencies:** None
 
@@ -452,9 +452,9 @@ bersamaan → unique violation → 500 ke APK. Hanya BOM yang punya retry loop.
 ---
 
 ## Checkpoint 4: Data
-- [ ] Unique constraint terpasang dan tidak ada duplikat tersisa
-- [ ] Generator tidak lagi melempar 500 pada tabrakan
-- [ ] `vendor/bin/pest` hijau
+- [x] Unique constraint terpasang dan tidak ada duplikat tersisa (0 duplikat, index diverifikasi)
+- [x] Generator tidak lagi melempar 500 pada tabrakan (DocumentNumber::retry, 9 call site)
+- [x] `vendor/bin/pest` hijau — 675 passed, 3x berturut
 
 ---
 
@@ -468,13 +468,13 @@ label form membaca `production.notes`, filter status Delivery punya opsi kosong,
 tidak mendeteksi key yang hilang.
 
 **Acceptance criteria:**
-- [ ] Semua key yang dilaporkan audit ada di ketiga bahasa: `production.notes`, `production.receiptDate`, `production.part`, `outgoing.allStatuses`, `outgoing.step_draft`, `outgoing.posted`, `production.stockTags*`, `production.noTagsAnyPart`, `incoming.arrivalDate`, `incoming.truckNoRequired`, `common.close`, `production.statuses.planned`.
-- [ ] `scripts/check-i18n.mjs` melaporkan `t('ns.key')` yang tidak ada di katalog (gagal dengan exit code ≠ 0).
-- [ ] `npm run build` lulus guard yang diperluas tanpa error.
+- [x] Semua key yang dilaporkan audit ada di ketiga bahasa: `production.notes`, `production.receiptDate`, `production.part`, `outgoing.allStatuses`, `outgoing.step_draft`, `outgoing.posted`, `production.stockTags*`, `production.noTagsAnyPart`, `incoming.arrivalDate`, `incoming.truckNoRequired`, `common.close`, `production.statuses.planned`.
+- [x] `scripts/check-i18n.mjs` melaporkan `t('ns.key')` yang tidak ada di katalog (gagal dengan exit code ≠ 0).
+- [x] `npm run build` lulus guard yang diperluas tanpa error.
 
 **Verification:**
-- [ ] `node scripts/check-i18n.mjs`
-- [ ] `npm run build`
+- [x] `node scripts/check-i18n.mjs`
+- [x] `npm run build`
 
 **Dependencies:** None
 
@@ -494,15 +494,20 @@ kotak pencarian (debounce 250 ms) menghapus semua harga yang sedang diketik —
 data loss senyap di layar 100+ baris.
 
 **Acceptance criteria:**
-- [ ] Mengetik harga lalu memicu pencarian/filter tidak menghapus harga yang belum disimpan.
-- [ ] Ganti customer tetap memuat ulang harga dari server (perilaku yang diinginkan).
-- [ ] Submit gagal (validasi) tidak mengosongkan input.
-- [ ] Test (bila memungkinkan) atau manual check terdokumentasi di PR.
+- [x] Mengetik harga lalu memicu pencarian/filter tidak menghapus harga yang belum disimpan.
+- [x] Ganti customer tetap memuat ulang harga dari server (perilaku yang diinginkan).
+- [x] Submit gagal (validasi) tidak mengosongkan input.
+- [x] Test (bila memungkinkan) atau manual check terdokumentasi di PR.
 
 **Verification:**
-- [ ] `npm run build`
-- [ ] `vendor/bin/pest tests/Feature/CustomerPriceTest.php`
-- [ ] Manual check: ketik 3 harga → ubah kotak pencarian → harga tetap
+- [x] `npm run build`
+- [x] `vendor/bin/pest tests/Feature/CustomerPriceTest.php`
+- [x] Manual check: ketik 3 harga → ubah kotak pencarian → harga tetap
+
+**Catatan:** Baris yang tersaring pencarian tetap disimpan di `form.prices`
+(tidak dibuang) dan ikut terkirim saat simpan. Server hanya menyentuh `part_id`
+yang dikirim, jadi baris tersembunyi tidak menghapus harga lain; menahannya
+malah akan membuang hasil ketikan yang belum tersimpan.
 
 **Dependencies:** None
 
@@ -521,14 +526,14 @@ tidak punya index dan tidak punya FK, padahal dipakai di dalam loop dan 5 join
 laporan. `whereDate()` pada kolom `timestamp` memaksa seq scan.
 
 **Acceptance criteria:**
-- [ ] Query tag memakai index (EXPLAIN menunjukkan Index Scan, bukan Seq Scan) — lewat expression index yang identik dengan query, atau query diubah ke `tag = UPPER(BTRIM(?))`.
-- [ ] Index parsial pada `production_results(output_part_stock_id)` terpasang.
-- [ ] `whereDate()` pada kolom timestamp di `WipInventoryService` dan `DeliveryService` diganti rentang `>= d 00:00 AND < d+1 00:00`.
-- [ ] Laporan WIP dan kartu stok tetap menghasilkan angka yang sama setelah perubahan.
+- [x] Query tag memakai index (EXPLAIN menunjukkan Index Scan, bukan Seq Scan) — lewat expression index yang identik dengan query, atau query diubah ke `tag = UPPER(BTRIM(?))`.
+- [x] Index parsial pada `production_results(output_part_stock_id)` terpasang.
+- [x] `whereDate()` pada kolom timestamp di `WipInventoryService` dan `DeliveryService` diganti rentang `>= d 00:00 AND < d+1 00:00`.
+- [x] Laporan WIP dan kartu stok tetap menghasilkan angka yang sama setelah perubahan.
 
 **Verification:**
-- [ ] `vendor/bin/pest tests/Feature/WipInventoryTest.php tests/Feature/DeliveryTest.php`
-- [ ] `EXPLAIN (ANALYZE, BUFFERS)` untuk query tag menunjukkan Index Scan
+- [x] `vendor/bin/pest tests/Feature/WipInventoryTest.php tests/Feature/DeliveryTest.php`
+- [x] `EXPLAIN (ANALYZE, BUFFERS)` untuk query tag menunjukkan Index Scan
 
 **Dependencies:** None
 
@@ -542,10 +547,10 @@ laporan. `whereDate()` pada kolom `timestamp` memaksa seq scan.
 ---
 
 ## Checkpoint 5: Selesai
-- [ ] Semua acceptance criteria terpenuhi
-- [ ] `vendor/bin/pest`, `npm run build`, `vendor/bin/pint --dirty` hijau
-- [ ] Siap deploy trial
-- [ ] Review manusia sebelum `git push`
+- [x] Semua acceptance criteria terpenuhi (17/17 task)
+- [x] `vendor/bin/pest`, `npm run build`, `vendor/bin/pint --dirty` hijau
+- [x] Migrasi reversibel (rollback + migrate ulang diverifikasi)
+- [ ] Review manusia: 3 checkpoint manual masih terbuka (lihat Checkpoint 1-3)
 
 ---
 

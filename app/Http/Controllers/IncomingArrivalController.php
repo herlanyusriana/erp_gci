@@ -12,6 +12,7 @@ use App\Models\PurchaseOrder;
 use App\Models\Supplier;
 use App\Models\TruckingCompany;
 use App\Rules\UomCode;
+use App\Support\DocumentNumber;
 use App\Support\PurchaseOrderLimit;
 use App\Support\UomCatalog;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -288,7 +289,7 @@ class IncomingArrivalController extends Controller
 
         $this->assertWithinPurchaseOrderLimit($validated['purchase_order_id'] ?? null, $validated['items']);
 
-        $arrival = DB::transaction(function () use ($validated, $isLocal, $request) {
+        $createArrival = function () use ($validated, $isLocal, $request) {
             $arrival = IncomingArrival::create([
                 'arrival_no' => IncomingArrival::generateArrivalNo(),
                 'is_local' => $isLocal,
@@ -349,7 +350,12 @@ class IncomingArrivalController extends Controller
             }
 
             return $arrival;
-        });
+        };
+
+        $arrival = DocumentNumber::retry(
+            fn () => DB::transaction($createArrival),
+            'incoming_arrivals_arrival_no_unique',
+        );
 
         return redirect()->route('incoming-arrivals.show', $arrival)->with('success', __('Arrival created.'));
     }
@@ -610,6 +616,10 @@ class IncomingArrivalController extends Controller
     public function destroy(IncomingArrival $arrival): RedirectResponse
     {
         Gate::authorize('delete', $arrival);
+
+        if ($arrival->items()->whereHas('receives')->exists()) {
+            return back()->with('error', __('Kedatangan tidak dapat dihapus karena sudah memiliki penerimaan. Hapus penerimaan terlebih dahulu.'));
+        }
 
         $arrival->delete();
 

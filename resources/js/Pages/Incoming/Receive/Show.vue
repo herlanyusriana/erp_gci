@@ -163,8 +163,8 @@ function removeReceive(r: IncomingReceive) {
                                 <th scope="col" class="px-4 py-3">{{ t('incoming.part') }}</th>
                                 <th scope="col" class="px-4 py-3">{{ t('incoming.tag') }}</th>
                                 <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.qty') }}</th>
-                                <th scope="col" class="px-4 py-3 text-right">Berat Bersih (KGM)</th>
-                                <th scope="col" class="px-4 py-3 text-right">Kemasan</th>
+                                <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.netWeightColumn') }}</th>
+                                <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.packagingColumn') }}</th>
                                 <th scope="col" class="px-4 py-3">{{ t('incoming.date') }}</th>
                                 <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.actions') }}</th>
                             </tr>

@@ -17,6 +17,7 @@ use App\Models\User;
 use App\Models\WorkOrder;
 use App\Services\DeliveryService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
 
 class PickingListTest extends TestCase
@@ -99,6 +100,41 @@ class PickingListTest extends TestCase
             'qty' => $qty,
             'qty_unit' => 'PCS',
         ];
+    }
+
+    /**
+     * Tabrakan nomor DO disimulasikan seperti request lain yang menyisipkan
+     * nomor yang sama di antara generate dan INSERT: listener `creating`
+     * memaksa percobaan pertama memakai nomor yang sudah dipakai.
+     */
+    public function test_generate_deliveries_retries_after_a_duplicate_number(): void
+    {
+        $this->fgStock('TAG-PICK-RETRY-'.uniqid(), 10);
+        $list = $this->createPicking([$this->row($this->customerA, 2)]);
+
+        $taken = Delivery::generateDeliveryNo($list->picking_date);
+        Delivery::create([
+            'delivery_no' => $taken,
+            'customer_id' => $this->customerA->id,
+            'delivery_date' => now()->toDateString(),
+            'status' => Delivery::STATUS_DRAFT,
+        ]);
+
+        $attempts = 0;
+        Event::listen('eloquent.creating: '.Delivery::class, function (Delivery $delivery) use (&$attempts, $taken): void {
+            $attempts++;
+
+            if ($attempts === 1) {
+                $delivery->delivery_no = $taken;
+            }
+        });
+
+        $this->post(route('picking-lists.deliveries.generate', $list))->assertRedirect();
+
+        $created = Delivery::query()->where('picking_list_id', $list->id)->value('delivery_no');
+
+        $this->assertSame(2, $attempts);
+        $this->assertNotSame($taken, $created);
     }
 
     public function test_picking_marks_rows_ok_and_short_without_production(): void

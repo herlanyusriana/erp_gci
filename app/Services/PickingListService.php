@@ -11,6 +11,7 @@ use App\Models\PartStock;
 use App\Models\PickingList;
 use App\Models\PickingListItem;
 use App\Models\WorkOrder;
+use App\Support\DocumentNumber;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -29,7 +30,7 @@ class PickingListService
      */
     public function create(array $data, ?int $userId = null): PickingList
     {
-        return DB::transaction(function () use ($data, $userId): PickingList {
+        $createPickingList = function () use ($data, $userId): PickingList {
             $list = PickingList::create([
                 'picking_no' => PickingList::generatePickingNo(now()),
                 'picking_date' => $data['picking_date'],
@@ -41,7 +42,12 @@ class PickingListService
             $this->syncItems($list, $data['items'] ?? []);
 
             return $list;
-        });
+        };
+
+        return DocumentNumber::retry(
+            fn () => DB::transaction($createPickingList),
+            'picking_lists_picking_no_unique',
+        );
     }
 
     /**
@@ -178,7 +184,7 @@ class PickingListService
             return $existing;
         }
 
-        return DB::transaction(function () use ($list, $userId): Collection {
+        $createDeliveries = function () use ($list, $userId): Collection {
             $deliveries = new Collection;
 
             foreach ($list->items->groupBy('customer_id') as $customerId => $items) {
@@ -230,7 +236,12 @@ class PickingListService
             $list->update(['status' => PickingList::STATUS_PICKED, 'updated_by' => $userId]);
 
             return $deliveries;
-        });
+        };
+
+        return DocumentNumber::retry(
+            fn () => DB::transaction($createDeliveries),
+            'deliveries_delivery_no_unique',
+        );
     }
 
     /**

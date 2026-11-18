@@ -542,6 +542,8 @@ function submit() {
                         <thead class="bg-background">
                             <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                                 <th class="w-12 border border-borderline px-3 py-2.5 text-center">No</th>
+                                <th class="w-52 border border-borderline px-3 py-2.5">{{ t('master.partName') }}</th>
+                                <th class="w-32 border border-borderline px-3 py-2.5">{{ t('master.model') }}</th>
                                 <th class="w-40 border border-borderline px-3 py-2.5">Tag # (Bundle)</th>
                                 <th class="w-36 border border-borderline px-3 py-2.5">Packing #</th>
                                 <th class="w-32 border border-borderline px-3 py-2.5 text-right">Qty/packing</th>
@@ -564,6 +566,21 @@ function submit() {
                                         class="border border-borderline bg-surface px-3 py-2 text-center font-bold text-ink-primary align-middle"
                                     >
                                         {{ bi + 1 }}
+                                    </td>
+                                    <!-- Part & model dari master, bukan input: identitas part tidak boleh diubah saat menerima -->
+                                    <td
+                                        v-if="ri === 0"
+                                        :rowspan="b.packings.length"
+                                        class="border border-borderline bg-surface px-3 py-2 align-middle text-xs font-semibold text-ink-primary"
+                                    >
+                                        {{ arrivalItem.part?.part_name || '—' }}
+                                    </td>
+                                    <td
+                                        v-if="ri === 0"
+                                        :rowspan="b.packings.length"
+                                        class="border border-borderline bg-surface px-3 py-2 align-middle text-xs text-ink-secondary"
+                                    >
+                                        {{ arrivalItem.part?.model || '—' }}
                                     </td>
                                     <td
                                         v-if="ri === 0"

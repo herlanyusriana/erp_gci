@@ -251,7 +251,7 @@ export interface IncomingArrivalItem {
     total_price: number | null;
     is_foc: boolean;
     notes: string | null;
-    part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
+    part?: Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> | null;
     arrival?: {
         id: number;
         invoice_no: string | null;

@@ -621,6 +621,22 @@ Bukti audit (statis + render nyata, 30 halaman di 1920/1440/1280/1024):
 - [x] `tabular-nums` pada kolom angka: `Administration/Role/Index`,
       `Incoming/Arrival/Index`.
 
+## Fase 7: Audit Material Tracker (APK)
+
+**Status:** Audit selesai — laporan di `tasks/audit-fixes/mobile-audit.md`.
+Perbaikan **belum** dimulai (menunggu keputusan ruang lingkup).
+
+- [x] Baseline: `flutter analyze` 5 info / 0 error, `flutter test` 214 lulus,
+      `flutter build apk --debug` ✓, katalog i18n 275×3 seimbang.
+- [x] Audit 3 alur paralel (issue/release, production, loading+warehouse) +
+      irisan data layer/keamanan/i18n/test.
+- [x] Verifikasi setiap temuan Critical ke kode server `erp_gci`
+      (`scanned_qty` per part, tidak ada `qc/pass` di API, tanpa idempotency di
+      `storeResult`, `qty_reject` tanpa batas atas, key `scanTag`/`saving` hilang).
+- [x] Hasil: 8 Critical, 43 Required, 23 Optional, 25 Nit.
+- [ ] Keputusan: gelombang 1 (C1–C4) boleh menyentuh server?
+- [ ] Keputusan: `issue_screen.dart` (785 baris, mati di produksi) dihapus?
+
 ## Yang sengaja TIDAK diubah
 
 - 48 pemakaian `text-[10px]`/`text-[11px]` di 17 file. Sebagian besar adalah

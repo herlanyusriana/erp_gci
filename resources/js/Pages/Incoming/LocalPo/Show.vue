@@ -87,6 +87,7 @@ const receiveRows = computed<ReceiveRow[]>(() =>
                     <thead class="bg-background">
                         <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                             <th scope="col" class="px-4 py-3">{{ t('incoming.part') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.model') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('incoming.size') }}</th>
                             <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.qty') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('incoming.unit') }}</th>
@@ -102,6 +103,7 @@ const receiveRows = computed<ReceiveRow[]>(() =>
                                 {{ p.item.part?.part_number ?? '—' }}
                                 <div class="text-xs text-ink-secondary">{{ p.item.part?.part_name ?? '' }}</div>
                             </td>
+                            <td class="px-4 py-3 text-ink-primary">{{ p.item.part?.model || '—' }}</td>
                             <td class="px-4 py-3 text-ink-primary">{{ p.item.size ?? '—' }}</td>
                             <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ p.item.qty_goods }}</td>
                             <td class="px-4 py-3 text-ink-primary">{{ p.item.unit_goods ?? '—' }}</td>
@@ -115,7 +117,7 @@ const receiveRows = computed<ReceiveRow[]>(() =>
                             </td>
                         </tr>
                         <tr v-if="!pending.length">
-                            <td colspan="8" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noItems') }}</td>
+                            <td colspan="9" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noItems') }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -129,6 +131,7 @@ const receiveRows = computed<ReceiveRow[]>(() =>
                     <thead class="bg-background">
                         <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                             <th scope="col" class="px-4 py-3">{{ t('incoming.part') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.model') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('incoming.tag') }}</th>
                             <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.qty') }}</th>
                             <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.netUnit', { unit: 'KGM' }) }}</th>
@@ -142,6 +145,7 @@ const receiveRows = computed<ReceiveRow[]>(() =>
                                 {{ r.item.part?.part_number ?? '—' }}
                                 <div class="text-xs text-ink-secondary">{{ r.item.part?.part_name ?? '' }}</div>
                             </td>
+                            <td class="px-4 py-3 text-ink-primary">{{ r.item.part?.model || '—' }}</td>
                             <td class="px-4 py-3 text-ink-primary">{{ r.receive.tag ?? '—' }}</td>
                             <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ r.receive.qty }}</td>
                             <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ r.receive.net_weight }}</td>
@@ -154,7 +158,7 @@ const receiveRows = computed<ReceiveRow[]>(() =>
                             </td>
                         </tr>
                         <tr v-if="!receiveRows.length">
-                            <td colspan="6" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noReceipts') }}</td>
+                            <td colspan="7" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noReceipts') }}</td>
                         </tr>
                     </tbody>
                 </table>

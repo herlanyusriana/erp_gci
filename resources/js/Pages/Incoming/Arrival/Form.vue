@@ -48,6 +48,7 @@ const props = defineProps<{
         part_id: number;
         part_number?: string;
         part_name?: string;
+        model?: string | null;
         unit: string | null;
     }>;
     purchaseOrders: Array<any>;
@@ -229,7 +230,9 @@ const supplierMaterialOptions = computed(() => {
     return list.map((m) => ({
         value: m.part_id,
         label: m.part_number ? `${m.part_number} · ${m.part_name}` : m.group,
-        sublabel: `${m.group} · Size: ${m.size} · UOM: ${m.unit ?? 'KGM'}`,
+        sublabel: [m.group, `Size: ${m.size}`, `UOM: ${m.unit ?? 'KGM'}`, m.model ? `Model: ${m.model}` : '']
+            .filter((segment) => segment !== '')
+            .join(' · '),
         raw: m,
     }));
 });

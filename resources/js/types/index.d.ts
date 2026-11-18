@@ -217,7 +217,7 @@ export interface PurchaseOrderItem {
     unit: string | null;
     price: number | null;
     notes: string | null;
-    part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
+    part?: Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> | null;
 }
 
 export interface PurchaseOrder {
@@ -377,7 +377,7 @@ export interface PartStock {
     remarks: string | null;
     booked_qty?: number;
     avail_qty?: number;
-    part?: (Pick<Part, 'id' | 'part_number' | 'part_name'> & { part_type?: PartType | null }) | null;
+    part?: (Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> & { part_type?: PartType | null }) | null;
     receive?: (Pick<IncomingReceive, 'id' | 'invoice_no' | 'location_code'> & {
         arrival_item?: (Pick<IncomingArrivalItem, 'id' | 'arrival_id'> & {
             arrival?: (Pick<IncomingArrival, 'id'> & {

@@ -104,6 +104,7 @@ function removeReceive(r: IncomingReceive) {
                         <thead class="bg-background">
                             <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                                 <th scope="col" class="px-4 py-3">{{ t('incoming.part') }}</th>
+                                <th scope="col" class="px-4 py-3">{{ t('master.model') }}</th>
                                 <th scope="col" class="px-4 py-3">{{ t('incoming.groupSize') }}</th>
                                 <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.plannedQty') }}</th>
                                 <th scope="col" class="px-4 py-3">{{ t('incoming.unit') }}</th>
@@ -118,6 +119,7 @@ function removeReceive(r: IncomingReceive) {
                                     {{ p.item.part?.part_number ?? '—' }}
                                     <div class="text-xs text-ink-secondary">{{ p.item.part?.part_name ?? '' }}</div>
                                 </td>
+                                <td class="px-4 py-3 text-ink-primary">{{ p.item.part?.model || '—' }}</td>
                                 <td class="px-4 py-3 text-ink-primary">
                                     {{ p.item.material_group_label ?? p.item.material_group ?? '—' }} · {{ p.item.size ?? '—' }}
                                 </td>
@@ -144,7 +146,7 @@ function removeReceive(r: IncomingReceive) {
                                 </td>
                             </tr>
                             <tr v-if="!pending.length">
-                                <td colspan="7" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noItems') }}</td>
+                                <td colspan="8" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noItems') }}</td>
                             </tr>
                         </tbody>
                     </table>
@@ -161,6 +163,7 @@ function removeReceive(r: IncomingReceive) {
                         <thead class="bg-background">
                             <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                                 <th scope="col" class="px-4 py-3">{{ t('incoming.part') }}</th>
+                                <th scope="col" class="px-4 py-3">{{ t('master.model') }}</th>
                                 <th scope="col" class="px-4 py-3">{{ t('incoming.tag') }}</th>
                                 <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.qty') }}</th>
                                 <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.netWeightColumn') }}</th>
@@ -175,6 +178,7 @@ function removeReceive(r: IncomingReceive) {
                                     {{ r.item.part?.part_number ?? '—' }}
                                     <div class="text-xs text-ink-secondary">{{ r.item.material_group_label ?? r.item.material_group ?? '' }}</div>
                                 </td>
+                                <td class="px-4 py-3 text-ink-primary">{{ r.item.part?.model || '—' }}</td>
                                 <td class="px-4 py-3 text-ink-primary font-mono font-medium">{{ r.receive.tag ?? '—' }}</td>
                                 <td class="px-4 py-3 text-right tabular-nums text-ink-primary font-semibold">
                                     {{ r.receive.qty }} {{ r.receive.qty_unit ?? '' }}
@@ -206,7 +210,7 @@ function removeReceive(r: IncomingReceive) {
                                 </td>
                             </tr>
                             <tr v-if="!receiveRows.length">
-                                <td colspan="7" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noReceipts') }}</td>
+                                <td colspan="8" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noReceipts') }}</td>
                             </tr>
                         </tbody>
                     </table>

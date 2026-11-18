@@ -1,10 +1,12 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import SearchableSelect from '@/Components/SearchableSelect.vue';
 
 export interface PartOption {
     id: number;
     part_number: string | null;
     part_name: string | null;
+    model?: string | null;
 }
 
 const props = withDefaults(
@@ -21,6 +23,16 @@ const props = withDefaults(
 
 const emit = defineEmits<{ 'update:modelValue': [value: number | '']; change: [] }>();
 
+const formattedOptions = computed(() =>
+    props.options.map((option) => ({
+        ...option,
+        sublabel: [option.part_name, option.model]
+            .map((value) => (value ?? '').trim())
+            .filter((segment) => segment !== '')
+            .join(' · '),
+    })),
+);
+
 function onUpdate(val: any) {
     const parsed = val === '' || val === null || val === undefined ? '' : Number(val);
     emit('update:modelValue', parsed);
@@ -32,10 +44,10 @@ function onUpdate(val: any) {
     <div class="mt-1">
         <SearchableSelect
             :model-value="modelValue"
-            :options="options"
+            :options="formattedOptions"
             value-key="id"
             label-key="part_number"
-            sublabel-key="part_name"
+            sublabel-key="sublabel"
             :placeholder="placeholder"
             :disabled="disabled"
             :aria-label="ariaLabel"

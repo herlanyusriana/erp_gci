@@ -139,6 +139,7 @@ function groupLabel(item: PendingRow['item']): string {
                     <thead class="bg-background">
                         <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                             <th scope="col" class="px-4 py-3">{{ t('incoming.part') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.model') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('incoming.groupSize') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('incoming.bundleQty') }}</th>
                             <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.qtyGoods') }}</th>
@@ -153,6 +154,7 @@ function groupLabel(item: PendingRow['item']): string {
                                 <span class="font-mono font-bold">{{ p.item.part?.part_number ?? '—' }}</span>
                                 <div class="text-xs text-ink-secondary">{{ p.item.part?.part_name ?? '' }}</div>
                             </td>
+                            <td class="px-4 py-3 text-ink-primary">{{ p.item.part?.model || '—' }}</td>
                             <td class="px-4 py-3 text-ink-primary">
                                 {{ groupLabel(p.item) }} · {{ p.item.size ?? '—' }}
                             </td>
@@ -170,7 +172,7 @@ function groupLabel(item: PendingRow['item']): string {
                             <td class="px-4 py-3 text-right tabular-nums font-semibold" :class="p.remaining > 0 ? 'text-warning' : 'text-success'">{{ p.remaining }}</td>
                         </tr>
                         <tr v-if="!pending.length">
-                            <td colspan="7" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noItems') }}</td>
+                            <td colspan="8" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noItems') }}</td>
                         </tr>
                     </tbody>
                 </table>

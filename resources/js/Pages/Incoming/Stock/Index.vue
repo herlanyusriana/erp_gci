@@ -65,6 +65,7 @@ function doSearch() {
                 <thead class="bg-background">
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                         <th scope="col" class="px-4 py-3">{{ t('incoming.part') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.model') }}</th>
                         <th scope="col" class="px-4 py-3">{{ t('incoming.type') }}</th>
                         <th scope="col" class="px-4 py-3">{{ t('incoming.invoice') }}</th>
                         <th scope="col" class="px-4 py-3">{{ t('incoming.tag') }}</th>
@@ -79,6 +80,7 @@ function doSearch() {
                 <tbody class="divide-y divide-borderline">
                     <tr v-for="st in stocks.data" :key="st.id" class="hover:bg-primary-light/40">
                         <td class="px-4 py-3 font-medium text-ink-primary">{{ st.part?.part_number }} · {{ st.part?.part_name }}</td>
+                        <td class="px-4 py-3 text-ink-primary">{{ st.part?.model || '—' }}</td>
                         <td class="px-4 py-3 text-ink-primary">{{ st.part?.part_type?.name ?? '—' }}</td>
                         <td class="px-4 py-3 text-ink-primary">{{ st.receive?.invoice_no ?? '—' }}</td>
                         <td class="px-4 py-3 text-ink-primary">{{ st.tag ?? '—' }}</td>
@@ -90,7 +92,7 @@ function doSearch() {
                         <td class="px-4 py-3 text-ink-primary">{{ st.qty_unit ?? '—' }}</td>
                     </tr>
                     <tr v-if="!stocks.data.length">
-                        <td colspan="10" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noStock') }}</td>
+                        <td colspan="11" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noStock') }}</td>
                     </tr>
                 </tbody>
             </table>

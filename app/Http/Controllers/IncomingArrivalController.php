@@ -35,7 +35,7 @@ class IncomingArrivalController extends Controller
         return PartSubstitute::query()
             ->where('is_active', true)
             ->whereNotNull('supplier_id')
-            ->with(['substitutePart:id,part_number,part_name,size,uom_id', 'substitutePart.uom:id,code'])
+            ->with(['substitutePart:id,part_number,part_name,model,size,uom_id', 'substitutePart.uom:id,code'])
             ->get()
             ->map(function (PartSubstitute $mapping) {
                 $part = $mapping->substitutePart;
@@ -53,6 +53,7 @@ class IncomingArrivalController extends Controller
                     'part_id' => (int) $part->id,
                     'part_number' => $part->part_number,
                     'part_name' => $part->part_name,
+                    'model' => $part->model,
                     'unit' => $part->uom?->code,
                 ];
             })

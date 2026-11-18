@@ -78,12 +78,12 @@ const form = useForm({
 /** Part yang boleh dipilih: hanya part supplier terpilih (strict). */
 const partOptions = computed(() => {
     const supplierId = Number(form.supplier_id);
-    const map = new Map<number, { id: number; part_number: string | null; part_name: string | null }>();
+    const map = new Map<number, { id: number; part_number: string | null; part_name: string | null; model: string | null }>();
 
     if (supplierId) {
         for (const sp of props.supplierParts) {
             if (sp.supplier_id === supplierId && !map.has(sp.part_id)) {
-                map.set(sp.part_id, { id: sp.part_id, part_number: sp.part_number, part_name: sp.part_name });
+                map.set(sp.part_id, { id: sp.part_id, part_number: sp.part_number, part_name: sp.part_name, model: sp.model });
             }
         }
     }
@@ -93,7 +93,7 @@ const partOptions = computed(() => {
         const id = Number(r.part_id);
         if (id && !map.has(id)) {
             const p = props.parts.find((x) => x.id === id);
-            if (p) map.set(id, { id: p.id, part_number: p.part_number, part_name: p.part_name });
+            if (p) map.set(id, { id: p.id, part_number: p.part_number, part_name: p.part_name, model: p.model ?? null });
         }
     }
 

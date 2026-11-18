@@ -29,7 +29,7 @@ class PartStockController extends Controller
                 ? $q->whereRaw('UPPER(code) = ?', ['WIP'])
                 : $q->whereRaw('UPPER(code) <> ?', ['WIP']))
             ->with([
-                'part:id,part_number,part_name,part_type_id',
+                'part:id,part_number,part_name,model,part_type_id',
                 'part.partType:id,code,name',
                 'receive:id,invoice_no,arrival_item_id,location_code',
                 'receive.arrivalItem:id,arrival_id',

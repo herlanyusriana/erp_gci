@@ -72,7 +72,7 @@ function partTypeLabel(partType: PartType | null): string {
             <div>
                 <h1 class="text-2xl font-bold tracking-tight text-ink-primary">{{ t('master.partTitle') }}</h1>
                 <p class="mt-1 text-sm text-ink-secondary">
-                    {{ t('master.partSubtitle') }} <code class="rounded bg-primary-light px-1">part_type</code>
+                    {{ t('master.partSubtitle') }} <code class="rounded bg-primary-light px-1 text-primary">part_type</code>
                 </p>
             </div>
             <div v-if="perms.create" class="relative">

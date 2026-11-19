@@ -94,12 +94,6 @@ const form = useForm({
     tags: [] as any[],
 });
 
-// Prefix default Tag
-const tagPrefix = computed(() => {
-    const raw = props.arrivalItem.arrival?.invoice_no || props.arrivalItem.part?.part_number || 'TAG';
-    return String(raw).toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 20) || 'TAG';
-});
-
 // Bundles reactive list
 const bundles = ref<BundleGroup[]>([]);
 
@@ -125,8 +119,10 @@ function resizeBundles() {
     const current = bundles.value;
     while (current.length < nb) {
         const idx = current.length + 1;
+        // Tag = identitas bundle yang diketik operator. Prefill cukup nomor
+        // bundle agar tidak tertukar dengan nomor invoice / nomor part.
         current.push({
-            tag: `${tagPrefix.value}-B${String(idx).padStart(2, '0')}`,
+            tag: String(idx),
             packings: [],
         });
     }

@@ -386,6 +386,44 @@ class TieredReceiveTest extends TestCase
             ->assertSee('TAG-LBL-01/2');
     }
 
+    /**
+     * Tag adalah identitas bundle yang diketik operator, bukan turunan nomor
+     * invoice. Label harus mencetaknya apa adanya, dan invoice tetap tampil
+     * sebagai rujukan dokumen di baris terpisah.
+     */
+    public function test_label_prints_operator_tag_verbatim_and_invoice_separately(): void
+    {
+        [$arrival, $item] = $this->createArrivalWithItem('EA');
+        $arrival->update(['invoice_no' => 'INV/2026/01/0001']);
+
+        $this->post(route('receive.store', $item), [
+            'receive_date' => now()->toDateString(),
+            'truck_no' => 'B 9001 GCI',
+            'location_code' => 'BULK-AREA',
+            'tags' => [
+                [
+                    'tag' => '2',
+                    'bundle_count' => 1,
+                    'bundle_unit' => 'PALLET',
+                    'packing_count' => 1,
+                    'packing_type' => 'COIL',
+                    'packing_qty' => 2000,
+                    'qty' => 2000,
+                    'qty_unit' => 'EA',
+                ],
+            ],
+        ]);
+
+        $receive = IncomingReceive::where('tag', '2')->firstOrFail();
+        $this->assertSame('2', $receive->tag);
+
+        $this->get(route('receive.label', $receive))
+            ->assertOk()
+            ->assertSee('TAG # : 2')
+            ->assertSee('INV : INV/2026/01/0001')
+            ->assertDontSee('TAG # : INV/2026/01/0001');
+    }
+
     public function test_label_lists_each_packing_when_packing_weights_differ(): void
     {
         [$arrival, $item] = $this->createArrivalWithItem('KGM');

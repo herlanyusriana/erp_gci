@@ -95,8 +95,10 @@
 
         .part-name { font-size: 12pt; font-weight: 900; text-transform: uppercase; line-height: 1.15; }
         .part-size { font-size: 8.5pt; font-weight: 600; text-transform: uppercase; color: #222; margin-top: 0.5mm; }
-        .invoice { font-size: 15pt; font-weight: 900; text-transform: uppercase; margin-top: 4mm; letter-spacing: 0.3px; }
-        .tag-line { font-size: 12.5pt; font-weight: 900; text-transform: uppercase; margin-top: 2mm; }
+        /* Tag = identitas fisik bundle yang diketik operator, jadi paling menonjol.
+           Invoice hanya rujukan dokumen, ditulis kecil agar tidak terbaca sebagai tag. */
+        .tag-line { font-size: 19pt; font-weight: 900; text-transform: uppercase; margin-top: 4mm; letter-spacing: 0.3px; line-height: 1.1; }
+        .invoice { font-size: 8.5pt; font-weight: 700; text-transform: uppercase; color: #333; margin-top: 1mm; }
 
         .packaging { margin-top: 3.5mm; }
         .packaging .line { font-size: 9.5pt; font-weight: 800; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -142,8 +144,8 @@
                     <div class="part-size">{{ $sizeText }}</div>
                 @endif
 
-                <div class="invoice">{{ $invoiceNo }}</div>
                 <div class="tag-line">TAG # : {{ $resolvedTag }}</div>
+                <div class="invoice">INV : {{ $invoiceNo }}</div>
 
                 <div class="packaging">
                     <div class="line bundle">

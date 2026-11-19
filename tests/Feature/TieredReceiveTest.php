@@ -347,7 +347,13 @@ class TieredReceiveTest extends TestCase
                 ->where('packingUnits', fn ($units) => collect($units)->contains('PALLET')));
     }
 
-    public function test_label_lists_sub_packing_numbers(): void
+    /**
+     * Nomor packing ({tag}/{n}) tetap dibuat otomatis dan tersimpan, tetapi
+     * tidak dicetak di label. Pada bundle berisi puluhan packing deret nomornya
+     * memenuhi separuh label dan tidak dibaca operator di rak; ringkasan
+     * "2 COIL @ 1,000 KGM" sudah cukup.
+     */
+    public function test_label_summarizes_packings_without_printing_packing_numbers(): void
     {
         [$arrival, $item] = $this->createArrivalWithItem('KGM');
 
@@ -378,12 +384,15 @@ class TieredReceiveTest extends TestCase
 
         $this->get(route('receive.label', $receive))
             ->assertOk()
-            // 1 tag = 1 bundle: baris bundle membawa total, packing dirinci di bawahnya.
+            // 1 tag = 1 bundle: baris bundle membawa total, packing diringkas per unit.
             ->assertSee('1 PALLET')
             ->assertSee('2,000 KGM')
             ->assertSee('2 COIL @ 1,000 KGM')
-            ->assertSee('TAG-LBL-01/1')
-            ->assertSee('TAG-LBL-01/2');
+            ->assertDontSee('TAG-LBL-01/1')
+            ->assertDontSee('TAG-LBL-01/2');
+
+        expect($receive->packings()->orderBy('sequence')->pluck('packing_no')->all())
+            ->toBe(['TAG-LBL-01/1', 'TAG-LBL-01/2']);
     }
 
     /**
@@ -424,7 +433,12 @@ class TieredReceiveTest extends TestCase
             ->assertDontSee('TAG # : INV/2026/01/0001');
     }
 
-    public function test_label_lists_each_packing_when_packing_weights_differ(): void
+    /**
+     * Berat packing tidak seragam: label mengelompokkan per berat, bukan satu
+     * baris per packing. Nomor packing tetap tidak dicetak, dan label tidak
+     * memanjang mengikuti jumlah packing.
+     */
+    public function test_label_groups_packings_by_weight_when_weights_differ(): void
     {
         [$arrival, $item] = $this->createArrivalWithItem('KGM');
 
@@ -439,14 +453,15 @@ class TieredReceiveTest extends TestCase
                     'qty_unit' => 'KGM',
                     'bundle_count' => 1,
                     'bundle_unit' => 'PALLET',
-                    'packing_count' => 3,
+                    'packing_count' => 4,
                     'packing_type' => 'COIL',
-                    'packing_qty' => 1000,
+                    'packing_qty' => 750,
                     'net_weight' => 3000,
                     'packings' => [
                         ['packing_no' => 'TAG-MIX-01/1', 'sequence' => 1, 'qty' => 1000, 'uom' => 'KGM', 'net_weight' => 1000],
-                        ['packing_no' => 'TAG-MIX-01/2', 'sequence' => 2, 'qty' => 1500, 'uom' => 'KGM', 'net_weight' => 1500],
+                        ['packing_no' => 'TAG-MIX-01/2', 'sequence' => 2, 'qty' => 500, 'uom' => 'KGM', 'net_weight' => 500],
                         ['packing_no' => 'TAG-MIX-01/3', 'sequence' => 3, 'qty' => 500, 'uom' => 'KGM', 'net_weight' => 500],
+                        ['packing_no' => 'TAG-MIX-01/4', 'sequence' => 4, 'qty' => 1000, 'uom' => 'KGM', 'net_weight' => 1000],
                     ],
                 ],
             ],
@@ -454,16 +469,16 @@ class TieredReceiveTest extends TestCase
 
         $receive = IncomingReceive::where('tag', 'TAG-MIX-01')->firstOrFail();
 
-        // Berat packing tidak seragam: tiap packing ditulis sendiri, jangan dirata-ratakan.
         $this->get(route('receive.label', $receive))
             ->assertOk()
             ->assertSee('1 PALLET')
             ->assertSee('3,000 KGM')
-            ->assertSee('3 COIL')
-            ->assertSee('TAG-MIX-01/1 — 1,000 KGM')
-            ->assertSee('TAG-MIX-01/2 — 1,500 KGM')
-            ->assertSee('TAG-MIX-01/3 — 500 KGM')
-            ->assertDontSee('3 COIL @');
+            ->assertSee('4 COIL')
+            ->assertSee('2 × 1,000 KGM')
+            ->assertSee('2 × 500 KGM')
+            ->assertDontSee('4 COIL @')
+            ->assertDontSee('TAG-MIX-01/1')
+            ->assertDontSee('TAG-MIX-01/2');
     }
 
     public function test_receive_show_uses_the_supplier_material_group_not_the_part_number(): void

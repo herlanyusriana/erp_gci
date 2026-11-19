@@ -45,22 +45,29 @@
         && count(array_unique(array_map(fn ($w) => (string) round((float) $w, 4), $packingWeights))) === 1;
 
     $packingLines = [];
-    $packingNumbers = '';
     if ($packingCount > 0) {
         $head = trim($packingCount.' '.$packingType);
         if ($packings->isNotEmpty() && $uniformWeight) {
-            // Ringkas seperti label fisik: "2 COIL @ 1.380 KGM", nomor packing
-            // tetap dicetak di bawahnya agar bisa dicocokkan dengan stiker coil.
+            // Ringkas seperti label fisik: "2 COIL @ 1.380 KGM". Nomor packing
+            // ({tag}/{n}) sengaja tidak dicetak: pada bundle berisi puluhan
+            // packing deretnya memenuhi label dan tidak dibaca operator di rak.
             $packingLines[] = $head.' @ '.$num((float) $packingWeights[0]).' '.$packingUnit;
-            $packingNumbers = $packings->map(fn ($p) => (string) $p->packing_no)->implode(' · ');
         } elseif ($packings->isNotEmpty()) {
-            // Berat per packing berbeda: tulis masing-masing, jangan dirata-ratakan.
+            // Berat per packing berbeda: ringkas per berat ("3 × 1,000 KGM"),
+            // jangan dirata-ratakan dan jangan cetak nomor packing. Satu baris
+            // per packing akan membanjiri label pada bundle berisi puluhan coil.
             $packingLines[] = $head;
-            foreach ($packings as $index => $packing) {
-                $perUnit = $packingWeights[$index] ?? null;
-                if ($perUnit !== null) {
-                    $packingLines[] = $packing->packing_no.' — '.$num((float) $perUnit).' '.$packingUnit;
+            $weightGroups = [];
+            foreach ($packingWeights as $perUnit) {
+                if ($perUnit === null) {
+                    continue;
                 }
+
+                $key = (string) round((float) $perUnit, 4);
+                $weightGroups[$key] = ($weightGroups[$key] ?? 0) + 1;
+            }
+            foreach ($weightGroups as $weight => $count) {
+                $packingLines[] = $count.' × '.$num((float) $weight).' '.$packingUnit;
             }
         } else {
             $packingLines[] = $head.' @ '.$num((float) ($receive->packing_qty ?? 0)).' '.$packingUnit;
@@ -105,7 +112,6 @@
         .packaging .line + .line { margin-top: 1mm; }
         .packaging .bundle { display: flex; gap: 5mm; }
         .packaging .bundle .qty { margin-left: auto; }
-        .packing-nos { margin-top: 1.2mm; font-size: 7.5pt; font-weight: 700; color: #222; line-height: 1.25; word-break: break-word; }
 
         .label-date { margin-top: auto; font-size: 9.5pt; font-weight: 700; }
 
@@ -155,9 +161,6 @@
                     @foreach ($packingLines as $line)
                         <div class="line">{{ $line }}</div>
                     @endforeach
-                    @if ($packingNumbers !== '')
-                        <div class="packing-nos">{{ $packingNumbers }}</div>
-                    @endif
                 </div>
 
                 <div class="label-date">{{ $receive->ata_date?->format('d-M-y') ?? '-' }}</div>

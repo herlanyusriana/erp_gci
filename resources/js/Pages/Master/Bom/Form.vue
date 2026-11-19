@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
@@ -95,6 +95,18 @@ const form = useForm({
     items: [] as ItemRow[],
 });
 
+/**
+ * Baris kosong (hasil "Tambah baris") dibuang sebelum dikirim: server menolak
+ * baris tanpa part, dan pesan errornya muncul jauh dari tombol Simpan sehingga
+ * klik Simpan terlihat tidak melakukan apa pun.
+ *
+ * `submittedRows` menyimpan nomor baris layar untuk setiap item yang dikirim,
+ * karena index error server (`items.<n>.<field>`) relatif terhadap payload
+ * yang sudah disaring.
+ */
+const submittedRows = ref<number[]>([]);
+const clientError = ref('');
+
 function addRow() {
     rows.value.push(blankItem());
 }
@@ -161,8 +173,78 @@ function onParentChange(r: ItemRow) {
     if (r.parent_uom === '') r.parent_uom = part.uom?.code ?? '';
 }
 
+/**
+ * Index error server untuk baris layar ke-`uiIndex`. Sebelum submit pertama
+ * `submittedRows` masih kosong, jadi index layar dipakai apa adanya.
+ */
+function serverIndex(uiIndex: number): number | null {
+    const list = submittedRows.value;
+    if (list.length === 0) {
+        return uiIndex;
+    }
+
+    const at = list.indexOf(uiIndex + 1);
+
+    return at === -1 ? null : at;
+}
+
+/** Pesan error server untuk satu field baris layar. */
+function rowError(uiIndex: number, field: string): string | undefined {
+    const index = serverIndex(uiIndex);
+    if (index === null) {
+        return undefined;
+    }
+
+    return (form.errors as Record<string, string>)[`items.${index}.${field}`];
+}
+
+/** Semua error dalam bentuk yang bisa dibaca: nomor baris layar + pesan. */
+const errorList = computed<Array<{ row: number | null; message: string }>>(() =>
+    Object.entries(form.errors as Record<string, string>).map(([key, message]) => {
+        const match = /^items\.(\d+)\./.exec(key);
+        if (match === null) {
+            return { row: null, message };
+        }
+
+        const index = Number(match[1]);
+
+        return { row: submittedRows.value[index] ?? index + 1, message };
+    }),
+);
+
+watch(
+    () => form.errors,
+    (errors) => {
+        const key = Object.keys(errors).find((k) => /^items\.\d+\./.test(k));
+        if (key === undefined) {
+            return;
+        }
+
+        const index = Number(/^items\.(\d+)\./.exec(key)![1]);
+        const rowNumber = submittedRows.value[index] ?? index + 1;
+
+        nextTick(() => {
+            document.getElementById(`bom-row-${rowNumber}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        });
+    },
+    { deep: true },
+);
+
 function submit() {
-    form.items = rows.value.map((r) => ({
+    const filled = rows.value
+        .map((row, index) => ({ row, number: index + 1 }))
+        .filter(({ row }) => rowHasData(row));
+
+    if (filled.length === 0) {
+        clientError.value = t('master.bomItemsRequired');
+
+        return;
+    }
+
+    clientError.value = '';
+    submittedRows.value = filled.map(({ number }) => number);
+
+    form.items = filled.map(({ row: r }) => ({
         sequence: r.sequence === '' ? null : Number(r.sequence),
         process_id: r.process_id === '' ? null : Number(r.process_id),
         machine_id: r.machine_id === '' ? null : Number(r.machine_id),
@@ -240,9 +322,7 @@ const fieldClass = 'mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-
                     </button>
                 </div>
 
-                <InputError :message="form.errors.items" class="px-6 pt-4" />
-
-                <div v-for="(r, i) in rows" :key="r.uid" class="border-b border-borderline px-6 py-4 last:border-b-0">
+                <div v-for="(r, i) in rows" :id="`bom-row-${i + 1}`" :key="r.uid" class="border-b border-borderline px-6 py-4 last:border-b-0">
                     <div class="mb-3 flex items-center justify-between">
                         <span class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('master.bomItem') }} {{ i + 1 }}</span>
                         <button type="button" @click="removeRow(i)" :disabled="rows.length === 1" class="text-xs font-semibold text-danger transition hover:underline disabled:cursor-not-allowed disabled:opacity-40">{{ t('master.removeItem') }}</button>
@@ -252,7 +332,7 @@ const fieldClass = 'mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-
                         <div class="sm:col-span-2">
                             <label class="text-xs font-semibold text-ink-secondary">{{ t('master.sequence') }}</label>
                             <input :aria-label="t('master.sequence')" v-model="r.sequence" type="number" min="0" step="1" :class="fieldClass" />
-                            <InputError :message="form.errors[`items.${i}.sequence`]" class="mt-1" />
+                            <InputError :message="rowError(i, 'sequence')" class="mt-1" />
                         </div>
                         <div class="sm:col-span-5">
                             <label class="text-xs font-semibold text-ink-secondary">{{ t('master.process') }}</label>
@@ -265,10 +345,10 @@ const fieldClass = 'mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-
                                     sublabel-key="process_code"
                                     placeholder="—"
                                     :aria-label="t('master.process')"
-                                    :error="form.errors[`items.${i}.process_id`]"
+                                    :error="rowError(i, 'process_id')"
                                 />
                             </div>
-                            <InputError :message="form.errors[`items.${i}.process_id`]" class="mt-1" />
+                            <InputError :message="rowError(i, 'process_id')" class="mt-1" />
                         </div>
                         <div class="sm:col-span-5">
                             <label class="text-xs font-semibold text-ink-secondary">{{ t('master.machine') }}</label>
@@ -281,10 +361,10 @@ const fieldClass = 'mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-
                                     sublabel-key="machine_code"
                                     placeholder="—"
                                     :aria-label="t('master.machine')"
-                                    :error="form.errors[`items.${i}.machine_id`]"
+                                    :error="rowError(i, 'machine_id')"
                                 />
                             </div>
-                            <InputError :message="form.errors[`items.${i}.machine_id`]" class="mt-1" />
+                            <InputError :message="rowError(i, 'machine_id')" class="mt-1" />
                         </div>
 
                         <div class="sm:col-span-6">
@@ -298,12 +378,12 @@ const fieldClass = 'mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-
                                 @update:model-value="r.parent_part_id = $event"
                                 @change="onParentChange(r)"
                             />
-                            <InputError :message="form.errors[`items.${i}.parent_part_id`]" class="mt-1" />
+                            <InputError :message="rowError(i, 'parent_part_id')" class="mt-1" />
                         </div>
                         <div class="sm:col-span-3">
                             <label class="text-xs font-semibold text-ink-secondary">{{ t('master.parentQty') }}</label>
                             <input :aria-label="t('master.parentQty')" v-model="r.parent_qty" type="number" step="any" min="0" :class="fieldClass" />
-                            <InputError :message="form.errors[`items.${i}.parent_qty`]" class="mt-1" />
+                            <InputError :message="rowError(i, 'parent_qty')" class="mt-1" />
                         </div>
                         <div class="sm:col-span-3">
                             <label class="text-xs font-semibold text-ink-secondary">{{ t('master.parentUom') }}</label>
@@ -311,7 +391,7 @@ const fieldClass = 'mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-
                                 <option value="">—</option>
                                 <option v-for="u in uoms" :key="u" :value="u">{{ u }}</option>
                             </select>
-                            <InputError :message="form.errors[`items.${i}.parent_uom`]" class="mt-1" />
+                            <InputError :message="rowError(i, 'parent_uom')" class="mt-1" />
                         </div>
 
                         <div class="sm:col-span-6">
@@ -325,12 +405,12 @@ const fieldClass = 'mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-
                                 @update:model-value="r.child_part_id = $event"
                                 @change="onChildChange(r)"
                             />
-                            <InputError :message="form.errors[`items.${i}.child_part_id`]" class="mt-1" />
+                            <InputError :message="rowError(i, 'child_part_id')" class="mt-1" />
                         </div>
                         <div class="sm:col-span-3">
                             <label class="text-xs font-semibold text-ink-secondary">{{ t('master.childQty') }} <span class="text-danger">*</span></label>
                             <input :aria-label="t('master.childQty')" v-model="r.child_qty" type="number" step="any" min="0" :class="fieldClass" />
-                            <InputError :message="form.errors[`items.${i}.child_qty`]" class="mt-1" />
+                            <InputError :message="rowError(i, 'child_qty')" class="mt-1" />
                         </div>
                         <div class="sm:col-span-3">
                             <label class="text-xs font-semibold text-ink-secondary">{{ t('master.uomRm') }}</label>
@@ -338,7 +418,7 @@ const fieldClass = 'mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-
                                 <option value="">—</option>
                                 <option v-for="u in uoms" :key="u" :value="u">{{ u }}</option>
                             </select>
-                            <InputError :message="form.errors[`items.${i}.uom_rm`]" class="mt-1" />
+                            <InputError :message="rowError(i, 'uom_rm')" class="mt-1" />
                         </div>
 
                         <div class="sm:col-span-4">
@@ -355,20 +435,31 @@ const fieldClass = 'mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-
                             <p :id="`bom-size-hint-${r.uid}`" class="mt-1 text-xs text-ink-secondary">
                                 {{ sizeFromMaster(r) ? t('incoming.sizeFromMaster') : t('incoming.sizeManual') }}
                             </p>
-                            <InputError :message="form.errors[`items.${i}.size`]" class="mt-1" />
+                            <InputError :message="rowError(i, 'size')" class="mt-1" />
                         </div>
                         <div class="sm:col-span-4">
                             <label class="text-xs font-semibold text-ink-secondary">{{ t('master.specialCode') }}</label>
                             <input :aria-label="t('master.specialCode')" v-model="r.special_code" type="text" :class="fieldClass" />
-                            <InputError :message="form.errors[`items.${i}.special_code`]" class="mt-1" />
+                            <InputError :message="rowError(i, 'special_code')" class="mt-1" />
                         </div>
                         <div class="sm:col-span-4">
                             <label class="text-xs font-semibold text-ink-secondary">{{ t('master.source') }}</label>
                             <input :aria-label="t('master.source')" v-model="r.source" type="text" :class="fieldClass" />
-                            <InputError :message="form.errors[`items.${i}.source`]" class="mt-1" />
+                            <InputError :message="rowError(i, 'source')" class="mt-1" />
                         </div>
                     </div>
                 </div>
+            </div>
+
+            <div v-if="clientError || errorList.length > 0" role="alert" class="rounded-xl border border-danger/30 bg-danger/5 px-4 py-3 text-sm text-danger">
+                <p class="font-semibold">{{ t('master.bomErrorsTitle') }}</p>
+                <ul class="mt-1 list-inside list-disc space-y-0.5">
+                    <li v-if="clientError">{{ clientError }}</li>
+                    <li v-for="(error, idx) in errorList" :key="idx">
+                        <span v-if="error.row !== null" class="font-semibold">{{ t('master.bomItem') }} {{ error.row }}:</span>
+                        {{ error.message }}
+                    </li>
+                </ul>
             </div>
 
             <div class="flex items-center justify-end gap-3">

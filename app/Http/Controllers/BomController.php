@@ -286,9 +286,16 @@ class BomController extends Controller
     }
 
     /**
-     * Aturan update sama dengan create. Keunikan part_id tidak divalidasi di sini
-     * karena BOM milik part itu sendiri harus tetap boleh disimpan; bentrok
-     * dengan BOM lain ditolak di dalam transaksi.
+     * Aturan update sama dengan create, dengan dua pengecualian.
+     *
+     * 1. Keunikan part_id tidak divalidasi di sini karena BOM milik part itu
+     *    sendiri harus tetap boleh disimpan; bentrok dengan BOM lain ditolak di
+     *    dalam transaksi.
+     * 2. `child_qty` menerima 0. Data BOM hasil impor memuat baris komponen
+     *    berjumlah 0 (mis. FOAM PU BLACK & OPP TRANS pada BOM REINFORCE
+     *    ASSEMBLY). Dengan `gt:0` BOM seperti itu tidak bisa disimpan sama
+     *    sekali — bahkan saat operator hanya mengubah baris lain. Baris baru
+     *    tetap wajib > 0 lewat `rules()` pada create.
      *
      * @return array<string, mixed>
      */
@@ -296,6 +303,7 @@ class BomController extends Controller
     {
         $rules = $this->rules();
         $rules['part_id'] = ['required', 'integer', 'exists:parts,id'];
+        $rules['items.*.child_qty'] = ['required', 'numeric', 'gte:0'];
 
         return $rules;
     }

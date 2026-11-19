@@ -427,6 +427,101 @@ class BomMaintenanceTest extends TestCase
         $this->assertSame($originalQty, (float) BomItem::where('bom_id', $bom->id)->value('child_qty'));
     }
 
+    /**
+     * Data BOM hasil impor memuat baris komponen berjumlah 0 (FOAM PU BLACK &
+     * OPP TRANS pada BOM REINFORCE ASSEMBLY). Baris seperti itu harus tetap bisa
+     * disimpan apa adanya saat operator mengubah bagian lain dari BOM — kalau
+     * tidak, BOM tersebut sama sekali tidak bisa diedit.
+     */
+    public function test_update_keeps_legacy_zero_quantity_rows_editable(): void
+    {
+        $bom = $this->existingBom();
+        $legacyChild = $this->makePart('MATERIAL');
+
+        $bom->items()->create([
+            'sequence' => 20,
+            'child_part_id' => $legacyChild->id,
+            'child_qty' => 0,
+            'uom_rm' => 'PCS',
+        ]);
+
+        $this->put(route('boms.update', $bom), $this->payload($bom->part, [
+            $this->item(['sequence' => 10, 'child_qty' => 7]),
+            [
+                'sequence' => 20,
+                'child_part_id' => $legacyChild->id,
+                'child_qty' => 0,
+                'uom_rm' => 'PCS',
+            ],
+        ]))
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('boms.show', $bom));
+
+        $this->assertSame(7.0, (float) BomItem::where('bom_id', $bom->id)->where('sequence', 10)->value('child_qty'));
+        $this->assertSame(0.0, (float) BomItem::where('bom_id', $bom->id)->where('sequence', 20)->value('child_qty'));
+    }
+
+    /**
+     * Pelonggaran di atas hanya berlaku untuk update; BOM baru tetap tidak boleh
+     * dibuat dengan komponen berjumlah 0.
+     */
+    public function test_store_still_rejects_zero_quantity(): void
+    {
+        $fg = $this->makeFgWithoutBom();
+
+        $this->post(route('boms.store'), $this->payload($fg, [$this->item(['child_qty' => 0])]))
+            ->assertSessionHasErrors('items.0.child_qty');
+
+        $this->assertSame(0, Bom::withTrashed()->where('part_id', $fg->id)->count());
+    }
+
+    /**
+     * Pesan validasi harus memakai nama kolom yang terbaca. Sebelum katalog
+     * `validation.attributes` memuat key `items.*`, pesan tampil sebagai
+     * `items.8.child_qty` sehingga operator tidak tahu kolom mana yang salah.
+     */
+    public function test_update_error_message_uses_a_readable_column_name(): void
+    {
+        $bom = $this->existingBom();
+
+        $invalid = $this->item(['sequence' => 99]);
+        unset($invalid['child_part_id']);
+
+        $this->put(route('boms.update', $bom), $this->payload($bom->part, [$invalid]))
+            ->assertSessionHasErrors('items.0.child_part_id');
+
+        $message = (string) session('errors')->first('items.0.child_part_id');
+        $label = trans('validation.attributes')['items.*.child_part_id'] ?? null;
+
+        $this->assertNotNull($label, 'Nama kolom untuk items.*.child_part_id harus ada di katalog validasi.');
+        $this->assertStringNotContainsString('items.0.child_part_id', $message, 'Pesan tidak boleh memakai key mentah.');
+        $this->assertStringContainsString($label, $message);
+    }
+
+    /**
+     * Baris kosong hasil "Tambah baris" harus disaring sebelum dikirim, dan
+     * error per baris diringkas tepat di atas tombol Simpan. Tanpa itu klik
+     * Simpan terlihat tidak melakukan apa pun karena pesannya muncul di luar
+     * layar, di baris yang salah.
+     */
+    public function test_bom_form_filters_blank_rows_and_summarizes_errors_next_to_submit(): void
+    {
+        $source = file_get_contents(resource_path('js/Pages/Master/Bom/Form.vue'));
+        $this->assertNotFalse($source);
+
+        $this->assertStringContainsString('.filter(({ row }) => rowHasData(row))', $source, 'Baris kosong harus disaring.');
+        $this->assertStringContainsString("t('master.bomItemsRequired')", $source);
+        $this->assertStringContainsString(':id="`bom-row-${i + 1}`"', $source, 'Setiap baris butuh anchor untuk digulir.');
+
+        $alert = 'v-if="clientError || errorList.length > 0"';
+        $alertPos = strpos($source, $alert);
+        $submitPos = strpos($source, 'type="submit"');
+
+        $this->assertNotFalse($alertPos, 'Ringkasan error harus dirender.');
+        $this->assertNotFalse($submitPos);
+        $this->assertLessThan($submitPos, $alertPos, 'Ringkasan error harus berada tepat sebelum tombol Simpan.');
+    }
+
     public function test_edit_and_update_are_forbidden_without_bom_update_permission(): void
     {
         $bom = $this->existingBom();

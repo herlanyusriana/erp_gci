@@ -16,27 +16,27 @@ tidak pernah bisa `loading_complete`.
 
 ## Acceptance criteria
 
-- [ ] `LoadingContext` menyimpan `partProgress` dari `data.part_progress` dan
+- [x] `LoadingContext` menyimpan `partProgress` dari `data.part_progress` dan
       menyediakan `remainingForPart(int partId)`.
-- [ ] `LoadingItem.remaining` tidak lagi dipakai untuk mengunci baris; baris
+- [x] `LoadingItem.remaining` tidak lagi dipakai untuk mengunci baris; baris
       hanya dipakai sebagai niat operator (seq/customer mana yang sedang diisi).
-- [ ] Tombol scan per baris aktif selama `remainingForPart(partId) > 0`, dan
+- [x] Tombol scan per baris aktif selama `remainingForPart(partId) > 0`, dan
       tombol FG utama mengikuti kondisi yang sama.
-- [ ] `allCovered` dihitung dari `part_progress` (semua `covered == true`),
+- [x] `allCovered` dihitung dari `part_progress` (semua `covered == true`),
       bukan dari `items.every((i) => i.remaining <= 0)`.
-- [ ] Tampilan progres memakai `covered_parts` / `total_parts` (angka yang sama
+- [x] Tampilan progres memakai `covered_parts` / `total_parts` (angka yang sama
       dengan server), bukan turunan dari baris.
-- [ ] Test: satu FG di dua baris — setelah scan sebagian, kedua baris tetap
+- [x] Test: satu FG di dua baris — setelah scan sebagian, kedua baris tetap
       dapat dipindai dan tombol utama tetap aktif; setelah qty penuh, semuanya
       nonaktif dan progres mencapai total.
 
 ## Verification
 
-- [ ] Tests pass: `cd ../erp_gci_mobile && flutter test test/loading_context_test.dart test/loading_part_progress_test.dart`
-- [ ] Full mobile suite: `cd ../erp_gci_mobile && flutter test`
-- [ ] Analyze: `cd ../erp_gci_mobile && flutter analyze` (0 error/warning)
-- [ ] Build: `cd ../erp_gci_mobile && flutter build apk --debug`
-- [ ] Manual check: dokumen dengan part sama di seq 1 dan 2 — pindai satu tag,
+- [x] Tests pass: `flutter test test/loading_context_test.dart test/loading_part_progress_test.dart` — 11 passed
+- [x] Full mobile suite: `flutter test` — 219 passed (dari 214)
+- [x] Analyze: `flutter analyze` — 5 info lama, 0 error/warning
+- [x] Build: `flutter build apk --debug` — ok
+- [x] Manual check: dokumen dengan part sama di seq 1 dan 2 — pindai satu tag,
       baris kedua tidak berubah hijau
 
 ## Blocked by

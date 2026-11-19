@@ -8,25 +8,25 @@ berjalan.
 
 ## Acceptance criteria
 
-- [ ] `IssueRepository.reportResultRaw()` menerima `idempotencyKey` dan
+- [x] `IssueRepository.reportResultRaw()` menerima `idempotencyKey` dan
       mengirimnya di body.
-- [ ] `ProductionSessionScreen` membuat key (uuid v4) saat halaman dibuka,
+- [x] `ProductionSessionScreen` membuat key (uuid v4) saat halaman dibuka,
       memakainya untuk setiap retry, dan **mengganti key hanya setelah sukses**.
-- [ ] Key tidak diganti saat gagal jaringan/timeout — ini yang membuat retry
+- [x] Key tidak diganti saat gagal jaringan/timeout — ini yang membuat retry
       aman.
-- [ ] `_submit` punya guard masuk (`if (_saving) return;`) dan `_saving` diset
+- [x] `_submit` punya guard masuk (`if (_saving) return;`) dan `_saving` diset
       **sebelum** await, sehingga dua tap cepat tidak menghasilkan dua request.
-- [ ] `step_entry_dialog` juga mengirim key dan punya flag in-flight (jalur
+- [x] `step_entry_dialog` juga mengirim key (dan `result_entry_screen`, yang memakai endpoint sama) dan punya flag in-flight (jalur
       `/production-result/:id` memakai endpoint yang sama).
-- [ ] Test: submit dua kali dengan key sama (simulasi timeout) → repository
+- [x] Test: submit dua kali dengan key sama (simulasi timeout) → repository
       dipanggil dengan key identik; setelah sukses, key berikutnya berbeda.
 
 ## Verification
 
-- [ ] Tests pass: `cd ../erp_gci_mobile && flutter test test/production_result_idempotency_test.dart test/production_session_screen_test.dart`
-- [ ] Full mobile suite: `cd ../erp_gci_mobile && flutter test`
-- [ ] Analyze: `cd ../erp_gci_mobile && flutter analyze`
-- [ ] Build: `cd ../erp_gci_mobile && flutter build apk --debug`
+- [x] Tests pass: `flutter test test/production_result_idempotency_test.dart test/production_session_screen_test.dart` — 3 + 22 passed
+- [x] Full mobile suite: `flutter test` — 226 passed
+- [x] Analyze: `flutter analyze` — 5 info lama, 0 error/warning
+- [x] Build: `flutter build apk --debug` — ok
 - [ ] Manual check: matikan Wi-Fi setelah tap Save, nyalakan, tap Save lagi —
       server hanya punya satu baris untuk periode itu
 

@@ -1,38 +1,70 @@
 @php
+    use App\Support\UomCatalog;
+
     $resolvedTag = $receive->tag ?: '-';
-    $vendorName = $arrival?->supplier?->supplier_name ?? '-';
     $invoiceNo = $arrival?->invoice_no ?? '-';
-    $incomingPartNo = $part?->part_number ?? $arrivalItem?->part_id ?? '-';
     $partName = $part?->part_name ?? '-';
 
-    $bCount = $receive->bundle_count ?? $receive->bundle_qty;
-    $bUnit = $receive->bundle_unit ?? 'PALLET';
-    $pCount = $receive->packing_count ?? 1;
-    $pType = $receive->packing_type ?? 'BOX';
-    $pQty = $receive->packing_qty;
+    $sizeText = trim((string) ($arrivalItem?->size ?: $part?->size));
+    $sizeText = ($sizeText === '' || $sizeText === '-') ? null : $sizeText;
 
-    if ($bCount && $pCount && $pQty) {
-        $packagingText = (float)$bCount . ' ' . $bUnit . ' @ ' . (float)$pCount . ' ' . $pType . ' @ ' . number_format((float)$pQty, 0) . ' ' . $goodsUnit;
-    } elseif ($bCount) {
-        $packagingText = (float)$bCount . ' ' . $bUnit;
-    } else {
-        $packagingText = null;
+    $weightUnit = UomCatalog::WEIGHT;
+    $num = fn (float $n): string => number_format($n, fmod($n, 1.0) === 0.0 ? 0 : 2);
+
+    // 1 tag = 1 bundle. Bundle memuat beberapa packing (sub-unit fisik).
+    $bundleCount = (float) ($receive->bundle_count ?: ($receive->bundle_qty ?: 1));
+    $bundleUnit = strtoupper((string) ($receive->bundle_unit ?: 'BUNDLE'));
+    $bundleQtyText = $weightBasis
+        ? $num((float) ($receive->net_weight ?? $receive->qty ?? 0)).' '.$weightUnit
+        : $num((float) ($receive->qty ?? 0)).' '.$goodsUnit;
+
+    $packings = $receive->packings->sortBy('sequence')->values();
+
+    $packingCount = $packings->isNotEmpty()
+        ? $packings->count()
+        : (int) ($receive->packing_count ?? 0);
+    $packingType = strtoupper((string) ($receive->packing_type ?? ''));
+    if ($packingType === '') {
+        // Data lama / payload tanpa jenis kemasan: pakai istilah netral.
+        $packingType = 'PACKAGES';
     }
 
-    // Rincian sub-packing (TAG/1, TAG/2, ...) bila penerimaan mencatatnya.
-    $packings = $receive->relationLoaded('packings') ? $receive->packings : $receive->packings()->orderBy('sequence')->get();
-    $packingText = $packings->isNotEmpty()
-        ? $packings->map(fn ($p) => $p->packing_no . ' (' . number_format((float) $p->qty, 0) . ' ' . ($p->uom ?? $goodsUnit) . ')')->implode(', ')
-        : null;
+    $packingWeights = $packings
+        ->map(fn ($p) => $weightBasis
+            ? ($p->net_weight !== null ? (float) $p->net_weight : null)
+            : ($p->qty !== null ? (float) $p->qty : null))
+        ->all();
 
-    if ($weightBasis) {
-        // Basis berat (KGM): baris utama = berat; baris sekunder = kemasan / qty barang.
-        $qtyWeightText = number_format((float) ($receive->net_weight ?? $receive->weight ?? 0), 2) . ' KGM';
-        $qtySecondaryText = $packingText ?: ($packagingText ?: (number_format((float) ($receive->qty ?? 0), 0) . ' ' . $goodsUnit));
-    } else {
-        // Basis qty (local/barang): baris utama = qty; baris sekunder = rincian kemasan.
-        $qtyWeightText = number_format((float) ($receive->qty ?? 0), 0) . ' ' . $goodsUnit;
-        $qtySecondaryText = $packingText ?: ($packagingText ?: '-');
+    // Satu nilai untuk semua packing → baris ringkas "@ 1.380 KGM".
+    // Bila beratnya berbeda, setiap packing ditulis sendiri agar tidak menyesatkan.
+    $packingUnit = $weightBasis
+        ? $weightUnit
+        : (string) ($packings->first()?->uom ?? $goodsUnit);
+    $uniformWeight = $packingWeights !== []
+        && ! in_array(null, $packingWeights, true)
+        && count(array_unique(array_map(fn ($w) => (string) round((float) $w, 4), $packingWeights))) === 1;
+
+    $packingLines = [];
+    $packingNumbers = '';
+    if ($packingCount > 0) {
+        $head = trim($packingCount.' '.$packingType);
+        if ($packings->isNotEmpty() && $uniformWeight) {
+            // Ringkas seperti label fisik: "2 COIL @ 1.380 KGM", nomor packing
+            // tetap dicetak di bawahnya agar bisa dicocokkan dengan stiker coil.
+            $packingLines[] = $head.' @ '.$num((float) $packingWeights[0]).' '.$packingUnit;
+            $packingNumbers = $packings->map(fn ($p) => (string) $p->packing_no)->implode(' · ');
+        } elseif ($packings->isNotEmpty()) {
+            // Berat per packing berbeda: tulis masing-masing, jangan dirata-ratakan.
+            $packingLines[] = $head;
+            foreach ($packings as $index => $packing) {
+                $perUnit = $packingWeights[$index] ?? null;
+                if ($perUnit !== null) {
+                    $packingLines[] = $packing->packing_no.' — '.$num((float) $perUnit).' '.$packingUnit;
+                }
+            }
+        } else {
+            $packingLines[] = $head.' @ '.$num((float) ($receive->packing_qty ?? 0)).' '.$packingUnit;
+        }
     }
 
     $monthBox = str_pad((string) ($monthNumber ?? 1), 2, '0', STR_PAD_LEFT);
@@ -44,45 +76,53 @@
     <title>Material Label Card</title>
     <style>
         @page { size: 150mm 100mm; margin: 0; }
-        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact; }
-        body { font-family: "Helvetica Neue", Arial, sans-serif; background: #eee; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        body { font-family: Arial, "Helvetica Neue", Helvetica, sans-serif; background: #eee; color: #000; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
 
-        .label-outer { width: 148mm; height: 98mm; background: #fff; border: 3px solid #000; display: flex; flex-direction: column; overflow: hidden; }
+        .label-outer { width: 148mm; height: 98mm; background: #fff; border: 2.5px solid #000; display: flex; flex-direction: column; overflow: hidden; }
 
-        /* HEADER SECTION */
-        header { height: 22mm; border-bottom: 3px solid #000; display: flex; align-items: center; justify-content: space-between; padding: 0 8mm; }
-        .h-left { display: flex; align-items: center; gap: 5mm; }
-        .gl-circle { width: 14mm; height: 14mm; border: 2.5px solid #000; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 20px; }
-        .h-title { font-size: 24px; font-weight: 900; letter-spacing: 4px; }
-        .month-chip { width: 14mm; height: 14mm; background: #000; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 900; border-radius: 2mm; }
+        /* HEADER */
+        header { height: 20mm; border-bottom: 2.5px solid #000; display: flex; align-items: stretch; }
+        .brand { width: 20mm; display: flex; align-items: center; justify-content: center; border-right: 2.5px solid #000; }
+        .brand img { width: 14mm; height: 14mm; object-fit: contain; }
+        .h-title { flex: 1; display: flex; align-items: center; padding-left: 6mm; font-size: 23px; font-weight: 900; letter-spacing: 1.5px; }
+        .month-chip { width: 26mm; background: #000; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 30px; font-weight: 900; }
 
-        /* BODY SECTION */
+        /* BODY */
         main { display: flex; flex: 1; min-height: 0; }
-        .data-grid { width: 62%; border-right: 3px solid #000; display: flex; flex-direction: column; }
-        .side-grid { width: 38%; display: flex; flex-direction: column; }
+        .data { width: 62%; border-right: 2.5px solid #000; display: flex; flex-direction: column; padding: 3mm 5mm 3mm 4mm; }
+        .side { width: 38%; display: flex; flex-direction: column; }
 
-        /* DATA ROWS - Total 10 rows, shared height */
-        .row { flex: 1; border-bottom: 1px solid #000; display: flex; align-items: center; padding: 0 5mm; }
-        .row:last-child { border-bottom: none; }
-        .val { font-size: 10pt; font-weight: 800; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .part-name { font-size: 12pt; font-weight: 900; text-transform: uppercase; line-height: 1.15; }
+        .part-size { font-size: 8.5pt; font-weight: 600; text-transform: uppercase; color: #222; margin-top: 0.5mm; }
+        .invoice { font-size: 15pt; font-weight: 900; text-transform: uppercase; margin-top: 4mm; letter-spacing: 0.3px; }
+        .tag-line { font-size: 12.5pt; font-weight: 900; text-transform: uppercase; margin-top: 2mm; }
 
-        /* QR AREA */
-        .qr-section { height: 50mm; display: flex; align-items: center; justify-content: center; border-bottom: 3px solid #000; padding: 3mm; }
-        .qr-section svg { width: 44mm !important; height: 44mm !important; }
+        .packaging { margin-top: 3.5mm; }
+        .packaging .line { font-size: 9.5pt; font-weight: 800; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .packaging .line + .line { margin-top: 1mm; }
+        .packaging .bundle { display: flex; gap: 5mm; }
+        .packaging .bundle .qty { margin-left: auto; }
+        .packing-nos { margin-top: 1.2mm; font-size: 7.5pt; font-weight: 700; color: #222; line-height: 1.25; word-break: break-word; }
 
-        /* IQC AREA */
+        .label-date { margin-top: auto; font-size: 9.5pt; font-weight: 700; }
+
+        /* QR */
+        .qr-section { height: 48mm; display: flex; align-items: center; justify-content: center; border-bottom: 2.5px solid #000; padding: 2mm; }
+        .qr-section svg { width: 42mm !important; height: 42mm !important; }
+
+        /* IQC */
         .iqc-section { flex: 1; display: flex; flex-direction: column; }
-        .iqc-head { background: #e0e0e0; text-align: center; border-bottom: 1.5px solid #000; font-size: 11px; font-weight: 900; padding: 1.5mm 0; letter-spacing: 1px; }
+        .iqc-head { text-align: center; border-bottom: 1.5px solid #000; font-size: 10pt; font-weight: 900; letter-spacing: 1.2px; padding: 1.5mm 0; }
         .iqc-boxes { flex: 1; display: flex; }
-        .iqc-box { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; color: #333; }
-        .iqc-box:first-child { border-right: 2px solid #000; }
+        .iqc-box { flex: 1; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 1.5mm; font-size: 8pt; font-weight: 700; color: #333; }
+        .iqc-box:first-child { border-right: 1.5px solid #000; }
 
-        /* PRINT CONTROL */
-        .no-print { position: fixed; bottom: 20px; right: 20px; background: #000; color: #fff; padding: 12px 24px; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; transition: 0.2s; }
-        .no-print:hover { transform: scale(1.05); background: #333; }
+        .no-print { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #000; color: #fff; padding: 10px 22px; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; }
+        .no-print:hover { background: #333; }
 
         @media print {
-            body { background: #fff; padding: 0; }
+            body { background: #fff; display: block; }
             .no-print { display: none; }
         }
     </style>
@@ -90,33 +130,43 @@
 <body>
     <div class="label-outer">
         <header>
-            <div class="h-left">
-                <div class="gl-circle">GL</div>
-                <div class="h-title">LABEL MATERIAL</div>
-            </div>
+            <div class="brand"><img src="{{ asset('images/logo-mark.png') }}" alt=""></div>
+            <div class="h-title">LABEL MATERIAL</div>
             <div class="month-chip">{{ $monthBox }}</div>
         </header>
 
         <main>
-            <section class="data-grid">
-                <div class="row"><div class="val">{{ $incomingPartNo }}</div></div>
-                <div class="row"><div class="val">{{ $partName }}</div></div>
-                <div class="row"><div class="val">{{ $arrivalItem?->material_group ?? '-' }}</div></div>
-                <div class="row"><div class="val">{{ $arrivalItem?->size ?? '-' }}</div></div>
-                <div class="row"><div class="val">{{ $vendorName }}</div></div>
-                <div class="row"><div class="val">{{ $invoiceNo }}</div></div>
-                <div class="row"><div class="val">{{ $resolvedTag }}</div></div>
-                <div class="row"><div class="val">{{ $qtyWeightText }}</div></div>
-                <div class="row"><div class="val">{{ $qtySecondaryText }}</div></div>
-                <div class="row"><div class="val">{{ $receive->ata_date?->format('Y-m-d H:i') ?? '-' }}</div></div>
+            <section class="data">
+                <div class="part-name">{{ $partName }}</div>
+                @if ($sizeText)
+                    <div class="part-size">{{ $sizeText }}</div>
+                @endif
+
+                <div class="invoice">{{ $invoiceNo }}</div>
+                <div class="tag-line">TAG # : {{ $resolvedTag }}</div>
+
+                <div class="packaging">
+                    <div class="line bundle">
+                        <span>{{ $num($bundleCount) }} {{ $bundleUnit }}</span>
+                        <span class="qty">{{ $bundleQtyText }}</span>
+                    </div>
+                    @foreach ($packingLines as $line)
+                        <div class="line">{{ $line }}</div>
+                    @endforeach
+                    @if ($packingNumbers !== '')
+                        <div class="packing-nos">{{ $packingNumbers }}</div>
+                    @endif
+                </div>
+
+                <div class="label-date">{{ $receive->ata_date?->format('d-M-y') ?? '-' }}</div>
             </section>
 
-            <section class="side-grid">
+            <section class="side">
                 <div class="qr-section">
                     {!! $qrSvg ?? '' !!}
                 </div>
                 <div class="iqc-section">
-                    <div class="iqc-head">IQC CHECK</div>
+                    <div class="iqc-head">IQC APPROVAL</div>
                     <div class="iqc-boxes">
                         <div class="iqc-box">STAMP</div>
                         <div class="iqc-box">TTD</div>

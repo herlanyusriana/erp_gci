@@ -139,7 +139,10 @@ class TieredReceiveTest extends TestCase
         $first = $item->receives()->orderBy('tag')->firstOrFail();
         $this->get(route('receive.label', $first))
             ->assertOk()
-            ->assertSee('1 PALLET @ 5 COIL @ 500 KGM');
+            // 1 tag = 1 bundle: baris bundle membawa total, baris packing per unit.
+            ->assertSee('1 PALLET')
+            ->assertSee('2,500 KGM')
+            ->assertSee('5 COIL @ 500 KGM');
     }
 
     public function test_receive_generates_auto_tag_when_identification_is_blank(): void
@@ -268,8 +271,10 @@ class TieredReceiveTest extends TestCase
 
         $response = $this->get(route('receive.label', $receive))->assertOk();
 
-        // Label memuat baris ringkasan kemasan bertingkat
-        $response->assertSee('2 PALLET @ 5 BOX @ 2,000 EA');
+        // Label memisahkan baris bundle (total) dari baris packing (per unit)
+        $response->assertSee('2 PALLET')
+            ->assertSee('20,000 EA')
+            ->assertSee('5 BOX @ 2,000 EA');
     }
 
     public function test_receive_stores_sub_packings_per_bundle(): void
@@ -373,8 +378,54 @@ class TieredReceiveTest extends TestCase
 
         $this->get(route('receive.label', $receive))
             ->assertOk()
+            // 1 tag = 1 bundle: baris bundle membawa total, packing dirinci di bawahnya.
+            ->assertSee('1 PALLET')
+            ->assertSee('2,000 KGM')
+            ->assertSee('2 COIL @ 1,000 KGM')
             ->assertSee('TAG-LBL-01/1')
             ->assertSee('TAG-LBL-01/2');
+    }
+
+    public function test_label_lists_each_packing_when_packing_weights_differ(): void
+    {
+        [$arrival, $item] = $this->createArrivalWithItem('KGM');
+
+        $this->post(route('receive.store', $item), [
+            'receive_date' => now()->toDateString(),
+            'truck_no' => 'B 9001 GCI',
+            'location_code' => 'BULK-AREA',
+            'tags' => [
+                [
+                    'tag' => 'TAG-MIX-01',
+                    'qty' => 3000,
+                    'qty_unit' => 'KGM',
+                    'bundle_count' => 1,
+                    'bundle_unit' => 'PALLET',
+                    'packing_count' => 3,
+                    'packing_type' => 'COIL',
+                    'packing_qty' => 1000,
+                    'net_weight' => 3000,
+                    'packings' => [
+                        ['packing_no' => 'TAG-MIX-01/1', 'sequence' => 1, 'qty' => 1000, 'uom' => 'KGM', 'net_weight' => 1000],
+                        ['packing_no' => 'TAG-MIX-01/2', 'sequence' => 2, 'qty' => 1500, 'uom' => 'KGM', 'net_weight' => 1500],
+                        ['packing_no' => 'TAG-MIX-01/3', 'sequence' => 3, 'qty' => 500, 'uom' => 'KGM', 'net_weight' => 500],
+                    ],
+                ],
+            ],
+        ])->assertRedirect();
+
+        $receive = IncomingReceive::where('tag', 'TAG-MIX-01')->firstOrFail();
+
+        // Berat packing tidak seragam: tiap packing ditulis sendiri, jangan dirata-ratakan.
+        $this->get(route('receive.label', $receive))
+            ->assertOk()
+            ->assertSee('1 PALLET')
+            ->assertSee('3,000 KGM')
+            ->assertSee('3 COIL')
+            ->assertSee('TAG-MIX-01/1 — 1,000 KGM')
+            ->assertSee('TAG-MIX-01/2 — 1,500 KGM')
+            ->assertSee('TAG-MIX-01/3 — 500 KGM')
+            ->assertDontSee('3 COIL @');
     }
 
     public function test_receive_show_uses_the_supplier_material_group_not_the_part_number(): void

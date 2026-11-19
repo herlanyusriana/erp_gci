@@ -294,6 +294,7 @@ class ReceiveController extends Controller
         $receive->load([
             'arrivalItem.part',
             'arrivalItem.arrival.supplier',
+            'packings' => fn ($query) => $query->orderBy('sequence'),
         ]);
 
         $arrivalItem = $receive->arrivalItem;

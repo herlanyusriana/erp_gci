@@ -419,8 +419,8 @@ class TieredReceiveTest extends TestCase
 
         $this->get(route('receive.label', $receive))
             ->assertOk()
-            ->assertSee('TAG # : 2')
-            ->assertSee('INV : INV/2026/01/0001')
+            // Invoice di atas tag, ukuran sama; tag tetap dicetak apa adanya.
+            ->assertSeeInOrder(['INV : INV/2026/01/0001', 'TAG # : 2'])
             ->assertDontSee('TAG # : INV/2026/01/0001');
     }
 

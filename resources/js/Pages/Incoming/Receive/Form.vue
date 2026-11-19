@@ -155,26 +155,40 @@ function onQtyChange(r: PackingSubRow) {
 const round4 = (n: number) => Math.round(n * 10000) / 10000;
 
 /**
- * Sisa yang dibagi ke seluruh baris packing.
+ * Net weight hanya dibagi untuk packing type COIL.
+ *
+ * Coil ditimbang satu per satu, jadi berat total memang terbagi ke tiap coil.
+ * Packing lain (BOX/SHEET/PALLET/BAG/…) dicatat per qty barang; beratnya tidak
+ * dipecah per baris supaya angka yang diketik operator tidak dikarang form.
+ */
+const splitsNetWeight = computed(
+    () => props.weightBasis && String(bundleConfig.packing_type).toUpperCase() === 'COIL',
+);
+
+/**
+ * Sisa yang dibagi ke seluruh baris packing: jumlah bundle × jumlah packing.
  *
  * Qty dan net weight adalah dua besaran berbeda di dokumen kedatangan: qty
  * memakai satuan barang (mis. COIL), net weight selalu KGM. Dulu hanya qty
  * yang dibagi, lalu net weight disamakan dengan qty sehingga 825 COIL menjadi
- * 825 KGM. Sekarang keduanya dibagi dari sisa masing-masing. Net weight
- * dibatasi `maxReceivable` (sisa berat setelah limit PO) dan qty diskalakan
- * dengan rasio yang sama supaya perbandingan qty:berat tetap seperti dokumen
+ * 825 KGM. Sekarang qty dibagi dari sisa qty barang dan — khusus COIL — net
+ * weight dibagi dari sisa berat kedatangan. Net weight dibatasi
+ * `maxReceivable` (sisa berat setelah limit PO) dan qty diskalakan dengan
+ * rasio yang sama supaya perbandingan qty:berat tetap seperti dokumen
  * kedatangan.
  */
 const distribution = computed(() => {
     const rows = (Number(bundleConfig.bundle_count) || 1) * (Number(bundleConfig.packing_count) || 1);
-    const acceptedNet = props.weightBasis ? Math.max(0, Number(props.maxReceivable) || 0) : 0;
+    const acceptedNet = Math.max(0, Number(props.maxReceivable) || 0);
     const remainingNet = Math.max(0, Number(props.remainingNetWeight) || 0);
+    // Limit PO dihitung dalam berat, jadi qty barang ikut diskalakan dengan
+    // rasio berat yang boleh diterima — berapa pun tipe packingnya.
     const scale = props.weightBasis && remainingNet > 0 ? Math.min(1, acceptedNet / remainingNet) : 1;
 
     return {
         rows,
         qtyTotal: round4(Math.max(0, Number(props.remainingGoodsQty) || 0) * scale),
-        netTotal: acceptedNet,
+        netTotal: splitsNetWeight.value ? acceptedNet : 0,
     };
 });
 
@@ -601,13 +615,18 @@ function submit() {
                             Penomoran packing otomatis {TAG}/{1..N}. Tag Bundle adalah identitas utama saat scan fisik.
                         </p>
                     </div>
-                    <button
-                        type="button"
-                        @click="autoDistributeRemaining"
-                        class="rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary-light"
-                    >
-                        ⚡ Auto-distribusikan Sisa ({{ autoDistributeSummary }})
-                    </button>
+                    <div class="flex flex-col items-end gap-1">
+                        <button
+                            type="button"
+                            @click="autoDistributeRemaining"
+                            class="rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary-light"
+                        >
+                            ⚡ Auto-distribusikan Sisa ({{ autoDistributeSummary }})
+                        </button>
+                        <p v-if="weightBasis && !splitsNetWeight" class="text-[11px] text-ink-secondary">
+                            {{ t('incoming.autoDistributeHint') }}
+                        </p>
+                    </div>
                 </div>
 
                 <InputError :message="form.errors.tags" class="mb-3" />

@@ -262,6 +262,23 @@ class ReceiveFormDefaultsTest extends TestCase
     }
 
     /**
+     * Auto-distribusi hanya membagi net weight untuk packing type COIL: coil
+     * ditimbang satu per satu, sedangkan packing lain dicatat per qty barang.
+     * Tanpa batas ini form mengarang angka berat yang tidak pernah diukur
+     * operator (mis. 250 SHEET dibagi rata menjadi 275 KGM per baris).
+     */
+    public function test_receive_form_splits_net_weight_only_for_coil_packing(): void
+    {
+        $source = file_get_contents(resource_path('js/Pages/Incoming/Receive/Form.vue'));
+        $this->assertNotFalse($source);
+
+        $this->assertStringContainsString('const splitsNetWeight = computed', $source);
+        $this->assertStringContainsString("=== 'COIL'", $source);
+        $this->assertStringContainsString('netTotal: splitsNetWeight.value ? acceptedNet : 0', $source);
+        $this->assertStringContainsString('const netValues = splitEvenly(netTotal, rows);', $source);
+    }
+
+    /**
      * Semua penolakan (validasi klien maupun server) harus tampil di dekat
      * tombol Simpan. Sebelumnya pesan validasi klien dirender di atas tabel —
      * di luar layar saat pengguna menekan Simpan — sehingga klik Simpan

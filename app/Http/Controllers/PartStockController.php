@@ -33,7 +33,9 @@ class PartStockController extends Controller
                 'part.partType:id,code,name',
                 'receive:id,invoice_no,arrival_item_id,location_code',
                 'receive.arrivalItem:id,arrival_id',
-                'receive.arrivalItem.arrival:id,supplier_id',
+                // invoice_no ikut: kolom Faktur membaca invoice arrival (dokumen
+                // induk), bukan snapshot receive yang bisa basi.
+                'receive.arrivalItem.arrival:id,supplier_id,invoice_no',
                 'receive.arrivalItem.arrival.supplier:id,supplier_name',
             ])
             // Pencarian dikelompokkan: tanpa pembungkus, `orWhereHas` akan

@@ -83,7 +83,7 @@ function doSearch() {
                         <td class="px-4 py-3 font-medium text-ink-primary">{{ st.part?.part_number }} · {{ st.part?.part_name }}</td>
                         <td class="px-4 py-3 text-ink-primary">{{ st.part?.model || '—' }}</td>
                         <td class="px-4 py-3 text-ink-primary">{{ st.part?.part_type?.name ?? '—' }}</td>
-                        <td class="px-4 py-3 text-ink-primary">{{ st.receive?.invoice_no ?? '—' }}</td>
+                        <td class="px-4 py-3 text-ink-primary">{{ st.receive?.arrival_item?.arrival?.invoice_no ?? st.receive?.invoice_no ?? '—' }}</td>
                         <td class="px-4 py-3 text-ink-primary">{{ st.tag ?? '—' }}</td>
                         <td class="px-4 py-3 text-ink-primary">{{ st.receive?.location_code ?? t('incoming.locationNone') }}</td>
                         <td class="px-4 py-3 text-ink-primary">{{ st.receive?.arrival_item?.arrival?.supplier?.supplier_name ?? '—' }}</td>

@@ -380,7 +380,7 @@ export interface PartStock {
     part?: (Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> & { part_type?: PartType | null }) | null;
     receive?: (Pick<IncomingReceive, 'id' | 'invoice_no' | 'location_code'> & {
         arrival_item?: (Pick<IncomingArrivalItem, 'id' | 'arrival_id'> & {
-            arrival?: (Pick<IncomingArrival, 'id'> & {
+            arrival?: (Pick<IncomingArrival, 'id' | 'invoice_no'> & {
                 supplier?: Pick<Supplier, 'id' | 'supplier_name'> | null;
             }) | null;
         }) | null;

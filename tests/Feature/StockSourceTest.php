@@ -235,6 +235,31 @@ class StockSourceTest extends TestCase
                 )));
     }
 
+    /**
+     * Faktur di halaman Stock mengikuti invoice arrival (dokumen induk), bukan
+     * snapshot receive. Invoice sering baru diisi setelah barang diterima, dan
+     * label mencetak invoice arrival — keduanya harus sama.
+     */
+    public function test_stock_invoice_follows_arrival_when_receive_snapshot_is_stale(): void
+    {
+        [$stock] = $this->makeStockSource('INV-LAMA-0001', 'TAG-INVOICE-0001');
+
+        $arrival = IncomingArrival::where('arrival_no', 'ARV-TEST-TAG-INVOICE-0001')->firstOrFail();
+        $arrival->update(['invoice_no' => 'INV-BARU-9999']);
+
+        $this->assertSame('INV-LAMA-0001', $stock->fresh()->receive->invoice_no);
+
+        $this->actingAs($this->admin())
+            ->get(route('stocks.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Incoming/Stock/Index')
+                ->where('stocks.data', fn ($rows) => collect($rows)->contains(
+                    fn ($r) => (int) $r['id'] === (int) $stock->id
+                        && ($r['receive']['arrival_item']['arrival']['invoice_no'] ?? null) === 'INV-BARU-9999'
+                )));
+    }
+
     /** Pencarian nomor part tidak boleh melepas filter tab material/WIP. */
     public function test_stock_search_does_not_leak_wip_rows_into_material_tab(): void
     {

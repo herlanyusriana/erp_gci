@@ -7,17 +7,17 @@ Membuat migrasi database untuk menambahkan kolom kemasan bertingkat pada tabel `
 
 ## Acceptance criteria
 
-- [ ] Migrasi menambahkan kolom nullable `bundle_count` (decimal 20,4 / integer), `packing_count` (decimal 20,4 / integer), `packing_type` (varchar 50), dan `packing_qty` (decimal 20,4) pada `incoming_receives`.
-- [ ] Kolom bersifat nullable agar tidak merusak data historis yang sudah ada.
-- [ ] Model `IncomingReceive` memperbarui `$fillable` dan `$casts` untuk atribut-atribut baru tersebut.
-- [ ] Method `down()` pada migrasi mampu melakukan rollback dengan aman (`dropColumn`).
+- [x] Migrasi menambahkan kolom nullable `bundle_count` (decimal 20,4 / integer), `packing_count` (decimal 20,4 / integer), `packing_type` (varchar 50), dan `packing_qty` (decimal 20,4) pada `incoming_receives`.
+- [x] Kolom bersifat nullable agar tidak merusak data historis yang sudah ada.
+- [x] Model `IncomingReceive` memperbarui `$fillable` dan `$casts` untuk atribut-atribut baru tersebut.
+- [x] Method `down()` pada migrasi mampu melakukan rollback dengan aman (`dropColumn`).
 
 ## Verification
 
-- [ ] Tests pass: `php artisan migrate --pretend`
-- [ ] Build succeeds: `php artisan migrate`
-- [ ] Output matches: Kolom baru terdaftar pada schema tabel `incoming_receives`.
-- [ ] No regressions: `vendor/bin/pest tests/Feature/ReceiveStockUnitTest.php`
+- [x] Tests pass: `php artisan migrate --pretend`
+- [x] Build succeeds: `php artisan migrate`
+- [x] Output matches: Kolom baru terdaftar pada schema tabel `incoming_receives`.
+- [x] No regressions: `vendor/bin/pest tests/Feature/ReceiveStockUnitTest.php`
 - [ ] Manual check: Periksa tabel via tinker / `database-schema`.
 
 ## Blocked by

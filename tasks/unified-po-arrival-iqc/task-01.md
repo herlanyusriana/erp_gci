@@ -6,15 +6,15 @@
 
 ## Acceptance criteria
 
-- [ ] Migrasi berhasil menambahkan kolom `iqc_status`, `iqc_passed_at`, `iqc_passed_by`, dan `delivery_note_no` pada tabel `incoming_arrivals`.
-- [ ] Kolom `is_local` lama dibersihkan/direset agar siap menampung tipe kedatangan baru.
-- [ ] Model `IncomingArrival` memperbarui `$fillable`, `$casts`, dan relasi `iqcInspector` (`belongsTo(User::class, 'iqc_passed_by')`).
+- [x] Migrasi berhasil menambahkan kolom `iqc_status`, `iqc_passed_at`, `iqc_passed_by`, dan `delivery_note_no` pada tabel `incoming_arrivals`.
+- [x] Kolom `is_local` lama dibersihkan/direset agar siap menampung tipe kedatangan baru.
+- [x] Model `IncomingArrival` memperbarui `$fillable`, `$casts`, dan relasi `iqcInspector` (`belongsTo(User::class, 'iqc_passed_by')`).
 
 ## Verification
 
-- [ ] Tests pass: `./vendor/bin/pest tests/Feature/IncomingPoArrivalTest.php`
-- [ ] Build succeeds: `php artisan migrate --pretend`
-- [ ] Output matches: Schema tabel `incoming_arrivals` memuat kolom IQC dan delivery_note_no
+- [x] Tests pass: `./vendor/bin/pest tests/Feature/IncomingPoArrivalTest.php`
+- [x] Build succeeds: `php artisan migrate --pretend`
+- [x] Output matches: Schema tabel `incoming_arrivals` memuat kolom IQC dan delivery_note_no
 
 ## Blocked by
 

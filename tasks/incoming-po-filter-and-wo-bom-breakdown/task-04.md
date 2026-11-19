@@ -9,17 +9,17 @@ Implementasi logika penentuan tampilan part material di tabel routing Work Order
 
 ## Acceptance criteria
 
-- [ ] Sebelum material di-issue, baris material menampilkan Part Number dan Part Name dari Main Part BOM (`child_part`).
-- [ ] Setelah material di-issue (terbit `material_issues` atau terisi `selected_part_id`), tampilan material berganti menampilkan Part Substitute aktual yang dipakai.
-- [ ] Ditampilkan label/badge pembeda yang jelas antara part standar BOM dan part substitusi.
-- [ ] Informasi alokasi tag/stok yang di-issue tetap dapat dilihat secara detail.
+- [x] Sebelum material di-issue, baris material menampilkan Part Number dan Part Name dari Main Part BOM (`child_part`).
+- [x] Setelah material di-issue (terbit `material_issues` atau terisi `selected_part_id`), tampilan material berganti menampilkan Part Substitute aktual yang dipakai.
+- [x] Ditampilkan label/badge pembeda yang jelas antara part standar BOM dan part substitusi.
+- [x] Informasi alokasi tag/stok yang di-issue tetap dapat dilihat secara detail.
 
 ## Verification
 
-- [ ] Tests pass: `vendor/bin/pest tests/Feature/WorkOrderAllocationTest.php`
-- [ ] Build succeeds: `npm run build`
-- [ ] Output matches: WO yang belum di-issue menampilkan Main BOM, WO setelah issue menampilkan Substitute Part.
-- [ ] No regressions: `vendor/bin/pest`
+- [x] Tests pass: `vendor/bin/pest tests/Feature/WorkOrderAllocationTest.php`
+- [x] Build succeeds: `npm run build`
+- [x] Output matches: WO yang belum di-issue menampilkan Main BOM, WO setelah issue menampilkan Substitute Part.
+- [x] No regressions: `vendor/bin/pest`
 - [ ] Manual check: buat WO baru, cek sebelum issue (tampil Main Part), lakukan issue/release, cek sesudah issue (tampil Substitute).
 
 ## Blocked by

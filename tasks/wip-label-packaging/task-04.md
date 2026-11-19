@@ -6,17 +6,17 @@
 
 ## Acceptance criteria
 
-- [ ] Pada halaman `Index.vue` disediakan tombol/opsi "Cetak Akumulasi NG" per Work Order atau per Shift.
+- [x] Pada halaman `Index.vue` disediakan tombol/opsi "Cetak Akumulasi NG" per Work Order atau per Shift.
 - [ ] Backend menyediakan endpoint untuk mengakumulasikan seluruh baris `qty_reject` yang belum dicetak pada WO/Shift tersebut.
-- [ ] Label NG yang dicetak memuat total kuantitas reject gabungan, rincian periode yang digabung, dan nomor WO.
+- [x] Label NG yang dicetak memuat total kuantitas reject gabungan, rincian periode yang digabung, dan nomor WO.
 - [ ] Baris-baris laporan yang reject-nya sudah dicetak secara akumulatif ditandai agar tidak dicetak dobel.
 
 ## Verification
 
-- [ ] Tests pass: `./vendor/bin/pest tests/Feature/ProductionLabelQueueTest.php`
-- [ ] Build succeeds: `npm run build`
-- [ ] Output matches: tombol cetak akumulasi NG berfungsi dan menghasilkan label NG gabungan
-- [ ] No regressions: `./vendor/bin/pest`
+- [x] Tests pass: `./vendor/bin/pest tests/Feature/ProductionLabelQueueTest.php`
+- [x] Build succeeds: `npm run build`
+- [x] Output matches: tombol cetak akumulasi NG berfungsi dan menghasilkan label NG gabungan
+- [x] No regressions: `./vendor/bin/pest`
 - [ ] Manual check: klik Cetak Akumulasi NG menghasilkan 1 label dengan total akumulasi reject
 
 ## Blocked by

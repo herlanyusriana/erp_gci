@@ -6,16 +6,16 @@
 
 ## Acceptance criteria
 
-- [ ] Route `GET /incoming-quality` dan `POST /incoming-quality/{arrival}/pass` terdaftar dan dilindungi otorisasi QC (`qc.view`, `qc.create`, atau role `qc`).
-- [ ] Tabel menampilkan daftar kedatangan dengan kolom: Tanggal Arrival, Supp Name, PO No, Item List (ringkasan part & qty), dan tombol/ceklis `IQC Pass`.
-- [ ] Menekan tombol ceklis `IQC Pass` mengupdate `iqc_status = 'passed'`, mencatat `iqc_passed_at = now()`, dan `iqc_passed_by = auth()->id()`.
-- [ ] Menyediakan opsi batal/undo IQC Pass jika salah klik.
-- [ ] Menambahkan tile `Incoming Quality` di `resources/js/Pages/Quality/ModuleLauncher.vue` (jika ada) atau launcher terkait.
+- [x] Route `GET /incoming-quality` dan `POST /incoming-quality/{arrival}/pass` terdaftar dan dilindungi otorisasi QC (`qc.view`, `qc.create`, atau role `qc`).
+- [x] Tabel menampilkan daftar kedatangan dengan kolom: Tanggal Arrival, Supp Name, PO No, Item List (ringkasan part & qty), dan tombol/ceklis `IQC Pass`.
+- [x] Menekan tombol ceklis `IQC Pass` mengupdate `iqc_status = 'passed'`, mencatat `iqc_passed_at = now()`, dan `iqc_passed_by = auth()->id()`.
+- [x] Menyediakan opsi batal/undo IQC Pass jika salah klik.
+- [x] Menambahkan tile `Incoming Quality` di `resources/js/Pages/Quality/ModuleLauncher.vue` (jika ada) atau launcher terkait.
 
 ## Verification
 
-- [ ] Tests pass: `./vendor/bin/pest tests/Feature/IncomingQualityTest.php`
-- [ ] Build succeeds: `npm run build`
+- [x] Tests pass: `./vendor/bin/pest tests/Feature/IncomingQualityTest.php`
+- [x] Build succeeds: `npm run build`
 - [ ] Manual check: Klik tombol IQC Pass langsung mengubah status baris menjadi Lolos / Pass
 
 ## Blocked by

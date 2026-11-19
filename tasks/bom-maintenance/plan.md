@@ -26,15 +26,15 @@ Target task list: file di direktori ini (`tasks/bom-maintenance/`).
 
 ### Phase 1: Server
 
-- [ ] Task 01: Membuat BOM lengkap untuk part FG
-- [ ] Task 02: Mengedit BOM yang sudah ada
+- [x] Task 01: Membuat BOM lengkap untuk part FG
+- [x] Task 02: Mengedit BOM yang sudah ada
 
 **Checkpoint:** BOM dapat dibuat dan diperbarui lewat endpoint, tetap satu record
 per part, dan lolos validasi part FG.
 
 ### Phase 2: Antarmuka
 
-- [ ] Task 03: Form tambah dan edit BOM di web
+- [x] Task 03: Form tambah dan edit BOM di web
 
 **Final checkpoint:** setiap Success Criterion pada PRD diverifikasi.
 

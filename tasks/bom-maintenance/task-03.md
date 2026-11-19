@@ -8,25 +8,25 @@ ditambah dan dihapus.
 
 ## Acceptance criteria
 
-- [ ] Halaman form menampilkan pilihan part FG yang sudah terdaftar di Master
+- [x] Halaman form menampilkan pilihan part FG yang sudah terdaftar di Master
       Part, dan menonaktifkan pilihan part saat mode edit.
-- [ ] Setiap baris item memiliki input sequence, proses, mesin, parent/output
+- [x] Setiap baris item memiliki input sequence, proses, mesin, parent/output
       part, child part, jumlah, UOM, ukuran, special code, dan source.
-- [ ] Baris dapat ditambah dan dihapus; minimal satu baris wajib ada.
-- [ ] Tombol simpan mengirim ke endpoint create atau update sesuai mode.
-- [ ] Error validasi server tampil pada field yang sesuai.
-- [ ] Tautan "Tambah BOM" muncul pada halaman daftar BOM hanya bagi pengguna
+- [x] Baris dapat ditambah dan dihapus; minimal satu baris wajib ada.
+- [x] Tombol simpan mengirim ke endpoint create atau update sesuai mode.
+- [x] Error validasi server tampil pada field yang sesuai.
+- [x] Tautan "Tambah BOM" muncul pada halaman daftar BOM hanya bagi pengguna
       berpermission `bom.create`; aksi edit mengikuti permission `bom.update`.
-- [ ] Semua teks baru tersedia di katalog i18n ID/EN/KO dengan jumlah kunci
+- [x] Semua teks baru tersedia di katalog i18n ID/EN/KO dengan jumlah kunci
       seimbang.
 
 ## Verification
 
-- [ ] Tests pass: `vendor/bin/pest tests/Feature/BomMaintenanceTest.php`
-- [ ] Build succeeds: `npm run build`
-- [ ] Output matches: halaman menerima props part FG, proses, mesin, dan daftar
+- [x] Tests pass: `vendor/bin/pest tests/Feature/BomMaintenanceTest.php`
+- [x] Build succeeds: `npm run build`
+- [x] Output matches: halaman menerima props part FG, proses, mesin, dan daftar
       UOM; `node scripts/check-i18n.mjs` lulus
-- [ ] No regressions: `vendor/bin/pest tests/Feature/RolePermissionTest.php`
+- [x] No regressions: `vendor/bin/pest tests/Feature/RolePermissionTest.php`
 - [ ] Manual check: buat BOM dua baris dari UI, lalu edit dan ubah jumlahnya
 
 ## Blocked by

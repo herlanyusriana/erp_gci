@@ -55,15 +55,15 @@ received_by (user_id), received_at, notes. Beserta model Eloquent dengan relasi
 ke `MaterialIssueItem`, `Part`, `Machine`, dan `User`.
 
 **Acceptance criteria:**
-- [ ] Migrasi berjalan maju dan mundur tanpa kehilangan data
-- [ ] Model memiliki relasi: materialIssueItem, part, machine, receiver (User)
-- [ ] Kolom unique constraint: (material_issue_item_id, machine_id) — satu tag
+- [x] Migrasi berjalan maju dan mundur tanpa kehilangan data
+- [x] Model memiliki relasi: materialIssueItem, part, machine, receiver (User)
+- [x] Kolom unique constraint: (material_issue_item_id, machine_id) — satu tag
       hanya bisa diterima sekali per mesin
 
 **Verification:**
-- [ ] `php artisan migrate` sukses
+- [x] `php artisan migrate` sukses
 - [ ] `php artisan migrate:rollback` sukses
-- [ ] Test unit: model dapat di-create dan dibaca
+- [x] Test unit: model dapat di-create dan dibaca
 
 **Dependencies:** None
 
@@ -79,15 +79,15 @@ mesin yang sama, dan menyimpan receipt. Juga method untuk mengambil daftar
 penerimaan per mesin (hari ini atau range tanggal).
 
 **Acceptance criteria:**
-- [ ] `confirmReceipt(tag, machineId, userId)` — validasi + simpan
-- [ ] `receiptsByMachine(machineId, date)` — daftar penerimaan per mesin
-- [ ] Validasi: tag yang tidak dikenal (tidak ada di `material_issue_items`) → error
-- [ ] Validasi: tag yang sudah diterima mesin yang sama → error duplikat
-- [ ] Validasi: mesin nonaktif → error
+- [x] `confirmReceipt(tag, machineId, userId)` — validasi + simpan
+- [x] `receiptsByMachine(machineId, date)` — daftar penerimaan per mesin
+- [x] Validasi: tag yang tidak dikenal (tidak ada di `material_issue_items`) → error
+- [x] Validasi: tag yang sudah diterima mesin yang sama → error duplikat
+- [x] Validasi: mesin nonaktif → error
 
 **Verification:**
 - [ ] Unit test service dengan fake data
-- [ ] Feature test endpoint setelah task 3
+- [x] Feature test endpoint setelah task 3
 
 **Dependencies:** Task 1
 
@@ -105,17 +105,17 @@ Menggunakan `resolveTag` dan `resolveMachine` yang sudah ada untuk validasi
 tag/mesin sebelum konfirmasi. Permission `stock.issue`.
 
 **Acceptance criteria:**
-- [ ] Confirm receipt: tag valid + machine valid → 200 + data receipt
-- [ ] Confirm receipt: tag belum di-issue → 404/422
-- [ ] Confirm receipt: duplikat (tag+machine sudah pernah) → 422
-- [ ] List receipts by machine: mengembalikan array receipt hari itu
-- [ ] List receipts: filter date opsional
-- [ ] Authorization: Sanctum + permission stock.issue
+- [x] Confirm receipt: tag valid + machine valid → 200 + data receipt
+- [x] Confirm receipt: tag belum di-issue → 404/422
+- [x] Confirm receipt: duplikat (tag+machine sudah pernah) → 422
+- [x] List receipts by machine: mengembalikan array receipt hari itu
+- [x] List receipts: filter date opsional
+- [x] Authorization: Sanctum + permission stock.issue
 
 **Verification:**
-- [ ] Feature test mencakup semua skenario di atas
-- [ ] `php artisan test --filter=ProductionReceiptApiTest`
-- [ ] Pint + build
+- [x] Feature test mencakup semua skenario di atas
+- [x] `php artisan test --filter=ProductionReceiptApiTest`
+- [x] Pint + build
 
 **Dependencies:** Task 2
 
@@ -124,9 +124,9 @@ tag/mesin sebelum konfirmasi. Permission `stock.issue`.
 ---
 
 ### Checkpoint 1: Backend Foundation
-- [ ] Migrasi jalan
-- [ ] Service + API berfungsi
-- [ ] Test backend lulus
+- [x] Migrasi jalan
+- [x] Service + API berfungsi
+- [x] Test backend lulus
 
 ---
 
@@ -141,10 +141,10 @@ tag/mesin sebelum konfirmasi. Permission `stock.issue`.
 `issue_repository.dart` (ikuti pola existing).
 
 **Acceptance criteria:**
-- [ ] `ProductionReceipt.fromJson` mem-parse semua field dari API
-- [ ] `confirmReceipt()` mengirim POST dengan benar
-- [ ] `receiptsByMachine()` mengembalikan list receipt
-- [ ] Error handling: 404 → tag tidak dikenal, 422 → duplikat
+- [x] `ProductionReceipt.fromJson` mem-parse semua field dari API
+- [x] `confirmReceipt()` mengirim POST dengan benar
+- [x] `receiptsByMachine()` mengembalikan list receipt
+- [x] Error handling: 404 → tag tidak dikenal, 422 → duplikat
 
 **Verification:**
 - [ ] Model test (fromJson)
@@ -163,14 +163,14 @@ per mesin, error. Method `confirm(tag, machineId)` yang memanggil repository,
 dan `loadReceipts(machineId, date)`.
 
 **Acceptance criteria:**
-- [ ] State: idle → loading → success/error
-- [ ] Confirm success → reset field + reload list
-- [ ] Confirm duplikat → error state dengan pesan
-- [ ] Confirm tag invalid → error state
+- [x] State: idle → loading → success/error
+- [x] Confirm success → reset field + reload list
+- [x] Confirm duplikat → error state dengan pesan
+- [x] Confirm tag invalid → error state
 
 **Verification:**
-- [ ] Unit test notifier dengan FakeRepository
-- [ ] `flutter test` pada notifier test
+- [x] Unit test notifier dengan FakeRepository
+- [x] `flutter test` pada notifier test
 
 **Dependencies:** Task 4
 
@@ -192,16 +192,16 @@ Integrasi dengan `ScanScreen` existing. Mengikuti pola yang sudah ada di
 `issue_screen.dart` (panggil scanner via Navigator.push, parse hasil).
 
 **Acceptance criteria:**
-- [ ] Scan tag → resolve → tampilkan part name, qty, invoice
-- [ ] Scan mesin → resolve → tampilkan machine name
-- [ ] Konfirmasi → API call → sukses
-- [ ] Error state: tag tidak dikenal, mesin tidak dikenal, duplikat
-- [ ] Loading state selama resolve dan konfirmasi
+- [x] Scan tag → resolve → tampilkan part name, qty, invoice
+- [x] Scan mesin → resolve → tampilkan machine name
+- [x] Konfirmasi → API call → sukses
+- [x] Error state: tag tidak dikenal, mesin tidak dikenal, duplikat
+- [x] Loading state selama resolve dan konfirmasi
 
 **Verification:**
-- [ ] Widget test dengan mocked repository
+- [x] Widget test dengan mocked repository
 - [ ] `flutter analyze` no issues
-- [ ] `flutter test` lulus
+- [x] `flutter test` lulus
 
 **Dependencies:** Task 4, 5
 
@@ -220,17 +220,17 @@ sebuah mesin pada hari itu. Bisa diakses dari:
 Tampilan: card per receipt dengan tag, part, invoice, supplier, timestamp.
 
 **Acceptance criteria:**
-- [ ] Pilih mesin (dropdown dari daftar mesin aktif, atau scan) → tampilkan list
-- [ ] List receipt hari ini dari API
+- [x] Pilih mesin (dropdown dari daftar mesin aktif, atau scan) → tampilkan list
+- [x] List receipt hari ini dari API
 - [ ] Setiap card menampilkan: tag, part number, part name, qty, invoice, supplier, timestamp
-- [ ] Empty state: "Belum ada penerimaan untuk mesin ini hari ini"
-- [ ] Loading state
-- [ ] Error state
+- [x] Empty state: "Belum ada penerimaan untuk mesin ini hari ini"
+- [x] Loading state
+- [x] Error state
 
 **Verification:**
-- [ ] Widget test
+- [x] Widget test
 - [ ] `flutter analyze` no issues
-- [ ] `flutter test` lulus
+- [x] `flutter test` lulus
 
 **Dependencies:** Task 4
 
@@ -239,10 +239,10 @@ Tampilan: card per receipt dengan tag, part, invoice, supplier, timestamp.
 ---
 
 ### Checkpoint 2: Complete
-- [ ] Backend: 251+ test lulus
-- [ ] Flutter: all existing + new test lulus
+- [x] Backend: 251+ test lulus
+- [x] Flutter: all existing + new test lulus
 - [ ] `flutter analyze` no issues
-- [ ] `npm run build` lulus
+- [x] `npm run build` lulus
 - [ ] Manual flow: issue-out → buka APK → scan tag → scan mesin → konfirmasi → lihat daftar
 
 ---

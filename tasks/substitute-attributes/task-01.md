@@ -9,27 +9,27 @@ memperoleh kolom ukuran dan packing type.
 
 ## Acceptance criteria
 
-- [ ] Tabel katalog packing type per part menyimpan `part_id`, kode packing, dan
+- [x] Tabel katalog packing type per part menyimpan `part_id`, kode packing, dan
       asal nilai (riwayat Arrival atau tambahan manual), unik per part + kode.
-- [ ] Nilai `unit_bundle` dari item Arrival yang sudah ada menjadi sumber katalog
+- [x] Nilai `unit_bundle` dari item Arrival yang sudah ada menjadi sumber katalog
       untuk part pada item tersebut, tanpa menggandakan kode yang sama.
-- [ ] Kode packing type dapat ditambahkan manual untuk satu part dan tersedia
+- [x] Kode packing type dapat ditambahkan manual untuk satu part dan tersedia
       kembali pada pemakaian berikutnya, tanpa membuat baris Arrival baru.
-- [ ] Katalog untuk satu part tidak bocor menjadi pilihan part lain.
-- [ ] `part_substitutes` memiliki kolom ukuran bertipe teks nullable dan kolom
+- [x] Katalog untuk satu part tidak bocor menjadi pilihan part lain.
+- [x] `part_substitutes` memiliki kolom ukuran bertipe teks nullable dan kolom
       packing type.
-- [ ] Relasi lama dengan tepat satu nilai packing historis unik terisi otomatis;
+- [x] Relasi lama dengan tepat satu nilai packing historis unik terisi otomatis;
       relasi dengan beberapa nilai atau tanpa nilai dibiarkan kosong untuk diisi
       pengelola.
-- [ ] Migrasi dapat dibalik tanpa kehilangan data relasi substitute.
+- [x] Migrasi dapat dibalik tanpa kehilangan data relasi substitute.
 
 ## Verification
 
-- [ ] Tests pass: `vendor/bin/pest tests/Feature/PartSubstituteAttributeTest.php`
-- [ ] Build succeeds: `npm run build`
-- [ ] Output matches: katalog per part berisi kode gabungan Arrival dan manual,
+- [x] Tests pass: `vendor/bin/pest tests/Feature/PartSubstituteAttributeTest.php`
+- [x] Build succeeds: `npm run build`
+- [x] Output matches: katalog per part berisi kode gabungan Arrival dan manual,
       terdeduplikasi, dan backfill mengisi hanya relasi bernilai tunggal
-- [ ] No regressions: `vendor/bin/pest`
+- [x] No regressions: `vendor/bin/pest`
 - [ ] Manual check: periksa isi tabel katalog untuk satu part yang punya riwayat
       Arrival dan satu part tanpa riwayat
 

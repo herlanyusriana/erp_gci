@@ -9,17 +9,17 @@ Merombak rendering tabel routing di `resources/js/Pages/Production/WorkOrder/Sho
 
 ## Acceptance criteria
 
-- [ ] Fungsi helper deteksi TPL mendeteksi secara presisi mesin TPL (`MachineRouting::isTplPressLine` atau nama berawalan `TPL DONGSHIN` / `TPL KUKIL`).
-- [ ] Mesin TPL tetap dirangkum sebagai 1 baris continuous tandem line (input awal -> output WIP akhir).
-- [ ] Mesin Non-TPL (khususnya Assembly / Welding dengan multi-input) menampilkan seluruh item input dalam proses tersebut, tidak ada komponen yang tersembunyi.
-- [ ] Kolom kuantitas kebutuhan (`qty_required`) dan konsumsi (`qty_consumed`) tertera akurat untuk setiap item material input.
+- [x] Fungsi helper deteksi TPL mendeteksi secara presisi mesin TPL (`MachineRouting::isTplPressLine` atau nama berawalan `TPL DONGSHIN` / `TPL KUKIL`).
+- [x] Mesin TPL tetap dirangkum sebagai 1 baris continuous tandem line (input awal -> output WIP akhir).
+- [x] Mesin Non-TPL (khususnya Assembly / Welding dengan multi-input) menampilkan seluruh item input dalam proses tersebut, tidak ada komponen yang tersembunyi.
+- [x] Kolom kuantitas kebutuhan (`qty_required`) dan konsumsi (`qty_consumed`) tertera akurat untuk setiap item material input.
 
 ## Verification
 
-- [ ] Tests pass: `npm run build` & `vendor/bin/pest tests/Feature/WorkOrderHttpTest.php`
-- [ ] Build succeeds: `npm run build`
-- [ ] Output matches: Detail WO dengan proses Assembly menampilkan seluruh komponen inputnya secara transparan.
-- [ ] No regressions: `vendor/bin/pest`
+- [x] Tests pass: `npm run build` & `vendor/bin/pest tests/Feature/WorkOrderHttpTest.php`
+- [x] Build succeeds: `npm run build`
+- [x] Output matches: Detail WO dengan proses Assembly menampilkan seluruh komponen inputnya secara transparan.
+- [x] No regressions: `vendor/bin/pest`
 - [ ] Manual check: buka halaman `/work-orders/{id}` yang memiliki proses assembly multi-part, verifikasi seluruh material tampil.
 
 ## Blocked by

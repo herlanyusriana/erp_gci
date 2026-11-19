@@ -6,20 +6,20 @@
 
 ## Acceptance criteria
 
-- [ ] Di bagian atas form Arrival terdapat switcher: `[ Lokal ]` vs `[ Impor ]`.
-- [ ] Dropdown `Pilih PO` memfilter PO sesuai jenis (PO lokal vs PO impor).
-- [ ] Begitu PO dipilih, sistem otomatis mengisikan (*auto-populate*) seluruh item barang dari PO tersebut ke tabel item.
-- [ ] Kuantitas item kedatangan dapat diedit secara parsial jika barang datang bertahap.
-- [ ] Jika tipe `Lokal`:
+- [x] Di bagian atas form Arrival terdapat switcher: `[ Lokal ]` vs `[ Impor ]`.
+- [x] Dropdown `Pilih PO` memfilter PO sesuai jenis (PO lokal vs PO impor).
+- [x] Begitu PO dipilih, sistem otomatis mengisikan (*auto-populate*) seluruh item barang dari PO tersebut ke tabel item.
+- [x] Kuantitas item kedatangan dapat diedit secara parsial jika barang datang bertahap.
+- [x] Jika tipe `Lokal`:
   - Menyembunyikan seluruh panel kontainer, seal code, kapal/vessel, pelabuhan, dan bill of lading.
   - Menampilkan input `No. Surat Jalan / Invoice`, `No. PEN`, dan `No. AJU`.
-- [ ] Jika tipe `Impor`:
+- [x] Jika tipe `Impor`:
   - Menampilkan form impor lengkap beserta kontainer dan inspeksi kontainer seperti sebelumnya.
 
 ## Verification
 
 - [ ] Tests pass: `./vendor/bin/pest tests/Feature/IncomingArrivalTest.php`
-- [ ] Build succeeds: `npm run build`
+- [x] Build succeeds: `npm run build`
 - [ ] Manual check: Pilih PO lokal -> item terisi otomatis -> simpan dengan No PEN, AJU, Surat Jalan
 
 ## Blocked by

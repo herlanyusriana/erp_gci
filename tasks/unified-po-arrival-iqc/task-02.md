@@ -6,16 +6,16 @@
 
 ## Acceptance criteria
 
-- [ ] `PurchaseOrderController::create` dan `edit` menyajikan seluruh supplier aktif (baik `source = 'local'` maupun `source = 'import'`).
-- [ ] Dropdown part pada form PO mendukung part substitute aktif dari supplier lokal maupun impor.
-- [ ] Validasi `supplier_id` di `PurchaseOrderController` menerima supplier dengan source `local` maupun `import`.
+- [x] `PurchaseOrderController::create` dan `edit` menyajikan seluruh supplier aktif (baik `source = 'local'` maupun `source = 'import'`).
+- [x] Dropdown part pada form PO mendukung part substitute aktif dari supplier lokal maupun impor.
+- [x] Validasi `supplier_id` di `PurchaseOrderController` menerima supplier dengan source `local` maupun `import`.
 - [ ] Route `local-pos` dan controller `LocalPoController` dihapus/dideprecate.
 - [ ] Tile `Local PO` dihapus dari `resources/js/Pages/Incoming/ModuleLauncher.vue`, hanya menyisakan `Purchase Order`.
 
 ## Verification
 
 - [ ] Tests pass: `./vendor/bin/pest tests/Feature/PurchaseOrderTest.php`
-- [ ] Build succeeds: `npm run build`
+- [x] Build succeeds: `npm run build`
 - [ ] Manual check: Form PO dapat menyimpan PO dengan supplier lokal dan supplier impor
 
 ## Blocked by

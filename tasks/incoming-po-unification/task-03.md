@@ -8,21 +8,21 @@ gabungan yang memaksakan kolom seragam.
 
 ## Acceptance criteria
 
-- [ ] Titik masuk Incoming menyatakan bahwa PO import berlanjut ke Arrival
+- [x] Titik masuk Incoming menyatakan bahwa PO import berlanjut ke Arrival
       (BL/PEN/AJU, vessel, container).
-- [ ] Titik masuk Incoming menyatakan bahwa PO local tanpa langkah Arrival dan
+- [x] Titik masuk Incoming menyatakan bahwa PO local tanpa langkah Arrival dan
       langsung ke penerimaan.
-- [ ] PO import dan PO local tetap memakai halaman dan kolom daftarnya sendiri.
+- [x] PO import dan PO local tetap memakai halaman dan kolom daftarnya sendiri.
 - [ ] Form PO hanya menampilkan supplier `import`; form Local PO hanya supplier
       `local` (dari Task 02).
-- [ ] Teks baru tersedia di katalog i18n ID/EN/KO dengan jumlah kunci seimbang.
+- [x] Teks baru tersedia di katalog i18n ID/EN/KO dengan jumlah kunci seimbang.
 
 ## Verification
 
-- [ ] Tests pass: `vendor/bin/pest tests/Feature/IncomingPoUnificationTest.php`
-- [ ] Build succeeds: `npm run build`
-- [ ] Output matches: keterangan tile menyatakan kelanjutan masing-masing alur
-- [ ] No regressions: `vendor/bin/pest tests/Feature/LocalPoTest.php`
+- [x] Tests pass: `vendor/bin/pest tests/Feature/IncomingPoUnificationTest.php`
+- [x] Build succeeds: `npm run build`
+- [x] Output matches: keterangan tile menyatakan kelanjutan masing-masing alur
+- [x] No regressions: `vendor/bin/pest tests/Feature/LocalPoTest.php`
 - [ ] Manual check: buka menu Incoming; perbedaan alur terbaca tanpa membuka
       halaman detail
 

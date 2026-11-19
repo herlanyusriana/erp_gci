@@ -6,17 +6,17 @@
 
 ## Acceptance criteria
 
-- [ ] Kolom `label_carried_over_qty` bertipe decimal(12,4) default 0 berhasil ditambahkan ke tabel `production_results`.
-- [ ] Kolom `label_carry_over_source_id` (nullable foreign id ke `production_results`) ditambahkan untuk menautkan riwayat penggabungan sisa antar periode.
-- [ ] Model `ProductionResult` menambahkan field baru ke `$fillable` dan `$casts`.
-- [ ] Menambahkan scope/helper untuk menghitung sisa kuantitas yang siap dicetak pada periode berjalan (termasuk carry-over dari periode sebelumnya).
+- [x] Kolom `label_carried_over_qty` bertipe decimal(12,4) default 0 berhasil ditambahkan ke tabel `production_results`.
+- [x] Kolom `label_carry_over_source_id` (nullable foreign id ke `production_results`) ditambahkan untuk menautkan riwayat penggabungan sisa antar periode.
+- [x] Model `ProductionResult` menambahkan field baru ke `$fillable` dan `$casts`.
+- [x] Menambahkan scope/helper untuk menghitung sisa kuantitas yang siap dicetak pada periode berjalan (termasuk carry-over dari periode sebelumnya).
 
 ## Verification
 
-- [ ] Tests pass: `./vendor/bin/pest tests/Feature/ProductionLabelQueueTest.php`
-- [ ] Build succeeds: `php artisan migrate --pretend`
-- [ ] Output matches: schema table `production_results` memuat kolom carry-over
-- [ ] No regressions: `./vendor/bin/pest`
+- [x] Tests pass: `./vendor/bin/pest tests/Feature/ProductionLabelQueueTest.php`
+- [x] Build succeeds: `php artisan migrate --pretend`
+- [x] Output matches: schema table `production_results` memuat kolom carry-over
+- [x] No regressions: `./vendor/bin/pest`
 - [ ] Manual check: tinker `new ProductionResult(['label_carried_over_qty' => 52])` valid
 
 ## Blocked by

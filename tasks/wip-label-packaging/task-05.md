@@ -6,18 +6,18 @@
 
 ## Acceptance criteria
 
-- [ ] Seluruh Success Criteria di `docs/prd/wip-label-packaging.md` telah terpenuhi dan teruji.
-- [ ] Test feature Pest di `tests/Feature/ProductionLabelQueueTest.php` mencakup seluruh skenario (kemasan pas, sisa ganjil dicetak, sisa ganjil ditunda, multi-label numbering, dan akumulasi NG).
-- [ ] `vendor/bin/pint --dirty --format agent` lulus tanpa error formatting.
-- [ ] `npm run build` lulus typecheck dan bundling production tanpa error.
-- [ ] Full test suite `./vendor/bin/pest` lulus hijau 100%.
+- [x] Seluruh Success Criteria di `docs/prd/wip-label-packaging.md` telah terpenuhi dan teruji.
+- [x] Test feature Pest di `tests/Feature/ProductionLabelQueueTest.php` mencakup seluruh skenario (kemasan pas, sisa ganjil dicetak, sisa ganjil ditunda, multi-label numbering, dan akumulasi NG).
+- [x] `vendor/bin/pint --dirty --format agent` lulus tanpa error formatting.
+- [x] `npm run build` lulus typecheck dan bundling production tanpa error.
+- [x] Full test suite `./vendor/bin/pest` lulus hijau 100%.
 
 ## Verification
 
-- [ ] Tests pass: `./vendor/bin/pest tests/Feature/ProductionLabelQueueTest.php`
-- [ ] Build succeeds: `npm run build`
-- [ ] Output matches: 100% test suite hijau
-- [ ] No regressions: `./vendor/bin/pest`
+- [x] Tests pass: `./vendor/bin/pest tests/Feature/ProductionLabelQueueTest.php`
+- [x] Build succeeds: `npm run build`
+- [x] Output matches: 100% test suite hijau
+- [x] No regressions: `./vendor/bin/pest`
 - [ ] Manual check: review diff dan laporan hasil eksekusi ke user
 
 ## Blocked by

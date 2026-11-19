@@ -7,27 +7,27 @@ Plan: `tasks/production-material-receipt/plan.md`
 
 ### Phase 1: Backend Foundation
 
-- [ ] Task 1: Migrasi tabel `production_material_receipts` + Model Eloquent
-- [ ] Task 2: Service `ProductionReceiptService` — logika bisnis
-- [ ] Task 3: API Controller + Route — `POST /api/receipts/confirm`, `GET /api/receipts`
+- [x] Task 1: Migrasi tabel `production_material_receipts` + Model Eloquent
+- [x] Task 2: Service `ProductionReceiptService` — logika bisnis
+- [x] Task 3: API Controller + Route — `POST /api/receipts/confirm`, `GET /api/receipts`
 
 ### Checkpoint 1: Backend Foundation
-- [ ] Migrasi jalan, model dan service berfungsi
-- [ ] Test API lulus: confirm sukses, validasi tag/mesin/duplikat
-- [ ] Pint lulus, npm build lulus
+- [x] Migrasi jalan, model dan service berfungsi
+- [x] Test API lulus: confirm sukses, validasi tag/mesin/duplikat
+- [x] Pint lulus, npm build lulus
 
 ### Phase 2: Flutter Integration
 
-- [ ] Task 4: Flutter model `ProductionReceipt` + Repository
-- [ ] Task 5: Provider `ProductionReceiptNotifier` (Riverpod)
-- [ ] Task 6: Screen scan tag → scan mesin → konfirmasi
-- [ ] Task 7: Daftar penerimaan per mesin (list screen)
+- [x] Task 4: Flutter model `ProductionReceipt` + Repository
+- [x] Task 5: Provider `ProductionReceiptNotifier` (Riverpod)
+- [x] Task 6: Screen scan tag → scan mesin → konfirmasi
+- [x] Task 7: Daftar penerimaan per mesin (list screen)
 
 ### Checkpoint 2: Complete
-- [ ] Backend: 251+ test lulus
-- [ ] Flutter: existing + new test lulus
+- [x] Backend: 251+ test lulus
+- [x] Flutter: existing + new test lulus
 - [ ] `flutter analyze` no issues
-- [ ] `npm run build` lulus
+- [x] `npm run build` lulus
 - [ ] Manual flow terverifikasi
 
 ---

@@ -9,27 +9,27 @@ BOM dibuat otomatis dan BOM langsung aktif.
 
 ## Acceptance criteria
 
-- [ ] `GET /boms/create` menampilkan form BOM baru bagi pengguna berpermission
+- [x] `GET /boms/create` menampilkan form BOM baru bagi pengguna berpermission
       `bom.create`.
-- [ ] `POST /boms` menyimpan satu header BOM untuk part FG beserta item-itemnya
+- [x] `POST /boms` menyimpan satu header BOM untuk part FG beserta item-itemnya
       dalam satu transaksi.
-- [ ] `bom_no` dibuat otomatis dan unik, termasuk setelah BOM lama dihapus.
-- [ ] Part yang tidak ada atau bertipe selain FG ditolak dengan error validasi.
-- [ ] Part FG yang sudah memiliki BOM ditolak pada alur create, karena
+- [x] `bom_no` dibuat otomatis dan unik, termasuk setelah BOM lama dihapus.
+- [x] Part yang tidak ada atau bertipe selain FG ditolak dengan error validasi.
+- [x] Part FG yang sudah memiliki BOM ditolak pada alur create, karena
       `boms.part_id` unik dan perubahan dilakukan lewat edit.
-- [ ] Setiap item menyimpan sequence, proses, mesin, parent/output part, child
+- [x] Setiap item menyimpan sequence, proses, mesin, parent/output part, child
       part, jumlah, UOM, ukuran, special code, dan source sesuai yang dikirim.
-- [ ] BOM tersimpan dengan `is_active = true` dan langsung terbaca oleh alur yang
+- [x] BOM tersimpan dengan `is_active = true` dan langsung terbaca oleh alur yang
       memakai BOM aktif.
-- [ ] Pengguna tanpa permission `bom.create` ditolak.
+- [x] Pengguna tanpa permission `bom.create` ditolak.
 
 ## Verification
 
-- [ ] Tests pass: `vendor/bin/pest tests/Feature/BomMaintenanceTest.php`
-- [ ] Build succeeds: `npm run build`
-- [ ] Output matches: record `boms` dan `bom_items` tersimpan lengkap; `bom_no`
+- [x] Tests pass: `vendor/bin/pest tests/Feature/BomMaintenanceTest.php`
+- [x] Build succeeds: `npm run build`
+- [x] Output matches: record `boms` dan `bom_items` tersimpan lengkap; `bom_no`
       berurutan dan tidak bentrok setelah penghapusan
-- [ ] No regressions: `vendor/bin/pest tests/Feature/PartTypeGuardTest.php`
+- [x] No regressions: `vendor/bin/pest tests/Feature/PartTypeGuardTest.php`
 - [ ] Manual check: buat BOM FG baru dengan dua item proses, lalu buka detailnya
 
 ## Blocked by

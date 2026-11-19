@@ -9,22 +9,22 @@ sama tanpa membuat versi baru.
 
 ## Acceptance criteria
 
-- [ ] `GET /boms/{bom}/edit` menampilkan BOM beserta item terurut sequence.
-- [ ] `PUT /boms/{bom}` memperbarui header dan mengganti daftar item sesuai
+- [x] `GET /boms/{bom}/edit` menampilkan BOM beserta item terurut sequence.
+- [x] `PUT /boms/{bom}` memperbarui header dan mengganti daftar item sesuai
       kiriman, tetap pada `bom_id` yang sama.
-- [ ] Jumlah record BOM untuk part tersebut tetap satu setelah penyimpanan.
-- [ ] Item yang dihapus dari form tidak tertinggal di database.
-- [ ] Part pemilik BOM tidak dapat diubah menjadi part non-FG atau part yang
+- [x] Jumlah record BOM untuk part tersebut tetap satu setelah penyimpanan.
+- [x] Item yang dihapus dari form tidak tertinggal di database.
+- [x] Part pemilik BOM tidak dapat diubah menjadi part non-FG atau part yang
       sudah memiliki BOM lain.
-- [ ] Pengguna tanpa permission `bom.update` ditolak.
+- [x] Pengguna tanpa permission `bom.update` ditolak.
 
 ## Verification
 
-- [ ] Tests pass: `vendor/bin/pest tests/Feature/BomMaintenanceTest.php`
-- [ ] Build succeeds: `npm run build`
-- [ ] Output matches: setelah update, jumlah `boms` untuk part itu tetap 1 dan
+- [x] Tests pass: `vendor/bin/pest tests/Feature/BomMaintenanceTest.php`
+- [x] Build succeeds: `npm run build`
+- [x] Output matches: setelah update, jumlah `boms` untuk part itu tetap 1 dan
       `bom_items` mencerminkan daftar terbaru
-- [ ] No regressions: `vendor/bin/pest`
+- [x] No regressions: `vendor/bin/pest`
 - [ ] Manual check: edit BOM, hapus satu item, ubah jumlah item lain, simpan,
       lalu muat ulang halaman
 

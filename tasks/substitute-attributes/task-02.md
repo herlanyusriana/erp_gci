@@ -9,28 +9,28 @@ endpoint yang sudah ada. Nilai yang tidak terkait part tersebut ditolak.
 
 ## Acceptance criteria
 
-- [ ] `POST /substitutes` menerima dan menyimpan `size` (boleh kosong) serta
+- [x] `POST /substitutes` menerima dan menyimpan `size` (boleh kosong) serta
       `packing_type` untuk relasi part + substitute part + supplier.
-- [ ] `PUT /substitutes/{id}` memperbarui ukuran dan packing type pada record
+- [x] `PUT /substitutes/{id}` memperbarui ukuran dan packing type pada record
       yang sama.
-- [ ] Packing type yang tidak terdaftar pada katalog part pengganti ditolak
+- [x] Packing type yang tidak terdaftar pada katalog part pengganti ditolak
       dengan pesan validasi pada field `packing_type`.
-- [ ] Relasi baru tanpa packing type ditolak; relasi lama yang belum punya nilai
+- [x] Relasi baru tanpa packing type ditolak; relasi lama yang belum punya nilai
       tetap dapat disimpan setelah pengelola memilih packing type.
-- [ ] `supplier_id` divalidasi sebagai supplier yang ada; relasi tidak dibuat
+- [x] `supplier_id` divalidasi sebagai supplier yang ada; relasi tidak dibuat
       atau ditimpa dengan supplier kosong.
-- [ ] Ukuran kosong tersimpan sebagai null, bukan string kosong atau tanda
+- [x] Ukuran kosong tersimpan sebagai null, bukan string kosong atau tanda
       hubung.
-- [ ] UOM tidak disimpan ulang pada relasi; nilainya tetap dibaca dari master
+- [x] UOM tidak disimpan ulang pada relasi; nilainya tetap dibaca dari master
       part pengganti.
 
 ## Verification
 
-- [ ] Tests pass: `vendor/bin/pest tests/Feature/PartSubstituteAttributeTest.php`
-- [ ] Build succeeds: `npm run build`
-- [ ] Output matches: record tersimpan memuat size dan packing_type yang dikirim;
+- [x] Tests pass: `vendor/bin/pest tests/Feature/PartSubstituteAttributeTest.php`
+- [x] Build succeeds: `npm run build`
+- [x] Output matches: record tersimpan memuat size dan packing_type yang dikirim;
       packing type di luar katalog menghasilkan session error
-- [ ] No regressions: `vendor/bin/pest tests/Feature/PartPriceTest.php tests/Feature/WorkOrderAllocationTest.php tests/Feature/LocalPoTest.php`
+- [x] No regressions: `vendor/bin/pest tests/Feature/PartPriceTest.php tests/Feature/WorkOrderAllocationTest.php tests/Feature/LocalPoTest.php`
 - [ ] Manual check: simpan relasi dengan ukuran kosong, lalu pastikan tampil
       sebagai kosong di database
 

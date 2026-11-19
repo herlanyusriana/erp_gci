@@ -29,15 +29,15 @@ satu-satunya sumber status.
 
 ### Phase 1: Fondasi data
 
-- [ ] Task 01: Katalog packing type per part dan skema atribut substitute
-- [ ] Task 02: Server menerima ukuran dan packing type pada relasi substitute
+- [x] Task 01: Katalog packing type per part dan skema atribut substitute
+- [x] Task 02: Server menerima ukuran dan packing type pada relasi substitute
 
 **Checkpoint:** katalog dan kolom tersedia; endpoint menyimpan dan memvalidasi
 field baru tanpa merusak relasi lama.
 
 ### Phase 2: Permukaan pengguna
 
-- [ ] Task 03: Form Material Substitute menampilkan ukuran, UOM, dan packing type
+- [x] Task 03: Form Material Substitute menampilkan ukuran, UOM, dan packing type
 
 **Final checkpoint:** setiap Success Criterion pada PRD diverifikasi.
 

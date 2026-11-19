@@ -13,18 +13,18 @@ Memperbarui validasi backend di `ReceiveController@store` dan `update`.
 
 ## Acceptance criteria
 
-- [ ] Form Receive menyajikan input berurutan: Bundle Count & Unit $\rightarrow$ Packing Count & Unit $\rightarrow$ Qty per Packing & UOM.
+- [x] Form Receive menyajikan input berurutan: Bundle Count & Unit $\rightarrow$ Packing Count & Unit $\rightarrow$ Qty per Packing & UOM.
 - [ ] Perubahan pada nilai Bundle, Packing, atau Qty per Packing langsung mengalkulasi Total Qty secara instan.
-- [ ] Operator tetap bisa menyesuaikan Total Qty secara manual jika ada barang sisa kemasan ganjil.
-- [ ] Input berat bersih dan kotor berlabel tetap `KGM` dan backend selalu menyimpan dalam basis `KGM`.
-- [ ] Validasi batas kuantitas PO tetap menolak jika total penerimaan melebihi sisa PO.
+- [x] Operator tetap bisa menyesuaikan Total Qty secara manual jika ada barang sisa kemasan ganjil.
+- [x] Input berat bersih dan kotor berlabel tetap `KGM` dan backend selalu menyimpan dalam basis `KGM`.
+- [x] Validasi batas kuantitas PO tetap menolak jika total penerimaan melebihi sisa PO.
 
 ## Verification
 
-- [ ] Tests pass: `npm run build`
-- [ ] Build succeeds: `vendor/bin/pint --format agent`
+- [x] Tests pass: `npm run build`
+- [x] Build succeeds: `vendor/bin/pint --format agent`
 - [ ] Output matches: Input $2 \times 5 \times 2.000$ menghasilkan Total Qty $20.000$ secara otomatis.
-- [ ] No regressions: `vendor/bin/pest tests/Feature/ReceiveStockUnitTest.php`
+- [x] No regressions: `vendor/bin/pest tests/Feature/ReceiveStockUnitTest.php`
 - [ ] Manual check: Buka form receive, uji kalkulasi otomatis dan pastikan satuan berat terkunci KGM.
 
 ## Blocked by

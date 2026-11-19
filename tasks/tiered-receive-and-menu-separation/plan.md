@@ -16,15 +16,15 @@ Rencana implementasi untuk memisahkan menu Arrival dan Receive secara mandiri, m
 
 ### Phase 1: Foundation & Menu Separation
 
-- [ ] Task 01: Database Migration & Model: Multi-Tier Packaging Fields (`task-01.md`)
-- [ ] Task 02: Menu Separation: Clean Arrival Show & Dedicated Receive Workspace (`task-02.md`)
+- [x] Task 01: Database Migration & Model: Multi-Tier Packaging Fields (`task-01.md`)
+- [x] Task 02: Menu Separation: Clean Arrival Show & Dedicated Receive Workspace (`task-02.md`)
 
 **Checkpoint 01:** Database siap; Arrival Show bersih dari aksi receive; alur Receive mandiri sudah aktif.
 
 ### Phase 2: Multi-Tier Packaging & Verification
 
-- [ ] Task 03: Frontend Multi-Tier Packaging Form (Bundle x Packing x Qty) & KGM Weight (`task-03.md`)
-- [ ] Task 04: QR Tag Label Packaging String & Automated Regression Tests (`task-04.md`)
+- [x] Task 03: Frontend Multi-Tier Packaging Form (Bundle x Packing x Qty) & KGM Weight (`task-03.md`)
+- [x] Task 04: QR Tag Label Packaging String & Automated Regression Tests (`task-04.md`)
 
 **Final Checkpoint:** Seluruh Success Criteria di PRD terverifikasi, label QR memuat detail kemasan, dan 100% test Pest lulus hijau.
 

@@ -9,24 +9,24 @@ melalui aturan klasifikasi yang dapat dipertanggungjawabkan.
 
 ## Acceptance criteria
 
-- [ ] `suppliers` memiliki kolom kategori dengan nilai sah `local` atau `import`.
-- [ ] Supplier baru wajib menyertakan kategori; nilai kosong atau tidak dikenal
+- [x] `suppliers` memiliki kolom kategori dengan nilai sah `local` atau `import`.
+- [x] Supplier baru wajib menyertakan kategori; nilai kosong atau tidak dikenal
       ditolak dengan error validasi pada field kategori.
-- [ ] Supplier yang sudah ada mendapat kategori awal: nama berawalan `PT` menjadi
+- [x] Supplier yang sudah ada mendapat kategori awal: nama berawalan `PT` menjadi
       `local`.
-- [ ] Supplier lain diisi dari riwayat transaksi bila seluruh riwayatnya
+- [x] Supplier lain diisi dari riwayat transaksi bila seluruh riwayatnya
       menunjukkan satu source; riwayat kosong atau campuran dibiarkan kosong.
-- [ ] Form Master Supplier menampilkan dan menyimpan kategori.
-- [ ] Kolom kategori ditampilkan pada daftar supplier.
-- [ ] Teks baru tersedia di katalog i18n ID/EN/KO dengan jumlah kunci seimbang.
+- [x] Form Master Supplier menampilkan dan menyimpan kategori.
+- [x] Kolom kategori ditampilkan pada daftar supplier.
+- [x] Teks baru tersedia di katalog i18n ID/EN/KO dengan jumlah kunci seimbang.
 
 ## Verification
 
-- [ ] Tests pass: `vendor/bin/pest tests/Feature/SupplierSourceTest.php`
-- [ ] Build succeeds: `npm run build`
-- [ ] Output matches: supplier `PT ...` terisi `local`; supplier tanpa riwayat
+- [x] Tests pass: `vendor/bin/pest tests/Feature/SupplierSourceTest.php`
+- [x] Build succeeds: `npm run build`
+- [x] Output matches: supplier `PT ...` terisi `local`; supplier tanpa riwayat
       tetap kosong dan tidak dikarang
-- [ ] No regressions: `vendor/bin/pest tests/Feature/StockSourceTest.php tests/Feature/LocalPoTest.php`
+- [x] No regressions: `vendor/bin/pest tests/Feature/StockSourceTest.php tests/Feature/LocalPoTest.php`
 - [ ] Manual check: buat supplier baru tanpa kategori (harus ditolak), lalu isi
       kategori dan simpan
 

@@ -27,7 +27,7 @@ Target task list: file di direktori ini (`tasks/incoming-po-unification/`).
 
 ### Phase 1: Fondasi source
 
-- [ ] Task 01: Kategori source pada Master Supplier
+- [x] Task 01: Kategori source pada Master Supplier
 
 **Checkpoint:** setiap supplier baru wajib berkategori; data lama terklasifikasi
 sesuai aturan yang dapat diperiksa.

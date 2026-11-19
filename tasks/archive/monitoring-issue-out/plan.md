@@ -47,54 +47,54 @@ Broadcasting dependencies and configuration
 
 ### Phase 1: Foundation
 
-- [ ] Task 1: Add and configure Reverb/Echo broadcasting foundation
-- [ ] Task 2: Establish consistent monitoring permission and launcher discovery
-- [ ] Task 3: Implement WIB-aware monitoring query, filters, and summaries
+- [x] Task 1: Add and configure Reverb/Echo broadcasting foundation
+- [x] Task 2: Establish consistent monitoring permission and launcher discovery
+- [x] Task 3: Implement WIB-aware monitoring query, filters, and summaries
 
 ### Checkpoint: Foundation
 
-- [ ] Focused authorization and query tests pass
-- [ ] Composer/npm configuration is valid
-- [ ] Existing Material Issue detail and print behavior remains unchanged
+- [x] Focused authorization and query tests pass
+- [x] Composer/npm configuration is valid
+- [x] Existing Material Issue detail and print behavior remains unchanged
 - [ ] Human reviews the event payload and permission boundary before live UI work
 
 ### Phase 2: Real-time backend path
 
-- [ ] Task 4: Publish a post-commit Issue Out event from APK release
-- [ ] Task 5: Add event/channel authorization and backend regression coverage
+- [x] Task 4: Publish a post-commit Issue Out event from APK release
+- [x] Task 5: Add event/channel authorization and backend regression coverage
 
 ### Checkpoint: Backend real-time path
 
-- [ ] A successful APK release creates exactly one broadcastable event
-- [ ] An idempotent retry does not create a duplicate event
-- [ ] Unauthorized users cannot subscribe to the private channel
-- [ ] Existing API Issue Out tests remain green
+- [x] A successful APK release creates exactly one broadcastable event
+- [x] An idempotent retry does not create a duplicate event
+- [x] Unauthorized users cannot subscribe to the private channel
+- [x] Existing API Issue Out tests remain green
 
 ### Phase 3: Dashboard experience
 
-- [ ] Task 6: Build the monitoring dashboard summary, filters, and table
+- [x] Task 6: Build the monitoring dashboard summary, filters, and table
 - [ ] Task 7: Connect Echo live updates, status, reconnect, highlight, and toast
 - [ ] Task 8: Add complete i18n/types and launcher/detail/print integration coverage
 
 ### Checkpoint: Product flow
 
-- [ ] A new APK Issue Out appears without a full-page reload
+- [x] A new APK Issue Out appears without a full-page reload
 - [ ] Matching active filters update the row and summary; non-matching events do not
 - [ ] Detail and print links work and no mutation action is exposed
 - [ ] Browser verification covers connected, reconnecting, and disconnected states
 
 ### Phase 4: Operations and release verification
 
-- [ ] Task 9: Document local and VPS Reverb operation
-- [ ] Task 10: Run full quality verification and review the implementation
+- [x] Task 9: Document local and VPS Reverb operation
+- [x] Task 10: Run full quality verification and review the implementation
 
 ### Checkpoint: Complete
 
 - [ ] All PRD success criteria are verified
-- [ ] `vendor/bin/pint --dirty --format agent` passes
-- [ ] `npm run build` passes
-- [ ] Focused and full test suites pass
-- [ ] VPS runbook is complete and contains no secrets
+- [x] `vendor/bin/pint --dirty --format agent` passes
+- [x] `npm run build` passes
+- [x] Focused and full test suites pass
+- [x] VPS runbook is complete and contains no secrets
 - [ ] Ready for `code-review-and-quality`
 
 ## Parallelization Opportunities

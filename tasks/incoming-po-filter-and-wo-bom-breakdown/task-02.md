@@ -7,18 +7,18 @@ Pembaruan antarmuka `Incoming/Arrival/Form.vue` agar alur pemilihan input dimula
 
 ## Acceptance criteria
 
-- [ ] Di form Arrival (baik tab Lokal maupun Impor), field Supplier berada di posisi utama sebelum Purchase Order.
-- [ ] Memilih Supplier langsung menyaring dropdown PO: hanya menampilkan PO yang dimiliki oleh supplier tersebut.
-- [ ] Jika user mengubah Supplier, field `purchase_order_id` otomatis di-reset jika PO sebelumnya bukan milik supplier baru.
-- [ ] Dropdown PO menampilkan info nomor PO beserta status atau indikator sisa kuantitas.
+- [x] Di form Arrival (baik tab Lokal maupun Impor), field Supplier berada di posisi utama sebelum Purchase Order.
+- [x] Memilih Supplier langsung menyaring dropdown PO: hanya menampilkan PO yang dimiliki oleh supplier tersebut.
+- [x] Jika user mengubah Supplier, field `purchase_order_id` otomatis di-reset jika PO sebelumnya bukan milik supplier baru.
+- [x] Dropdown PO menampilkan info nomor PO beserta status atau indikator sisa kuantitas.
 - [ ] Di daftar `Incoming/Arrival/Index.vue` dan `Show.vue`, indikator tahapan pipeline menampilkan badge yang jelas: `Arrival`, `IQC Cek`, dan `Received`.
 
 ## Verification
 
-- [ ] Tests pass: `npm run build` (vue-tsc typecheck lolos)
-- [ ] Build succeeds: `npm run build`
-- [ ] Output matches: dropdown PO reaktif terhadap pilihan Supplier.
-- [ ] No regressions: `vendor/bin/pest`
+- [x] Tests pass: `npm run build` (vue-tsc typecheck lolos)
+- [x] Build succeeds: `npm run build`
+- [x] Output matches: dropdown PO reaktif terhadap pilihan Supplier.
+- [x] No regressions: `vendor/bin/pest`
 - [ ] Manual check: buka `/incoming-arrivals/create`, ganti supplier dan pastikan opsi PO menyesuaikan secara instan.
 
 ## Blocked by

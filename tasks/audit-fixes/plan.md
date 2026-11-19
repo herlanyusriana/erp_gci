@@ -73,54 +73,54 @@ penyusunan plan ini:
 Ringkas di sini; detail acceptance criteria + verifikasi ada di `todo.md`.
 
 ### Phase 1: Integritas Stok (risiko tertinggi, fail fast)
-- [ ] Task 01: `delivery_scans.deducted_qty` + tolak under-deduct
-- [ ] Task 02: Lock delivery + `returnToOrigin` memakai qty potong nyata
-- [ ] Task 03: Eksklusivitas tag & troli lintas delivery
+- [x] Task 01: `delivery_scans.deducted_qty` + tolak under-deduct
+- [x] Task 02: Lock delivery + `returnToOrigin` memakai qty potong nyata
+- [x] Task 03: Eksklusivitas tag & troli lintas delivery
 
 ### Checkpoint 1: Stok
-- [ ] Test baru membuktikan: tag lintas delivery ditolak, return parsial seimbang, move ganda tidak memotong 2×
-- [ ] `vendor/bin/pest` hijau
+- [x] Test baru membuktikan: tag lintas delivery ditolak, return parsial seimbang, move ganda tidak memotong 2×
+- [x] `vendor/bin/pest` hijau
 - [ ] Review manusia sebelum lanjut
 
 ### Phase 2: Alur yang Putus (blocker fungsional)
-- [ ] Task 04: Perbaiki route Production Result (XS)
-- [ ] Task 05: Sembunyikan release WO di web + jelaskan jalurnya
-- [ ] Task 06: Render panel OQC di web + permission role qc
-- [ ] Task 07: Pintu masuk Local PO
-- [ ] Task 08: Container inspection UI
-- [ ] Task 09: Buka akses Outgoing untuk PPIC
+- [x] Task 04: Perbaiki route Production Result (XS)
+- [x] Task 05: Sembunyikan release WO di web + jelaskan jalurnya
+- [x] Task 06: Render panel OQC di web + permission role qc
+- [x] Task 07: Pintu masuk Local PO
+- [x] Task 08: Container inspection UI
+- [x] Task 09: Buka akses Outgoing untuk PPIC
 
 ### Checkpoint 2: Alur
 - [ ] Satu siklus penuh bisa diselesaikan dari UI (dengan APK)
-- [ ] `vendor/bin/pest` + `npm run build` hijau
+- [x] `vendor/bin/pest` + `npm run build` hijau
 - [ ] Review manusia: coba alur di browser
 
 ### Phase 3: Keamanan & Operasional
-- [ ] Task 10: Gate di 5 controller + test matriks permission
-- [ ] Task 11: Kredensial seed dari env
-- [ ] Task 12: Guard `erp:reset-data` (env + audit trail)
+- [x] Task 10: Gate di 5 controller + test matriks permission
+- [x] Task 11: Kredensial seed dari env
+- [x] Task 12: Guard `erp:reset-data` (env + audit trail)
 
 ### Checkpoint 3: Keamanan
-- [ ] Test matriks membuktikan role non-admin ditolak di semua mutasi master
-- [ ] Reset menolak berjalan di production tanpa flag eksplisit
+- [x] Test matriks membuktikan role non-admin ditolak di semua mutasi master
+- [x] Reset menolak berjalan di production tanpa flag eksplisit
 - [ ] Review manusia sebelum deploy trial
 
 ### Phase 4: Integritas Data Lanjutan
-- [ ] Task 13: Unique `(part_id, tag)` + guard hapus dokumen hulu
-- [ ] Task 14: Generator nomor atomik
+- [x] Task 13: Unique `(part_id, tag)` + guard hapus dokumen hulu
+- [x] Task 14: Generator nomor atomik
 
 ### Checkpoint 4: Data
-- [ ] Unique constraint terpasang, tidak ada duplikat tersisa
-- [ ] Dua create bersamaan tidak menghasilkan 500
+- [x] Unique constraint terpasang, tidak ada duplikat tersisa
+- [x] Dua create bersamaan tidak menghasilkan 500
 
 ### Phase 5: UX, i18n, Performa
-- [ ] Task 15: 10 key i18n hilang + perluas `check-i18n.mjs`
-- [ ] Task 16: `CustomerPrice` berhenti menghapus input
-- [ ] Task 17: Index tag + `output_part_stock_id` + `whereDate` → range
+- [x] Task 15: 10 key i18n hilang + perluas `check-i18n.mjs`
+- [x] Task 16: `CustomerPrice` berhenti menghapus input
+- [x] Task 17: Index tag + `output_part_stock_id` + `whereDate` → range
 
 ### Checkpoint 5: Selesai
-- [ ] Semua acceptance criteria terpenuhi
-- [ ] `vendor/bin/pest`, `npm run build`, `vendor/bin/pint` hijau
+- [x] Semua acceptance criteria terpenuhi
+- [x] `vendor/bin/pest`, `npm run build`, `vendor/bin/pint` hijau
 - [ ] Siap deploy trial
 
 ## Backlog (sengaja ditunda, dengan alasan)

@@ -634,8 +634,8 @@ Perbaikan **belum** dimulai (menunggu keputusan ruang lingkup).
       (`scanned_qty` per part, tidak ada `qc/pass` di API, tanpa idempotency di
       `storeResult`, `qty_reject` tanpa batas atas, key `scanTag`/`saving` hilang).
 - [x] Hasil: 8 Critical, 43 Required, 23 Optional, 25 Nit.
-- [ ] Keputusan: gelombang 1 (C1–C4) boleh menyentuh server?
-- [ ] Keputusan: `issue_screen.dart` (785 baris, mati di produksi) dihapus?
+- [x] Keputusan: gelombang 1 (C1–C4) boleh menyentuh server?
+- [x] Keputusan: `issue_screen.dart` (785 baris, mati di produksi) dihapus?
 
 ## Yang sengaja TIDAK diubah
 

@@ -7,16 +7,16 @@ Penyempurnaan query data Purchase Order di `IncomingArrivalController` (method `
 
 ## Acceptance criteria
 
-- [ ] Query PO menghitung kuantitas yang sudah dibuatkan kedatangan (arrival).
-- [ ] PO yang seluruh kuantitasnya sudah diterima 100% (`remaining_qty <= 0`) tidak dikirimkan ke pilihan form kedatangan baru.
-- [ ] Setiap record PO menyertakan data `supplier_id` dan `remaining_qty` per item / total agar frontend dapat memvalidasi dan memfilter secara akurat.
-- [ ] PO berstatus `cancelled` atau `completed` dieksklusikan.
+- [x] Query PO menghitung kuantitas yang sudah dibuatkan kedatangan (arrival).
+- [x] PO yang seluruh kuantitasnya sudah diterima 100% (`remaining_qty <= 0`) tidak dikirimkan ke pilihan form kedatangan baru.
+- [x] Setiap record PO menyertakan data `supplier_id` dan `remaining_qty` per item / total agar frontend dapat memvalidasi dan memfilter secara akurat.
+- [x] PO berstatus `cancelled` atau `completed` dieksklusikan.
 
 ## Verification
 
-- [ ] Tests pass: `vendor/bin/pest tests/Feature/IncomingArrivalPoFilterTest.php`
+- [x] Tests pass: `vendor/bin/pest tests/Feature/IncomingArrivalPoFilterTest.php`
 - [ ] Build succeeds: `vendor/bin/pint --format agent`
-- [ ] Output matches: payload `purchaseOrders` pada inertia response `Incoming/Arrival/Form` hanya berisi PO aktif dengan remaining qty > 0.
+- [x] Output matches: payload `purchaseOrders` pada inertia response `Incoming/Arrival/Form` hanya berisi PO aktif dengan remaining qty > 0.
 - [ ] No regressions: `vendor/bin/pest tests/Feature/IncomingArrivalTest.php`
 - [ ] Manual check: periksa response Inertia pada `/incoming-arrivals/create`, verifikasi struktur PO.
 

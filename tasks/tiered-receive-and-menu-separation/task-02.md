@@ -7,17 +7,17 @@ Membersihkan halaman Detail Arrival (`resources/js/Pages/Incoming/Arrival/Show.v
 
 ## Acceptance criteria
 
-- [ ] Di halaman `Arrival/Show.vue`, tombol aksi `receiveAction` ("Terima") dan bagian tabel tag penerimaan fisik (`receiveTag`) dihilangkan seluruhnya.
-- [ ] Di halaman `Receive/Index.vue`, tombol "Terima" mengarahkan operator ke workspace alur penerimaan Receive (bukan lagi ke `incoming-arrivals.show`).
-- [ ] Dibuat endpoint/halaman detail penerimaan kedatangan di `ReceiveController` yang menyajikan item kedatangan siap-terima dan riwayat tag yang sudah diterbitkan.
-- [ ] Operator dapat memulai penerimaan item secara langsung dari modul Receive.
+- [x] Di halaman `Arrival/Show.vue`, tombol aksi `receiveAction` ("Terima") dan bagian tabel tag penerimaan fisik (`receiveTag`) dihilangkan seluruhnya.
+- [x] Di halaman `Receive/Index.vue`, tombol "Terima" mengarahkan operator ke workspace alur penerimaan Receive (bukan lagi ke `incoming-arrivals.show`).
+- [x] Dibuat endpoint/halaman detail penerimaan kedatangan di `ReceiveController` yang menyajikan item kedatangan siap-terima dan riwayat tag yang sudah diterbitkan.
+- [x] Operator dapat memulai penerimaan item secara langsung dari modul Receive.
 
 ## Verification
 
-- [ ] Tests pass: `npm run build`
-- [ ] Build succeeds: `vendor/bin/pint --format agent`
-- [ ] Output matches: Halaman Arrival bersih dari aksi penerimaan barang fisik; modul Receive memiliki alur kerja mandiri.
-- [ ] No regressions: `vendor/bin/pest tests/Feature/IncomingPoArrivalTest.php`
+- [x] Tests pass: `npm run build`
+- [x] Build succeeds: `vendor/bin/pint --format agent`
+- [x] Output matches: Halaman Arrival bersih dari aksi penerimaan barang fisik; modul Receive memiliki alur kerja mandiri.
+- [x] No regressions: `vendor/bin/pest tests/Feature/IncomingPoArrivalTest.php`
 - [ ] Manual check: Buka `/incoming-arrivals/{id}` dan pastikan tidak ada tombol Terima; buka `/receive` dan pastikan tombol Terima langsung masuk ke workspace Receive.
 
 ## Blocked by

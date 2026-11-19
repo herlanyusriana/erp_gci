@@ -17,15 +17,15 @@ Rencana implementasi untuk memfilter PO berbasis Supplier dan sisa kuantitas di 
 
 ### Phase 1: Incoming Supplier-PO Filter & Pipeline Status
 
-- [ ] Task 01: Backend PO Remaining Qty & Supplier Filter (`task-01.md`)
+- [x] Task 01: Backend PO Remaining Qty & Supplier Filter (`task-01.md`)
 - [ ] Task 02: Frontend Arrival Form Supplier-PO Reactive Filter & Pipeline Status (`task-02.md`)
 
 **Checkpoint 01:** Form Arrival reaktif memfilter PO berdasarkan Supplier dan hanya memuat PO yang belum tuntas; status pipeline Arrival -> IQC Cek -> Received tampil rapi.
 
 ### Phase 2: Work Order BOM Breakdown & Material Transition
 
-- [ ] Task 03: Work Order Process Breakdown: Multi-Input Assembly & TPL Continuous Line (`task-03.md`)
-- [ ] Task 04: Dynamic Material Display: Main BOM Part -> Substitute on Issue (`task-04.md`)
+- [x] Task 03: Work Order Process Breakdown: Multi-Input Assembly & TPL Continuous Line (`task-03.md`)
+- [x] Task 04: Dynamic Material Display: Main BOM Part -> Substitute on Issue (`task-04.md`)
 
 **Final Checkpoint:** Seluruh komponen proses Assembly tampil lengkap di WO Show; TPL tetap 1 baris tandem; tampilan Main Part bertransisi ke Substitute saat di-issue; Pest tests 100% hijau; npm run build sukses.
 

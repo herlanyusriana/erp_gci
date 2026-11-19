@@ -8,26 +8,26 @@ menambahkan packing type baru untuk part tersebut.
 
 ## Acceptance criteria
 
-- [ ] Form menampilkan input ukuran teks bebas yang boleh dikosongkan.
-- [ ] UOM ditampilkan dari master part pengganti sebagai nilai baca-saja; tidak
+- [x] Form menampilkan input ukuran teks bebas yang boleh dikosongkan.
+- [x] UOM ditampilkan dari master part pengganti sebagai nilai baca-saja; tidak
       ada input UOM terpisah pada relasi.
-- [ ] Packing type berupa pilihan tunggal yang berisi kode dari katalog part
+- [x] Packing type berupa pilihan tunggal yang berisi kode dari katalog part
       pengganti, wajib dipilih saat menyimpan.
-- [ ] Tersedia opsi menambahkan packing type baru untuk part tersebut dari form;
+- [x] Tersedia opsi menambahkan packing type baru untuk part tersebut dari form;
       setelah ditambahkan, kode langsung dapat dipilih.
-- [ ] Ukuran kosong ditampilkan sebagai `-` pada tabel daftar.
-- [ ] Tabel daftar menampilkan kolom ukuran, UOM, dan packing type.
-- [ ] Semua teks baru tersedia dalam katalog i18n ID/EN/KO dengan jumlah kunci
+- [x] Ukuran kosong ditampilkan sebagai `-` pada tabel daftar.
+- [x] Tabel daftar menampilkan kolom ukuran, UOM, dan packing type.
+- [x] Semua teks baru tersedia dalam katalog i18n ID/EN/KO dengan jumlah kunci
       seimbang.
-- [ ] Menambah packing type baru tidak memicu pembuatan record Arrival.
+- [x] Menambah packing type baru tidak memicu pembuatan record Arrival.
 
 ## Verification
 
-- [ ] Tests pass: `vendor/bin/pest tests/Feature/PartSubstituteAttributeTest.php`
-- [ ] Build succeeds: `npm run build`
-- [ ] Output matches: halaman menerima props katalog packing type per part dan
+- [x] Tests pass: `vendor/bin/pest tests/Feature/PartSubstituteAttributeTest.php`
+- [x] Build succeeds: `npm run build`
+- [x] Output matches: halaman menerima props katalog packing type per part dan
       UOM part pengganti; `node scripts/check-i18n.mjs` lulus
-- [ ] No regressions: `vendor/bin/pest tests/Feature/RolePermissionTest.php`
+- [x] No regressions: `vendor/bin/pest tests/Feature/RolePermissionTest.php`
 - [ ] Manual check: buka halaman Substitute, simpan relasi dengan ukuran kosong,
       tambahkan satu packing type baru, lalu pastikan pilihan muncul pada relasi
       part yang sama dan tidak muncul pada part lain

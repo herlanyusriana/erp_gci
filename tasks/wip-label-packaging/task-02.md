@@ -6,20 +6,20 @@
 
 ## Acceptance criteria
 
-- [ ] Tombol `Print Good` pada baris antrean label membuka modal dialog kemasan, bukan langsung membuka tab cetak.
-- [ ] Dropdown kemasan menyediakan pilihan: `Troli`, `Box`, dan `Pallet`.
-- [ ] Input kapasitas kemasan (`Packing Qty`) menerima angka integer positif.
-- [ ] Modal menampilkan kalkulasi instan: `X kemasan penuh (@ Y EA)` dan `Sisa ganjil: Z EA`.
-- [ ] Terdapat checkbox opsi sisa ganjil: `Cetak label untuk sisa Z EA sekarang` vs `Tunda sisa Z EA ke periode berikutnya`.
-- [ ] Menampilkan notifikasi ringkasan: `Total X label akan dicetak`.
-- [ ] Konfirmasi cetak membuka tab baru dengan parameter kemasan yang dipilih dan mengirim update carry-over jika sisa ditunda.
+- [x] Tombol `Print Good` pada baris antrean label membuka modal dialog kemasan, bukan langsung membuka tab cetak.
+- [x] Dropdown kemasan menyediakan pilihan: `Troli`, `Box`, dan `Pallet`.
+- [x] Input kapasitas kemasan (`Packing Qty`) menerima angka integer positif.
+- [x] Modal menampilkan kalkulasi instan: `X kemasan penuh (@ Y EA)` dan `Sisa ganjil: Z EA`.
+- [x] Terdapat checkbox opsi sisa ganjil: `Cetak label untuk sisa Z EA sekarang` vs `Tunda sisa Z EA ke periode berikutnya`.
+- [x] Menampilkan notifikasi ringkasan: `Total X label akan dicetak`.
+- [x] Konfirmasi cetak membuka tab baru dengan parameter kemasan yang dipilih dan mengirim update carry-over jika sisa ditunda.
 
 ## Verification
 
-- [ ] Tests pass: `./vendor/bin/pest tests/Feature/ProductionLabelQueueTest.php`
-- [ ] Build succeeds: `npm run build`
-- [ ] Output matches: komponen modal terpasang dan interaktif di `Index.vue`
-- [ ] No regressions: `./vendor/bin/pest`
+- [x] Tests pass: `./vendor/bin/pest tests/Feature/ProductionLabelQueueTest.php`
+- [x] Build succeeds: `npm run build`
+- [x] Output matches: komponen modal terpasang dan interaktif di `Index.vue`
+- [x] No regressions: `./vendor/bin/pest`
 - [ ] Manual check: klik Print Good di web memunculkan dialog kalkulasi kemasan
 
 ## Blocked by

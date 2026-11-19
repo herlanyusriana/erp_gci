@@ -49,6 +49,7 @@
     "Receive updated.": "Receipt updated.",
     "Receive :tag deleted.": "Receipt :tag deleted.",
     "TAG tersimpan.": "TAG saved.",
+    "Baris packing tanpa qty dan tanpa berat bersih tidak boleh disimpan.": "A packing row without quantity and without net weight cannot be saved.",
     "TAG tersimpan. Masih ada pending.": "TAG saved. Some goods are still pending receipt.",
     "Invoice complete receive. Transaction No: :number": "Invoice fully received. Transaction No: :number",
     "Total (:total :unit) melebihi sisa (:remaining :unit).": "Total (:total :unit) exceeds the remaining quantity (:remaining :unit).",

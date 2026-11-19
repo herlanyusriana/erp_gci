@@ -13,6 +13,7 @@ use App\Support\DocumentNumber;
 use App\Support\PurchaseOrderLimit;
 use App\Support\QrSvg;
 use App\Support\UomCatalog;
+use Closure;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -162,6 +163,21 @@ class ReceiveController extends Controller
             'tags.*.packings.*.uom' => ['nullable', 'string', 'max:20'],
             'tags.*.packings.*.net_weight' => ['nullable', 'numeric', 'min:0'],
             'tags.*.packings.*.gross_weight' => ['nullable', 'numeric', 'min:0'],
+            // Baris packing kosong (tanpa qty dan tanpa berat) tidak boleh
+            // tersimpan: label dan layar issue membacanya sebagai packing nyata,
+            // sehingga bundle berisi 3 coil bisa tercetak "8 COIL".
+            'tags.*.packings.*' => [function (string $attribute, mixed $value, Closure $fail): void {
+                if (! is_array($value)) {
+                    return;
+                }
+
+                $qty = (float) ($value['qty'] ?? 0);
+                $netWeight = is_numeric($value['net_weight'] ?? null) ? (float) $value['net_weight'] : 0.0;
+
+                if ($qty <= 0 && $netWeight <= 0) {
+                    $fail(__('Baris packing tanpa qty dan tanpa berat bersih tidak boleh disimpan.'));
+                }
+            }],
         ]);
 
         $this->receiveService->ensureTagsUniqueForArrivalItem($arrivalItem, $validated['tags'], 'tags');

@@ -49,6 +49,7 @@
     "Receive updated.": "Penerimaan diperbarui.",
     "Receive :tag deleted.": "Penerimaan :tag dihapus.",
     "TAG tersimpan.": "TAG disimpan.",
+    "Baris packing tanpa qty dan tanpa berat bersih tidak boleh disimpan.": "Baris packing tanpa qty dan tanpa berat bersih tidak boleh disimpan.",
     "TAG tersimpan. Masih ada pending.": "TAG disimpan. Masih ada barang yang belum diterima.",
     "Invoice complete receive. Transaction No: :number": "Penerimaan faktur selesai. Nomor transaksi: :number",
     "Total (:total :unit) melebihi sisa (:remaining :unit).": "Total (:total :unit) melebihi sisa (:remaining :unit).",

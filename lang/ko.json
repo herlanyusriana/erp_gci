@@ -49,6 +49,7 @@
     "Receive updated.": "입고 내역이 수정되었습니다.",
     "Receive :tag deleted.": "입고 내역 :tag이(가) 삭제되었습니다.",
     "TAG tersimpan.": "태그가 저장되었습니다.",
+    "Baris packing tanpa qty dan tanpa berat bersih tidak boleh disimpan.": "수량도 없고 순중량도 없는 포장 행은 저장할 수 없습니다.",
     "TAG tersimpan. Masih ada pending.": "태그가 저장되었습니다. 아직 입고되지 않은 물품이 있습니다.",
     "Invoice complete receive. Transaction No: :number": "해당 송장의 입고가 완료되었습니다. 거래 번호: :number",
     "Total (:total :unit) melebihi sisa (:remaining :unit).": "합계(:total :unit)가 잔여 수량(:remaining :unit)을 초과합니다.",

@@ -22,6 +22,8 @@ interface PackingSubRow {
 
 interface BundleGroup {
     tag: string;
+    /** Jenis kemasan bundle ini; boleh berbeda antar bundle dalam satu penerimaan. */
+    packing_type: string;
     packings: PackingSubRow[];
 }
 
@@ -71,6 +73,12 @@ const initialBundleCount = () => {
 };
 
 // Section 2 State
+//
+// `packing_count` dan `packing_type` di sini adalah NILAI AWAL, bukan nilai
+// semua bundle: satu penerimaan boleh berisi bundle dengan jumlah packing
+// berbeda (mis. bundle 1 = 3 packing, bundle 2 = 8 packing). Nilai awal hanya
+// dipakai saat baris bundle dibuat; sesudahnya tiap bundle diatur sendiri di
+// kolom Tag pada tabel detail.
 const bundleConfig = reactive({
     bundle_count: initialBundleCount() as number | '',
     bundle_unit: initialBundleUnit(),
@@ -79,10 +87,9 @@ const bundleConfig = reactive({
 });
 
 const packingCapNotice = computed(() => {
-    const applied = Number(bundleConfig.packing_count) || 0;
     const requested = requestedPackingCount.value;
 
-    return requested !== null && requested > applied ? applied : null;
+    return requested !== null && requested > maxPackingsPerBundle.value ? maxPackingsPerBundle.value : null;
 });
 
 // Section 1 Form State
@@ -107,38 +114,123 @@ function createPackingRow(): PackingSubRow {
     };
 }
 
+/**
+ * Batas jumlah packing untuk satu bundle.
+ *
+ * Dua batas berlaku sekaligus: 999 packing per bundle (batas tampilan) dan
+ * 1000 baris total agar tabel tetap ringan. Karena tiap bundle punya jumlah
+ * sendiri, batas per bundle dihitung dari sisa jatah baris yang belum dipakai
+ * bundle lain.
+ */
+function bundleRowCap(bundleIndex: number): number {
+    const otherRows = bundles.value.reduce(
+        (sum, b, i) => (i === bundleIndex ? sum : sum + b.packings.length),
+        0,
+    );
+
+    return Math.max(1, Math.min(MAX_PACKINGS, MAX_TOTAL_ROWS - otherRows));
+}
+
+const maxPackingsPerBundle = computed(() => {
+    const bundleCount = Math.max(1, Math.floor(Number(bundleConfig.bundle_count) || 1));
+
+    return Math.max(1, Math.min(MAX_PACKINGS, Math.floor(MAX_TOTAL_ROWS / bundleCount)));
+});
+
+const defaultPackingCount = () =>
+    Math.min(maxPackingsPerBundle.value, Math.max(1, Math.floor(Number(bundleConfig.packing_count) || 1)));
+
+/** Baris terakhir yang berisi menentukan batas bawah jumlah packing. */
+function minimumPackingCount(bundle: BundleGroup): number {
+    let lastFilled = -1;
+
+    bundle.packings.forEach((packing, index) => {
+        if (isPackingFilled(packing)) {
+            lastFilled = index;
+        }
+    });
+
+    return lastFilled + 1;
+}
+
+function setBundlePackingCount(bundle: BundleGroup, bundleIndex: number, value: number) {
+    // Jangan pernah memotong baris yang sudah berisi: operator harus
+    // mengosongkan barisnya dulu. Tanpa batas ini salah ketik "3" pada bundle
+    // berisi 8 packing menghapus 5 packing tanpa peringatan.
+    const floor = Math.max(1, minimumPackingCount(bundle));
+    const target = Math.min(bundleRowCap(bundleIndex), Math.max(floor, Math.floor(value) || 1));
+
+    while (bundle.packings.length < target) {
+        bundle.packings.push(createPackingRow());
+    }
+    bundle.packings.length = target;
+}
+
+function onBundlePackingCount(bundle: BundleGroup, bundleIndex: number, event: Event) {
+    const value = Number((event.target as HTMLInputElement).value);
+    setBundlePackingCount(bundle, bundleIndex, Number.isFinite(value) && value > 0 ? value : 1);
+
+    // Tulis balik nilai yang benar-benar dipakai supaya input tidak menampilkan
+    // angka yang berbeda dari jumlah baris di tabel.
+    (event.target as HTMLInputElement).value = String(bundle.packings.length);
+}
+
+/** Bundle yang belum diisi qty/berat masih boleh mengikuti nilai awal. */
+function isBundlePristine(bundle: BundleGroup): boolean {
+    return bundle.packings.every((p) => !Number(p.qty) && !Number(p.net_weight));
+}
+
+function createBundle(index: number): BundleGroup {
+    return {
+        tag: String(index),
+        packing_type: bundleConfig.packing_type,
+        packings: Array.from({ length: defaultPackingCount() }, createPackingRow),
+    };
+}
+
 function resizeBundles() {
-    let nb = Math.floor(Number(bundleConfig.bundle_count) || 1);
-    const requestedPacking = Math.floor(Number(bundleConfig.packing_count) || 1);
-    nb = Math.min(MAX_BUNDLES, Math.max(1, nb));
-
-    const packingCap = Math.max(1, Math.min(MAX_PACKINGS, Math.floor(MAX_TOTAL_ROWS / nb)));
-    const np = Math.min(packingCap, Math.max(1, requestedPacking));
-
-    bundleConfig.bundle_count = nb;
-    bundleConfig.packing_count = np;
+    const bundleCount = Math.min(MAX_BUNDLES, Math.max(1, Math.floor(Number(bundleConfig.bundle_count) || 1)));
+    bundleConfig.bundle_count = bundleCount;
 
     const current = bundles.value;
-    while (current.length < nb) {
-        const idx = current.length + 1;
-        // Tag = identitas bundle yang diketik operator. Prefill cukup nomor
-        // bundle agar tidak tertukar dengan nomor invoice / nomor part.
-        current.push({
-            tag: String(idx),
-            packings: [],
-        });
+    while (current.length < bundleCount) {
+        const bundle = createBundle(current.length + 1);
+        // Jatah baris total bisa lebih kecil dari nilai awal: potong bundle
+        // baru agar gabungan semua bundle tidak melewati MAX_TOTAL_ROWS.
+        setBundlePackingCount(bundle, current.length, bundle.packings.length);
+        current.push(bundle);
     }
-    current.length = nb;
+    current.length = bundleCount;
+}
 
-    current.forEach((b) => {
-        while (b.packings.length < np) {
-            b.packings.push(createPackingRow());
+/**
+ * Nilai awal diterapkan hanya ke bundle yang belum diisi qty/berat.
+ *
+ * Tanpa aturan ini, mengubah "Jumlah packing" setelah mengatur bundle 1 = 3
+ * dan bundle 2 = 8 akan menghapus pengaturan per bundle yang baru saja dibuat
+ * operator. Bundle yang sudah berisi data tidak pernah diubah diam-diam.
+ */
+function applyPackingDefaults() {
+    // Tampilkan angka yang benar-benar dipakai, bukan angka yang diminta:
+    // kolom "Jumlah packing" tidak boleh menjanjikan 2000 sementara tabel
+    // hanya mendapat 999.
+    const cap = maxPackingsPerBundle.value;
+    if ((Number(bundleConfig.packing_count) || 0) > cap) {
+        bundleConfig.packing_count = cap;
+    }
+
+    bundles.value.forEach((bundle, index) => {
+        if (!isBundlePristine(bundle)) {
+            return;
         }
-        b.packings.length = np;
+
+        bundle.packing_type = bundleConfig.packing_type;
+        setBundlePackingCount(bundle, index, defaultPackingCount());
     });
 }
 
-watch(() => [bundleConfig.bundle_count, bundleConfig.packing_count], resizeBundles);
+watch(() => bundleConfig.bundle_count, resizeBundles);
+watch(() => [bundleConfig.packing_count, bundleConfig.packing_type], applyPackingDefaults);
 
 function onPackingCountInput(event: Event) {
     const value = Number((event.target as HTMLInputElement).value);
@@ -160,10 +252,40 @@ const round4 = (n: number) => Math.round(n * 10000) / 10000;
  * Coil ditimbang satu per satu, jadi berat total memang terbagi ke tiap coil.
  * Packing lain (BOX/SHEET/PALLET/BAG/…) dicatat per qty barang; beratnya tidak
  * dipecah per baris supaya angka yang diketik operator tidak dikarang form.
+ *
+ * Sejak jumlah packing bisa berbeda antar bundle, pembagian berat hanya
+ * dilakukan bila SELURUH bundle bertipe COIL. Campuran COIL + BOX tidak punya
+ * dasar pembagian yang jujur, jadi berat diisi manual per baris.
  */
 const splitsNetWeight = computed(
-    () => props.weightBasis && String(bundleConfig.packing_type).toUpperCase() === 'COIL',
+    () =>
+        props.weightBasis
+        && bundles.value.length > 0
+        && bundles.value.every((b) => String(b.packing_type).toUpperCase() === 'COIL'),
 );
+
+/** Baris packing yang benar-benar berisi; baris kosong tidak dikirim ke server. */
+const isPackingFilled = (packing: PackingSubRow) =>
+    (Number(packing.qty) || 0) > 0 || (Number(packing.net_weight) || 0) > 0;
+
+/**
+ * Nomor packing yang akan tersimpan untuk baris ke-`rowIndex`.
+ *
+ * Baris kosong dilewati saat menyimpan, jadi nomor di layar mengikuti urutan
+ * baris yang terisi — bukan indeks baris — supaya nomor yang ditulis operator
+ * di packing fisik sama dengan nomor yang tersimpan.
+ */
+function packingSequence(bundle: BundleGroup, rowIndex: number): number {
+    let sequence = 0;
+
+    for (let i = 0; i <= rowIndex; i++) {
+        if (isPackingFilled(bundle.packings[i])) {
+            sequence++;
+        }
+    }
+
+    return sequence;
+}
 
 /**
  * Sisa yang dibagi ke seluruh baris packing: jumlah bundle × jumlah packing.
@@ -254,7 +376,9 @@ const totals = computed(() => {
 
     bundles.value.forEach((b) => {
         b.packings.forEach((p) => {
-            totPack++;
+            if (isPackingFilled(p)) {
+                totPack++;
+            }
             totQty += Number(p.qty) || 0;
             totNet += Number(p.net_weight) || 0;
         });
@@ -338,11 +462,10 @@ function submit() {
         });
     }
 
-    // Hanya bundle yang benar-benar berisi qty yang dikirim. Form selalu
-    // menyediakan beberapa baris kosong (default 4 bundle x 3 packing), dan
-    // server menolak tag ber-qty 0 — tanpa filter ini penyimpanan gagal
-    // dengan pesan yang tidak tampil di layar.
-    const filled = bundles.value.filter((b) => b.packings.some((p) => (Number(p.qty) || 0) > 0));
+    // Hanya bundle yang benar-benar berisi qty/berat yang dikirim. Form selalu
+    // menyediakan beberapa baris kosong, dan server menolak packing kosong —
+    // tanpa filter ini penyimpanan gagal dengan pesan yang tidak tampil di layar.
+    const filled = bundles.value.filter((b) => b.packings.some(isPackingFilled));
 
     const emptyTagIdx = filled.findIndex((b) => !b.tag.trim());
     if (emptyTagIdx !== -1) {
@@ -360,12 +483,17 @@ function submit() {
         return;
     }
 
-    // Bentuk payload tags per bundle (1 incoming_receive per tag bundle, berisi list sub-packings)
+    // Bentuk payload tags per bundle (1 incoming_receive per tag bundle, berisi list sub-packings).
+    // Baris packing kosong dibuang dan nomornya diurutkan ulang, supaya
+    // packing_count yang tersimpan sama dengan jumlah packing yang benar-benar
+    // ada — bukan jumlah baris yang disediakan form.
     form.tags = filled.map((b) => {
         let bQty = 0;
         let bNet = 0;
+        const tag = b.tag.trim();
+        const filledPackings = b.packings.filter(isPackingFilled);
 
-        const packingsData = b.packings.map((p, pi) => {
+        const packingsData = filledPackings.map((p, index) => {
             const q = Number(p.qty) || 0;
             const nw = p.net_weight === '' ? null : Number(p.net_weight);
 
@@ -373,8 +501,8 @@ function submit() {
             if (nw !== null) bNet += nw;
 
             return {
-                packing_no: `${b.tag}/${pi + 1}`,
-                sequence: pi + 1,
+                packing_no: `${tag}/${index + 1}`,
+                sequence: index + 1,
                 qty: q,
                 uom: p.uom,
                 net_weight: nw,
@@ -384,15 +512,15 @@ function submit() {
         const round4 = (n: number) => Math.round(n * 10000) / 10000;
 
         return {
-            tag: b.tag.trim(),
+            tag,
             qty: round4(bQty),
             qty_unit: defaultUom(),
             bundle_count: 1,
             bundle_qty: 1,
             bundle_unit: bundleConfig.bundle_unit,
-            packing_count: b.packings.length,
-            packing_type: bundleConfig.packing_type,
-            packing_qty: b.packings.length > 0 ? round4(bQty / b.packings.length) : round4(bQty),
+            packing_count: packingsData.length,
+            packing_type: b.packing_type,
+            packing_qty: packingsData.length > 0 ? round4(bQty / packingsData.length) : round4(bQty),
             net_weight: props.weightBasis ? round4(bNet) : (bNet > 0 ? round4(bNet) : null),
             packings: packingsData,
         };
@@ -576,7 +704,9 @@ function submit() {
                     </div>
 
                     <div>
-                        <label class="text-xs font-semibold text-ink-secondary">Jumlah Packing</label>
+                        <label class="text-xs font-semibold text-ink-secondary">
+                            {{ t('incoming.packingPerBundle') }}
+                        </label>
                         <input
                             v-model="bundleConfig.packing_count"
                             type="number"
@@ -588,7 +718,7 @@ function submit() {
                         <p v-if="packingCapNotice" class="mt-1 text-[11px] font-semibold text-warning">
                             {{ t('incoming.packingRowLimit', { packing: packingCapNotice, max: MAX_TOTAL_ROWS }) }}
                         </p>
-                        <p v-else class="mt-1 text-[11px] text-ink-secondary">Packing per bundle</p>
+                        <p v-else class="mt-1 text-[11px] text-ink-secondary">{{ t('incoming.packingDefaultHint') }}</p>
                     </div>
 
                     <div>
@@ -614,6 +744,7 @@ function submit() {
                         <p class="text-xs text-ink-secondary">
                             Penomoran packing otomatis {TAG}/{1..N}. Tag Bundle adalah identitas utama saat scan fisik.
                         </p>
+                        <p class="text-xs text-ink-secondary">{{ t('incoming.packingPerBundleTableHint') }}</p>
                     </div>
                     <div class="flex flex-col items-end gap-1">
                         <button
@@ -638,7 +769,7 @@ function submit() {
                                 <th class="w-12 border border-borderline px-3 py-2.5 text-center">No</th>
                                 <th class="w-52 border border-borderline px-3 py-2.5">{{ t('master.partName') }}</th>
                                 <th class="w-32 border border-borderline px-3 py-2.5">{{ t('master.model') }}</th>
-                                <th class="w-40 border border-borderline px-3 py-2.5">Tag # (Bundle)</th>
+                                <th class="w-48 border border-borderline px-3 py-2.5">Tag # (Bundle)</th>
                                 <th class="w-36 border border-borderline px-3 py-2.5">Packing #</th>
                                 <th class="w-32 border border-borderline px-3 py-2.5 text-right">Qty/packing</th>
                                 <th class="w-24 border border-borderline px-3 py-2.5">UOM</th>
@@ -684,13 +815,34 @@ function submit() {
                                             v-model="b.tag"
                                             type="text"
                                             placeholder="Tag bundle"
+                                            :aria-label="`${t('incoming.tag')} ${bi + 1}`"
                                             class="w-full rounded border-borderline bg-surface px-2.5 py-1.5 font-mono text-xs font-bold text-ink-primary focus:border-primary focus:ring-primary"
                                         />
+                                        <div class="mt-1.5 flex items-center gap-1">
+                                            <input
+                                                :value="b.packings.length"
+                                                type="number"
+                                                min="1"
+                                                :max="MAX_PACKINGS"
+                                                inputmode="numeric"
+                                                :aria-label="t('incoming.packingCountForBundle', { bundle: bi + 1 })"
+                                                class="w-14 rounded border-borderline bg-surface px-1.5 py-1 text-center text-xs font-bold text-ink-primary focus:border-primary focus:ring-primary"
+                                                @input="onBundlePackingCount(b, bi, $event)"
+                                            />
+                                            <select
+                                                v-model="b.packing_type"
+                                                :aria-label="t('incoming.packingTypeForBundle', { bundle: bi + 1 })"
+                                                class="min-w-0 flex-1 rounded border-borderline bg-surface px-1 py-1 text-[11px] font-semibold text-ink-primary focus:border-primary focus:ring-primary"
+                                            >
+                                                <option v-for="p in packingTypeOptions" :key="p" :value="p">{{ p }}</option>
+                                            </select>
+                                        </div>
                                     </td>
 
                                     <!-- Kolom per Packing -->
                                     <td class="border border-borderline px-3 py-2 font-mono text-xs font-semibold text-primary">
-                                        {{ b.tag || '-' }}/{{ ri + 1 }}
+                                        <template v-if="isPackingFilled(r)">{{ b.tag || '-' }}/{{ packingSequence(b, ri) }}</template>
+                                        <span v-else class="text-ink-secondary">—</span>
                                     </td>
                                     <td class="border border-borderline p-1 text-right">
                                         <input

@@ -23,7 +23,6 @@ interface ItemRow {
     unit_bundle: string;
     weight_nett: number | '';
     unit_weight: string;
-    weight_gross: number | '';
     price: number | '';
     total_price: number | '';
     is_foc: boolean;
@@ -71,7 +70,6 @@ const blankItem = (): ItemRow => ({
     unit_bundle: props.packingUnits[0] ?? 'PALLET',
     weight_nett: '',
     unit_weight: 'KGM',
-    weight_gross: '',
     price: '',
     total_price: '',
     is_foc: false,
@@ -108,7 +106,6 @@ const itemRows = ref<ItemRow[]>(
         unit_bundle: i.unit_bundle ?? (props.packingUnits[0] ?? 'PALLET'),
         weight_nett: i.weight_nett ?? '',
         unit_weight: i.unit_weight ?? 'KGM',
-        weight_gross: i.weight_gross ?? '',
         price: i.price ?? '',
         total_price: i.total_price ?? '',
         is_foc: Boolean(i.is_foc),
@@ -205,7 +202,6 @@ function onPurchaseOrderChange() {
                 unit_bundle: props.packingUnits[0] ?? 'PALLET',
                 weight_nett: it.unit === 'KGM' || !it.unit ? it.qty : '',
                 unit_weight: 'KGM',
-                weight_gross: '',
                 price: it.price ?? '',
                 total_price: (Number(it.qty) || 0) * (Number(it.price) || 0) || '',
                 is_foc: false,
@@ -303,12 +299,6 @@ function recalcPrice(row: ItemRow) {
     row.price = priceMilli / 1000;
 }
 
-function weightInvalid(row: ItemRow) {
-    const nett = Number(row.weight_nett);
-    const gross = Number(row.weight_gross);
-    return Number.isFinite(nett) && Number.isFinite(gross) && nett > 0 && gross > 0 && nett > gross;
-}
-
 function formatMilli(value: number | ''): string {
     if (value === '' || value === null) return '';
     const milli = Math.floor(Number(value) * 1000);
@@ -346,7 +336,6 @@ function submit() {
             unit_bundle: r.unit_bundle || null,
             weight_nett: r.weight_nett === '' ? (r.unit_goods === 'KGM' ? Number(r.qty_goods) : null) : Number(r.weight_nett),
             unit_weight: 'KGM',
-            weight_gross: r.weight_gross === '' ? null : Number(r.weight_gross),
             price: r.price === '' ? null : Number(r.price),
             total_price: r.total_price === '' ? null : Number(r.total_price),
             is_foc: r.is_foc,
@@ -840,20 +829,6 @@ function submit() {
                                     @input="recalcPrice(r)"
                                     class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
                                 />
-                            </div>
-
-                            <div class="sm:col-span-3">
-                                <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.grossWeight') }} (KGM)</label>
-                                <input
-                                    v-model="r.weight_gross"
-                                    :aria-label="t('incoming.grossWeight')"
-                                    type="number"
-                                    step="0.0001"
-                                    min="0"
-                                    placeholder="0.0000"
-                                    class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
-                                />
-                                <p v-if="weightInvalid(r)" class="mt-0.5 text-[10px] text-danger">{{ t('incoming.invalidWeight') }}</p>
                             </div>
                         </div>
 

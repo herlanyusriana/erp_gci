@@ -352,6 +352,55 @@ class IncomingPoArrivalTest extends TestCase
         $this->assertEquals(625, $item->weight_gross);
     }
 
+    public function test_arrival_edit_keeps_the_stored_gross_weight(): void
+    {
+        $supplier = Supplier::where('is_active', true)->firstOrFail();
+        $part = Part::whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))->firstOrFail();
+
+        $this->post(route('incoming-arrivals.store'), [
+            'is_local' => false,
+            'supplier_id' => $supplier->id,
+            'invoice_no' => 'INV-KEEP-GROSS',
+            'invoice_date' => now()->toDateString(),
+            'items' => [
+                [
+                    'part_id' => $part->id,
+                    'qty_goods' => 500,
+                    'unit_goods' => 'KGM',
+                    'weight_nett' => 500,
+                    'weight_gross' => 520,
+                ],
+            ],
+            'containers' => [],
+        ])->assertSessionHasNoErrors()->assertRedirect();
+
+        $arrival = IncomingArrival::where('invoice_no', 'INV-KEEP-GROSS')->firstOrFail();
+        $item = $arrival->items()->firstOrFail();
+
+        // Form sudah tidak mengirim gross weight; edit tidak boleh menghapusnya
+        // karena kolom itu masih dicetak di invoice & export.
+        $this->put(route('incoming-arrivals.update', $arrival), [
+            'is_local' => false,
+            'supplier_id' => $supplier->id,
+            'status' => 'pending',
+            'invoice_no' => $arrival->invoice_no,
+            'invoice_date' => now()->toDateString(),
+            'items' => [
+                [
+                    'id' => $item->id,
+                    'part_id' => $part->id,
+                    'qty_goods' => 600,
+                    'unit_goods' => 'KGM',
+                    'weight_nett' => 600,
+                ],
+            ],
+            'containers' => [],
+        ])->assertSessionHasNoErrors()->assertRedirect();
+
+        $this->assertEquals(600, $item->fresh()->weight_nett);
+        $this->assertEqualsWithDelta(520, (float) $item->fresh()->weight_gross, 0.01);
+    }
+
     public function test_backfill_replaces_part_number_with_the_supplier_material_group(): void
     {
         $mapping = PartSubstitute::query()

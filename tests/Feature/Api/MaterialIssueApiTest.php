@@ -12,8 +12,10 @@ use App\Models\MaterialIssue;
 use App\Models\MaterialIssueItem;
 use App\Models\Part;
 use App\Models\PartStock;
+use App\Models\Permission;
 use App\Models\ProductionPlan;
 use App\Models\ProductionPlanItem;
+use App\Models\Role;
 use App\Models\Supplier;
 use App\Models\User;
 use App\Models\WorkOrder;
@@ -970,12 +972,92 @@ class MaterialIssueApiTest extends TestCase
             ->assertNotFound();
     }
 
-    public function test_resolve_tag_requires_stock_issue_permission(): void
+    public function test_resolve_tag_is_forbidden_without_any_issue_permission(): void
     {
         $qc = User::where('email', 'qc@geumcheon.local')->firstOrFail();
         $this->actingAs($qc, 'sanctum');
 
-        $this->postJson('/api/stock-tags/resolve', ['tag' => 'APA-SAJA'])->assertForbidden();
+        $this->postJson('/api/stock-tags/resolve', ['tag' => 'APA-SAJA'])
+            ->assertForbidden()
+            ->assertJsonPath('message', __('Tidak berwenang mengakses data stok.'));
+    }
+
+    public function test_resolve_tag_allows_a_user_with_only_production_update(): void
+    {
+        $role = Role::firstOrCreate(
+            ['name' => 'test-production-update'],
+            ['label' => 'Test Production Update'],
+        );
+        $role->permissions()->sync([
+            Permission::firstOrCreate(
+                ['name' => 'production.update'],
+                ['module' => 'production', 'label' => 'Production Update'],
+            )->id,
+        ]);
+        $user = User::factory()->create();
+        $user->roles()->attach($role->id);
+        $this->actingAs($user, 'sanctum');
+
+        $this->assertTrue($user->hasPermission('production.update'));
+        $this->assertFalse($user->hasPermission('stock.issue'));
+        $this->assertFalse($user->hasPermission('work_order.update'));
+
+        $part = Part::where('part_number', 'PINCB01')->firstOrFail();
+        $this->addStock($part->id, 'PRODUCTION-UPDATE-TAG', 5, 'PCS');
+
+        $this->postJson('/api/stock-tags/resolve', ['tag' => 'PRODUCTION-UPDATE-TAG'])
+            ->assertOk()
+            ->assertJsonPath('data.tag', 'PRODUCTION-UPDATE-TAG');
+    }
+
+    public function test_resolve_tag_allows_a_user_with_only_stock_issue(): void
+    {
+        $warehouse = User::where('email', 'warehouse@geumcheon.local')->firstOrFail();
+        $this->assertTrue($warehouse->hasPermission('stock.issue'));
+        $this->assertFalse($warehouse->hasPermission('production.update'), 'Gudang tidak memegang production.update, jadi uji ini membuktikan stock.issue tetap cukup.');
+        $this->actingAs($warehouse, 'sanctum');
+        $part = Part::where('part_number', 'PINCB01')->firstOrFail();
+        $this->addStock($part->id, 'WAREHOUSE-RESOLVE-TAG', 5, 'PCS');
+
+        $this->postJson('/api/stock-tags/resolve', ['tag' => 'WAREHOUSE-RESOLVE-TAG'])
+            ->assertOk()
+            ->assertJsonPath('data.tag', 'WAREHOUSE-RESOLVE-TAG');
+    }
+
+    public function test_resolve_tag_reports_available_qty_after_active_booking(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->actingAsApi();
+        $item = $this->firstReleaseItem($wo);
+        $partId = $this->substituteIds($item)[0];
+        $stock = $this->addStock($partId, 'AVAILABLE-TAG', 100, $item['uom']);
+        $this->bookStock($wo, $stock, $partId, $item['work_order_item_id'], 30, $item['uom']);
+
+        $this->postJson('/api/stock-tags/resolve', ['tag' => 'AVAILABLE-TAG'])
+            ->assertOk()
+            ->assertJsonPath('data.qty', 100)
+            ->assertJsonPath('data.booked', 30)
+            ->assertJsonPath('data.available_qty', 70);
+    }
+
+    public function test_resolve_tag_reports_available_qty_on_ambiguous_candidates(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->actingAsApi();
+        $item = $this->firstReleaseItem($wo);
+        $mainId = $this->mainPartId($item);
+        $substituteId = $this->substituteIds($item)[0];
+        $mainStock = $this->addStock($mainId, 'AMBIGUOUS-TAG', 100, $item['uom']);
+        $this->addStock($substituteId, 'AMBIGUOUS-TAG', 50, $item['uom']);
+        $this->bookStock($wo, $mainStock, $mainId, $item['work_order_item_id'], 30, $item['uom']);
+
+        $candidates = $this->postJson('/api/stock-tags/resolve', ['tag' => 'AMBIGUOUS-TAG'])
+            ->assertStatus(409)
+            ->json('candidates');
+
+        $this->assertCount(2, $candidates);
+        $this->assertSame(70.0, (float) collect($candidates)->firstWhere('part_id', $mainId)['available_qty']);
+        $this->assertSame(50.0, (float) collect($candidates)->firstWhere('part_id', $substituteId)['available_qty']);
     }
 
     public function test_release_requires_idempotency_key(): void

@@ -321,11 +321,18 @@ class LocalPoController extends Controller
                     'unit_bundle' => UomCatalog::normalize((string) ($itemData['unit_bundle'] ?? '')) ?? UomCatalog::PALLET,
                     'weight_nett' => (float) $itemData['weight_nett'],
                     'unit_weight' => UomCatalog::WEIGHT,
-                    'weight_gross' => (float) ($itemData['weight_gross'] ?? 0),
                     'price' => $price,
                     'total_price' => $qtyGoods * $price,
                     'notes' => $itemData['notes'] ?? null,
                 ];
+
+                // Gross weight sudah tidak diisi dari form. Jangan timpa nilai
+                // lama saat edit: kolom ini masih dicetak di invoice & export.
+                if (array_key_exists('weight_gross', $itemData)) {
+                    $data['weight_gross'] = (float) $itemData['weight_gross'];
+                } elseif (empty($itemData['id'])) {
+                    $data['weight_gross'] = 0;
+                }
 
                 if (! empty($itemData['id'])) {
                     $itemModel = $arrival->items()->findOrFail((int) $itemData['id']);

@@ -175,10 +175,11 @@ class MaterialIssueApiController extends Controller
      */
     public function resolveTag(Request $request): JsonResponse
     {
-        // Resolusi tag mengungkap stok, harga, invoice, dan supplier —
-        // batasi ke pemegang permission issue material.
+        // Resolusi tag mengungkap stok, harga, invoice, dan supplier — batasi ke
+        // peran yang memang menjalankan alur issue material, sama dengan
+        // penjaga rute issue-plan.
         abort_unless(
-            $request->user()?->hasPermission('stock.issue') ?? false,
+            $request->user()?->hasAnyPermission(['stock.issue', 'production.update', 'work_order.update']) ?? false,
             403,
             __('Tidak berwenang mengakses data stok.'),
         );
@@ -199,12 +200,10 @@ class MaterialIssueApiController extends Controller
         // Nomor tag tidak unik antar part (mis. tag 16 dipakai dua substitusi).
         // Menebak satu baris bisa membooking part yang salah, jadi tag yang
         // ambigu dikembalikan sebagai kandidat untuk dipilih operator.
-        $available = $candidates
-            ->filter(function (PartStock $stock): bool {
-                $booked = (float) ($this->stockService->bookedQtyByStock([$stock->id])[$stock->id] ?? 0);
+        $booked = $this->stockService->bookedQtyByStock($candidates->pluck('id')->all());
 
-                return (float) $stock->qty - $booked > 1e-9;
-            })
+        $available = $candidates
+            ->filter(fn (PartStock $stock): bool => (float) $stock->qty - ($booked[$stock->id] ?? 0) > 1e-9)
             ->values();
 
         if ($available->isEmpty()) {
@@ -218,8 +217,9 @@ class MaterialIssueApiController extends Controller
             return response()->json([
                 'ok' => false,
                 'message' => __('Tag ini dipakai beberapa part. Pilih part yang benar.'),
-                'candidates' => $available->map(function (PartStock $stock): array {
+                'candidates' => $available->map(function (PartStock $stock) use ($booked): array {
                     $part = Part::find($stock->part_id);
+                    $stockBooked = (float) ($booked[$stock->id] ?? 0);
 
                     return [
                         'part_stock_id' => (int) $stock->id,
@@ -227,6 +227,7 @@ class MaterialIssueApiController extends Controller
                         'part_number' => $part?->part_number,
                         'part_name' => $part?->part_name,
                         'qty' => (float) $stock->qty,
+                        'available_qty' => max(0.0, (float) $stock->qty - $stockBooked),
                         'uom' => UomCatalog::normalize((string) $stock->qty_unit),
                         'tag' => $stock->tag,
                     ];
@@ -235,6 +236,7 @@ class MaterialIssueApiController extends Controller
         }
 
         $stock = $available->first();
+        $stockBooked = (float) ($booked[$stock->id] ?? 0);
 
         $part = Part::find($stock->part_id);
         $receive = $stock->receive;
@@ -247,7 +249,8 @@ class MaterialIssueApiController extends Controller
                 'part_number' => $part?->part_number,
                 'part_name' => $part?->part_name,
                 'qty' => (float) $stock->qty,
-                'booked' => (float) ($this->stockService->bookedQtyByStock([$stock->id])[$stock->id] ?? 0),
+                'booked' => $stockBooked,
+                'available_qty' => max(0.0, (float) $stock->qty - $stockBooked),
                 'uom' => UomCatalog::normalize((string) $stock->qty_unit),
                 'price' => $stock->price !== null ? (float) $stock->price : null,
                 'invoice' => $receive?->invoice_no,

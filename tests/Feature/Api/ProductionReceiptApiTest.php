@@ -276,6 +276,16 @@ class ProductionReceiptApiTest extends TestCase
         $this->getJson('/api/receipts?machine_id='.$this->machine->id)->assertForbidden();
     }
 
+    public function test_receipt_endpoints_still_reject_a_user_who_may_only_resolve_stock_tags(): void
+    {
+        $ppic = User::where('email', 'ppic@geumcheon.local')->firstOrFail();
+        $this->actingAs($ppic, 'sanctum');
+
+        $this->postJson('/api/receipts/resolve', ['tag' => 'ANY'])->assertForbidden();
+        $this->postJson('/api/receipts/confirm', ['tag' => 'ANY', 'machine_id' => $this->machine->id])->assertForbidden();
+        $this->getJson('/api/receipts?machine_id='.$this->machine->id)->assertForbidden();
+    }
+
     public function test_receipt_resolve_requires_authentication(): void
     {
         $this->app['auth']->forgetGuards();

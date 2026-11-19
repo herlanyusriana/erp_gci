@@ -23,7 +23,6 @@ interface ItemRow {
     qty_bundle: number | '';
     unit_bundle: string;
     weight_nett: number | '';
-    weight_gross: number | '';
     price: number | '';
     notes: string;
 }
@@ -46,7 +45,7 @@ const isLocked = editing;
 const defaultUomCode = computed(() => props.defaultUom || (props.uomCodes[0] ?? ''));
 
 let rowUid = 0;
-const newRow = (): ItemRow => ({ uid: ++rowUid, id: null, part_id: '', size: '', qty_goods: '', unit_goods: defaultUomCode.value, qty_bundle: '', unit_bundle: '', weight_nett: '', weight_gross: '', price: '', notes: '' });
+const newRow = (): ItemRow => ({ uid: ++rowUid, id: null, part_id: '', size: '', qty_goods: '', unit_goods: defaultUomCode.value, qty_bundle: '', unit_bundle: '', weight_nett: '', price: '', notes: '' });
 
 const seedRows = (): ItemRow[] => {
     if (props.arrival?.items?.length) {
@@ -60,7 +59,6 @@ const seedRows = (): ItemRow[] => {
             qty_bundle: it.qty_bundle ?? '',
             unit_bundle: it.unit_bundle ?? '',
             weight_nett: it.weight_nett ?? '',
-            weight_gross: it.weight_gross ?? '',
             price: it.price ?? '',
             notes: it.notes ?? '',
         }));
@@ -196,7 +194,6 @@ function submit() {
             qty_bundle: r.qty_bundle === '' ? null : Number(r.qty_bundle),
             unit_bundle: r.unit_bundle === '' ? null : r.unit_bundle,
             weight_nett: r.weight_nett === '' ? null : Number(r.weight_nett),
-            weight_gross: r.weight_gross === '' ? null : Number(r.weight_gross),
             price: r.price === '' ? null : Number(r.price),
             notes: r.notes,
         })) as any;
@@ -354,11 +351,6 @@ function submit() {
                             <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.netWeight') }}</label>
                             <input :aria-label="t('incoming.netWeight')" v-model="r.weight_nett" type="number" step="0.0001" min="0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                             <InputError :message="rowError(r, 'weight_nett')" class="mt-1" />
-                        </div>
-                        <div class="sm:col-span-3">
-                            <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.grossWeight') }}</label>
-                            <input :aria-label="t('incoming.grossWeight')" v-model="r.weight_gross" type="number" step="0.0001" min="0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
-                            <InputError :message="rowError(r, 'weight_gross')" class="mt-1" />
                         </div>
                     </div>
                     <div class="mt-3 grid gap-3 sm:grid-cols-12">

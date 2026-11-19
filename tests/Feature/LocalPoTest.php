@@ -93,6 +93,41 @@ class LocalPoTest extends TestCase
         $this->post(route('local-pos.store'), $payload)->assertSessionHasErrors('items.0.weight_nett');
     }
 
+    public function test_local_po_stores_without_gross_weight(): void
+    {
+        // Bentuk payload yang benar-benar dikirim form sekarang: gross weight
+        // tidak ada sama sekali, bukan dikirim sebagai 0.
+        $payload = $this->payload(['po_no' => 'LPO-NO-GROSS']);
+        unset($payload['items'][0]['weight_gross']);
+
+        $this->post(route('local-pos.store'), $payload)
+            ->assertSessionHasNoErrors()
+            ->assertRedirect();
+
+        $item = IncomingArrival::where('po_no', 'LPO-NO-GROSS')->firstOrFail()->items()->firstOrFail();
+        $this->assertEqualsWithDelta(0, (float) $item->weight_gross, 0.01);
+        $this->assertEqualsWithDelta(2500, (float) $item->weight_nett, 0.01);
+    }
+
+    public function test_local_po_edit_keeps_the_stored_gross_weight(): void
+    {
+        $this->post(route('local-pos.store'), $this->payload())->assertRedirect();
+
+        $arrival = IncomingArrival::where('po_no', 'LPO-TEST-001')->firstOrFail();
+        $item = $arrival->items()->firstOrFail();
+        $this->assertEqualsWithDelta(2600, (float) $item->weight_gross, 0.01);
+
+        // Form sudah tidak mengirim gross weight; edit tidak boleh menghapusnya
+        // karena kolom itu masih dicetak di invoice & export.
+        $payload = $this->payload();
+        $payload['items'][0]['id'] = $item->id;
+        unset($payload['items'][0]['weight_gross']);
+
+        $this->put(route('local-pos.update', $arrival), $payload)->assertRedirect();
+
+        $this->assertEqualsWithDelta(2600, (float) $item->fresh()->weight_gross, 0.01);
+    }
+
     public function test_local_po_rejects_part_not_mapped_to_supplier(): void
     {
         $supplier = Supplier::create([

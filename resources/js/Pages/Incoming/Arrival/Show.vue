@@ -124,6 +124,10 @@ function groupLabel(item: PendingRow['item']): string {
                 <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('incoming.portLoading') }}</div>
                 <div class="mt-1 text-ink-primary">{{ arrival.port_of_loading ?? '—' }}</div>
             </div>
+            <div class="rounded-xl border border-borderline bg-surface p-4">
+                <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('incoming.priceTerm') }}</div>
+                <div class="mt-1 text-ink-primary">{{ arrival.price_term ?? '—' }}</div>
+            </div>
         </div>
 
         <!-- Items -->

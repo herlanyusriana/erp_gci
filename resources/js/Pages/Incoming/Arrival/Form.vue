@@ -596,6 +596,30 @@ function submit() {
                         </select>
                     </div>
 
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.priceTerm') }}</label>
+                        <input
+                            :aria-label="t('incoming.priceTerm')"
+                            v-model="form.price_term"
+                            type="text"
+                            list="arrival-price-terms"
+                            maxlength="50"
+                            placeholder="FOB"
+                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm uppercase text-ink-primary focus:border-primary focus:ring-primary"
+                        />
+                        <datalist id="arrival-price-terms">
+                            <option value="FOB"></option>
+                            <option value="CIF"></option>
+                            <option value="CNF"></option>
+                            <option value="CFR"></option>
+                            <option value="EXW"></option>
+                            <option value="FCA"></option>
+                            <option value="DAP"></option>
+                            <option value="DDP"></option>
+                        </datalist>
+                        <InputError :message="form.errors.price_term" class="mt-1" />
+                    </div>
+
                     <div class="sm:col-span-2 lg:col-span-3">
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.remarks') }}</label>
                         <textarea

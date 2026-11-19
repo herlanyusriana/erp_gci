@@ -138,6 +138,18 @@ class IncomingArrivalController extends Controller
     }
 
     /**
+     * Syarat harga (FOB, CIF, dan sejenisnya) adalah kode huruf besar. Nilai
+     * disimpan dalam bentuk yang sama dengan yang tercetak di invoice, supaya
+     * form, halaman detail, dan cetakan tidak menampilkan tiga ejaan berbeda.
+     */
+    private function normalizePriceTerm(?string $value): ?string
+    {
+        $normalized = strtoupper(trim((string) $value));
+
+        return $normalized === '' ? null : $normalized;
+    }
+
+    /**
      * Mengambil daftar PO aktif yang masih memiliki sisa kuantitas belum tiba,
      * atau menyertakan PO saat ini jika dalam mode edit.
      *
@@ -309,7 +321,7 @@ class IncomingArrivalController extends Controller
                 'pen_no' => $validated['pen_no'] ?? null,
                 'pen_date' => $validated['pen_date'] ?? null,
                 'aju_no' => $validated['aju_no'] ?? null,
-                'price_term' => $validated['price_term'] ?? null,
+                'price_term' => $this->normalizePriceTerm($validated['price_term'] ?? null),
                 'hs_code' => $validated['hs_code'] ?? null,
                 'port_of_loading' => $validated['port_of_loading'] ?? null,
                 'country' => $validated['country'] ?? null,
@@ -548,7 +560,7 @@ class IncomingArrivalController extends Controller
                     'eta' => $validated['eta'] ?? null,
                     'eta_gci' => $validated['eta_gci'] ?? null,
                     'bill_of_lading' => $validated['bill_of_lading'] ?? null,
-                    'price_term' => $validated['price_term'] ?? null,
+                    'price_term' => $this->normalizePriceTerm($validated['price_term'] ?? null),
                     'hs_code' => $validated['hs_code'] ?? null,
                     'port_of_loading' => $validated['port_of_loading'] ?? null,
                     'country' => $validated['country'] ?? null,

@@ -59,6 +59,12 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::post('/deliveries/{delivery}/trolley-qc', [DeliveryApiController::class, 'trolleyQc'])
         ->middleware('permission:delivery.oqc')
         ->name('api.deliveries.trolley-qc');
+    Route::post('/deliveries/{delivery}/pass-qc', [DeliveryApiController::class, 'passQc'])
+        ->middleware('permission:delivery.oqc')
+        ->name('api.deliveries.pass-qc');
+    Route::post('/deliveries/{delivery}/reject-qc', [DeliveryApiController::class, 'rejectQc'])
+        ->middleware('permission:delivery.oqc')
+        ->name('api.deliveries.reject-qc');
 
     // Production result (WIP per proses)
     Route::get('/work-orders/{workOrder}/result-context', [MaterialIssueApiController::class, 'resultContext']);

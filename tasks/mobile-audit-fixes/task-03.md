@@ -15,25 +15,25 @@ pass/reject hanya ada di `routes/web.php` (`deliveries.qc.pass`,
 
 ## Acceptance criteria
 
-- [ ] `POST /api/deliveries/{delivery}/pass-qc` dan `.../reject-qc` tersedia,
+- [x] `POST /api/deliveries/{delivery}/pass-qc` dan `.../reject-qc` tersedia,
       memakai `Gate::authorize('oqc', $delivery)` seperti web.
-- [ ] Keduanya memanggil `DeliveryService::passQc()` / `rejectQc()` yang sama —
+- [x] Keduanya memanggil `DeliveryService::passQc()` / `rejectQc()` yang sama —
       tidak ada logika OQC kedua.
-- [ ] `qc_notes` opsional untuk pass, **wajib** untuk reject (maks 500),
+- [x] `qc_notes` opsional untuk pass, **wajib** untuk reject (maks 500),
       mengikuti validasi web.
-- [ ] Respons JSON memuat `ok`, `message`, dan `data.status` / `data.qc_status`
+- [x] Respons JSON memuat `ok`, `message`, dan `data.status` / `data.qc_status`
       terbaru.
-- [ ] Dokumen yang belum `picked` menghasilkan 422 dengan pesan dari service
+- [x] Dokumen yang belum `picked` menghasilkan 422 dengan pesan dari service
       (bukan 500).
-- [ ] Test: role `qc` berhasil pass/reject; role tanpa `delivery.oqc` → 403;
+- [x] Test: role `qc` berhasil pass/reject; role tanpa `delivery.oqc` → 403;
       reject tanpa catatan → 422; setelah pass, `qc_status = passed`.
 
 ## Verification
 
-- [ ] Tests pass: `vendor/bin/pest tests/Feature/Api/DeliveryQcApiTest.php`
-- [ ] No regressions: `vendor/bin/pest tests/Feature/DeliveryTest.php`
-- [ ] Lint: `vendor/bin/pint --dirty --format agent`
-- [ ] Manual check: `php artisan route:list --path=api --method=POST` memuat
+- [x] Tests pass: `vendor/bin/pest tests/Feature/Api/DeliveryQcApiTest.php` — 5 passed / 50 assertions
+- [x] No regressions: `vendor/bin/pest tests/Feature/DeliveryTest.php` — 34 passed / 286 assertions (dengan DeliveryLoadingApiTest)
+- [x] Lint: `vendor/bin/pint --dirty --format agent` — fixed (import order)
+- [x] Manual check: `php artisan route:list --path=api --method=POST` memuat
       `pass-qc` dan `reject-qc`
 
 ## Blocked by

@@ -61,15 +61,15 @@ Target task list: file di direktori ini (`task-01.md` … `task-17.md`).
 ### Phase 1: Kontrak loading (C1)
 
 - [x] Task 01: Progres loading per part di payload API
-- [ ] Task 02: APK memakai pool per part
+- [x] Task 02: APK memakai pool per part
 
 **Checkpoint 1:** pengiriman dengan satu FG di dua sequence tidak lagi mengunci
 operator.
 
 ### Phase 2: OQC (C2)
 
-- [ ] Task 03: Endpoint pass/reject OQC di API
-- [ ] Task 04: APK menyelesaikan OQC
+- [x] Task 03: Endpoint pass/reject OQC di API
+- [x] Task 04: APK menyelesaikan OQC
 
 **Checkpoint 1 (setelah Task 03–04):** dokumen bisa berpindah dari `picked` ke
 `qc_passed` tanpa membuka web.

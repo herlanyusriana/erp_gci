@@ -110,11 +110,7 @@ class DeliveryApiController extends Controller
                 isset($validated['qty']) ? (float) $validated['qty'] : null,
             );
         } catch (ValidationException $e) {
-            return response()->json([
-                'ok' => false,
-                'message' => collect($e->errors())->flatten()->first(),
-                'errors' => $e->errors(),
-            ], 422);
+            return $this->validationFailure($e);
         }
 
         return response()->json([
@@ -146,17 +142,83 @@ class DeliveryApiController extends Controller
                 $validated['notes'] ?? null,
             );
         } catch (ValidationException $e) {
-            return response()->json([
-                'ok' => false,
-                'message' => collect($e->errors())->flatten()->first(),
-                'errors' => $e->errors(),
-            ], 422);
+            return $this->validationFailure($e);
         }
 
         return response()->json([
             'ok' => true,
+            'message' => __('Pemeriksaan troli tersimpan.'),
             'data' => $this->deliveryService->loadingContext($delivery->fresh()),
         ]);
+    }
+
+    /**
+     * Tahap 3 (APK) — QC menyatakan seluruh troli lolos.
+     *
+     * Memakai `DeliveryService::passQc()` yang sama dengan tombol web, jadi
+     * aturan "troli belum diperiksa / NG" tidak diduplikasi di sini.
+     */
+    public function passQc(Request $request, Delivery $delivery): JsonResponse
+    {
+        Gate::authorize('oqc', $delivery);
+
+        $validated = $request->validate([
+            'qc_notes' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        try {
+            $this->deliveryService->passQc(
+                $delivery,
+                $request->user()?->id,
+                $validated['qc_notes'] ?? null,
+            );
+        } catch (ValidationException $e) {
+            return $this->validationFailure($e);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'message' => __('QC lolos. Label pengiriman bisa dirilis.'),
+            'data' => $this->deliveryService->loadingContext($delivery->fresh()),
+        ]);
+    }
+
+    /** Tahap 3 (APK) — QC menolak, picking harus diperbaiki. */
+    public function rejectQc(Request $request, Delivery $delivery): JsonResponse
+    {
+        Gate::authorize('oqc', $delivery);
+
+        $validated = $request->validate([
+            'qc_notes' => ['required', 'string', 'max:500'],
+        ], [
+            'qc_notes.required' => __('Isi alasan penolakan QC.'),
+        ]);
+
+        try {
+            $this->deliveryService->rejectQc(
+                $delivery,
+                $request->user()?->id,
+                $validated['qc_notes'],
+            );
+        } catch (ValidationException $e) {
+            return $this->validationFailure($e);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'message' => __('QC menolak. Perbaiki picking lalu ulangi QC.'),
+            'data' => $this->deliveryService->loadingContext($delivery->fresh()),
+        ]);
+    }
+
+    /** @return JsonResponse 422 dengan pesan pertama dari service. */
+    private function validationFailure(ValidationException $e): JsonResponse
+    {
+        return response()->json([
+            'ok' => false,
+            'message' => collect($e->errors())->flatten()->first(),
+            'errors' => $e->errors(),
+        ], 422);
     }
 
     /** Hapus satu scan (salah pindai). */

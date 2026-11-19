@@ -28,6 +28,20 @@ class ProductionResultService
     {
         return DB::transaction(function () use ($workOrder, $parentPartId, $data, $actorId) {
             $workOrder = WorkOrder::query()->lockForUpdate()->findOrFail($workOrder->id);
+            $idempotencyKey = $data['idempotency_key'] ?? null;
+            if ($idempotencyKey !== null) {
+                // APK mengirim ulang laporan setelah timeout. Kembalikan baris
+                // yang sudah tersimpan — termasuk yang sudah dibatalkan
+                // (soft delete) — supaya unique index tidak meledak dan output
+                // tidak terpotong dua kali.
+                $existing = ProductionResult::withTrashed()
+                    ->where('idempotency_key', $idempotencyKey)->first();
+                if ($existing !== null) {
+                    abort_unless($existing->work_order_id === $workOrder->id, 422, __('Laporan hasil tidak dikenal.'));
+
+                    return $existing;
+                }
+            }
             abort_if($workOrder->status !== 'in_progress', 422, __('WO belum di-release.'));
             $rows = $workOrder->items()->with(['parentPart:id,part_number,part_name', 'childPart:id,part_number,part_name'])
                 ->where('parent_part_id', $parentPartId)->lockForUpdate()->get();
@@ -97,6 +111,7 @@ class ProductionResultService
                 'is_backfilled' => $backfilled, 'label_status' => 'pending',
                 'qty_good' => (string) $goodDecimal, 'qty_reject' => (string) $rejectDecimal, 'uom' => $uom,
                 'reported_by' => $actorId, 'notes' => $data['notes'] ?? null,
+                'idempotency_key' => $idempotencyKey,
                 'created_by' => $actorId, 'updated_by' => $actorId,
             ]);
 

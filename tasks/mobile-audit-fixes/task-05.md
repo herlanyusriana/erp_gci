@@ -15,23 +15,23 @@ output dobel, dan `part_stocks` terpotong dua kali.
 
 ## Acceptance criteria
 
-- [ ] Kolom `production_results.idempotency_key` (string 80, nullable, **unique**)
+- [x] Kolom `production_results.idempotency_key` (string 80, nullable, **unique**)
       ditambahkan lewat migration aditif.
-- [ ] `ProductionResultService::report()` menerima `idempotency_key`; bila key
+- [x] `ProductionResultService::report()` menerima `idempotency_key`; bila key
       sudah ada, **mengembalikan baris yang sama** tanpa membuat baris baru.
-- [ ] `storeResult` memvalidasi `idempotency_key` sebagai `nullable|string|max:80`
+- [x] `storeResult` memvalidasi `idempotency_key` sebagai `nullable|string|max:80`
       — **opsional**, supaya form web yang belum mengirim key tetap jalan
       (Postgres mengizinkan banyak NULL pada unique index).
-- [ ] `idempotency_key` masuk `$fillable` model `ProductionResult`.
-- [ ] Test: dua POST dengan key sama → satu baris `production_results`, respons
+- [x] `idempotency_key` masuk `$fillable` model `ProductionResult`.
+- [x] Test: dua POST dengan key sama → satu baris `production_results`, respons
       kedua tetap `ok`; dua POST dengan key berbeda → dua baris.
 
 ## Verification
 
-- [ ] Tests pass: `vendor/bin/pest tests/Feature/ProductionResultTest.php tests/Feature/Api/MaterialIssueApiTest.php`
-- [ ] Migration: `php artisan migrate` lalu `php artisan migrate:rollback` bersih
-- [ ] Lint: `vendor/bin/pint --dirty --format agent`
-- [ ] Manual check: `php artisan tinker --execute 'echo \App\Models\ProductionResult::count();'` sebelum/sesudah test retry
+- [x] Tests pass: `ProductionResultTest` 15 passed / 120 assertions, `MaterialIssueApiTest` 78 passed / 461 assertions
+- [x] Migration: `migrate` lalu `migrate:rollback --step=1` lalu `migrate` bersih lalu `php artisan migrate:rollback` bersih
+- [x] Lint: `vendor/bin/pint --dirty --format agent` — passed
+- [x] Manual check: retry tercakup test (satu baris, satu output) --execute 'echo \App\Models\ProductionResult::count();'` sebelum/sesudah test retry
 
 ## Blocked by
 

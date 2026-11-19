@@ -76,7 +76,7 @@ operator.
 
 ### Phase 3: Idempotensi & validasi hasil produksi (C3, C4)
 
-- [ ] Task 05: Idempotensi `production_results` di server
+- [x] Task 05: Idempotensi `production_results` di server
 - [ ] Task 06: APK mengirim idempotency key + guard tap ganda
 - [ ] Task 07: Validasi angka hasil produksi (plafon + hasil reject saja)
 - [ ] Task 08: APK memperingatkan qty melebihi sisa

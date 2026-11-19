@@ -589,6 +589,8 @@ class MaterialIssueApiController extends Controller
             'period_end' => ['nullable', 'date_format:H:i', 'required_with:period_start'],
             'machine_id' => ['nullable', 'integer', 'exists:machines,id'],
             'notes' => ['nullable', 'string', 'max:2000'],
+            // Opsional: form web belum mengirim key. APK wajib mengirimnya.
+            'idempotency_key' => ['nullable', 'string', 'max:80'],
         ]);
 
         // Periode tidak boleh berada di masa depan: laporan hanya untuk jam yang

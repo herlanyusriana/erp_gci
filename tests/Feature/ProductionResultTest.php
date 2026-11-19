@@ -8,6 +8,7 @@ use App\Models\MaterialIssueItem;
 use App\Models\Part;
 use App\Models\PartStock;
 use App\Models\ProductionMaterialReceipt;
+use App\Models\ProductionResult;
 use App\Models\User;
 use App\Models\WorkOrder;
 use App\Models\WorkOrderConsumption;
@@ -381,5 +382,47 @@ class ProductionResultTest extends TestCase
             'parent_part_id' => $wip2,
             'qty_good' => 10,
         ]);
+    }
+
+    public function test_api_report_with_the_same_key_creates_one_row_and_one_output(): void
+    {
+        $wo = $this->releasedWorkOrder();
+        $first = $this->stepIds($wo)->first()['parent_part_id'];
+        $this->actingAs(User::where('email', 'admin@geumcheon.local')->firstOrFail(), 'sanctum');
+
+        $payload = [
+            'parent_part_id' => $first,
+            'qty_good' => 10,
+            'idempotency_key' => 'result-key-'.uniqid(),
+        ];
+
+        $created = $this->postJson("/api/work-orders/{$wo->id}/results", $payload)->assertOk();
+
+        // Retry setelah timeout: baris yang sama dikembalikan, bukan baris baru.
+        $this->postJson("/api/work-orders/{$wo->id}/results", $payload)
+            ->assertOk()
+            ->assertJsonPath('data.id', $created->json('data.id'));
+
+        $this->assertSame(1, ProductionResult::where('work_order_id', $wo->id)->count());
+        // Output WIP hanya diposting sekali.
+        $this->assertEqualsWithDelta(10.0, (float) PartStock::where('part_id', $first)->sum('qty'), 0.001);
+    }
+
+    public function test_api_report_with_different_keys_creates_two_rows(): void
+    {
+        $wo = $this->releasedWorkOrder();
+        $first = $this->stepIds($wo)->first()['parent_part_id'];
+        $this->actingAs(User::where('email', 'admin@geumcheon.local')->firstOrFail(), 'sanctum');
+
+        foreach (['a', 'b'] as $suffix) {
+            $this->postJson("/api/work-orders/{$wo->id}/results", [
+                'parent_part_id' => $first,
+                'qty_good' => 5,
+                'idempotency_key' => 'result-key-'.$suffix.'-'.uniqid(),
+            ])->assertOk();
+        }
+
+        $this->assertSame(2, ProductionResult::where('work_order_id', $wo->id)->count());
+        $this->assertEqualsWithDelta(10.0, (float) PartStock::where('part_id', $first)->sum('qty'), 0.001);
     }
 }

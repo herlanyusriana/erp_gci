@@ -28,6 +28,8 @@ interface BundleGroup {
 const props = defineProps<{
     arrivalItem: IncomingArrivalItem;
     remainingQty: number;
+    remainingGoodsQty: number;
+    remainingNetWeight: number;
     maxReceivable: number;
     poLimit: { po_qty: number; remaining: number } | null;
     totalPlanned: number;
@@ -150,25 +152,80 @@ function onQtyChange(r: PackingSubRow) {
     }
 }
 
-// Otomasi pembagian sisa rata ke seluruh baris
+const round4 = (n: number) => Math.round(n * 10000) / 10000;
+
+/**
+ * Sisa yang dibagi ke seluruh baris packing.
+ *
+ * Qty dan net weight adalah dua besaran berbeda di dokumen kedatangan: qty
+ * memakai satuan barang (mis. COIL), net weight selalu KGM. Dulu hanya qty
+ * yang dibagi, lalu net weight disamakan dengan qty sehingga 825 COIL menjadi
+ * 825 KGM. Sekarang keduanya dibagi dari sisa masing-masing. Net weight
+ * dibatasi `maxReceivable` (sisa berat setelah limit PO) dan qty diskalakan
+ * dengan rasio yang sama supaya perbandingan qty:berat tetap seperti dokumen
+ * kedatangan.
+ */
+const distribution = computed(() => {
+    const rows = (Number(bundleConfig.bundle_count) || 1) * (Number(bundleConfig.packing_count) || 1);
+    const acceptedNet = props.weightBasis ? Math.max(0, Number(props.maxReceivable) || 0) : 0;
+    const remainingNet = Math.max(0, Number(props.remainingNetWeight) || 0);
+    const scale = props.weightBasis && remainingNet > 0 ? Math.min(1, acceptedNet / remainingNet) : 1;
+
+    return {
+        rows,
+        qtyTotal: round4(Math.max(0, Number(props.remainingGoodsQty) || 0) * scale),
+        netTotal: acceptedNet,
+    };
+});
+
+const autoDistributeSummary = computed(() => {
+    const { qtyTotal, netTotal } = distribution.value;
+    const parts: string[] = [];
+
+    if (qtyTotal > 0) {
+        parts.push(`${qtyTotal.toLocaleString()} ${defaultUom()}`);
+    }
+    if (netTotal > 0 && !isWeightUnit(defaultUom())) {
+        parts.push(`${netTotal.toLocaleString()} ${props.weightUnit}`);
+    }
+
+    return parts.join(' / ') || '0';
+});
+
+function splitEvenly(total: number, rows: number): number[] {
+    if (total <= 0 || rows <= 0) {
+        return [];
+    }
+
+    const each = Math.floor((total / rows) * 10000) / 10000;
+    const values = Array.from({ length: rows }, () => each);
+    values[rows - 1] = round4(values[rows - 1] + (total - each * rows));
+
+    return values;
+}
+
+// Otomasi pembagian sisa qty dan net weight ke seluruh baris
 function autoDistributeRemaining() {
-    const totalRemaining = Number(props.maxReceivable) || 0;
-    const totalRows = (Number(bundleConfig.bundle_count) || 1) * (Number(bundleConfig.packing_count) || 1);
-    if (totalRemaining <= 0 || totalRows <= 0) return;
+    const { rows, qtyTotal, netTotal } = distribution.value;
+    if (rows <= 0 || (qtyTotal <= 0 && netTotal <= 0)) {
+        return;
+    }
 
-    const eachQty = Math.floor((totalRemaining / totalRows) * 10000) / 10000;
-    let remainder = Math.round((totalRemaining - (eachQty * totalRows)) * 10000) / 10000;
+    const qtyValues = splitEvenly(qtyTotal, rows);
+    const netValues = splitEvenly(netTotal, rows);
+    let index = 0;
 
-    bundles.value.forEach((b, bi) => {
-        b.packings.forEach((p, pi) => {
-            let q = eachQty;
-            if (bi === bundles.value.length - 1 && pi === b.packings.length - 1) {
-                q = Math.round((q + remainder) * 10000) / 10000;
+    bundles.value.forEach((b) => {
+        b.packings.forEach((p) => {
+            if (qtyValues.length > 0) {
+                p.qty = qtyValues[index];
             }
-            p.qty = q;
-            if (isWeightUnit(p.uom) || props.weightBasis) {
-                p.net_weight = q;
+            if (netValues.length > 0) {
+                p.net_weight = netValues[index];
+            } else if (isWeightUnit(p.uom) && qtyValues.length > 0) {
+                p.net_weight = p.qty;
             }
+            index++;
         });
     });
 }
@@ -549,7 +606,7 @@ function submit() {
                         @click="autoDistributeRemaining"
                         class="rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary-light"
                     >
-                        ⚡ Auto-distribusikan Sisa ({{ maxReceivable.toLocaleString() }} {{ defaultUom() }})
+                        ⚡ Auto-distribusikan Sisa ({{ autoDistributeSummary }})
                     </button>
                 </div>
 

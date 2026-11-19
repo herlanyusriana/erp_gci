@@ -124,10 +124,44 @@ class ReceiveMaterialService
     public function receivedQuantity(IncomingArrivalItem $item): float
     {
         if ($this->usesWeightBasis($item)) {
-            return (float) $item->receives->sum(fn (IncomingReceive $r) => $this->postedWeight($r));
+            return $this->receivedWeight($item);
         }
 
+        return $this->receivedGoodsQty($item);
+    }
+
+    /**
+     * Total berat bersih (KGM) yang sudah direceive untuk satu item.
+     */
+    public function receivedWeight(IncomingArrivalItem $item): float
+    {
+        return (float) $item->receives->sum(fn (IncomingReceive $r) => $this->postedWeight($r));
+    }
+
+    /**
+     * Total qty barang yang sudah direceive, dalam satuan barang (unit_goods).
+     * Berbeda dari receivedQuantity() yang memakai basis berat untuk item KGM.
+     */
+    public function receivedGoodsQty(IncomingArrivalItem $item): float
+    {
         return (float) $item->receives->sum('qty');
+    }
+
+    /**
+     * Sisa qty barang (unit_goods) yang belum diterima.
+     */
+    public function remainingGoodsQty(IncomingArrivalItem $item): float
+    {
+        return max(0, (float) $item->qty_goods - $this->receivedGoodsQty($item));
+    }
+
+    /**
+     * Sisa berat bersih (KGM) yang belum diterima. Nol bila item tidak
+     * merencanakan berat (Local PO non-berat).
+     */
+    public function remainingNetWeight(IncomingArrivalItem $item): float
+    {
+        return max(0, (float) $item->weight_nett - $this->receivedWeight($item));
     }
 
     /**

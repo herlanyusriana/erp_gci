@@ -104,6 +104,8 @@ class ReceiveController extends Controller
         return Inertia::render('Incoming/Receive/Form', [
             'arrivalItem' => $arrivalItem,
             'remainingQty' => $remaining,
+            'remainingGoodsQty' => $this->receiveService->remainingGoodsQty($arrivalItem),
+            'remainingNetWeight' => $this->receiveService->remainingNetWeight($arrivalItem),
             'poLimit' => $poLimit,
             'maxReceivable' => $maxReceivable,
             'totalPlanned' => $this->receiveService->plannedQuantity($arrivalItem),

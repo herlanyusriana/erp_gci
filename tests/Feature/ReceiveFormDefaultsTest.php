@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\IncomingArrival;
 use App\Models\IncomingArrivalItem;
+use App\Models\IncomingReceive;
 use App\Models\Part;
 use App\Models\Supplier;
 use App\Models\User;
@@ -49,12 +50,93 @@ class ReceiveFormDefaultsTest extends TestCase
                 ->component('Incoming/Receive/Form')
                 ->where('arrivalItem.unit_goods', 'SHEET')
                 ->where('remainingQty', 100)
+                ->where('remainingGoodsQty', 100)
+                ->where('remainingNetWeight', 0)
                 ->where('arrivalItem.qty_bundle', 4)
                 ->where('arrivalItem.unit_bundle', 'PALLET')
                 ->where('arrivalItem.arrival.invoice_no', 'INV-FORM-1')
                 ->where('arrivalItem.arrival.pen_no', 'PEN-FORM-1')
                 ->where('arrivalItem.arrival.aju_no', 'AJU-FORM-1')
                 ->where('packingTypes', fn ($types) => collect($types)->contains('COIL')));
+    }
+
+    /**
+     * Item berbasis berat: qty memakai satuan barang (mis. COIL), sedangkan
+     * net weight selalu KGM. Form harus menerima sisa keduanya secara terpisah
+     * supaya auto-distribute tidak mengisi net weight dengan angka qty
+     * (825 COIL berubah menjadi 825 KGM).
+     */
+    public function test_receive_form_exposes_remaining_goods_qty_and_net_weight_separately(): void
+    {
+        $part = Part::where('part_number', 'AAN30056405')->firstOrFail();
+        $arrival = IncomingArrival::create([
+            'arrival_no' => 'ARV-RECEIVE-'.uniqid(),
+            'supplier_id' => Supplier::query()->value('id'),
+            'is_local' => true,
+            'status' => 'pending',
+            'iqc_status' => 'passed',
+        ]);
+        $item = IncomingArrivalItem::create([
+            'arrival_id' => $arrival->id,
+            'part_id' => $part->id,
+            'qty_goods' => 250,
+            'unit_goods' => 'COIL',
+            'weight_nett' => 825,
+            'unit_weight' => 'KGM',
+        ]);
+
+        $this->get(route('receive.create', $item))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Incoming/Receive/Form')
+                ->where('weightBasis', true)
+                ->where('remainingQty', 825)
+                ->where('maxReceivable', 825)
+                ->where('remainingGoodsQty', 250)
+                ->where('remainingNetWeight', 825));
+    }
+
+    /**
+     * Setelah sebagian diterima, sisa qty dan sisa net weight harus berkurang
+     * sendiri-sendiri; qty 100 COIL tidak boleh mengurangi 100 KGM.
+     */
+    public function test_receive_form_remaining_tracks_partial_receives_in_both_units(): void
+    {
+        $part = Part::where('part_number', 'AAN30056405')->firstOrFail();
+        $arrival = IncomingArrival::create([
+            'arrival_no' => 'ARV-RECEIVE-'.uniqid(),
+            'supplier_id' => Supplier::query()->value('id'),
+            'is_local' => true,
+            'status' => 'pending',
+            'iqc_status' => 'passed',
+        ]);
+        $item = IncomingArrivalItem::create([
+            'arrival_id' => $arrival->id,
+            'part_id' => $part->id,
+            'qty_goods' => 250,
+            'unit_goods' => 'COIL',
+            'weight_nett' => 825,
+            'unit_weight' => 'KGM',
+        ]);
+        IncomingReceive::create([
+            'arrival_item_id' => $item->id,
+            'part_id' => $part->id,
+            'tag' => 'TAG-PARTIAL',
+            'qty' => 100,
+            'qty_unit' => 'COIL',
+            'weight' => 330,
+            'net_weight' => 330,
+            'qc_status' => 'pass',
+        ]);
+
+        $this->get(route('receive.create', $item))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Incoming/Receive/Form')
+                ->where('remainingQty', 495)
+                ->where('maxReceivable', 495)
+                ->where('remainingGoodsQty', 150)
+                ->where('remainingNetWeight', 495));
     }
 
     /**

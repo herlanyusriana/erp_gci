@@ -660,6 +660,11 @@ class DeliveryService
     /**
      * Ringkasan progres loading untuk layar scan.
      *
+     * `items[].scanned_qty` adalah angka **per part**, bukan per baris: satu tag
+     * terikat ke `part_stock_id`, jadi seluruh baris dengan part yang sama
+     * menerima nilai identik. Progres yang bisa dipakai mengunci loading ada di
+     * `part_progress[]` (satu entri per part).
+     *
      * @return array<string, mixed>
      */
     public function loadingContext(Delivery $delivery): array
@@ -670,13 +675,37 @@ class DeliveryService
             'items.part:id,part_number,part_name',
         ]);
 
+        $items = $delivery->items->sortBy('sequence')->values();
         $scannedByPart = $delivery->scannedQtyByPart();
 
-        // Status per baris rencana: qty part dianggap tertutup bila total tag
-        // terpindai untuk part itu sudah mencapai total rencananya.
-        $covered = $delivery->items
+        // Status per part: qty part dianggap tertutup bila total tag terpindai
+        // untuk part itu sudah mencapai total rencana seluruh barisnya.
+        $plannedByPart = $items
             ->groupBy('part_id')
-            ->map(fn (Collection $rows, $partId): bool => ($scannedByPart[$partId] ?? 0.0) + 1e-9 >= (float) $rows->sum('qty'))
+            ->map(fn (Collection $rows): float => (float) $rows->sum('qty'));
+
+        $covered = $plannedByPart
+            ->map(fn (float $planned, $partId): bool => ($scannedByPart[$partId] ?? 0.0) + 1e-9 >= $planned)
+            ->all();
+
+        $partProgress = $items
+            ->groupBy('part_id')
+            ->map(function (Collection $rows, $partId) use ($scannedByPart, $plannedByPart, $covered): array {
+                $plannedQty = (float) ($plannedByPart[$partId] ?? 0.0);
+                $scannedQty = (float) ($scannedByPart[$partId] ?? 0.0);
+                $part = $rows->first()->part;
+
+                return [
+                    'part_id' => (int) $partId,
+                    'part_number' => $part?->part_number,
+                    'part_name' => $part?->part_name,
+                    'planned_qty' => round($plannedQty, 4),
+                    'scanned_qty' => round($scannedQty, 4),
+                    'remaining_qty' => round(max(0.0, $plannedQty - $scannedQty), 4),
+                    'covered' => (bool) ($covered[$partId] ?? false),
+                ];
+            })
+            ->values()
             ->all();
 
         return [
@@ -705,7 +734,7 @@ class DeliveryService
                 ->all(),
             'pen_no' => $delivery->pen_no,
             'aju_no' => $delivery->aju_no,
-            'items' => $delivery->items->sortBy('sequence')->map(fn ($item): array => [
+            'items' => $items->map(fn ($item): array => [
                 'id' => (int) $item->id,
                 'sequence' => (int) $item->sequence,
                 'is_picked' => (bool) $item->is_picked,
@@ -716,11 +745,16 @@ class DeliveryService
                 'part_name' => $item->part?->part_name,
                 'qty' => round((float) $item->qty, 4),
                 'uom' => $item->qty_unit,
+                // Per part, bukan per baris — lihat PHPDoc method ini.
                 'scanned_qty' => round($scannedByPart[$item->part_id] ?? 0.0, 4),
                 'scanned' => (bool) ($covered[$item->part_id] ?? false),
             ])->values()->all(),
+            'part_progress' => $partProgress,
             'scanned_tags' => count(array_filter($covered)),
             'total_tags' => count($covered),
+            // Nama jujur untuk angka di atas: satuannya part, bukan baris/tag.
+            'covered_parts' => count(array_filter($covered)),
+            'total_parts' => count($covered),
             'loading_complete' => $delivery->loadingComplete(),
         ];
     }

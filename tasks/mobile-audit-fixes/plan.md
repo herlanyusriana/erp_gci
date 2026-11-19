@@ -60,7 +60,7 @@ Target task list: file di direktori ini (`task-01.md` … `task-17.md`).
 
 ### Phase 1: Kontrak loading (C1)
 
-- [ ] Task 01: Progres loading per part di payload API
+- [x] Task 01: Progres loading per part di payload API
 - [ ] Task 02: APK memakai pool per part
 
 **Checkpoint 1:** pengiriman dengan satu FG di dua sequence tidak lagi mengunci

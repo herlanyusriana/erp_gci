@@ -16,26 +16,26 @@ setiap baris punya jatah sendiri.
 
 ## Acceptance criteria
 
-- [ ] `data.part_progress[]` ditambahkan: `part_id`, `part_number`, `part_name`,
+- [x] `data.part_progress[]` ditambahkan: `part_id`, `part_number`, `part_name`,
       `planned_qty`, `scanned_qty`, `remaining_qty`, `covered` (bool) — satu
       entri per part, `planned_qty` = jumlah qty seluruh baris part itu.
-- [ ] `data.covered_parts` dan `data.total_parts` ditambahkan, nilainya sama
+- [x] `data.covered_parts` dan `data.total_parts` ditambahkan, nilainya sama
       dengan `scanned_tags`/`total_tags` yang lama (alias dipertahankan).
-- [ ] `items[].scanned_qty` didokumentasikan di PHPDoc sebagai angka **per
+- [x] `items[].scanned_qty` didokumentasikan di PHPDoc sebagai angka **per
       part** (baris dengan part sama menerima nilai identik); nilainya tidak
       berubah sehingga web tetap kompatibel.
-- [ ] Endpoint daftar `GET /api/deliveries` juga mengirim `covered_parts` dan
+- [x] Endpoint daftar `GET /api/deliveries` juga mengirim `covered_parts` dan
       `total_parts` di samping field lama.
-- [ ] Test: dokumen dengan satu FG pada dua baris (sequence 1 dan 2) menghasilkan
+- [x] Test: dokumen dengan satu FG pada dua baris (sequence 1 dan 2) menghasilkan
       **satu** entri `part_progress` dengan `planned_qty` = jumlah kedua baris,
       dan kedua item membawa `scanned_qty` yang sama.
 
 ## Verification
 
-- [ ] Tests pass: `vendor/bin/pest tests/Feature/Api/DeliveryLoadingApiTest.php`
-- [ ] No regressions: `vendor/bin/pest tests/Feature/DeliveryTest.php tests/Feature/PickingListTest.php`
-- [ ] Lint: `vendor/bin/pint --dirty --format agent`
-- [ ] Manual check: `GET /api/deliveries/{id}/loading-context` menampilkan
+- [x] Tests pass: `vendor/bin/pest tests/Feature/Api/DeliveryLoadingApiTest.php` — 2 passed / 68 assertions
+- [x] No regressions: `vendor/bin/pest tests/Feature/DeliveryTest.php tests/Feature/PickingListTest.php` — 52 passed / 332 assertions
+- [x] Lint: `vendor/bin/pint --dirty --format agent` — passed
+- [x] Manual check: `GET /api/deliveries/{id}/loading-context` menampilkan
       `part_progress` dengan `remaining_qty` yang turun setelah scan
 
 ## Blocked by

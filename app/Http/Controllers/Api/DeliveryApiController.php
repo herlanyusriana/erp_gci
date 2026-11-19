@@ -71,6 +71,9 @@ class DeliveryApiController extends Controller
                 'truck_no' => $delivery->truck_no,
                 'scanned_tags' => $covered->count(),
                 'total_tags' => $plannedByPart->count(),
+                // Nama jujur untuk angka di atas: satuannya part, bukan baris.
+                'covered_parts' => $covered->count(),
+                'total_parts' => $plannedByPart->count(),
                 'trolleys' => $delivery->scans->where('scan_type', DeliveryScan::TYPE_TROLLEY)->count(),
             ];
         })->values();

@@ -201,14 +201,56 @@ class IncomingPoArrivalTest extends TestCase
         // Jumlah kemasan tampil sebagai "NO. OF PKGS : 4", bukan rentang nomor.
         $response->assertSee('NO. OF PKGS : 4');
 
-        // Description of goods HANYA material group: tanpa model dan tanpa size.
-        $response->assertSee('STEEL IN SHEET');
+        // Description of goods memakai size barang, bukan material group yang
+        // sudah menjadi judul grup di atasnya. Tanpa model dan tanpa part number.
+        $response->assertSee('1.2MM');
         $response->assertDontSee(strtoupper((string) $part->model).' (MODEL)');
-        $response->assertDontSee('1.2MM');
+        $response->assertDontSee(strtoupper((string) $part->part_number));
 
         // Kolom MARKS memakai nama barang + model, bukan part number.
         $response->assertSee(strtoupper(trim((string) $part->part_name).' '.trim((string) $part->model)));
-        $response->assertDontSee(strtoupper((string) $part->part_number));
+    }
+
+    public function test_arrival_invoice_description_falls_back_to_material_group_when_size_is_empty(): void
+    {
+        $supplier = Supplier::where('is_active', true)->firstOrFail();
+
+        $part = Part::where(function ($q) {
+            $q->whereNull('size')->orWhereRaw('TRIM(size) IN (?, ?)', ['', '-']);
+        })
+            ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))
+            ->firstOrFail();
+
+        $arrival = IncomingArrival::create([
+            'arrival_no' => 'ARV-NOSIZE-'.uniqid(),
+            'supplier_id' => $supplier->id,
+            'invoice_no' => 'INV-NOSIZE-'.uniqid(),
+            'invoice_date' => now()->toDateString(),
+            'is_local' => false,
+            'status' => 'pending',
+            'iqc_status' => 'passed',
+        ]);
+
+        IncomingArrivalItem::create([
+            'arrival_id' => $arrival->id,
+            'part_id' => $part->id,
+            'material_group' => 'STEEL IN COIL',
+            'size' => null,
+            'qty_goods' => 500,
+            'unit_goods' => 'KGM',
+            'qty_bundle' => 1,
+            'unit_bundle' => 'BUNDLE',
+            'weight_nett' => 500,
+            'unit_weight' => 'KGM',
+        ]);
+
+        $html = $this->get(route('incoming-arrivals.invoice', $arrival))->assertOk()->getContent();
+
+        // Sel DESCRIPTION baris item tidak boleh kosong saat size tidak ada.
+        $this->assertMatchesRegularExpression(
+            '/<td class="ci-center">\s*STEEL IN COIL\s*<\/td>/',
+            $html,
+        );
     }
 
     public function test_receive_is_blocked_if_iqc_rejected(): void

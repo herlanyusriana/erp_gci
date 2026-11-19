@@ -602,6 +602,27 @@
             return trim($name.' '.$model);
         };
 
+        // Kolom DESCRIPTION OF GOODS memakai SIZE barang, bukan material group.
+        // Material group sudah menjadi judul grup tepat di atas baris item, jadi
+        // mengulangnya di setiap baris tidak membedakan apa pun — sedangkan ukuran
+        // (mis. "1.2MM") justru yang membedakan coil satu dengan lainnya.
+        // Size kosong jatuh ke size part, lalu ke material group agar sel tidak
+        // pernah tampil kosong.
+        $descriptionLabel = function ($item, string $fallback = ''): string {
+            $size = trim((string) ($item->size ?? ''));
+            if ($size === '' || $size === '-') {
+                $size = trim((string) ($item->part?->size ?? ''));
+            }
+            if ($size === '' || $size === '-') {
+                $size = trim((string) ($item->material_group ?? ''));
+            }
+            if ($size === '') {
+                $size = $fallback;
+            }
+
+            return strtoupper($size);
+        };
+
         $bundleUnitDisplay = optional($arrival->items->filter(function ($item) {
             return ($item->qty_bundle ?? 0) > 0 && $item->unit_bundle;
         })->first())->unit_bundle ?? 'BUNDLE';
@@ -839,7 +860,7 @@
                                             @endif
                                         </td>
                                         <td class="ci-center">
-                                            {{ $items->first()->material_group ?: $groupKey }}
+                                            {{ $descriptionLabel($item, (string) $groupKey) }}
                                         </td>
                                         <td class="ci-center" style="white-space:nowrap;">{{ $qtyText }}</td>
                                         <td class="ci-center" style="white-space:nowrap;">{{ $nettText }}</td>
@@ -1117,7 +1138,7 @@
                                         @endif
                                     </td>
                                     <td class="text-center" style="white-space:nowrap;">
-                                        {{ $items->first()->material_group ?: $vendorName }}
+                                        {{ $descriptionLabel($item, (string) $vendorName) }}
                                     </td>
                                     @php
                                         $packageText = (($item->qty_bundle ?? 0) > 0)

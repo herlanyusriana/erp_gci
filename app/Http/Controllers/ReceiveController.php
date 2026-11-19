@@ -291,6 +291,8 @@ class ReceiveController extends Controller
 
     public function printLabel(IncomingReceive $receive)
     {
+        Gate::authorize('view', $receive);
+
         $receive->load([
             'arrivalItem.part',
             'arrivalItem.arrival.supplier',

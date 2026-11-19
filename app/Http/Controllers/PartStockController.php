@@ -36,9 +36,12 @@ class PartStockController extends Controller
                 'receive.arrivalItem.arrival:id,supplier_id',
                 'receive.arrivalItem.arrival.supplier:id,supplier_name',
             ])
-            ->when($request->input('search'), fn ($q, $s) => $q
-                ->where('tag', 'ilike', "%{$s}%")
-                ->orWhereHas('part', fn ($w) => $w->where('part_number', 'ilike', "%{$s}%")->orWhere('part_name', 'ilike', "%{$s}%")))
+            // Pencarian dikelompokkan: tanpa pembungkus, `orWhereHas` akan
+            // melepas filter tab (material/WIP) saat mencari nomor part.
+            ->when($request->input('search'), fn ($q, $s) => $q->where(function ($query) use ($s): void {
+                $query->where('tag', 'ilike', "%{$s}%")
+                    ->orWhereHas('part', fn ($w) => $w->where('part_number', 'ilike', "%{$s}%")->orWhere('part_name', 'ilike', "%{$s}%"));
+            }))
             ->orderBy('part_id')
             ->orderBy('tag')
             ->paginate(15)

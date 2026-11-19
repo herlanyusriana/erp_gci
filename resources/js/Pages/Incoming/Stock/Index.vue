@@ -75,6 +75,7 @@ function doSearch() {
                         <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.booked') }}</th>
                         <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.available') }}</th>
                         <th scope="col" class="px-4 py-3">{{ t('incoming.unit') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.actions') }}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-borderline">
@@ -90,9 +91,22 @@ function doSearch() {
                         <td class="px-4 py-3 text-right tabular-nums text-warning">{{ st.booked_qty ?? 0 }}</td>
                         <td class="px-4 py-3 text-right tabular-nums font-semibold" :class="(st.avail_qty ?? 0) > 0 ? 'text-success' : 'text-ink-secondary'">{{ st.avail_qty ?? st.qty }}</td>
                         <td class="px-4 py-3 text-ink-primary">{{ st.qty_unit ?? '—' }}</td>
+                        <td class="px-4 py-3 text-right">
+                            <a
+                                v-if="st.receive?.id"
+                                :href="route('receive.label', st.receive.id)"
+                                target="_blank"
+                                rel="noopener"
+                                :aria-label="`${t('incoming.printLabel')} ${st.tag ?? ''}`.trim()"
+                                class="inline-flex rounded-md border border-borderline px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                            >
+                                {{ t('incoming.label') }}
+                            </a>
+                            <span v-else class="text-xs text-ink-secondary">—</span>
+                        </td>
                     </tr>
                     <tr v-if="!stocks.data.length">
-                        <td colspan="11" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noStock') }}</td>
+                        <td colspan="12" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noStock') }}</td>
                     </tr>
                 </tbody>
             </table>

@@ -218,4 +218,60 @@ class StockSourceTest extends TestCase
                 ->where('stocks.data', fn ($rows) => collect($rows)
                     ->every(fn ($r) => strtoupper((string) ($r['part']['part_type']['code'] ?? '')) === 'WIP')));
     }
+
+    /** Label material dicetak ulang dari halaman Stock, jadi receive.id wajib ikut terkirim. */
+    public function test_stock_rows_expose_receive_id_for_label_reprint(): void
+    {
+        [$stock] = $this->makeStockSource('INV-LABEL-0001', 'TAG-LABEL-0001');
+
+        $this->actingAs($this->admin())
+            ->get(route('stocks.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Incoming/Stock/Index')
+                ->where('stocks.data', fn ($rows) => collect($rows)->contains(
+                    fn ($r) => (int) $r['id'] === (int) $stock->id
+                        && (int) ($r['receive']['id'] ?? 0) === (int) $stock->receive_id
+                )));
+    }
+
+    /** Pencarian nomor part tidak boleh melepas filter tab material/WIP. */
+    public function test_stock_search_does_not_leak_wip_rows_into_material_tab(): void
+    {
+        $this->actingAs($this->admin());
+
+        $material = Part::whereRaw('UPPER(part_number) NOT LIKE ?', ['%-WIP%'])
+            ->whereHas('partType', fn ($q) => $q->whereRaw('UPPER(code) <> ?', ['WIP']))
+            ->firstOrFail();
+        $wip = Part::whereRaw('UPPER(part_number) LIKE ?', ['%-WIP%'])->firstOrFail();
+
+        PartStock::create([
+            'part_id' => $material->id, 'tag' => 'MAT-SEARCH-1',
+            'qty' => 10, 'qty_unit' => 'PCS', 'received_at' => now(),
+        ]);
+        PartStock::create([
+            'part_id' => $wip->id, 'tag' => 'WO-SEARCH#WIP#R1',
+            'qty' => 352, 'qty_unit' => 'PCS', 'received_at' => now(),
+        ]);
+
+        $this->get(route('stocks.index', ['tab' => 'material', 'search' => $wip->part_number]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('tab', 'material')
+                ->where('stocks.data', fn ($rows) => collect($rows)
+                    ->every(fn ($r) => strtoupper((string) ($r['part']['part_type']['code'] ?? '')) !== 'WIP')));
+    }
+
+    public function test_receive_label_requires_view_permission(): void
+    {
+        [$stock] = $this->makeStockSource('INV-LABEL-0002', 'TAG-LABEL-0002');
+
+        $this->actingAs(User::factory()->create())
+            ->get(route('receive.label', $stock->receive_id))
+            ->assertForbidden();
+
+        $this->actingAs($this->admin())
+            ->get(route('receive.label', $stock->receive_id))
+            ->assertOk();
+    }
 }

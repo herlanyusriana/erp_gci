@@ -150,7 +150,10 @@
                     <div class="part-size">{{ $sizeText }}</div>
                 @endif
 
-                <div class="invoice">INV : {{ $invoiceNo }}</div>
+                {{-- Invoice dicetak apa adanya tanpa prefiks: nomor invoice sudah
+                     dikenali polanya oleh operator, dan prefiks "INV :" memakan
+                     lebar baris pada nomor invoice yang panjang. --}}
+                <div class="invoice">{{ $invoiceNo }}</div>
                 <div class="tag-line">TAG # : {{ $resolvedTag }}</div>
 
                 <div class="packaging">

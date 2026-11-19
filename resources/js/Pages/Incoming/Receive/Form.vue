@@ -427,6 +427,15 @@ function submit() {
                         />
                     </div>
                     <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.invoiceNo') }}</label>
+                        <input
+                            type="text"
+                            :value="arrivalItem.arrival?.invoice_no || '—'"
+                            readonly
+                            class="mt-1 w-full rounded-lg border-borderline bg-background px-3 py-2 font-mono text-sm font-medium text-ink-primary"
+                        />
+                    </div>
+                    <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.penNo') }}</label>
                         <input
                             v-model="form.pen_no"

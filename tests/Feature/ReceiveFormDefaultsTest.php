@@ -29,6 +29,7 @@ class ReceiveFormDefaultsTest extends TestCase
             'is_local' => true,
             'status' => 'pending',
             'iqc_status' => 'passed',
+            'invoice_no' => 'INV-FORM-1',
             'pen_no' => 'PEN-FORM-1',
             'aju_no' => 'AJU-FORM-1',
         ]);
@@ -50,6 +51,7 @@ class ReceiveFormDefaultsTest extends TestCase
                 ->where('remainingQty', 100)
                 ->where('arrivalItem.qty_bundle', 4)
                 ->where('arrivalItem.unit_bundle', 'PALLET')
+                ->where('arrivalItem.arrival.invoice_no', 'INV-FORM-1')
                 ->where('arrivalItem.arrival.pen_no', 'PEN-FORM-1')
                 ->where('arrivalItem.arrival.aju_no', 'AJU-FORM-1')
                 ->where('packingTypes', fn ($types) => collect($types)->contains('COIL')));
@@ -75,6 +77,26 @@ class ReceiveFormDefaultsTest extends TestCase
             'form.tags = filled.map',
             $source,
             'Payload tags harus dibentuk dari bundle yang terisi saja.',
+        );
+    }
+
+    /**
+     * No. Faktur harus terlihat di form penerimaan. Label cetak memakai
+     * invoice dari dokumen arrival, sedangkan `incoming_receives.invoice_no`
+     * hanyalah snapshot — operator perlu melihat nomor yang sebenarnya
+     * dipakai label sebelum menyimpan.
+     */
+    public function test_receive_form_shows_arrival_invoice_as_read_only(): void
+    {
+        $source = file_get_contents(resource_path('js/Pages/Incoming/Receive/Form.vue'));
+        $this->assertNotFalse($source);
+
+        $this->assertStringContainsString("t('incoming.invoiceNo')", $source);
+        $this->assertStringContainsString(":value=\"arrivalItem.arrival?.invoice_no || '—'\"", $source);
+        $this->assertMatchesRegularExpression(
+            '/:value="arrivalItem\.arrival\?\.invoice_no[^>]*\n\s*readonly/s',
+            $source,
+            'No. Faktur hanya informasi dari master arrival, bukan input.',
         );
     }
 

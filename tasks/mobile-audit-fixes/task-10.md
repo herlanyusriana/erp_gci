@@ -16,24 +16,24 @@ kurang, dan produksi melaporkan material hilang padahal fisiknya ada di troli.
 
 ## Acceptance criteria
 
-- [ ] Bila `state.lines.isNotEmpty`, menekan tombol menampilkan konfirmasi yang
+- [x] Bila `state.lines.isNotEmpty`, menekan tombol menampilkan konfirmasi yang
       menyebut **jumlah tag** yang belum dirilis dan tiga pilihan: kirim
       sekarang / buang & selesai / batal.
-- [ ] "Kirim sekarang" memanggil jalur submit yang sudah ada (Task 09 menjamin
+- [x] "Kirim sekarang" memanggil jalur submit yang sudah ada (Task 09 menjamin
       state tidak terhapus), bukan implementasi baru.
-- [ ] "Buang & selesai" adalah satu-satunya jalur yang menghapus baris, dan itu
+- [x] "Buang & selesai" adalah satu-satunya jalur yang menghapus baris, dan itu
       tertulis jelas di dialog.
-- [ ] Bila `lines.isEmpty`, perilaku tetap: langsung kembali ke warehouse home.
-- [ ] Test: 2 baris belum dirilis → tombol memunculkan dialog; batal → tetap di
+- [x] Bila `lines.isEmpty`, perilaku tetap: langsung kembali ke warehouse home.
+- [x] Test: 2 baris belum dirilis → tombol memunculkan dialog; batal → tetap di
       layar; buang → provider bersih dan navigasi terjadi.
 
 ## Verification
 
-- [ ] Tests pass: `cd ../erp_gci_mobile && flutter test test/guided_issue_defer_test.dart`
-- [ ] Full mobile suite: `cd ../erp_gci_mobile && flutter test`
-- [ ] Analyze: `cd ../erp_gci_mobile && flutter analyze`
-- [ ] Build: `cd ../erp_gci_mobile && flutter build apk --debug`
-- [ ] Manual check: rilis 1 item, sisakan 2 tag, tekan "Sisa Menyusul" → dialog
+- [x] Tests pass: `cd ../erp_gci_mobile && flutter test test/guided_issue_defer_test.dart`
+- [x] Full mobile suite: `cd ../erp_gci_mobile && flutter test`
+- [x] Analyze: `cd ../erp_gci_mobile && flutter analyze`
+- [x] Build: `cd ../erp_gci_mobile && flutter build apk --debug`
+- [x] Manual check: rilis 1 item, sisakan 2 tag, tekan "Sisa Menyusul" → dialog
       menyebut 2 tag
 
 ## Blocked by

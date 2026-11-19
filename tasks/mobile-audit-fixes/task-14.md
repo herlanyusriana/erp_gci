@@ -15,25 +15,25 @@ memilih bundle dan menekan konfirmasi.
 
 ## Acceptance criteria
 
-- [ ] `resolveTag` menambahkan `available_qty = max(0, qty − booked)` pada
+- [x] `resolveTag` menambahkan `available_qty = max(0, qty − booked)` pada
       `data`, di samping `qty` dan `booked` yang tetap ada.
-- [ ] Kandidat 409 (`candidates[]`) juga membawa `available_qty`.
-- [ ] `ResolvedTag` di APK memuat `availableQty` (fallback ke `qty` bila field
+- [x] Kandidat 409 (`candidates[]`) juga membawa `available_qty`.
+- [x] `ResolvedTag` di APK memuat `availableQty` (fallback ke `qty` bila field
       tidak ada).
-- [ ] Layar bundle memakai `availableQty` sebagai batas atas qty manual dan
+- [x] Layar bundle memakai `availableQty` sebagai batas atas qty manual dan
       menampilkan angka tersedia bila lebih kecil dari stok.
-- [ ] Test server: stok 100 dengan booking 30 → `available_qty` 70.
-- [ ] Test APK: tag dengan available 70, input manual 80 → ditolak sebelum
+- [x] Test server: stok 100 dengan booking 30 → `available_qty` 70.
+- [x] Test APK: tag dengan available 70, input manual 80 → ditolak sebelum
       request dengan pesan yang menyebut 70.
 
 ## Verification
 
-- [ ] Tests pass: `vendor/bin/pest tests/Feature/Api/MaterialIssueApiTest.php`
-- [ ] Tests pass: `cd ../erp_gci_mobile && flutter test test/issue_bundle_screen_test.dart`
-- [ ] Full mobile suite: `cd ../erp_gci_mobile && flutter test`
-- [ ] Analyze: `cd ../erp_gci_mobile && flutter analyze`
-- [ ] Lint: `vendor/bin/pint --dirty --format agent`
-- [ ] Manual check: `POST /api/stock-tags/resolve` untuk tag yang sebagian sudah
+- [x] Tests pass: `vendor/bin/pest tests/Feature/Api/MaterialIssueApiTest.php`
+- [x] Tests pass: `cd ../erp_gci_mobile && flutter test test/issue_bundle_screen_test.dart`
+- [x] Full mobile suite: `cd ../erp_gci_mobile && flutter test`
+- [x] Analyze: `cd ../erp_gci_mobile && flutter analyze`
+- [x] Lint: `vendor/bin/pint --dirty --format agent`
+- [x] Manual check: `POST /api/stock-tags/resolve` untuk tag yang sebagian sudah
       dibooking menampilkan `available_qty` < `qty`
 
 ## Blocked by

@@ -15,26 +15,26 @@ tanpa satu pun pemberitahuan.
 
 ## Acceptance criteria
 
-- [ ] `GuidedIssueScreen` dibungkus `PopScope`; `canPop` hanya `true` bila
+- [x] `GuidedIssueScreen` dibungkus `PopScope`; `canPop` hanya `true` bila
       `lines.isEmpty && pendingRelease == null`.
-- [ ] Bila tidak boleh pop, dialog menampilkan jumlah tag yang belum dirilis
+- [x] Bila tidak boleh pop, dialog menampilkan jumlah tag yang belum dirilis
       dengan pilihan **Buang & keluar** / **Kembali ke layar**.
-- [ ] `load(workOrderId)` dengan WO **sama** dan `lines` tidak kosong hanya
+- [x] `load(workOrderId)` dengan WO **sama** dan `lines` tidak kosong hanya
       menyegarkan konteks (kebutuhan/stok) dan **mempertahankan** `lines`,
       `_materialIndex`, dan qty yang sudah diisi.
-- [ ] `load()` dengan WO berbeda tetap mengosongkan state (ditegakkan penuh di
+- [x] `load()` dengan WO berbeda tetap mengosongkan state (ditegakkan penuh di
       Task 11).
-- [ ] Test: isi 2 baris scan → tekan back → dialog muncul dan provider tidak
+- [x] Test: isi 2 baris scan → tekan back → dialog muncul dan provider tidak
       di-reset; tekan "Buang" → keluar dan state bersih.
-- [ ] Test: buka layar, isi scan, panggil `load` WO yang sama → `lines` tetap 2.
+- [x] Test: buka layar, isi scan, panggil `load` WO yang sama → `lines` tetap 2.
 
 ## Verification
 
-- [ ] Tests pass: `cd ../erp_gci_mobile && flutter test test/guided_issue_draft_test.dart`
-- [ ] Full mobile suite: `cd ../erp_gci_mobile && flutter test`
-- [ ] Analyze: `cd ../erp_gci_mobile && flutter analyze`
-- [ ] Build: `cd ../erp_gci_mobile && flutter build apk --debug`
-- [ ] Manual check: scan 2 tag → back → muncul dialog; pilih kembali, daftar
+- [x] Tests pass: `cd ../erp_gci_mobile && flutter test test/guided_issue_draft_test.dart`
+- [x] Full mobile suite: `cd ../erp_gci_mobile && flutter test`
+- [x] Analyze: `cd ../erp_gci_mobile && flutter analyze`
+- [x] Build: `cd ../erp_gci_mobile && flutter build apk --debug`
+- [x] Manual check: scan 2 tag → back → muncul dialog; pilih kembali, daftar
       masih 2 baris
 
 ## Blocked by

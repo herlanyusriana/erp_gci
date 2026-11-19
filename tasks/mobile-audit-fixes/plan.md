@@ -86,19 +86,19 @@ ditolak; reject saja diterima.
 
 ### Phase 4: Kehilangan data operator (C5–C8)
 
-- [ ] Task 09: Pengaman back + scan tidak hilang saat layar dimuat ulang
-- [ ] Task 10: "Sisa menyusul" tidak membuang scan
-- [ ] Task 11: State issue per Work Order
-- [ ] Task 12: Daftar penerimaan memuat saat dibuka
+- [x] Task 09: Pengaman back + scan tidak hilang saat layar dimuat ulang
+- [x] Task 10: "Sisa menyusul" tidak membuang scan
+- [x] Task 11: State issue per Work Order
+- [x] Task 12: Daftar penerimaan memuat saat dibuka
 
 **Checkpoint 3:** tidak ada lagi jalur di mana kerja fisik operator hilang tanpa
 konfirmasi.
 
 ### Phase 5: Sisa temuan web
 
-- [ ] Task 13: A2 — selaraskan permission `resolveTag`
-- [ ] Task 14: A3 — qty tersedia di `resolveTag`
-- [ ] Task 15: Hapus input gross weight dari Arrival & Local PO
+- [x] Task 13: A2 — selaraskan permission `resolveTag`
+- [x] Task 14: A3 — qty tersedia di `resolveTag`
+- [x] Task 15: Hapus input gross weight dari Arrival & Local PO
 
 **Checkpoint 4 (paruh pertama — Task 13–15):** temuan web yang terbuka sejak
 audit sebelumnya tertutup. (A1 sudah dikerjakan bersama Task 07 karena menyentuh
@@ -106,8 +106,8 @@ blok validasi yang sama.)
 
 ### Phase 6: Pembersihan & i18n minimum
 
-- [ ] Task 16: Hapus `issue_screen.dart` + pindahkan test
-- [ ] Task 17: Key `scanTag`/`saving` + guard paritas katalog
+- [x] Task 16: Hapus `issue_screen.dart` + pindahkan test
+- [x] Task 17: Key `scanTag`/`saving` + guard paritas katalog
 
 **Checkpoint 4 (final — Task 16–17):** suite web & APK hijau, tidak ada key
 mentah di layar.

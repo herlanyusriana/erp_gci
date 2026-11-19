@@ -16,24 +16,24 @@ tampil sebagai "tidak ada data".
 
 ## Acceptance criteria
 
-- [ ] `receiptListProvider` menjadi `NotifierProvider.family` berkunci
+- [x] `receiptListProvider` menjadi `NotifierProvider.family` berkunci
       `(machineId, date)`; state mesin A tidak bocor ke mesin B.
-- [ ] `build()` memulai dengan `loading: true` dan memicu `load()` sekali untuk
+- [x] `build()` memulai dengan `loading: true` dan memicu `load()` sekali untuk
       kunci tersebut.
-- [ ] Cabang `error != null` dirender **sebelum** cabang kosong: pesan + tombol
+- [x] Cabang `error != null` dirender **sebelum** cabang kosong: pesan + tombol
       coba lagi yang memanggil `load()`.
-- [ ] SnackBar error sementara tidak lagi menjadi satu-satunya umpan balik.
-- [ ] Test: buka layar → repository dipanggil tepat sekali tanpa aksi pengguna;
+- [x] SnackBar error sementara tidak lagi menjadi satu-satunya umpan balik.
+- [x] Test: buka layar → repository dipanggil tepat sekali tanpa aksi pengguna;
       error → panel error + tombol retry; sukses kosong → teks "belum ada
       penerimaan".
 
 ## Verification
 
-- [ ] Tests pass: `cd ../erp_gci_mobile && flutter test test/machine_receipt_list_test.dart`
-- [ ] Full mobile suite: `cd ../erp_gci_mobile && flutter test`
-- [ ] Analyze: `cd ../erp_gci_mobile && flutter analyze`
-- [ ] Build: `cd ../erp_gci_mobile && flutter build apk --debug`
-- [ ] Manual check: konfirmasi satu tag → buka daftar penerimaan → baris
+- [x] Tests pass: `cd ../erp_gci_mobile && flutter test test/machine_receipt_list_test.dart`
+- [x] Full mobile suite: `cd ../erp_gci_mobile && flutter test`
+- [x] Analyze: `cd ../erp_gci_mobile && flutter analyze`
+- [x] Build: `cd ../erp_gci_mobile && flutter build apk --debug`
+- [x] Manual check: konfirmasi satu tag → buka daftar penerimaan → baris
       langsung tampil tanpa menekan refresh
 
 ## Blocked by

@@ -19,25 +19,25 @@ karena repo mobile tidak punya pemeriksa paritas seperti
 
 ## Acceptance criteria
 
-- [ ] `scanTag` dan `saving` ada di **id, en, dan ko** dengan terjemahan wajar
+- [x] `scanTag` dan `saving` ada di **id, en, dan ko** dengan terjemahan wajar
       (bukan salinan Indonesia untuk en/ko).
-- [ ] Test baru `test/i18n_parity_test.dart` memeriksa:
+- [x] Test baru `test/i18n_parity_test.dart` memeriksa:
       (a) jumlah key id/en/ko sama;
       (b) setiap `l.t('literal')` di `lib/**/*.dart` ada di ketiga katalog;
       (c) tidak ada duplikat key dalam satu locale.
-- [ ] Test hanya memeriksa argumen literal; pemanggilan dinamis
+- [x] Test hanya memeriksa argumen literal; pemanggilan dinamis
       (`l.t(errorKey)`, `l.t(_obscure ? ... : ...)`) dilewati secara eksplisit.
-- [ ] Test gagal bila satu key dihapus dari salah satu locale (diverifikasi
+- [x] Test gagal bila satu key dihapus dari salah satu locale (diverifikasi
       manual sekali, lalu dikembalikan).
-- [ ] `flutter test` hijau dan `flutter analyze` bersih.
+- [x] `flutter test` hijau dan `flutter analyze` bersih.
 
 ## Verification
 
-- [ ] Tests pass: `cd ../erp_gci_mobile && flutter test test/i18n_parity_test.dart`
-- [ ] Full mobile suite: `cd ../erp_gci_mobile && flutter test`
-- [ ] Analyze: `cd ../erp_gci_mobile && flutter analyze`
-- [ ] Build: `cd ../erp_gci_mobile && flutter build apk --debug`
-- [ ] Manual check: buka layar konfirmasi penerimaan pada locale `en` — tombol
+- [x] Tests pass: `cd ../erp_gci_mobile && flutter test test/i18n_parity_test.dart`
+- [x] Full mobile suite: `cd ../erp_gci_mobile && flutter test`
+- [x] Analyze: `cd ../erp_gci_mobile && flutter analyze`
+- [x] Build: `cd ../erp_gci_mobile && flutter build apk --debug`
+- [x] Manual check: buka layar konfirmasi penerimaan pada locale `en` — tombol
       berbunyi "Scan Tag", bukan "scanTag"
 
 ## Blocked by

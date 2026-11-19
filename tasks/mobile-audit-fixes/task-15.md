@@ -8,23 +8,23 @@ weight, konsisten dengan form Receive yang sudah bersih.
 
 ## Acceptance criteria
 
-- [ ] Input `weight_gross` dan labelnya hilang dari `Incoming/Arrival/Form.vue`
+- [x] Input `weight_gross` dan labelnya hilang dari `Incoming/Arrival/Form.vue`
       (termasuk baris 846–849) dan `Incoming/LocalPo/Form.vue` (termasuk 359–361).
-- [ ] Aturan validasi yang membandingkan `nett > gross` (`Arrival/Form.vue`
+- [x] Aturan validasi yang membandingkan `nett > gross` (`Arrival/Form.vue`
       baris 308–309) ikut dihapus agar tidak memvalidasi field yang tidak ada.
-- [ ] Payload simpan tidak lagi mengirim `weight_gross` (atau mengirim `null`);
+- [x] Payload simpan tidak lagi mengirim `weight_gross` (atau mengirim `null`);
       server tetap menerima `null` karena kolomnya nullable.
-- [ ] Kolom `weight_gross` di database **tidak** dihapus; data lama tetap utuh.
-- [ ] `npm run build` dan `node scripts/check-i18n.mjs` lulus; key
+- [x] Kolom `weight_gross` di database **tidak** dihapus; data lama tetap utuh.
+- [x] `npm run build` dan `node scripts/check-i18n.mjs` lulus; key
       `incoming.grossWeight` boleh tetap ada (tidak dipakai) atau dihapus dari
       tiga katalog — pilih satu dan konsisten.
 
 ## Verification
 
-- [ ] Build: `npm run build`
-- [ ] i18n: `node scripts/check-i18n.mjs`
-- [ ] Tests pass: `vendor/bin/pest tests/Feature/IncomingPoArrivalTest.php tests/Feature/LocalPoTest.php tests/Feature/ReceiveFormDefaultsTest.php`
-- [ ] Manual check: buka form Arrival baru dan Local PO baru — tidak ada field
+- [x] Build: `npm run build`
+- [x] i18n: `node scripts/check-i18n.mjs`
+- [x] Tests pass: `vendor/bin/pest tests/Feature/IncomingPoArrivalTest.php tests/Feature/LocalPoTest.php tests/Feature/ReceiveFormDefaultsTest.php`
+- [x] Manual check: buka form Arrival baru dan Local PO baru — tidak ada field
       gross weight; simpan berhasil
 
 ## Blocked by

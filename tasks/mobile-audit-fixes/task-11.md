@@ -16,27 +16,27 @@ jadi satu-satunya jalan keluar adalah mematikan paksa APK.
 
 ## Acceptance criteria
 
-- [ ] `IssueState` menyimpan `workOrderId`.
-- [ ] `load(id)` **selalu** memuat konteks untuk `id` bila `id != state.workOrderId`;
+- [x] `IssueState` menyimpan `workOrderId`.
+- [x] `load(id)` **selalu** memuat konteks untuk `id` bila `id != state.workOrderId`;
       baris scan WO lama dibersihkan (dengan konfirmasi Task 09 bila perlu).
-- [ ] `pendingRelease` menyimpan `workOrderId` asalnya.
-- [ ] `_stageButton` hanya menampilkan "Retry release" bila
+- [x] `pendingRelease` menyimpan `workOrderId` asalnya.
+- [x] `_stageButton` hanya menampilkan "Retry release" bila
       `pendingRelease.workOrderId == state.workOrderId`.
-- [ ] Bila ada attempt tertunda milik WO lain, layar menampilkan kartu terpisah
+- [x] Bila ada attempt tertunda milik WO lain, layar menampilkan kartu terpisah
       ("Release WO-A belum terkonfirmasi") dengan aksi **Retry** dan **Buang** —
       bukan tombol utama.
-- [ ] `reset()` boleh membersihkan `pendingRelease` hanya lewat aksi eksplisit
+- [x] `reset()` boleh membersihkan `pendingRelease` hanya lewat aksi eksplisit
       pengguna, bukan otomatis saat pindah layar.
-- [ ] Test: release WO-A gagal → `load(WO-B)` → konteks WO-B tampil, tombol
+- [x] Test: release WO-A gagal → `load(WO-B)` → konteks WO-B tampil, tombol
       retry tidak muncul, kartu menyebut WO-A; Retry mengirim payload WO-A.
 
 ## Verification
 
-- [ ] Tests pass: `cd ../erp_gci_mobile && flutter test test/issue_state_per_wo_test.dart test/issue_notifier_test.dart test/pending_release_test.dart`
-- [ ] Full mobile suite: `cd ../erp_gci_mobile && flutter test`
-- [ ] Analyze: `cd ../erp_gci_mobile && flutter analyze`
-- [ ] Build: `cd ../erp_gci_mobile && flutter build apk --debug`
-- [ ] Manual check: matikan Wi-Fi → release WO-A → buka WO-B → material WO-B
+- [x] Tests pass: `cd ../erp_gci_mobile && flutter test test/issue_state_per_wo_test.dart test/issue_notifier_test.dart test/pending_release_test.dart`
+- [x] Full mobile suite: `cd ../erp_gci_mobile && flutter test`
+- [x] Analyze: `cd ../erp_gci_mobile && flutter analyze`
+- [x] Build: `cd ../erp_gci_mobile && flutter build apk --debug`
+- [x] Manual check: matikan Wi-Fi → release WO-A → buka WO-B → material WO-B
       tampil dan tidak ada tombol yang bisa merilis WO-A
 
 ## Blocked by
@@ -65,6 +65,12 @@ memori seperti sebelumnya.
   menangani satu WO pada satu waktu, dan attempt tertunda harus tetap terlihat
   lintas WO. Menyimpan `workOrderId` di state lebih kecil dan menyelesaikan
   masalahnya tanpa memecah provider.
+- **Keputusan saat eksekusi:** hanya ada satu slot `pendingRelease`, jadi selama
+  attempt WO lain belum pasti, WO yang sedang dibuka **tidak** boleh mulai
+  bekerja (`isLocked` = `isBusy || pendingRelease != null`). Submit WO-B akan
+  menimpa payload WO-A yang masih memegang tag fisik — kehilangan yang tidak
+  bisa dipulihkan. Kartu "belum terkonfirmasi" memberi jalan keluar segera
+  (Retry / Buang), dan `reset()` tetap menolak menghapus attempt tertunda.
 - `pending_release_test.dart` saat ini menguji `issue_screen.dart` (layar mati).
   Setelah Task 16, test itu menunjuk `GuidedIssueScreen`; jaga perilakunya tetap
   sama.

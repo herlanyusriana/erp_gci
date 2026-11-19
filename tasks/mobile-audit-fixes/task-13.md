@@ -21,20 +21,20 @@ sah.
 
 ## Acceptance criteria
 
-- [ ] `resolveTag` memakai `hasAnyPermission(['stock.issue', 'production.update', 'work_order.update'])`,
+- [x] `resolveTag` memakai `hasAnyPermission(['stock.issue', 'production.update', 'work_order.update'])`,
       mengikuti pola `WipBoardApiController` baris 24–26.
-- [ ] User tanpa ketiga permission tetap mendapat 403 dengan pesan yang sama.
-- [ ] Endpoint penerimaan produksi (`/receipts/resolve`, `/receipts/confirm`)
+- [x] User tanpa ketiga permission tetap mendapat 403 dengan pesan yang sama.
+- [x] Endpoint penerimaan produksi (`/receipts/resolve`, `/receipts/confirm`)
       tetap mensyaratkan `stock.issue` — tidak ikut dilonggarkan.
-- [ ] Test: user dengan `production.update` saja bisa resolve; user tanpa
+- [x] Test: user dengan `production.update` saja bisa resolve; user tanpa
       ketiganya 403; user `stock.issue` tetap bisa.
 
 ## Verification
 
-- [ ] Tests pass: `vendor/bin/pest tests/Feature/Api/MaterialIssueApiTest.php tests/Feature/Api/ProductionReceiptApiTest.php`
-- [ ] No regressions: `vendor/bin/pest tests/Feature/RolePermissionTest.php`
-- [ ] Lint: `vendor/bin/pint --dirty --format agent`
-- [ ] Manual check: `php artisan tinker --execute 'optional(\App\Models\User::where("email","production@geumcheon.local")->first())->hasAnyPermission(["production.update","work_order.update"]);'`
+- [x] Tests pass: `vendor/bin/pest tests/Feature/Api/MaterialIssueApiTest.php tests/Feature/Api/ProductionReceiptApiTest.php`
+- [x] No regressions: `vendor/bin/pest tests/Feature/RolePermissionTest.php`
+- [x] Lint: `vendor/bin/pint --dirty --format agent`
+- [x] Manual check: `php artisan tinker --execute 'optional(\App\Models\User::where("email","production@geumcheon.local")->first())->hasAnyPermission(["production.update","work_order.update"]);'`
 
 ## Blocked by
 

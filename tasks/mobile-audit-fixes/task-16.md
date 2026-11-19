@@ -18,24 +18,24 @@ dibuka operator.
 
 ## Acceptance criteria
 
-- [ ] Tidak ada lagi file di `lib/` yang mengimpor `issue_screen.dart`
+- [x] Tidak ada lagi file di `lib/` yang mengimpor `issue_screen.dart`
       (diverifikasi `grep -rn "issue_screen.dart" lib/` → kosong).
-- [ ] Kasus pending-release di `pending_release_test.dart` dipindahkan ke
+- [x] Kasus pending-release di `pending_release_test.dart` dipindahkan ke
       `GuidedIssueScreen` (perilaku yang sama: attempt tertunda terlihat, retry
       mengirim payload beku).
-- [ ] Entri aksesibilitas dan golden yang relevan dipindahkan atau dihapus
+- [x] Entri aksesibilitas dan golden yang relevan dipindahkan atau dihapus
       beserta gambarnya; tidak ada golden yang merujuk layar yang tidak ada.
-- [ ] `test/issue_screen_test.dart` dihapus; `test/scanner_polish_test.dart` dan
+- [x] `test/issue_screen_test.dart` dihapus; `test/scanner_polish_test.dart` dan
       `test/issue_tag_suggestion_test.dart` tetap lulus tanpa perubahan perilaku.
-- [ ] Jumlah test lulus **tidak turun** dari baseline 214 (test yang dipindah
+- [x] Jumlah test lulus **tidak turun** dari baseline 214 (test yang dipindah
       dihitung, yang memang duplikat dihapus beserta alasannya dicatat di PR).
 
 ## Verification
 
-- [ ] Full mobile suite: `cd ../erp_gci_mobile && flutter test`
-- [ ] Analyze: `cd ../erp_gci_mobile && flutter analyze` (tidak ada unused import)
-- [ ] Build: `cd ../erp_gci_mobile && flutter build apk --debug`
-- [ ] Manual check: rute `/work-orders/{id}/issue` tetap membuka
+- [x] Full mobile suite: `cd ../erp_gci_mobile && flutter test`
+- [x] Analyze: `cd ../erp_gci_mobile && flutter analyze` (tidak ada unused import)
+- [x] Build: `cd ../erp_gci_mobile && flutter build apk --debug`
+- [x] Manual check: rute `/work-orders/{id}/issue` tetap membuka
       `GuidedIssueScreen`; alur scan → bundle → release berjalan
 
 ## Blocked by
@@ -67,4 +67,6 @@ data atau server.
   (mis. edit qty per baris di 685–709), jangan porting buta: catat sebagai
   perilaku yang memang tidak ada di alur hidup dan buang bersama layarnya.
 - `issue_screen.dart` masih memuat satu perilaku berbahaya (`updateQty`
-  mengubah 0 menjadi 0.0001). Pastikan tidak ikut tersalin.
+  mengubah 0 menjadi 0.0001). Pastikan tidak ikut tersalin. **Catatan saat
+  eksekusi:** `IssueNotifier.updateQty` sekarang menjaga `value > 0`, jadi
+  perilaku itu tidak ada lagi di jalur hidup dan tidak perlu ditambal.

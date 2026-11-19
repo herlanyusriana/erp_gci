@@ -9,9 +9,21 @@ import type { PurchaseOrder } from '@/types';
 
 const { t } = useI18n();
 
-defineProps<{
+const props = defineProps<{
     purchaseOrder: PurchaseOrder;
 }>();
+
+/** Harga baris PO selalu ditampilkan dengan mata uang dokumennya. */
+function formatPrice(price: number | null): string {
+    if (price == null) return '—';
+
+    const amount = Number(price).toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    });
+
+    return props.purchaseOrder.currency ? `${props.purchaseOrder.currency} ${amount}` : amount;
+}
 
 </script>
 
@@ -49,7 +61,7 @@ defineProps<{
             </div>
         </div>
 
-        <div class="mb-6 grid gap-4 sm:grid-cols-3">
+        <div class="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div class="rounded-xl border border-borderline bg-surface p-4">
                 <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('incoming.poDate') }}</div>
                 <div class="mt-1 font-semibold text-ink-primary">{{ formatDate(purchaseOrder.po_date) }}</div>
@@ -57,6 +69,10 @@ defineProps<{
             <div class="rounded-xl border border-borderline bg-surface p-4">
                 <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('incoming.expected') }}</div>
                 <div class="mt-1 font-semibold text-ink-primary">{{ formatDate(purchaseOrder.expected_date) }}</div>
+            </div>
+            <div class="rounded-xl border border-borderline bg-surface p-4">
+                <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('incoming.currency') }}</div>
+                <div class="mt-1 font-semibold text-ink-primary">{{ purchaseOrder.currency ?? '—' }}</div>
             </div>
             <div class="rounded-xl border border-borderline bg-surface p-4">
                 <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('incoming.notes') }}</div>
@@ -84,7 +100,7 @@ defineProps<{
                             <td class="px-4 py-3 text-ink-primary">{{ item.size ?? '—' }}</td>
                             <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ item.qty }}</td>
                             <td class="px-4 py-3 text-ink-primary">{{ item.unit ?? '—' }}</td>
-                            <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ item.price ?? '—' }}</td>
+                            <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ formatPrice(item.price) }}</td>
                         </tr>
                         <tr v-if="!purchaseOrder.items?.length">
                             <td colspan="6" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noItems') }}</td>

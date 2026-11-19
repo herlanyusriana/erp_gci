@@ -225,6 +225,7 @@ export interface PurchaseOrder {
     po_no: string;
     supplier_id: number | null;
     status: string;
+    currency: string | null;
     po_date: string | null;
     expected_date: string | null;
     notes: string | null;

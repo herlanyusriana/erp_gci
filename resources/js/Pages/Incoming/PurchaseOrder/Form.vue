@@ -40,7 +40,7 @@ interface ActivePrice {
 
 const props = defineProps<{
     purchaseOrder: PurchaseOrder | null;
-    suppliers: Array<Pick<Supplier, 'id' | 'supplier_code' | 'supplier_name'>>;
+    suppliers: Array<Pick<Supplier, 'id' | 'supplier_code' | 'supplier_name' | 'source'>>;
     parts: Array<Pick<Part, 'id' | 'part_number' | 'part_name' | 'model' | 'size'>>;
     uomCodes: string[];
     supplierParts: SupplierPart[];
@@ -68,12 +68,31 @@ const rows = ref<ItemRow[]>(
 const form = useForm({
     po_no: props.purchaseOrder?.po_no ?? '',
     supplier_id: props.purchaseOrder?.supplier_id ?? ('' as number | ''),
+    status: props.purchaseOrder?.status ?? 'draft',
+    currency: props.purchaseOrder?.currency ?? 'IDR',
     po_date: props.purchaseOrder?.po_date ?? '',
     expected_date: props.purchaseOrder?.expected_date ?? '',
     notes: props.purchaseOrder?.notes ?? '',
-    status: props.purchaseOrder?.status ?? 'draft',
     items: [] as any[],
 });
+
+/**
+ * Mata uang baku sebuah supplier: supplier impor menagih USD, sisanya IDR.
+ * Nilai ini hanya usulan — operator boleh menimpanya.
+ */
+function defaultCurrency(): string {
+    const supplier = props.suppliers.find((s) => s.id === Number(form.supplier_id));
+
+    return supplier?.source === 'import' ? 'USD' : 'IDR';
+}
+
+/** Operator sudah mengetik sendiri → jangan ditimpa usulan supplier. */
+const currencyTouched = ref(props.purchaseOrder?.currency != null);
+
+function onCurrencyInput() {
+    currencyTouched.value = true;
+    form.currency = form.currency.toUpperCase();
+}
 
 /** Part yang boleh dipilih: hanya part supplier terpilih (strict). */
 const partOptions = computed(() => {
@@ -114,6 +133,11 @@ function onSupplierChange() {
     for (const r of rows.value) {
         r.part_id = '';
         r.price = '';
+    }
+
+    // Usulan mata uang ikut supplier, kecuali operator sudah mengetik sendiri.
+    if (!currencyTouched.value) {
+        form.currency = defaultCurrency();
     }
 }
 
@@ -248,6 +272,20 @@ function submit() {
                         </select>
                     </div>
                     <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.currency') }}</label>
+                        <input
+                            :aria-label="t('incoming.currency')"
+                            v-model="form.currency"
+                            type="text"
+                            placeholder="IDR"
+                            maxlength="10"
+                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm uppercase text-ink-primary focus:border-primary focus:ring-primary"
+                            @input="onCurrencyInput"
+                        />
+                        <p class="mt-1 text-xs text-ink-secondary">{{ t('incoming.currencyHint') }}</p>
+                        <InputError :message="form.errors.currency" class="mt-1" />
+                    </div>
+                    <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.poDate') }}</label>
                         <input :aria-label="t('incoming.poDate')" v-model="form.po_date" type="date" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                     </div>
@@ -328,6 +366,12 @@ function submit() {
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.price') }}</label>
                         <input :aria-label="t('incoming.price')" v-model="r.price" type="number" step="0.0001" min="0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                         <p v-if="priceFor(r.part_id)" class="mt-1 text-xs text-ink-secondary">{{ t('incoming.priceFromMaster', { currency: priceFor(r.part_id)?.currency }) }}</p>
+                        <p
+                            v-if="priceFor(r.part_id) && priceFor(r.part_id)?.currency !== form.currency"
+                            class="mt-1 text-xs text-warning"
+                        >
+                            {{ t('incoming.currencyMismatch', { priceCurrency: priceFor(r.part_id)?.currency, poCurrency: form.currency }) }}
+                        </p>
                         <InputError :message="rowError(r, 'price')" class="mt-1" />
                     </div>
                     <div class="flex items-end sm:col-span-2">

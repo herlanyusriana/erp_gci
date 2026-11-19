@@ -85,7 +85,7 @@ class PurchaseOrderController extends Controller
 
         $totalQty = (float) $purchaseOrder->items->sum('qty');
         $totalAmount = (float) $purchaseOrder->items->sum(fn ($item) => (float) $item->qty * (float) ($item->price ?? 0));
-        $currency = $purchaseOrder->supplier?->source === 'import' ? 'USD' : 'IDR';
+        $currency = $this->resolveCurrency($purchaseOrder->currency, $purchaseOrder->supplier?->source);
         $companyName = (string) ConfigMaster::getValue('SYSTEM', 'company_name', 'PT. GEUM CHEON INDO');
 
         return view('purchase-orders.print', compact(
@@ -121,11 +121,17 @@ class PurchaseOrderController extends Controller
     {
         $data = $this->validateOrRemap($request);
 
-        $po = DB::transaction(function () use ($data, $request) {
+        $currency = $this->resolveCurrency(
+            $data['currency'] ?? null,
+            Supplier::query()->whereKey((int) $data['supplier_id'])->value('source'),
+        );
+
+        $po = DB::transaction(function () use ($data, $request, $currency) {
             $po = PurchaseOrder::create([
                 'po_no' => $data['po_no'],
                 'supplier_id' => $data['supplier_id'],
                 'status' => $data['status'],
+                'currency' => $currency,
                 'po_date' => $data['po_date'] ?? null,
                 'expected_date' => $data['expected_date'] ?? null,
                 'notes' => $data['notes'] ?? null,
@@ -162,11 +168,17 @@ class PurchaseOrderController extends Controller
             ]);
         }
 
-        DB::transaction(function () use ($purchaseOrder, $data, $request) {
+        $currency = $this->resolveCurrency(
+            $data['currency'] ?? null,
+            Supplier::query()->whereKey((int) $data['supplier_id'])->value('source'),
+        );
+
+        DB::transaction(function () use ($purchaseOrder, $data, $request, $currency) {
             $purchaseOrder->update([
                 'po_no' => $data['po_no'],
                 'supplier_id' => $data['supplier_id'],
                 'status' => $data['status'],
+                'currency' => $currency,
                 'po_date' => $data['po_date'] ?? null,
                 'expected_date' => $data['expected_date'] ?? null,
                 'notes' => $data['notes'] ?? null,
@@ -217,6 +229,7 @@ class PurchaseOrderController extends Controller
             'expected_date' => ['nullable', 'date'],
             'notes' => ['nullable', 'string'],
             'status' => ['required', 'in:draft,confirmed,cancelled'],
+            'currency' => ['nullable', 'string', 'max:10'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.uid' => RowErrorKeys::rules(),
             'items.*.part_id' => ['required', 'exists:parts,id', PartTypeRule::notFg(), Rule::exists('part_substitutes', 'substitute_part_id')->where(fn ($q) => $q->where('supplier_id', $supplierId)->where('is_active', true))],
@@ -259,6 +272,24 @@ class PurchaseOrderController extends Controller
         $value = trim((string) $submitted);
 
         return $value !== '' ? $value : null;
+    }
+
+    /**
+     * Mata uang final sebuah PO.
+     *
+     * Isian operator menang; bila kosong, nilai mengikuti sumber supplier
+     * (import -> USD, sisanya IDR). Aturan cadangan ini sama dengan yang dulu
+     * dipakai halaman cetak, sehingga PO lama tetap tercetak seperti sebelumnya.
+     */
+    private function resolveCurrency(?string $submitted, ?string $supplierSource): string
+    {
+        $value = strtoupper(trim((string) $submitted));
+
+        if ($value !== '') {
+            return $value;
+        }
+
+        return $supplierSource === 'import' ? 'USD' : 'IDR';
     }
 
     /**

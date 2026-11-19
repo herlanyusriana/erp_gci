@@ -12,7 +12,7 @@ class PurchaseOrder extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        'po_no', 'supplier_id', 'status', 'po_date', 'expected_date',
+        'po_no', 'supplier_id', 'status', 'currency', 'po_date', 'expected_date',
         'notes', 'created_by', 'updated_by',
     ];
 

@@ -17,24 +17,24 @@ target/sisa, sehingga APK tidak bisa menampilkan batas.
 
 ## Acceptance criteria
 
-- [ ] `ProductionSessionService::context()` mengirim, untuk setiap part:
+- [x] `ProductionSessionService::context()` mengirim, untuk setiap part:
       `target_qty` (qty WO), `produced_qty` (sum `qty_good` part itu pada WO),
       dan `remaining_qty` (`max(0, target − produced)`).
-- [ ] `ProductionResultService::report()` menerima `qty_good = 0` **bila
+- [x] `ProductionResultService::report()` menerima `qty_good = 0` **bila
       `qty_reject > 0`** (laporan reject saja); menolak hanya bila keduanya nol.
-- [ ] `report()` menolak satu laporan dengan `qty_good + qty_reject >
+- [x] `report()` menolak satu laporan dengan `qty_good + qty_reject >
       qty WO` (plafon per laporan) memakai pesan validasi yang menyebut qty WO.
-- [ ] `qty_reject` wajib finite dan `>= 0` (yang sudah ada dipertahankan).
-- [ ] Plafon kumulatif `qty_good` yang sudah ada tidak dilonggarkan.
-- [ ] Test: good 0 + reject 5 → tersimpan; good 0 + reject 0 → 422; reject
+- [x] `qty_reject` wajib finite dan `>= 0` (yang sudah ada dipertahankan).
+- [x] Plafon kumulatif `qty_good` yang sudah ada tidak dilonggarkan.
+- [x] Test: good 0 + reject 5 → tersimpan; good 0 + reject 0 → 422; reject
       melebihi qty WO → 422; session memuat `remaining_qty` yang turun setelah
       satu laporan.
 
 ## Verification
 
-- [ ] Tests pass: `vendor/bin/pest tests/Feature/ProductionResultTest.php tests/Feature/Api/ProductionSessionApiTest.php`
-- [ ] No regressions: `vendor/bin/pest tests/Feature/Api/MaterialIssueApiTest.php tests/Feature/ProductionLabelQueueTest.php`
-- [ ] Lint: `vendor/bin/pint --dirty --format agent`
+- [x] Tests pass: `ProductionResultTest` 18 passed / 148 assertions, `ProductionSessionApiTest` 13 passed / 62 assertions
+- [x] No regressions: `MaterialIssueApiTest` + `ProductionLabelQueueTest` 98 passed / 583 assertions
+- [x] Lint: `vendor/bin/pint --dirty --format agent` — passed
 - [ ] Manual check: laporkan reject saja dari APK → tersimpan, output good tidak
       bertambah, stok material berkurang sesuai reject
 

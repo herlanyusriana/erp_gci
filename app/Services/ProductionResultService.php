@@ -50,11 +50,16 @@ class ProductionResultService
             }
             $qtyGood = (float) ($data['qty_good'] ?? 0);
             $qtyReject = (float) ($data['qty_reject'] ?? 0);
-            if (! is_finite($qtyGood) || $qtyGood <= 0) {
-                throw ValidationException::withMessages(['qty_good' => __('Qty good harus lebih dari 0.')]);
+            if (! is_finite($qtyGood) || $qtyGood < 0) {
+                throw ValidationException::withMessages(['qty_good' => __('Qty good tidak boleh negatif.')]);
             }
             if (! is_finite($qtyReject) || $qtyReject < 0) {
                 throw ValidationException::withMessages(['qty_reject' => __('Qty reject tidak boleh negatif.')]);
+            }
+            // Hasil reject saja tetap laporan yang sah (mesin menghasilkan scrap
+            // penuh); yang tidak masuk akal adalah keduanya nol.
+            if ($qtyGood <= 0 && $qtyReject <= 0) {
+                throw ValidationException::withMessages(['qty_good' => __('Isi qty good atau qty reject.')]);
             }
             try {
                 $goodDecimal = BigDecimal::of($data['qty_good'])->toScale(4);
@@ -62,9 +67,17 @@ class ProductionResultService
             } catch (MathException) {
                 throw ValidationException::withMessages(['qty_good' => __('Qty hasil maksimal empat angka desimal.')]);
             }
+            $woQty = BigDecimal::of($workOrder->getRawOriginal('qty'));
+            // Plafon per laporan: reject ikut menggerakkan konsumsi material,
+            // jadi salah ketik satu nol harus tertahan di sini.
+            if ($goodDecimal->plus($rejectDecimal)->isGreaterThan($woQty)) {
+                throw ValidationException::withMessages([
+                    'qty_reject' => __('Qty good + reject satu laporan melebihi qty WO (:qty).', ['qty' => $workOrder->qty]),
+                ]);
+            }
             $produced = BigDecimal::of(ProductionResult::query()->where('work_order_id', $workOrder->id)
                 ->where('parent_part_id', $parentPartId)->sum('qty_good'));
-            if ($produced->plus($goodDecimal)->isGreaterThan(BigDecimal::of($workOrder->getRawOriginal('qty')))) {
+            if ($produced->plus($goodDecimal)->isGreaterThan($woQty)) {
                 throw ValidationException::withMessages([
                     'qty_good' => __('Total hasil step ini melebihi qty WO (:qty).', ['qty' => $workOrder->qty]),
                 ]);
@@ -233,13 +246,17 @@ class ProductionResultService
                 $row->increment('qty_consumed', (string) $need);
             }
 
-            $tag = $workOrder->wo_no.'#'.($first->parentPart?->part_number ?? $parentPartId).'#R'.$result->id;
-            $output = $this->stockService->postProductionStock(
-                $parentPartId, $tag, (string) $goodDecimal, $uom, $reportedAt,
-                // Lokasi barang jadi sementara: mesin yang memproduksinya.
-                $machine?->machine_code,
-            );
-            $result->update(['output_part_stock_id' => $output->id]);
+            // Laporan reject saja tidak menghasilkan stok: jangan bikin baris
+            // output ber-qty 0 yang hanya jadi sampah di daftar stok.
+            if (! $goodDecimal->isZero()) {
+                $tag = $workOrder->wo_no.'#'.($first->parentPart?->part_number ?? $parentPartId).'#R'.$result->id;
+                $output = $this->stockService->postProductionStock(
+                    $parentPartId, $tag, (string) $goodDecimal, $uom, $reportedAt,
+                    // Lokasi barang jadi sementara: mesin yang memproduksinya.
+                    $machine?->machine_code,
+                );
+                $result->update(['output_part_stock_id' => $output->id]);
+            }
 
             return $result;
         });
@@ -256,19 +273,24 @@ class ProductionResultService
             if ($result->trashed()) {
                 return;
             }
-            if ($result->output_part_stock_id === null) {
+            // Laporan reject saja tidak punya baris output; konsumsinya tetap
+            // harus dikembalikan di bawah.
+            $hadOutput = BigDecimal::of($result->getRawOriginal('qty_good'))->isGreaterThan(0);
+            if ($result->output_part_stock_id === null && $hadOutput) {
                 throw ValidationException::withMessages(['result' => __('Hasil produksi lama perlu rekonsiliasi sebelum dibatalkan.')]);
             }
-            $output = PartStock::query()->lockForUpdate()->find($result->output_part_stock_id);
-            if ($output === null || BigDecimal::of($output->getRawOriginal('qty'))->isLessThan($result->getRawOriginal('qty_good'))
-                || WorkOrderConsumption::where('part_stock_id', $output->id)->exists()
-                || WorkOrderMaterialBooking::where('part_stock_id', $output->id)->where('status', 'booked')->exists()) {
-                throw ValidationException::withMessages(['result' => __('Output hasil ini sudah digunakan atau dibooking. Batalkan proses berikutnya terlebih dahulu.')]);
-            }
-            $outputRemaining = BigDecimal::of($output->getRawOriginal('qty'))->minus($result->getRawOriginal('qty_good'));
-            PartStock::query()->whereKey($output->id)->update(['qty' => (string) $outputRemaining]);
-            if ($outputRemaining->isZero()) {
-                $output->delete();
+            if ($result->output_part_stock_id !== null) {
+                $output = PartStock::query()->lockForUpdate()->find($result->output_part_stock_id);
+                if ($output === null || BigDecimal::of($output->getRawOriginal('qty'))->isLessThan($result->getRawOriginal('qty_good'))
+                    || WorkOrderConsumption::where('part_stock_id', $output->id)->exists()
+                    || WorkOrderMaterialBooking::where('part_stock_id', $output->id)->where('status', 'booked')->exists()) {
+                    throw ValidationException::withMessages(['result' => __('Output hasil ini sudah digunakan atau dibooking. Batalkan proses berikutnya terlebih dahulu.')]);
+                }
+                $outputRemaining = BigDecimal::of($output->getRawOriginal('qty'))->minus($result->getRawOriginal('qty_good'));
+                PartStock::query()->whereKey($output->id)->update(['qty' => (string) $outputRemaining]);
+                if ($outputRemaining->isZero()) {
+                    $output->delete();
+                }
             }
             $consumptions = WorkOrderConsumption::where('production_result_id', $result->id)->orderBy('id')->lockForUpdate()->get();
             foreach ($consumptions as $consumption) {

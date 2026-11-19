@@ -8,25 +8,25 @@ nol tertangkap di HP — bukan setelah stok terpotong.
 
 ## Acceptance criteria
 
-- [ ] `ProductionSessionPart` membaca `targetQty`, `producedQty`,
+- [x] `ProductionSessionPart` membaca `targetQty`, `producedQty`,
       `remainingQty` dari payload Task 07.
-- [ ] Layar menampilkan sisa (mis. "Sisa 500 / 1.000") di dekat input qty.
-- [ ] Bila `qty_good + qty_reject > remainingQty`, tekan Save menampilkan
+- [x] Layar menampilkan sisa (mis. "Sisa 500 / 1.000") di dekat input qty.
+- [x] Bila `qty_good + qty_reject > remainingQty`, tekan Save menampilkan
       konfirmasi berisi angka yang diketik dan sisa sebenarnya; batal =
       tidak ada request.
-- [ ] Qty yang bukan angka finite atau negatif ditolak sebelum request (termasuk
+- [x] Qty yang bukan angka finite atau negatif ditolak sebelum request (termasuk
       `qty_reject`), bukan di-`?? 0` diam-diam.
-- [ ] Bila server tidak mengirim field baru (APK lama vs server lama), layar
+- [x] Bila server tidak mengirim field baru (APK lama vs server lama), layar
       tetap berfungsi tanpa peringatan — jangan crash.
-- [ ] Test: input melebihi sisa → dialog muncul dan repository tidak dipanggil
+- [x] Test: input melebihi sisa → dialog muncul dan repository tidak dipanggil
       saat dibatalkan; dalam batas → langsung terkirim.
 
 ## Verification
 
-- [ ] Tests pass: `cd ../erp_gci_mobile && flutter test test/production_result_qty_guard_test.dart test/production_session_screen_test.dart`
-- [ ] Full mobile suite: `cd ../erp_gci_mobile && flutter test`
-- [ ] Analyze: `cd ../erp_gci_mobile && flutter analyze`
-- [ ] Build: `cd ../erp_gci_mobile && flutter build apk --debug`
+- [x] Tests pass: `flutter test test/production_result_qty_guard_test.dart test/production_session_screen_test.dart` — 6 + 20 passed
+- [x] Full mobile suite: `flutter test` — 232 passed
+- [x] Analyze: `flutter analyze` — 5 info lama, 0 error/warning
+- [x] Build: `flutter build apk --debug` — ok
 - [ ] Manual check: isi Good 10.000 pada part dengan sisa 500 → konfirmasi
       muncul dan menyebut 500
 

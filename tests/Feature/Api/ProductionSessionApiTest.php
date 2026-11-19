@@ -4,6 +4,7 @@ namespace Tests\Feature\Api;
 
 use App\Models\Machine;
 use App\Models\Part;
+use App\Models\ProductionResult;
 use App\Models\User;
 use App\Models\WorkOrder;
 use App\Models\WorkOrderItem;
@@ -277,5 +278,36 @@ class ProductionSessionApiTest extends TestCase
             'start_time' => '10:30',
             'end_time' => '09:30',
         ])->assertStatus(422)->assertJsonValidationErrors('end_time');
+    }
+
+    public function test_part_carries_target_produced_and_remaining_qty(): void
+    {
+        $this->travelTo(Carbon::parse('2026-01-15 02:30:00', 'UTC'));
+
+        $before = $this->getJson("/api/machines/{$this->machine->id}/production-session")
+            ->assertOk()
+            ->json('data.parts.0');
+
+        $this->assertSame(1000.0, (float) $before['target_qty']);
+        $this->assertSame(0.0, (float) $before['produced_qty']);
+        $this->assertSame(1000.0, (float) $before['remaining_qty']);
+
+        ProductionResult::create([
+            'work_order_id' => $this->wo->id,
+            'parent_part_id' => $this->parentPart->id,
+            'machine_id' => $this->machine->id,
+            'result_date' => now()->toDateString(),
+            'qty_good' => 400,
+            'qty_reject' => 25,
+            'uom' => 'PCS',
+        ]);
+
+        $after = $this->getJson("/api/machines/{$this->machine->id}/production-session")
+            ->assertOk()
+            ->json('data.parts.0');
+
+        // Reject tidak menambah produced: target dihitung dari good saja.
+        $this->assertSame(400.0, (float) $after['produced_qty']);
+        $this->assertSame(600.0, (float) $after['remaining_qty']);
     }
 }

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ConfigMaster;
 use App\Models\Machine;
 use App\Models\MachineDowntime;
+use App\Models\ProductionResult;
 use App\Models\WorkOrderItem;
 use App\Support\MachineRouting;
 use App\Support\ProductionPeriods;
@@ -68,7 +69,7 @@ final class ProductionSessionService
         $partsQuery = WorkOrderItem::query()
             ->where('machine_id', $machine->id)
             ->whereNotNull('parent_part_id')
-            ->with(['parentPart:id,part_number,part_name', 'workOrder:id,wo_no,status'])
+            ->with(['parentPart:id,part_number,part_name', 'workOrder:id,wo_no,status,qty'])
             ->whereHas('workOrder', fn ($q) => $q->whereIn('status', ['in_progress']))
             ->get();
 
@@ -84,16 +85,35 @@ final class ProductionSessionService
             });
         }
 
+        // Sisa rencana per part pada WO-nya: target = qty WO, produced = total
+        // good yang sudah dilaporkan. APK memakai ini hanya untuk memperingatkan;
+        // server tetap penentu akhir.
+        $producedByStep = ProductionResult::query()
+            ->whereIn('work_order_id', $partsQuery->pluck('work_order_id')->unique()->all())
+            ->whereIn('parent_part_id', $partsQuery->pluck('parent_part_id')->unique()->all())
+            ->selectRaw('work_order_id, parent_part_id, SUM(qty_good) AS produced')
+            ->groupBy('work_order_id', 'parent_part_id')
+            ->get()
+            ->keyBy(fn (ProductionResult $row): string => $row->work_order_id.'#'.$row->parent_part_id);
+
         $parts = $partsQuery
             ->unique('parent_part_id')
-            ->map(fn (WorkOrderItem $item): array => [
-                'part_id' => (int) $item->parent_part_id,
-                'part_number' => $item->parentPart?->part_number,
-                'part_name' => $item->parentPart?->part_name,
-                'uom' => $item->parent_uom,
-                'work_order_id' => (int) $item->work_order_id,
-                'wo_no' => $item->workOrder?->wo_no,
-            ])
+            ->map(function (WorkOrderItem $item) use ($producedByStep): array {
+                $target = (float) ($item->workOrder->qty ?? 0);
+                $produced = (float) ($producedByStep[$item->work_order_id.'#'.$item->parent_part_id]->produced ?? 0);
+
+                return [
+                    'part_id' => (int) $item->parent_part_id,
+                    'part_number' => $item->parentPart?->part_number,
+                    'part_name' => $item->parentPart?->part_name,
+                    'uom' => $item->parent_uom,
+                    'work_order_id' => (int) $item->work_order_id,
+                    'wo_no' => $item->workOrder?->wo_no,
+                    'target_qty' => $target,
+                    'produced_qty' => $produced,
+                    'remaining_qty' => max(0.0, $target - $produced),
+                ];
+            })
             ->values()
             ->all();
 

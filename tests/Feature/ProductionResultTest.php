@@ -384,6 +384,74 @@ class ProductionResultTest extends TestCase
         ]);
     }
 
+    public function test_reject_only_report_is_saved_consumes_material_and_can_be_reversed(): void
+    {
+        $wo = $this->releasedWorkOrder();
+        $rmId = (int) Part::where('part_number', 'CBKG07256C')->value('id');
+        $firstStep = $this->stepIds($wo)->first();
+        $first = $firstStep['parent_part_id'];
+        $unitNeed = (float) $firstStep['step']->child_qty;
+
+        $this->post(route('production-results.store', $wo), [
+            'parent_part_id' => $first,
+            'qty_good' => 0,
+            'qty_reject' => 5,
+        ])->assertSessionHasNoErrors();
+
+        $result = $wo->results()->latest('id')->firstOrFail();
+        $this->assertSame(0.0, (float) $result->qty_good);
+        $this->assertSame(5.0, (float) $result->qty_reject);
+        // Tanpa good tidak ada output, jadi tidak ada baris stok ber-qty 0.
+        $this->assertNull($result->output_part_stock_id);
+        $this->assertEqualsWithDelta(0.0, (float) PartStock::where('part_id', $first)->sum('qty'), 0.001);
+        // Material tetap terpakai sebesar reject.
+        $this->assertEqualsWithDelta(
+            5 * $unitNeed,
+            (float) ProductionMaterialReceipt::where('work_order_id', $wo->id)->where('part_id', $rmId)->sum('qty_consumed'),
+            0.001,
+        );
+
+        // Laporan reject saja tetap bisa dibatalkan.
+        $this->delete(route('production-results.destroy', [$wo, $result]))
+            ->assertRedirect(route('production-results.create', $wo));
+
+        $this->assertSoftDeleted('production_results', ['id' => $result->id]);
+        $this->assertEqualsWithDelta(
+            0.0,
+            (float) ProductionMaterialReceipt::where('work_order_id', $wo->id)->where('part_id', $rmId)->sum('qty_consumed'),
+            0.001,
+        );
+    }
+
+    public function test_report_rejects_a_result_with_neither_good_nor_reject(): void
+    {
+        $wo = $this->releasedWorkOrder();
+        $first = $this->stepIds($wo)->first()['parent_part_id'];
+
+        $this->post(route('production-results.store', $wo), [
+            'parent_part_id' => $first,
+            'qty_good' => 0,
+            'qty_reject' => 0,
+        ])->assertSessionHasErrors('qty_good');
+
+        $this->assertSame(0, $wo->results()->count());
+    }
+
+    public function test_report_rejects_good_plus_reject_above_the_work_order_qty(): void
+    {
+        $wo = $this->releasedWorkOrder();
+        $first = $this->stepIds($wo)->first()['parent_part_id'];
+
+        // WO berisi 10; satu laporan 8 + 3 sudah mustahil.
+        $this->post(route('production-results.store', $wo), [
+            'parent_part_id' => $first,
+            'qty_good' => 8,
+            'qty_reject' => 3,
+        ])->assertSessionHasErrors('qty_reject');
+
+        $this->assertSame(0, $wo->results()->count());
+    }
+
     public function test_api_report_with_the_same_key_creates_one_row_and_one_output(): void
     {
         $wo = $this->releasedWorkOrder();

@@ -165,7 +165,8 @@ class ProductionResultController extends Controller
 
         $data = $request->validate([
             'parent_part_id' => ['required', 'integer', 'exists:parts,id'],
-            'qty_good' => ['required', 'numeric', 'gt:0'],
+            // 0 sah bila seluruh hasil reject; service menolak bila keduanya 0.
+            'qty_good' => ['required', 'numeric', 'min:0'],
             'qty_reject' => ['nullable', 'numeric', 'min:0'],
             'result_date' => ['nullable', 'date'],
             'shift' => ['nullable', 'string', 'max:20'],

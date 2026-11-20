@@ -263,7 +263,9 @@ export interface IncomingArrivalItem {
         contract_no?: string | null;
         reference_no?: string | null;
         pen_no?: string | null;
+        pen_date?: string | null;
         aju_no?: string | null;
+        aju_date?: string | null;
         po_no?: string | null;
         supplier?: Pick<Supplier, 'id' | 'supplier_code' | 'supplier_name'> | null;
         subcontractor?: Pick<Subcontractor, 'id' | 'subcontractor_code' | 'subcontractor_name'> | null;
@@ -328,6 +330,7 @@ export interface IncomingArrival {
     pen_no: string | null;
     pen_date: string | null;
     aju_no: string | null;
+    aju_date?: string | null;
     price_term: string | null;
     hs_code: string | null;
     port_of_loading: string | null;

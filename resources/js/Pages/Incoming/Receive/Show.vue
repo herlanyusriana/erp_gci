@@ -63,7 +63,10 @@ function removeReceive(r: IncomingReceive) {
                     <span v-if="arrival.contract_no">· {{ t('incoming.contractNo') }}: {{ arrival.contract_no }}</span>
                 </p>
                 <p class="mt-1 text-xs text-ink-secondary">
-                    {{ t('incoming.penNo') }}: {{ arrival.pen_no ?? '—' }} · {{ t('incoming.ajuNo') }}: {{ arrival.aju_no ?? '—' }}
+                    {{ t('incoming.penNo') }}: {{ arrival.pen_no ?? '—' }}
+                    <span v-if="arrival.pen_date"> ({{ formatDate(arrival.pen_date) }})</span>
+                    · {{ t('incoming.ajuNo') }}: {{ arrival.aju_no ?? '—' }}
+                    <span v-if="arrival.aju_date"> ({{ formatDate(arrival.aju_date) }})</span>
                 </p>
             </div>
             <div class="flex items-center gap-2">

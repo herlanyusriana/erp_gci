@@ -161,6 +161,7 @@ return [
     ],
     'attributes' => [
         'address' => 'address',
+        'aju_date' => 'customs submission date',
         'aju_no' => 'customs submission number',
         'bill_of_lading' => 'bill of lading',
         'bundle_qty' => 'package quantity',

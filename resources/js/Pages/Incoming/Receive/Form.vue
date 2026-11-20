@@ -91,7 +91,9 @@ const form = useForm({
     driver_name: '',
     location_code: props.defaultLocation ?? 'BULK-AREA',
     pen_no: props.arrivalItem.arrival?.pen_no ?? '',
+    pen_date: props.arrivalItem.arrival?.pen_date ? String(props.arrivalItem.arrival.pen_date).slice(0, 10) : '',
     aju_no: props.arrivalItem.arrival?.aju_no ?? '',
+    aju_date: props.arrivalItem.arrival?.aju_date ? String(props.arrivalItem.arrival.aju_date).slice(0, 10) : '',
     idempotency_key: createIdempotencyKey(),
     tags: [] as any[],
 });
@@ -621,6 +623,17 @@ function submit() {
                         <InputError :message="(form.errors as any).pen_no" class="mt-1" />
                     </div>
                     <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.penDate') }}</label>
+                        <input
+                            v-model="form.pen_date"
+                            type="date"
+                            :aria-label="t('incoming.penDate')"
+                            @keydown.enter.prevent
+                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                        />
+                        <InputError :message="(form.errors as any).pen_date" class="mt-1" />
+                    </div>
+                    <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.ajuNo') }}</label>
                         <input
                             v-model="form.aju_no"
@@ -631,6 +644,17 @@ function submit() {
                             class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
                         />
                         <InputError :message="(form.errors as any).aju_no" class="mt-1" />
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.ajuDate') }}</label>
+                        <input
+                            v-model="form.aju_date"
+                            type="date"
+                            :aria-label="t('incoming.ajuDate')"
+                            @keydown.enter.prevent
+                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                        />
+                        <InputError :message="(form.errors as any).aju_date" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">Lokasi</label>

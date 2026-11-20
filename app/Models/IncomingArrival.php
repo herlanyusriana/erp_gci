@@ -40,7 +40,7 @@ class IncomingArrival extends Model
         'supplier_id', 'subcontractor_id', 'customer_id', 'purchase_order_id',
         'trucking_company_id', 'is_local', 'arrival_type',
         'vessel', 'etd', 'eta', 'eta_gci',
-        'bill_of_lading', 'pen_no', 'pen_date', 'aju_no',
+        'bill_of_lading', 'pen_no', 'pen_date', 'aju_no', 'aju_date',
         'bill_of_lading_file', 'delivery_note_file', 'invoice_file', 'packing_list_file',
         'price_term', 'hs_code', 'port_of_loading', 'country', 'currency',
         'notes', 'remarks', 'status', 'iqc_status', 'iqc_passed_at', 'iqc_passed_by',
@@ -53,6 +53,7 @@ class IncomingArrival extends Model
         'eta' => 'date',
         'eta_gci' => 'date',
         'pen_date' => 'date',
+        'aju_date' => 'date',
         'iqc_passed_at' => 'datetime',
         'is_local' => 'boolean',
     ];

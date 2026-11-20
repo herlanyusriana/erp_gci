@@ -185,7 +185,9 @@ class TieredReceiveTest extends TestCase
             'receive_date' => now()->toDateString(),
             'truck_no' => 'B 9001 GCI',
             'pen_no' => 'PEN-RECV-1',
+            'pen_date' => '2026-11-18',
             'aju_no' => 'AJU-RECV-1',
+            'aju_date' => '2026-11-17',
             'tags' => [
                 [
                     'tag' => 'TAG-PEN-1',
@@ -197,7 +199,28 @@ class TieredReceiveTest extends TestCase
 
         $arrival->refresh();
         $this->assertSame('PEN-RECV-1', $arrival->pen_no);
+        $this->assertSame('2026-11-18', $arrival->pen_date?->toDateString());
         $this->assertSame('AJU-RECV-1', $arrival->aju_no);
+        $this->assertSame('2026-11-17', $arrival->aju_date?->toDateString());
+
+        $receive = IncomingReceive::where('tag', 'TAG-PEN-1')->firstOrFail();
+
+        $this->put(route('receive.update', $receive), [
+            'receive_date' => now()->toDateString(),
+            'tag' => 'TAG-PEN-1',
+            'truck_no' => 'B 9001 GCI',
+            'pen_no' => 'PEN-RECV-2',
+            'pen_date' => '2026-11-20',
+            'aju_no' => 'AJU-RECV-2',
+            'aju_date' => '2026-11-19',
+            'qty' => 1000,
+        ])->assertRedirect(route('receive.show', $arrival));
+
+        $arrival->refresh();
+        $this->assertSame('PEN-RECV-2', $arrival->pen_no);
+        $this->assertSame('2026-11-20', $arrival->pen_date?->toDateString());
+        $this->assertSame('AJU-RECV-2', $arrival->aju_no);
+        $this->assertSame('2026-11-19', $arrival->aju_date?->toDateString());
     }
 
     public function test_arrival_show_page_no_longer_renders_receive_buttons_or_receive_tags_table(): void

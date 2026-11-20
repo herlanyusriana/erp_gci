@@ -161,6 +161,7 @@ return [
     ],
     'attributes' => [
         'address' => 'alamat',
+        'aju_date' => 'tanggal aju',
         'aju_no' => 'nomor aju',
         'bill_of_lading' => 'nomor bill of lading',
         'bundle_qty' => 'jumlah kemasan',

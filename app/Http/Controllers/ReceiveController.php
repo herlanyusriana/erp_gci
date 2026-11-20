@@ -161,7 +161,9 @@ class ReceiveController extends Controller
             'driver_name' => ['nullable', 'string', 'max:100'],
             'location_code' => $this->locationRule(),
             'pen_no' => ['nullable', 'string', 'max:255'],
+            'pen_date' => ['nullable', 'date'],
             'aju_no' => ['nullable', 'string', 'max:255'],
+            'aju_date' => ['nullable', 'date'],
             'idempotency_key' => ['nullable', 'string', 'max:80'],
             'tags' => ['required', 'array', 'min:1'],
             'tags.*.tag' => ['nullable', 'string', 'max:255'],
@@ -331,7 +333,9 @@ class ReceiveController extends Controller
             if ($arrival !== null) {
                 $arrival->update([
                     'pen_no' => array_key_exists('pen_no', $validated) ? $validated['pen_no'] : $arrival->pen_no,
+                    'pen_date' => array_key_exists('pen_date', $validated) ? $validated['pen_date'] : $arrival->pen_date,
                     'aju_no' => array_key_exists('aju_no', $validated) ? $validated['aju_no'] : $arrival->aju_no,
+                    'aju_date' => array_key_exists('aju_date', $validated) ? $validated['aju_date'] : $arrival->aju_date,
                 ]);
             }
         });
@@ -431,7 +435,9 @@ class ReceiveController extends Controller
             'truck_no' => ['nullable', 'string', 'max:50'],
             'location_code' => $this->locationRule(),
             'pen_no' => ['nullable', 'string', 'max:255'],
+            'pen_date' => ['nullable', 'date'],
             'aju_no' => ['nullable', 'string', 'max:255'],
+            'aju_date' => ['nullable', 'date'],
             'qty' => ['required', 'numeric', 'min:0.0001'],
             'bundle_count' => ['nullable', 'numeric', 'min:0'],
             'bundle_qty' => ['nullable', 'numeric', 'min:0'],
@@ -513,7 +519,9 @@ class ReceiveController extends Controller
             if ($arrival !== null) {
                 $arrival->update([
                     'pen_no' => array_key_exists('pen_no', $validated) ? $validated['pen_no'] : $arrival->pen_no,
+                    'pen_date' => array_key_exists('pen_date', $validated) ? $validated['pen_date'] : $arrival->pen_date,
                     'aju_no' => array_key_exists('aju_no', $validated) ? $validated['aju_no'] : $arrival->aju_no,
+                    'aju_date' => array_key_exists('aju_date', $validated) ? $validated['aju_date'] : $arrival->aju_date,
                 ]);
             }
         });

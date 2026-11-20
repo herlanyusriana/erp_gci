@@ -259,6 +259,10 @@ class ReceiveFormDefaultsTest extends TestCase
 
         $this->assertStringContainsString('v-model="form.pen_no"', $source);
         $this->assertStringContainsString("t('incoming.penNo')", $source);
+        $this->assertStringContainsString('v-model="form.pen_date"', $source);
+        $this->assertStringContainsString("t('incoming.penDate')", $source);
+        $this->assertStringContainsString('v-model="form.aju_date"', $source);
+        $this->assertStringContainsString("t('incoming.ajuDate')", $source);
     }
 
     /**

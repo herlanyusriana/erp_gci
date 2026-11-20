@@ -172,8 +172,9 @@ const form = useForm({
     eta_gci: props.arrival?.eta_gci ?? '',
     bill_of_lading: props.arrival?.bill_of_lading ?? '',
     pen_no: props.arrival?.pen_no ?? '',
-    pen_date: props.arrival?.pen_date ?? '',
+    pen_date: props.arrival?.pen_date ? String(props.arrival.pen_date).slice(0, 10) : '',
     aju_no: props.arrival?.aju_no ?? '',
+    aju_date: props.arrival?.aju_date ? String(props.arrival.aju_date).slice(0, 10) : '',
     price_term: props.arrival?.price_term ?? '',
     hs_code: props.arrival?.hs_code ?? '',
     port_of_loading: props.arrival?.port_of_loading ?? '',
@@ -817,6 +818,17 @@ function submit() {
                             class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
                         />
                         <InputError :message="form.errors.aju_no" class="mt-1" />
+                    </div>
+
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.ajuDate') }}</label>
+                        <input
+                            :aria-label="t('incoming.ajuDate')"
+                            v-model="form.aju_date"
+                            type="date"
+                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                        />
+                        <InputError :message="(form.errors as any).aju_date" class="mt-1" />
                     </div>
 
                     <div>

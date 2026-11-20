@@ -161,6 +161,7 @@ return [
     ],
     'attributes' => [
         'address' => '주소',
+        'aju_date' => '통관 신고일',
         'aju_no' => '통관 신고 번호',
         'bill_of_lading' => '선하증권 번호',
         'bundle_qty' => '포장 수량',

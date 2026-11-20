@@ -187,29 +187,39 @@ function resizeBundles() {
 
 watch(() => bundleConfig.bundle_count, resizeBundles);
 
-// Otomasi Qty -> Net weight jika UOM = KGM/KG
-function onQtyChange(r: PackingSubRow) {
-    if (isWeightUnit(r.uom) && r.qty !== '' && (r.net_weight === '' || r.net_weight === 0)) {
-        r.net_weight = r.qty;
-    }
-}
-
 const round4 = (n: number) => Math.round(n * 10000) / 10000;
 
 /**
- * Net weight hanya dibagi untuk packing type COIL.
- *
- * Coil ditimbang satu per satu, jadi berat total memang terbagi ke tiap coil.
- * Packing lain (BOX/SHEET/PALLET/BAG/…) dicatat per qty barang; beratnya tidak
- * dipecah per baris supaya angka yang diketik operator tidak dikarang form.
- *
- * Sejak jumlah packing bisa berbeda antar bundle, pembagian berat hanya
- * dilakukan bila SELURUH bundle bertipe COIL. Campuran COIL + BOX tidak punya
- * dasar pembagian yang jujur, jadi berat diisi manual per baris.
+ * Berat bersih per 1 satuan barang untuk Part No ini:
+ * (Total Net Weight per Part No / Total Qty Barang)
  */
-const splitsNetWeight = computed(
-    () => props.weightBasis && String(bundleConfig.packing_type).toUpperCase() === 'COIL',
-);
+const netWeightPerUnit = computed(() => {
+    const totalNet = Number(props.arrivalItem.weight_nett) || Number(props.remainingNetWeight) || 0;
+    const totalQty = Number(props.arrivalItem.qty_goods) || Number(props.remainingGoodsQty) || 0;
+    if (totalNet > 0 && totalQty > 0) {
+        return totalNet / totalQty;
+    }
+    return 0;
+});
+
+function calcPackingNetWeight(qty: number, uom: string): number | '' {
+    if (qty <= 0) {
+        return '';
+    }
+    if (netWeightPerUnit.value > 0) {
+        return round4(netWeightPerUnit.value * qty);
+    }
+    if (isWeightUnit(uom)) {
+        return round4(qty);
+    }
+    return '';
+}
+
+// Otomasi Qty/packing -> Net weight (kg) = ((Total Net Weight / Total Qty Barang) × Qty/packing)
+function onQtyChange(r: PackingSubRow) {
+    const qty = Number(r.qty) || 0;
+    r.net_weight = calcPackingNetWeight(qty, r.uom);
+}
 
 /** Baris packing yang benar-benar berisi; baris kosong tidak dikirim ke server. */
 const isPackingFilled = (packing: PackingSubRow) =>
@@ -257,7 +267,7 @@ const distribution = computed(() => {
     return {
         rows,
         qtyTotal: round4(Math.max(0, Number(props.remainingGoodsQty) || 0) * scale),
-        netTotal: splitsNetWeight.value ? acceptedNet : 0,
+        netTotal: props.weightBasis ? acceptedNet : 0,
     };
 });
 
@@ -287,7 +297,7 @@ function splitEvenly(total: number, rows: number): number[] {
     return values;
 }
 
-// Otomasi pembagian sisa qty dan net weight ke seluruh baris
+// Otomasi pembagian sisa qty dan kalkulasi net weight ke seluruh baris packing
 function autoDistributeRemaining() {
     const { rows, qtyTotal, netTotal } = distribution.value;
     if (rows <= 0 || (qtyTotal <= 0 && netTotal <= 0)) {
@@ -297,20 +307,30 @@ function autoDistributeRemaining() {
     const qtyValues = splitEvenly(qtyTotal, rows);
     const netValues = splitEvenly(netTotal, rows);
     let index = 0;
+    let sumNet = 0;
+    let lastPacking: PackingSubRow | null = null;
 
     bundles.value.forEach((b) => {
         b.packings.forEach((p) => {
             if (qtyValues.length > 0) {
                 p.qty = qtyValues[index];
-            }
-            if (netValues.length > 0) {
+                const computedNet = calcPackingNetWeight(Number(p.qty) || 0, p.uom);
+                p.net_weight = computedNet !== '' ? computedNet : (netValues[index] ?? '');
+            } else if (netValues.length > 0) {
                 p.net_weight = netValues[index];
-            } else if (isWeightUnit(p.uom) && qtyValues.length > 0) {
-                p.net_weight = p.qty;
             }
+            sumNet += Number(p.net_weight) || 0;
+            lastPacking = p;
             index++;
         });
     });
+
+    if (lastPacking && netTotal > 0 && sumNet > 0) {
+        const diff = round4(netTotal - sumNet);
+        if (Math.abs(diff) > 0 && Math.abs(diff) < 0.05) {
+            (lastPacking as PackingSubRow).net_weight = round4((Number((lastPacking as PackingSubRow).net_weight) || 0) + diff);
+        }
+    }
 }
 
 resizeBundles();
@@ -398,20 +418,22 @@ function submit() {
         return;
     }
 
-    // Material berbasis berat: operator sering hanya mengisi Net weight.
-    // Pada item berbasis berat qty memakai satuan yang sama (KGM), jadi qty
-    // diisi dari net weight agar penerimaan tidak tertahan tanpa penjelasan.
-    if (props.weightBasis) {
-        bundles.value.forEach((b) => {
-            b.packings.forEach((p) => {
-                const qty = Number(p.qty) || 0;
-                const net = Number(p.net_weight) || 0;
-                if (qty <= 0 && net > 0) {
-                    p.qty = net;
+    // Lengkapi net_weight dari rumus ((Total Net Weight / Total Qty Barang) × Qty/packing)
+    // bila operator hanya mengisi Qty/packing, atau sebaliknya isi qty bila hanya net_weight diisi.
+    bundles.value.forEach((b) => {
+        b.packings.forEach((p) => {
+            const qty = Number(p.qty) || 0;
+            const net = Number(p.net_weight) || 0;
+            if (qty > 0 && net <= 0) {
+                const computedNet = calcPackingNetWeight(qty, p.uom);
+                if (computedNet !== '') {
+                    p.net_weight = computedNet;
                 }
-            });
+            } else if (props.weightBasis && qty <= 0 && net > 0) {
+                p.qty = netWeightPerUnit.value > 0 ? round4(net / netWeightPerUnit.value) : net;
+            }
         });
-    }
+    });
 
     // Hanya bundle yang benar-benar berisi qty/berat yang dikirim. Form selalu
     // menyediakan beberapa baris kosong, dan server menolak packing kosong —
@@ -737,9 +759,6 @@ function submit() {
                         >
                             ⚡ Auto-distribusikan Sisa ({{ autoDistributeSummary }})
                         </button>
-                        <p v-if="weightBasis && !splitsNetWeight" class="text-[11px] text-ink-secondary">
-                            {{ t('incoming.autoDistributeHint') }}
-                        </p>
                     </div>
                 </div>
 

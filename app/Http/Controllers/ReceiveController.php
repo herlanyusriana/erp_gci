@@ -271,10 +271,11 @@ class ReceiveController extends Controller
                     ]);
                 }
 
-                // Berat bersih dan kotor: selalu dalam basis KGM
+                // Berat bersih (KGM): jika diisi pakai nilai input, jika kosong dihitung dari
+                // ((Total Net Weight Part / Total Qty Barang) × Qty)
                 $netWeight = isset($tagData['net_weight']) && $tagData['net_weight'] !== null && $tagData['net_weight'] !== ''
                     ? (float) $tagData['net_weight']
-                    : ($weightBasis ? (float) $tagData['qty'] : null);
+                    : ($this->calculateNetWeightFromQty($arrivalItem, (float) $tagData['qty']) ?? ($weightBasis ? (float) $tagData['qty'] : null));
 
                 $tag = $this->receiveService->normalizeTag($tagData['tag'] ?? null);
 
@@ -314,12 +315,17 @@ class ReceiveController extends Controller
                             ? "{$currentTag}-{$seq}"
                             : $rawNo;
 
+                        $packingQty = (float) ($pData['qty'] ?? 0);
+                        $packingNetWeight = isset($pData['net_weight']) && $pData['net_weight'] !== '' && $pData['net_weight'] !== null
+                            ? (float) $pData['net_weight']
+                            : $this->calculateNetWeightFromQty($arrivalItem, $packingQty);
+
                         $receive->packings()->create([
                             'packing_no' => $pNo,
                             'sequence' => $seq,
-                            'qty' => (float) ($pData['qty'] ?? 0),
+                            'qty' => $packingQty,
                             'uom' => ! empty($pData['uom']) ? UomCatalog::normalize($pData['uom']) : $goodsUnit,
-                            'net_weight' => isset($pData['net_weight']) && $pData['net_weight'] !== '' ? (float) $pData['net_weight'] : null,
+                            'net_weight' => $packingNetWeight,
                             'gross_weight' => isset($pData['gross_weight']) && $pData['gross_weight'] !== '' ? (float) $pData['gross_weight'] : null,
                         ]);
                     }
@@ -460,7 +466,9 @@ class ReceiveController extends Controller
         }
 
         $receiveAt = Carbon::parse($validated['receive_date'])->setTimeFromTimeString(now()->format('H:i:s'));
-        $netWeight = $weightBasis ? (float) ($validated['net_weight'] ?? $validated['qty']) : null;
+        $netWeight = isset($validated['net_weight']) && $validated['net_weight'] !== null && $validated['net_weight'] !== ''
+            ? (float) $validated['net_weight']
+            : ($this->calculateNetWeightFromQty($arrivalItem, (float) $validated['qty']) ?? ($weightBasis ? (float) $validated['qty'] : null));
 
         $requestedQty = $weightBasis ? (float) $netWeight : (float) $validated['qty'];
         $poLimit = PurchaseOrderLimit::receiveLimit($arrivalItem, (int) $receive->id);
@@ -652,5 +660,25 @@ class ReceiveController extends Controller
         $trimmed = trim((string) $code);
 
         return $trimmed === '' ? null : $trimmed;
+    }
+
+    /**
+     * Hitung net weight proporsional dari qty:
+     * ((Total Net Weight per Part No / Total Qty Barang) × Qty).
+     */
+    private function calculateNetWeightFromQty(IncomingArrivalItem $arrivalItem, float $qty): ?float
+    {
+        if ($qty <= 0) {
+            return null;
+        }
+
+        $totalNet = (float) ($arrivalItem->weight_nett ?? 0);
+        $totalQty = (float) ($arrivalItem->qty_goods ?? 0);
+
+        if ($totalNet > 0 && $totalQty > 0) {
+            return round(($totalNet / $totalQty) * $qty, 4);
+        }
+
+        return null;
     }
 }

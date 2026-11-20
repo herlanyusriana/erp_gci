@@ -46,6 +46,25 @@ const form = useForm({
     gross_weight: props.receive.gross_weight ?? '',
 });
 
+const netWeightPerUnit = () => {
+    const totalNet = Number(props.arrivalItem.weight_nett) || 0;
+    const totalQty = Number(props.arrivalItem.qty_goods) || 0;
+    return totalNet > 0 && totalQty > 0 ? totalNet / totalQty : 0;
+};
+
+function updateNetWeightFromQty(qty: number) {
+    const unitWeight = netWeightPerUnit();
+    if (qty > 0 && unitWeight > 0) {
+        form.net_weight = Math.round(unitWeight * qty * 10000) / 10000;
+    } else if (props.weightBasis && !form.net_weight && qty > 0) {
+        form.net_weight = qty;
+    }
+}
+
+function onQtyInput() {
+    updateNetWeightFromQty(Number(form.qty) || 0);
+}
+
 function calculateTotal() {
     const bCount = Number(form.bundle_count) || 0;
     const pCount = Number(form.packing_count) || 0;
@@ -54,9 +73,7 @@ function calculateTotal() {
     if (bCount > 0 && pCount > 0 && pQty > 0) {
         const total = Math.round(bCount * pCount * pQty * 10000) / 10000;
         form.qty = total;
-        if (props.weightBasis && !form.net_weight) {
-            form.net_weight = total;
-        }
+        updateNetWeightFromQty(total);
     }
 }
 
@@ -162,7 +179,7 @@ function submit() {
                 </div>
                 <div>
                     <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.qty') }} *</label>
-                    <input :aria-label="t('incoming.qty')" v-model="form.qty" type="number" step="any" min="0.0001" class="mt-1 w-full rounded-lg border-primary bg-surface px-3 py-2 text-sm font-bold text-primary focus:border-primary focus:ring-primary" />
+                    <input :aria-label="t('incoming.qty')" v-model="form.qty" @input="onQtyInput" type="number" step="any" min="0.0001" class="mt-1 w-full rounded-lg border-primary bg-surface px-3 py-2 text-sm font-bold text-primary focus:border-primary focus:ring-primary" />
                     <InputError :message="form.errors.qty" class="mt-1" />
                 </div>
                 <div>

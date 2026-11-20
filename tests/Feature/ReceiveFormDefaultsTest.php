@@ -266,20 +266,67 @@ class ReceiveFormDefaultsTest extends TestCase
     }
 
     /**
-     * Auto-distribusi hanya membagi net weight untuk packing type COIL: coil
-     * ditimbang satu per satu, sedangkan packing lain dicatat per qty barang.
-     * Tanpa batas ini form mengarang angka berat yang tidak pernah diukur
-     * operator (mis. 250 SHEET dibagi rata menjadi 275 KGM per baris).
+     * Net weight receive dihitung dari ((Total Net Weight / Total Qty Barang) × Qty/packing)
+     * baik saat mengetik Qty/packing maupun saat auto-distribusi, untuk semua tipe packing.
      */
-    public function test_receive_form_splits_net_weight_only_for_coil_packing(): void
+    public function test_receive_form_calculates_net_weight_from_arrival_weight_per_unit_qty(): void
     {
         $source = file_get_contents(resource_path('js/Pages/Incoming/Receive/Form.vue'));
         $this->assertNotFalse($source);
 
-        $this->assertStringContainsString('const splitsNetWeight = computed', $source);
-        $this->assertStringContainsString("=== 'COIL'", $source);
-        $this->assertStringContainsString('netTotal: splitsNetWeight.value ? acceptedNet : 0', $source);
-        $this->assertStringContainsString('const netValues = splitEvenly(netTotal, rows);', $source);
+        $this->assertStringContainsString('const netWeightPerUnit = computed', $source);
+        $this->assertStringContainsString('totalNet / totalQty', $source);
+        $this->assertStringContainsString('round4(netWeightPerUnit.value * qty)', $source);
+    }
+
+    public function test_receive_store_auto_calculates_packing_net_weight_from_qty_ratio(): void
+    {
+        $arrival = IncomingArrival::create([
+            'arrival_no' => 'ARV-RATIO-'.uniqid(),
+            'invoice_no' => 'INV-RATIO-01',
+            'supplier_id' => Supplier::query()->value('id'),
+            'status' => 'pending',
+            'iqc_status' => 'passed',
+        ]);
+
+        // Total Net Weight = 2500 KG, Total Qty Barang = 1000 SHEET -> 2.5 KG / SHEET
+        $item = IncomingArrivalItem::create([
+            'arrival_id' => $arrival->id,
+            'part_id' => Part::where('part_number', 'AAN30056405')->firstOrFail()->id,
+            'qty_goods' => 1000,
+            'unit_goods' => 'SHEET',
+            'weight_nett' => 2500,
+            'unit_weight' => 'KGM',
+        ]);
+
+        $this->post(route('receive.store', $item), [
+            'receive_date' => now()->toDateString(),
+            'truck_no' => 'B 9123 GCI',
+            'location_code' => 'BULK-AREA',
+            'tags' => [[
+                'tag' => 'TAG-RATIO-1',
+                'qty' => 200,
+                'qty_unit' => 'SHEET',
+                'net_weight' => 500,
+                'bundle_count' => 1,
+                'bundle_qty' => 1,
+                'bundle_unit' => 'PALLET',
+                'packing_count' => 2,
+                'packing_type' => 'SHEET',
+                'packing_qty' => 100,
+                'packings' => [
+                    ['sequence' => 1, 'qty' => 120, 'uom' => 'SHEET'],
+                    ['sequence' => 2, 'qty' => 80, 'uom' => 'SHEET'],
+                ],
+            ]],
+        ])->assertRedirect();
+
+        $receive = IncomingReceive::where('tag', 'TAG-RATIO-1')->firstOrFail();
+        $packings = $receive->packings()->orderBy('sequence')->get();
+
+        // 120 * (2500 / 1000) = 300 KG; 80 * (2500 / 1000) = 200 KG
+        $this->assertEqualsWithDelta(300.0, (float) $packings[0]->net_weight, 1e-4);
+        $this->assertEqualsWithDelta(200.0, (float) $packings[1]->net_weight, 1e-4);
     }
 
     /**

@@ -20,7 +20,6 @@ class RebuildProductionPlan extends Command
     {
         $workOrders = WorkOrder::query()
             ->whereIn('status', ['planned', 'in_progress'])
-            ->whereHas('planItems')
             ->when($this->option('wo'), fn ($q, $id) => $q->whereKey((int) $id))
             ->with(['planItems.plan', 'part'])
             ->get();

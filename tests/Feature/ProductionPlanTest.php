@@ -8,6 +8,7 @@ use App\Models\ProductionPlanItem;
 use App\Models\ProductionResult;
 use App\Models\User;
 use App\Models\WorkOrder;
+use App\Services\WoService;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -727,11 +728,57 @@ class ProductionPlanTest extends TestCase
         $this->post(route('production-plans.attach'), [
             'work_order_id' => $wo->id,
             'plan_date' => now()->toDateString(),
+        ])->assertSessionHasErrors('work_order_id');
+    }
+
+    public function test_legacy_unpopulated_wo_is_auto_backfilled_onto_board_on_index(): void
+    {
+        $fg = Part::where('part_number', 'AAN30056405')->firstOrFail();
+        [$woId] = app(WoService::class)->createWorkOrder(
+            $fg->id,
+            10,
+            now()->toDateString(),
+            null,
+            (int) auth()->id(),
+        );
+        $wo = WorkOrder::findOrFail($woId);
+        $this->assertSame(0, ProductionPlanItem::where('work_order_id', $wo->id)->count());
+
+        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('items', fn ($list) => collect($list)->pluck('work_order_id')->contains($wo->id)));
+
+        $this->assertSame($this->expectedGroupCount($wo), ProductionPlanItem::where('work_order_id', $wo->id)->count());
+    }
+
+    public function test_wo_created_with_future_planned_date_still_appears_on_todays_board(): void
+    {
+        $fg = Part::where('part_number', 'AAN30056405')->firstOrFail();
+
+        $this->post(route('work-orders.store'), [
+            'part_id' => $fg->id,
+            'qty' => 10,
+            'planned_date' => now()->addDays(5)->toDateString(),
         ])->assertRedirect();
 
-        $this->post(route('production-plans.attach'), [
-            'work_order_id' => $wo->id,
-            'plan_date' => now()->toDateString(),
-        ])->assertSessionHasErrors('work_order_id');
+        $wo = WorkOrder::latest('id')->firstOrFail();
+
+        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('items', fn ($list) => collect($list)->pluck('work_order_id')->contains($wo->id)));
+    }
+
+    public function test_plan_item_without_machine_is_not_dropped_when_subcon_machine_exists(): void
+    {
+        $wo = $this->createWorkOrder();
+        $row = ProductionPlanItem::where('work_order_id', $wo->id)->firstOrFail();
+        $row->update(['machine_id' => null]);
+
+        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('items', fn ($list) => collect($list)->pluck('id')->contains($row->id)));
     }
 }

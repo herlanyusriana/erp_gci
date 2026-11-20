@@ -97,9 +97,11 @@ class WorkOrderController extends Controller
         );
 
         $workOrder = WorkOrder::query()->findOrFail($workOrderId);
+        $today = now()->toDateString();
+        $plannedDate = $workOrder->planned_date?->toDateString();
         $this->woService->populatePlanItems(
             $workOrder,
-            $workOrder->planned_date?->toDateString() ?? now()->toDateString(),
+            ($plannedDate !== null && $plannedDate < $today) ? $plannedDate : $today,
             (int) auth()->id(),
         );
 

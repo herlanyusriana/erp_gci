@@ -94,7 +94,9 @@ class WoService
             return;
         }
 
-        $planDate = $workOrder->planned_date?->toDateString() ?? now()->toDateString();
+        $today = now()->toDateString();
+        $plannedDate = $workOrder->planned_date?->toDateString();
+        $planDate = ($plannedDate !== null && $plannedDate < $today) ? $plannedDate : $today;
 
         $this->populatePlanItems($workOrder, $planDate, $actorId);
     }

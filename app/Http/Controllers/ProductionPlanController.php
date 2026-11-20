@@ -32,12 +32,38 @@ class ProductionPlanController extends Controller
         // Subcon bukan mesin internal → tidak boleh muncul di papan produksi.
         $subconMachineIds = $this->subconMachineIds();
 
+        // Auto-backfill WO belum selesai (planned / in_progress) yang dibuat sebelum
+        // auto-populate aktif dan belum pernah tercatat masuk Production Plan.
+        $missingPlanWos = WorkOrder::query()
+            ->whereIn('status', ['planned', 'in_progress'])
+            ->whereDoesntHave('planItems')
+            ->get();
+
+        if ($missingPlanWos->isNotEmpty()) {
+            $alreadyRecordedWoIds = ProductionPlanHistory::query()
+                ->where('event', 'work_order_added')
+                ->get(['after'])
+                ->map(fn (ProductionPlanHistory $h) => (int) ($h->after['work_order_id'] ?? 0))
+                ->filter()
+                ->flip();
+
+            $today = now()->toDateString();
+            foreach ($missingPlanWos as $missingWo) {
+                if ($alreadyRecordedWoIds->has($missingWo->id)) {
+                    continue;
+                }
+                $plannedDate = $missingWo->planned_date?->toDateString();
+                $targetPlanDate = ($plannedDate !== null && $plannedDate < $today) ? $plannedDate : min($date, $today);
+                $this->woService->populatePlanItems($missingWo, $targetPlanDate, (int) ($missingWo->created_by ?? auth()->id()));
+            }
+        }
+
         $plan = ProductionPlan::query()->whereDate('plan_date', $date)->first();
 
         $items = ProductionPlanItem::query()
             ->whereHas('plan', fn ($query) => $query->whereDate('plan_date', '<=', $date))
             ->whereHas('workOrder', fn ($query) => $query->whereIn('status', ['planned', 'in_progress', 'completed']))
-            ->whereNotIn('machine_id', $subconMachineIds)
+            ->where(fn ($query) => $query->whereNull('machine_id')->orWhereNotIn('machine_id', $subconMachineIds))
             ->with([
                 'machine:id,machine_code,machine_name',
                 'process:id,process_name',
@@ -103,10 +129,10 @@ class ProductionPlanController extends Controller
             ->orderBy('machine_name')
             ->get(['id', 'machine_code', 'machine_name', 'sequence']);
 
-        // WO planned yang BELUM masuk plan mana pun → supaya tidak "hilang" dari papan.
+        // WO belum selesai (planned / in_progress) yang BELUM masuk plan mana pun → supaya tidak "hilang" dari papan.
         $unplannedWorkOrders = WorkOrder::query()
             ->with('part:id,part_number,part_name,model')
-            ->where('status', 'planned')
+            ->whereIn('status', ['planned', 'in_progress'])
             ->whereDoesntHave('planItems')
             ->orderByDesc('id')
             ->get(['id', 'wo_no', 'part_id', 'qty', 'status', 'planned_date']);
@@ -116,14 +142,14 @@ class ProductionPlanController extends Controller
             ->with([
                 'part:id,part_number,part_name,model',
                 'planItems' => fn ($query) => $query
-                    ->whereNotIn('machine_id', $subconMachineIds)
+                    ->where(fn ($q) => $q->whereNull('machine_id')->orWhereNotIn('machine_id', $subconMachineIds))
                     ->whereHas('plan', fn ($planQuery) => $planQuery->whereDate('plan_date', '>', $date))
                     ->with('plan:id,plan_date'),
             ])
             ->whereIn('status', ['planned', 'in_progress', 'completed'])
             ->whereNotIn('id', $items->pluck('work_order_id')->filter()->unique())
             ->whereHas('planItems', fn ($query) => $query
-                ->whereNotIn('machine_id', $subconMachineIds)
+                ->where(fn ($q) => $q->whereNull('machine_id')->orWhereNotIn('machine_id', $subconMachineIds))
                 ->whereHas('plan', fn ($planQuery) => $planQuery->whereDate('plan_date', '>', $date)))
             ->orderByDesc('id')
             ->get(['id', 'wo_no', 'part_id', 'qty', 'status', 'planned_date']);
@@ -273,8 +299,8 @@ class ProductionPlanController extends Controller
 
         $workOrder = WorkOrder::query()->findOrFail((int) $data['work_order_id']);
 
-        if ($workOrder->status !== 'planned') {
-            throw ValidationException::withMessages(['work_order_id' => __('Hanya WO berstatus planned yang bisa dimasukkan ke plan.')]);
+        if (! in_array($workOrder->status, ['planned', 'in_progress'], true)) {
+            throw ValidationException::withMessages(['work_order_id' => __('Hanya WO berstatus planned atau in_progress yang bisa dimasukkan ke plan.')]);
         }
         if ($workOrder->planItems()->exists()) {
             throw ValidationException::withMessages(['work_order_id' => __('WO ini sudah ada di Production Plan.')]);

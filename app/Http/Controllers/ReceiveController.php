@@ -180,41 +180,46 @@ class ReceiveController extends Controller
             }],
         ]);
 
-        $this->receiveService->ensureTagsUniqueForArrivalItem($arrivalItem, $validated['tags'], 'tags');
-
         // Total yang diminta sesuai basis item (KGM untuk incoming, qty untuk local).
         $totalRequested = $weightBasis
             ? collect($validated['tags'])->sum(fn ($t) => (float) ($t['net_weight'] ?? $t['qty']))
             : collect($validated['tags'])->sum('qty');
-        $remainingQty = $this->receiveService->remainingQty($arrivalItem);
         $unitLabel = $weightBasis
             ? UomCatalog::WEIGHT
             : (UomCatalog::normalize($arrivalItem->unit_goods) ?? 'qty');
-
-        if ($totalRequested > $remainingQty + 1e-9) {
-            return back()->withInput()->withErrors([
-                'tags' => __('Total (:total :unit) melebihi sisa (:remaining :unit).', ['total' => $totalRequested, 'unit' => $unitLabel, 'remaining' => $remainingQty]),
-            ]);
-        }
-
-        $poLimit = PurchaseOrderLimit::receiveLimit($arrivalItem);
-        if ($poLimit !== null && $totalRequested > $poLimit['remaining'] + 1e-9) {
-            return back()->withInput()->withErrors([
-                'tags' => __('Total (:total :unit) melebihi qty PO (:po :unit). Sisa yang boleh diterima :remaining :unit.', [
-                    'total' => $totalRequested,
-                    'unit' => $unitLabel,
-                    'po' => $poLimit['po_qty'],
-                    'remaining' => $poLimit['remaining'],
-                ]),
-            ]);
-        }
 
         $goodsUnit = UomCatalog::normalize($arrivalItem->unit_goods) ?? UomCatalog::WEIGHT;
         $receiveAt = Carbon::parse($validated['receive_date'])->setTimeFromTimeString(now()->format('H:i:s'));
         $truckNo = trim((string) ($validated['truck_no'] ?? '')) !== '' ? strtoupper(trim((string) $validated['truck_no'])) : null;
         $locationCode = $this->normalizeLocationCode($validated['location_code'] ?? null);
 
-        DB::transaction(function () use ($validated, $arrivalItem, $goodsUnit, $receiveAt, $truckNo, $weightBasis, $locationCode) {
+        DB::transaction(function () use ($validated, $arrivalItem, $goodsUnit, $receiveAt, $truckNo, $weightBasis, $locationCode, $totalRequested, $unitLabel) {
+            $arrivalItem = IncomingArrivalItem::query()
+                ->with(['arrival', 'part', 'receives'])
+                ->lockForUpdate()
+                ->findOrFail($arrivalItem->id);
+
+            $this->receiveService->ensureTagsUniqueForArrivalItem($arrivalItem, $validated['tags'], 'tags');
+
+            $remainingQty = $this->receiveService->remainingQty($arrivalItem);
+            if ($totalRequested > $remainingQty + 1e-9) {
+                throw ValidationException::withMessages([
+                    'tags' => __('Total (:total :unit) melebihi sisa (:remaining :unit).', ['total' => $totalRequested, 'unit' => $unitLabel, 'remaining' => $remainingQty]),
+                ]);
+            }
+
+            $poLimit = PurchaseOrderLimit::receiveLimit($arrivalItem);
+            if ($poLimit !== null && $totalRequested > $poLimit['remaining'] + 1e-9) {
+                throw ValidationException::withMessages([
+                    'tags' => __('Total (:total :unit) melebihi qty PO (:po :unit). Sisa yang boleh diterima :remaining :unit.', [
+                        'total' => $totalRequested,
+                        'unit' => $unitLabel,
+                        'po' => $poLimit['po_qty'],
+                        'remaining' => $poLimit['remaining'],
+                    ]),
+                ]);
+            }
+
             $partId = $this->receiveService->resolvePartId($arrivalItem);
 
             foreach ($validated['tags'] as $tagData) {

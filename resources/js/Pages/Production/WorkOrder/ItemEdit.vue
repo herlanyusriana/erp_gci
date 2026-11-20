@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
@@ -23,6 +23,7 @@ interface MaterialOption {
     id: number;
     part_number: string;
     part_name: string;
+    model?: string | null;
     kind: 'mainMaterial' | 'substitute';
     stock: number;
     tags: StockTag[];
@@ -125,7 +126,7 @@ const optionsWithoutStock = computed(() => props.materialOptions
     .sort((a, b) => a.part_number.localeCompare(b.part_number)));
 
 const optionLabel = (o: MaterialOption) =>
-    `${o.part_number} · ${o.part_name} — ${t(`production.${o.kind}`)} · ${Number(o.stock ?? 0).toFixed(4)} ${unit.value}`;
+    `${o.part_number} · ${[o.part_name, o.model].filter(Boolean).join(' · ')} — ${t(`production.${o.kind}`)} · ${Number(o.stock ?? 0).toFixed(4)} ${unit.value}`;
 
 function formatReceivedAt(value: string | null) {
     if (!value) return '—';
@@ -192,10 +193,10 @@ function submit() {
                                         <div class="w-full">
                                             <SearchableSelect
                                                 v-model="row.part_id"
-                                                :options="materialOptions.map(o => ({ id: o.id, part_number: o.part_number, part_name: o.part_name, stock_badge: o.stock > 0 ? `Stok: ${o.stock}` : 'Tanpa stok' }))"
+                                                :options="materialOptions.map(o => ({ id: o.id, part_number: o.part_number, sublabel: [o.part_name, o.model].filter(Boolean).join(' · '), stock_badge: o.stock > 0 ? `Stok: ${o.stock}` : 'Tanpa stok' }))"
                                                 value-key="id"
                                                 label-key="part_number"
-                                                sublabel-key="part_name"
+                                                sublabel-key="sublabel"
                                                 :placeholder="t('production.searchMaterial')"
                                                 :aria-label="t('production.material')"
                                             />
@@ -251,6 +252,7 @@ function submit() {
                                         <thead class="bg-surface">
                                             <tr class="text-left font-semibold uppercase tracking-wide text-ink-secondary">
                                                 <th scope="col" class="px-3 py-2">{{ t('production.material') }}</th>
+                                                <th scope="col" class="px-3 py-2">{{ t('master.model') }}</th>
                                                 <th scope="col" class="px-3 py-2">{{ t('production.tag') }}</th>
                                                 <th scope="col" class="px-3 py-2 text-right">{{ t('production.qty') }}</th>
                                                 <th scope="col" class="px-3 py-2">{{ t('production.invoice') }}</th>
@@ -261,6 +263,7 @@ function submit() {
                                         <tbody class="divide-y divide-borderline">
                                             <tr v-for="(r, tagIndex) in stockTagRows" :key="tagIndex" :class="Number(r.option.id) === Number(row.part_id) ? 'bg-primary-light/40' : ''">
                                                 <td class="px-3 py-2 font-medium text-ink-primary">{{ r.option.part_number }}</td>
+                                                <td class="px-3 py-2 text-ink-secondary">{{ r.option.model || '—' }}</td>
                                                 <td class="px-3 py-2 text-ink-primary">{{ r.tag.tag ?? '—' }}</td>
                                                 <td class="px-3 py-2 text-right tabular-nums text-ink-primary">{{ r.tag.qty }} {{ r.tag.uom ?? '' }}</td>
                                                 <td class="px-3 py-2 text-ink-primary">{{ r.tag.invoice ?? '—' }}</td>
@@ -307,7 +310,7 @@ function submit() {
                 </div>
 
                 <div class="flex items-center justify-end gap-3 border-t border-borderline pt-4">
-                    <a :href="route('work-orders.show', workOrder.id)" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-secondary transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">{{ t('production.cancel') }}</a>
+                    <Link :href="route('work-orders.show', workOrder.id)" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-secondary transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">{{ t('production.cancel') }}</Link>
                     <button type="submit" :disabled="form.processing || overAllocated" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
                         {{ form.processing ? t('production.saving') : t('production.save') }}
                     </button>

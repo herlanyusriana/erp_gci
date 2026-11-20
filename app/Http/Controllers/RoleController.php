@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Permission;
 use App\Models\Role;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -43,6 +44,8 @@ class RoleController extends Controller
             'permissions.*' => ['exists:permissions,id'],
         ]);
 
+        $this->assertCanGrantPermissions($request->user(), $data['permissions'] ?? []);
+
         $role = Role::create([
             'name' => strtolower($data['name']),
             'label' => $data['label'] ?? null,
@@ -58,12 +61,14 @@ class RoleController extends Controller
         Gate::authorize('update', $role);
 
         $data = $request->validate([
-            'name' => ['required', 'string', 'max:80', 'unique:roles,name,' . $role->id],
+            'name' => ['required', 'string', 'max:80', 'unique:roles,name,'.$role->id],
             'label' => ['nullable', 'string', 'max:120'],
             'description' => ['nullable', 'string'],
             'permissions' => ['nullable', 'array'],
             'permissions.*' => ['exists:permissions,id'],
         ]);
+
+        $this->assertCanGrantPermissions($request->user(), $data['permissions'] ?? []);
 
         $role->update([
             'name' => strtolower($data['name']),
@@ -84,5 +89,24 @@ class RoleController extends Controller
         $role->delete();
 
         return redirect()->route('roles.index')->with('success', __('Role dihapus.'));
+    }
+
+    /**
+     * @param  array<int, int|string>  $permissionIds
+     */
+    private function assertCanGrantPermissions(User $actor, array $permissionIds): void
+    {
+        if ($permissionIds === [] || $actor->roles()->where('name', 'super-admin')->exists()) {
+            return;
+        }
+
+        $requestedNames = Permission::query()
+            ->whereIn('id', $permissionIds)
+            ->pluck('name')
+            ->all();
+
+        $unauthorized = array_diff($requestedNames, $actor->permissions());
+
+        abort_if($unauthorized !== [], 403, __('Anda tidak dapat memberikan izin yang tidak Anda miliki.'));
     }
 }

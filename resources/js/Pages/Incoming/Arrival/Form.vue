@@ -531,6 +531,7 @@ function submit() {
                                 @change="onPurchaseOrderChange"
                             />
                         </div>
+                        <InputError :message="form.errors.purchase_order_id" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.invoiceNo') }}</label>

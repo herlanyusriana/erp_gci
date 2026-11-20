@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import InputError from '@/Components/InputError.vue';
@@ -429,13 +429,13 @@ function submit(): void {
             role="status"
         >
             <span>{{ t('picking.lockedWithDeliveries', { count: deliveriesCount }) }}</span>
-            <a
+            <Link
                 v-if="pickingList"
                 :href="route('picking-lists.show', pickingList.id)"
                 class="rounded-md border border-warning px-3 py-1.5 text-xs font-semibold text-warning-ink transition hover:bg-warning/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning"
             >
                 {{ t('picking.openPicking') }}
-            </a>
+            </Link>
         </div>
 
         <form class="space-y-4" @submit.prevent="submit">

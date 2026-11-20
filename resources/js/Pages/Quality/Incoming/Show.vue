@@ -18,7 +18,7 @@ interface PartItem {
     weight_nett: number | null;
     iqc_status: string;
     iqc_passed_at: string | null;
-    part?: { id: number; part_number: string; part_name: string };
+    part?: { id: number; part_number: string; part_name: string; model?: string | null };
     iqc_inspector?: { id: number; name: string };
 }
 
@@ -104,6 +104,7 @@ function passAll() {
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                         <th scope="col" class="px-4 py-3">Part Number</th>
                         <th scope="col" class="px-4 py-3">Nama Material</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.model') }}</th>
                         <th scope="col" class="px-4 py-3 text-right">Qty Kirim</th>
                         <th scope="col" class="px-4 py-3 text-right">Berat Bersih</th>
                         <th scope="col" class="px-4 py-3 text-center">Status IQC</th>
@@ -118,6 +119,9 @@ function passAll() {
                         <td class="px-4 py-3.5 align-top text-ink-primary">
                             <div>{{ it.part?.part_name ?? '—' }}</div>
                             <div v-if="it.size" class="text-xs text-ink-secondary font-mono">{{ it.size }}</div>
+                        </td>
+                        <td class="px-4 py-3.5 align-top text-ink-secondary">
+                            {{ it.part?.model || '—' }}
                         </td>
                         <td class="px-4 py-3.5 align-top text-right tabular-nums font-semibold text-ink-primary">
                             {{ it.qty_goods }} <span class="text-xs font-normal text-ink-secondary">{{ it.unit_goods ?? '' }}</span>
@@ -166,7 +170,7 @@ function passAll() {
                         </td>
                     </tr>
                     <tr v-if="!arrival.items || arrival.items.length === 0">
-                        <td colspan="6" class="px-4 py-12 text-center text-sm text-ink-secondary">
+                        <td colspan="7" class="px-4 py-12 text-center text-sm text-ink-secondary">
                             Tidak ada material dalam kedatangan ini.
                         </td>
                     </tr>

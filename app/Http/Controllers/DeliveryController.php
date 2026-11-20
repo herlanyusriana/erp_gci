@@ -56,7 +56,7 @@ class DeliveryController extends Controller
 
         $delivery->load([
             'customer',
-            'items.part:id,part_number,part_name',
+            'items.part:id,part_number,part_name,model',
             'scans.scanner:id,name',
         ]);
 
@@ -252,7 +252,7 @@ class DeliveryController extends Controller
 
         abort_unless($delivery->labelPrintable(), 403, __('Label dicetak setelah barang dipindah ke area pengiriman.'));
 
-        $delivery->load(['customer', 'items.part:id,part_number,part_name', 'scans']);
+        $delivery->load(['customer', 'items.part:id,part_number,part_name,model', 'scans']);
 
         $companyName = (string) ConfigMaster::getValue('SYSTEM', 'company_name', 'PT. GEUM CHEON INDO');
 
@@ -270,7 +270,7 @@ class DeliveryController extends Controller
 
         abort_unless($delivery->documentsPrintable(), 403, __('Dokumen dicetak setelah OQC lolos.'));
 
-        $delivery->load(['customer', 'items.part:id,part_number,part_name']);
+        $delivery->load(['customer', 'items.part:id,part_number,part_name,model']);
 
         $companyName = (string) ConfigMaster::getValue('SYSTEM', 'company_name', 'PT. GEUM CHEON INDO');
 
@@ -284,7 +284,7 @@ class DeliveryController extends Controller
 
         abort_unless($delivery->documentsPrintable(), 403, __('Dokumen dicetak setelah OQC lolos.'));
 
-        $delivery->load(['customer', 'items.part:id,part_number,part_name']);
+        $delivery->load(['customer', 'items.part:id,part_number,part_name,model']);
 
         $companyName = (string) ConfigMaster::getValue('SYSTEM', 'company_name', 'PT. GEUM CHEON INDO');
 
@@ -298,7 +298,7 @@ class DeliveryController extends Controller
 
         abort_unless($delivery->documentsPrintable(), 403, __('Dokumen dicetak setelah OQC lolos.'));
 
-        $delivery->load(['customer', 'items.part:id,part_number,part_name']);
+        $delivery->load(['customer', 'items.part:id,part_number,part_name,model']);
 
         $companyName = (string) ConfigMaster::getValue('SYSTEM', 'company_name', 'PT. GEUM CHEON INDO');
 

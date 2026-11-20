@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
 import { ref } from 'vue';
-import { router, useForm } from '@inertiajs/vue3';
+import { Link, router, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import ActionButton from '@/Components/ActionButton.vue';
@@ -74,12 +74,12 @@ function remove(location: Location) {
                 <p class="mt-1 text-sm text-ink-secondary">{{ t('master.locationSubtitle') }}</p>
             </div>
             <div class="flex items-center gap-2">
-            <a
+            <Link
                 :href="route('locations.setup')"
                 class="inline-flex items-center gap-1.5 rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-primary transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
             >
                 {{ t('master.setupOpen') }}
-            </a>
+            </Link>
             <button
                 @click="openCreate"
                 class="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"

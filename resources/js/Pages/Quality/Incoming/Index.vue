@@ -16,7 +16,7 @@ interface PartItem {
     qty_goods: number;
     unit_goods: string | null;
     iqc_status: string;
-    part?: { id: number; part_number: string; part_name: string };
+    part?: { id: number; part_number: string; part_name: string; model?: string | null };
     iqc_inspector?: { id: number; name: string };
 }
 
@@ -163,7 +163,9 @@ function passAll(row: ArrivalRow) {
                                     <div>
                                         <span class="font-semibold text-ink-primary">{{ it.part?.part_number ?? '—' }}</span>
                                         <span class="text-ink-secondary"> ({{ it.qty_goods }} {{ it.unit_goods ?? '' }})</span>
-                                        <span v-if="it.part?.part_name" class="block text-[11px] text-ink-secondary/80">{{ it.part.part_name }}</span>
+                                        <span v-if="it.part?.part_name || it.part?.model" class="block text-[11px] text-ink-secondary/80">
+                                            {{ [it.part?.part_name, it.part?.model].filter(Boolean).join(' · ') }}
+                                        </span>
                                     </div>
                                     <span
                                         v-if="it.iqc_status === 'passed'"
@@ -204,7 +206,7 @@ function passAll(row: ArrivalRow) {
                                 <button
                                     v-if="itemsPassedCount(a.items) < (a.items?.length ?? 0)"
                                     type="button"
-                                    class="inline-flex items-center rounded-md border border-success bg-surface px-2.5 py-1.5 text-xs font-semibold text-success transition hover:bg-success-light"
+                                    class="inline-flex items-center rounded-md border border-success bg-surface px-2.5 py-1.5 text-xs font-semibold text-success transition hover:bg-success/10"
                                     :title="t('quality.passAllButton')"
                                     @click="passAll(a)"
                                 >

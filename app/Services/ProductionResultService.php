@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\ConfigMaster;
+use App\Models\DeliveryScan;
 use App\Models\Machine;
 use App\Models\Part;
 use App\Models\PartStock;
@@ -283,7 +284,8 @@ class ProductionResultService
                 $output = PartStock::query()->lockForUpdate()->find($result->output_part_stock_id);
                 if ($output === null || BigDecimal::of($output->getRawOriginal('qty'))->isLessThan($result->getRawOriginal('qty_good'))
                     || WorkOrderConsumption::where('part_stock_id', $output->id)->exists()
-                    || WorkOrderMaterialBooking::where('part_stock_id', $output->id)->where('status', 'booked')->exists()) {
+                    || WorkOrderMaterialBooking::where('part_stock_id', $output->id)->where('status', 'booked')->exists()
+                    || DeliveryScan::where('part_stock_id', $output->id)->exists()) {
                     throw ValidationException::withMessages(['result' => __('Output hasil ini sudah digunakan atau dibooking. Batalkan proses berikutnya terlebih dahulu.')]);
                 }
                 $outputRemaining = BigDecimal::of($output->getRawOriginal('qty'))->minus($result->getRawOriginal('qty_good'));

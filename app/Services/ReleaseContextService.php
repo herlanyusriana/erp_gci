@@ -33,8 +33,8 @@ class ReleaseContextService
             ->with([
                 'process:id,process_name',
                 'machine:id,machine_code,machine_name',
-                'childPart:id,part_number,part_name',
-                'allocations.part:id,part_number,part_name',
+                'childPart:id,part_number,part_name,model',
+                'allocations.part:id,part_number,part_name,model',
             ])
             ->get();
 
@@ -59,7 +59,7 @@ class ReleaseContextService
         }
         $allPartIds = array_values(array_unique($allPartIds));
 
-        $parts = Part::query()->whereIn('id', $allPartIds)->get(['id', 'part_number', 'part_name', 'size'])->keyBy('id');
+        $parts = Part::query()->whereIn('id', $allPartIds)->get(['id', 'part_number', 'part_name', 'model', 'size'])->keyBy('id');
 
         // Stok dan tag dikelompokkan per satuan: agregat KGM tidak boleh dicampur PCS.
         $stockByUom = [];
@@ -104,6 +104,7 @@ class ReleaseContextService
                 'id' => (int) $id,
                 'part_number' => $parts[$id]->part_number ?? null,
                 'part_name' => $parts[$id]->part_name ?? null,
+                'model' => $parts[$id]->model ?? null,
                 'kind' => (int) $id === $mainId ? 'main' : 'substitute',
             ])->values();
 
@@ -145,6 +146,7 @@ class ReleaseContextService
                     'part_id' => $partId,
                     'part_number' => $parts[$partId]->part_number ?? null,
                     'part_name' => $parts[$partId]->part_name ?? null,
+                    'model' => $parts[$partId]->model ?? null,
                     'size' => ($partSize !== null && $partSize !== '') ? $partSize : $it->size,
                     'uom' => $uom,
                     'source' => $candidate['source'],
@@ -167,6 +169,7 @@ class ReleaseContextService
                     'id' => $it->childPart->id,
                     'part_number' => $it->childPart->part_number,
                     'part_name' => $it->childPart->part_name,
+                    'model' => $it->childPart->model,
                 ] : null,
                 'child_part_name' => $it->child_part_name,
                 'uom' => $uom,
@@ -210,7 +213,7 @@ class ReleaseContextService
     public function wipSummary(WorkOrder $workOrder): array
     {
         $items = $workOrder->items()
-            ->with(['parentPart:id,part_number,part_name'])
+            ->with(['parentPart:id,part_number,part_name,model'])
             ->get();
 
         $wipItems = $items
@@ -245,6 +248,7 @@ class ReleaseContextService
                 'part_id' => $pid,
                 'part_number' => $it->parentPart?->part_number,
                 'part_name' => $it->parentPart?->part_name ?? $it->parent_part_name,
+                'model' => $it->parentPart?->model,
                 'available_qty' => round($avail, 4),
                 'uom' => UomCatalog::normalize((string) $it->parent_uom) ?? UomCatalog::PIECE,
             ];

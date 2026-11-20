@@ -8,7 +8,11 @@ class StorePartRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->hasAnyPermission(['part.create', 'master.part.create']) ?? false;
+        $permissions = $this->route('part')
+            ? ['part.update', 'master.part.update']
+            : ['part.create', 'master.part.create'];
+
+        return $this->user()?->hasAnyPermission($permissions) ?? false;
     }
 
     public function rules(): array
@@ -16,7 +20,7 @@ class StorePartRequest extends FormRequest
         $partId = $this->route('part')?->id;
 
         return [
-            'part_number' => ['required', 'string', 'max:120', 'unique:parts,part_number,' . ($partId ?? 'NULL')],
+            'part_number' => ['required', 'string', 'max:120', 'unique:parts,part_number,'.($partId ?? 'NULL')],
             'part_name' => ['required', 'string', 'max:255'],
             'hs_code' => ['nullable', 'string', 'max:30'],
             'part_type_id' => ['required', 'exists:part_types,id'],

@@ -22,7 +22,7 @@ class LocationSetupController extends Controller
     {
         $receives = IncomingReceive::query()
             ->with([
-                'part:id,part_number,part_name',
+                'part:id,part_number,part_name,model',
                 'arrivalItem.arrival:id,arrival_no,invoice_no',
             ])
             ->whereNull('location_code')

@@ -42,10 +42,10 @@ class ProductionPlanController extends Controller
                 'machine:id,machine_code,machine_name',
                 'process:id,process_name',
                 'workOrder:id,wo_no,part_id,qty,status',
-                'workOrder.part:id,part_number,part_name',
+                'workOrder.part:id,part_number,part_name,model',
                 'fgPart:id,part_number,part_name,model',
-                'inputPart:id,part_number,part_name',
-                'wipPart:id,part_number,part_name',
+                'inputPart:id,part_number,part_name,model',
+                'wipPart:id,part_number,part_name,model',
             ])
             ->orderByRaw('step_sequence ASC NULLS LAST')
             ->orderBy('machine_id')
@@ -105,7 +105,7 @@ class ProductionPlanController extends Controller
 
         // WO planned yang BELUM masuk plan mana pun → supaya tidak "hilang" dari papan.
         $unplannedWorkOrders = WorkOrder::query()
-            ->with('part:id,part_number,part_name')
+            ->with('part:id,part_number,part_name,model')
             ->where('status', 'planned')
             ->whereDoesntHave('planItems')
             ->orderByDesc('id')
@@ -114,7 +114,7 @@ class ProductionPlanController extends Controller
         // WO aktif yang baru dialokasikan setelah tanggal papan terpilih.
         $offBoardWorkOrders = WorkOrder::query()
             ->with([
-                'part:id,part_number,part_name',
+                'part:id,part_number,part_name,model',
                 'planItems' => fn ($query) => $query
                     ->whereNotIn('machine_id', $subconMachineIds)
                     ->whereHas('plan', fn ($planQuery) => $planQuery->whereDate('plan_date', '>', $date))
@@ -171,7 +171,7 @@ class ProductionPlanController extends Controller
             ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) = ?', ['wip']))
             ->where('is_active', true)
             ->orderBy('part_number')
-            ->get(['id', 'part_number', 'part_name']);
+            ->get(['id', 'part_number', 'part_name', 'model']);
 
         $histories = $plan
             ? $plan->histories()
@@ -337,8 +337,15 @@ class ProductionPlanController extends Controller
         ]);
 
         DB::transaction(function () use ($data, $request) {
+            $itemIds = collect($data['items'])->pluck('id')->map(fn ($id) => (int) $id)->unique()->values()->all();
+            $planItems = ProductionPlanItem::query()
+                ->whereIn('id', $itemIds)
+                ->with('plan')
+                ->get()
+                ->keyBy('id');
+
             foreach ($data['items'] as $row) {
-                $item = ProductionPlanItem::query()->with('plan')->find((int) $row['id']);
+                $item = $planItems->get((int) $row['id']);
                 if ($item === null) {
                     continue;
                 }
@@ -373,8 +380,19 @@ class ProductionPlanController extends Controller
         ]);
 
         DB::transaction(function () use ($data) {
+            $itemIds = collect($data['items'])->pluck('id')->map(fn ($id) => (int) $id)->unique()->values()->all();
+            $planItems = ProductionPlanItem::query()
+                ->whereIn('id', $itemIds)
+                ->with('plan')
+                ->get()
+                ->keyBy('id');
+
             foreach ($data['items'] as $row) {
-                $item = ProductionPlanItem::query()->with('plan')->findOrFail((int) $row['id']);
+                $item = $planItems->get((int) $row['id']);
+                if ($item === null) {
+                    continue;
+                }
+
                 Gate::authorize('update', $item->plan);
                 $before = ['sequence' => $item->sequence];
                 $item->update([

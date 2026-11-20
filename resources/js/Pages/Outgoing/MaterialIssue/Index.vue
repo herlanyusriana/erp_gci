@@ -16,10 +16,11 @@ interface WoRow {
     wo_status: string;
     fg_part_number: string | null;
     fg_part_name: string | null;
+    fg_model?: string | null;
     slip_count: number;
     first_issued_date: string | null;
     last_issued_date: string | null;
-    materials: Array<{ part_id: number; part_number: string | null; part_name: string | null; qty: number; uom: string | null }>;
+    materials: Array<{ part_id: number; part_number: string | null; part_name: string | null; model?: string | null; qty: number; uom: string | null }>;
     status_by_uom: Array<{ uom: string; issued_qty: number; required_qty: number }>;
 }
 
@@ -28,6 +29,7 @@ interface DetailLine {
     issue_date: string | null;
     part_number: string | null;
     part_name: string | null;
+    model?: string | null;
     tag: string | null;
     qty: number;
     uom: string | null;
@@ -40,6 +42,14 @@ const props = defineProps<{
     filters: { search?: string; date_from?: string; date_to?: string };
     summary: { work_order_count: number; slip_count: number; tag_count: number };
 }>();
+
+const localRows = ref<WoRow[]>([...props.rows]);
+watch(
+    () => props.rows,
+    (v) => {
+        localRows.value = [...v];
+    },
+);
 
 const search = ref(props.filters.search ?? '');
 const dateFrom = ref(props.filters.date_from ?? '');
@@ -108,17 +118,19 @@ function flushStaleRows() {
         }
     })).then((results) => {
         const changed: number[] = [];
+        const next = [...localRows.value];
         for (const fresh of results) {
             if (fresh === null) continue;
-            const index = props.rows.findIndex((row) => row.work_order_id === fresh.work_order_id);
+            const index = next.findIndex((row) => row.work_order_id === fresh.work_order_id);
             if (index >= 0) {
-                props.rows[index] = fresh;
+                next[index] = fresh;
             } else {
-                props.rows.unshift(fresh);
+                next.unshift(fresh);
             }
             changed.push(fresh.work_order_id);
         }
         if (changed.length === 0) return;
+        localRows.value = next;
 
         highlightedWorkOrders.value = new Set(changed);
         clearTimeout(highlightTimer);
@@ -227,6 +239,7 @@ function closeDetail() {
                     <thead class="bg-background">
                         <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                             <th scope="col" class="px-4 py-3">{{ t('outgoing.workOrder') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.model') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('outgoing.issueDate') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('outgoing.item') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('outgoing.status') }}</th>
@@ -236,7 +249,7 @@ function closeDetail() {
                     </thead>
                     <tbody class="divide-y divide-borderline">
                         <tr
-                            v-for="row in rows"
+                            v-for="row in localRows"
                             :key="row.work_order_id"
                             :class="['hover:bg-primary-light/40', highlightedWorkOrders.has(row.work_order_id) ? 'bg-success/10' : '']"
                         >
@@ -244,6 +257,7 @@ function closeDetail() {
                                 <div class="font-semibold text-ink-primary">{{ row.wo_no }}</div>
                                 <div class="text-xs text-ink-secondary">{{ row.fg_part_number ?? '' }} {{ row.fg_part_name ?? '' }}</div>
                             </td>
+                            <td class="px-4 py-3 text-ink-secondary">{{ row.fg_model || '—' }}</td>
                             <td class="px-4 py-3 tabular-nums text-ink-primary">{{ row.first_issued_date ?? '—' }}</td>
                             <td class="px-4 py-3">
                                 <div class="text-ink-primary">{{ itemLabel(row) }}</div>
@@ -262,8 +276,8 @@ function closeDetail() {
                                 </button>
                             </td>
                         </tr>
-                        <tr v-if="rows.length === 0">
-                            <td colspan="6" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('outgoing.empty') }}</td>
+                        <tr v-if="localRows.length === 0">
+                            <td colspan="7" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('outgoing.empty') }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -276,7 +290,10 @@ function closeDetail() {
                 <div class="mb-4 flex items-start justify-between gap-4">
                     <div>
                         <h2 class="text-lg font-bold text-ink-primary">{{ detailRow?.wo_no }}</h2>
-                        <p class="text-sm text-ink-secondary">{{ detailRow?.fg_part_number }} · {{ detailRow?.fg_part_name }}</p>
+                        <p class="text-sm text-ink-secondary">
+                            {{ detailRow?.fg_part_number }} · {{ detailRow?.fg_part_name }}
+                            <span v-if="detailRow?.fg_model"> · {{ detailRow.fg_model }}</span>
+                        </p>
                     </div>
                     <button type="button" class="rounded-md p-1.5 text-ink-secondary transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" :aria-label="t('common.close')" @click="closeDetail">
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -292,6 +309,7 @@ function closeDetail() {
                             <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                                 <th scope="col" class="px-3 py-2">{{ t('outgoing.slipNo') }}</th>
                                 <th scope="col" class="px-3 py-2">{{ t('outgoing.materialPartNo') }}</th>
+                                <th scope="col" class="px-3 py-2">{{ t('master.model') }}</th>
                                 <th scope="col" class="px-3 py-2">{{ t('outgoing.invoiceSupplier') }}</th>
                                 <th scope="col" class="px-3 py-2">{{ t('outgoing.tagNo') }}</th>
                                 <th scope="col" class="px-3 py-2 text-right">{{ t('outgoing.qty') }}</th>
@@ -308,6 +326,7 @@ function closeDetail() {
                                     <div class="text-ink-primary">{{ line.part_number ?? '—' }}</div>
                                     <div class="text-xs text-ink-secondary">{{ line.part_name ?? '' }}</div>
                                 </td>
+                                <td class="px-3 py-2 text-ink-secondary">{{ line.model || '—' }}</td>
                                 <td class="px-3 py-2">
                                     <div class="text-ink-primary">{{ line.invoice ?? '—' }}</div>
                                     <div class="text-xs text-ink-secondary">{{ line.supplier ?? '—' }}</div>
@@ -317,7 +336,7 @@ function closeDetail() {
                                 <td class="px-3 py-2 text-ink-secondary">{{ line.uom ?? '—' }}</td>
                             </tr>
                             <tr v-if="detailLines.length === 0">
-                                <td colspan="6" class="px-3 py-8 text-center text-sm text-ink-secondary">{{ t('outgoing.empty') }}</td>
+                                <td colspan="7" class="px-3 py-8 text-center text-sm text-ink-secondary">{{ t('outgoing.empty') }}</td>
                             </tr>
                         </tbody>
                     </table>

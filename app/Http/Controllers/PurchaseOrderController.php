@@ -119,6 +119,8 @@ class PurchaseOrderController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        Gate::authorize('create', PurchaseOrder::class);
+
         $data = $this->validateOrRemap($request);
 
         $currency = $this->resolveCurrency(
@@ -160,6 +162,8 @@ class PurchaseOrderController extends Controller
 
     public function update(Request $request, PurchaseOrder $purchaseOrder): RedirectResponse
     {
+        Gate::authorize('update', $purchaseOrder);
+
         $data = $this->validateOrRemap($request, $purchaseOrder);
 
         if ((int) $data['supplier_id'] !== (int) $purchaseOrder->supplier_id) {
@@ -204,6 +208,8 @@ class PurchaseOrderController extends Controller
 
     public function destroy(PurchaseOrder $purchaseOrder): RedirectResponse
     {
+        Gate::authorize('delete', $purchaseOrder);
+
         $purchaseOrder->delete();
 
         return redirect()->route('purchase-orders.index')->with('success', __('Purchase order deleted.'));

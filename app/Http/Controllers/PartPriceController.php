@@ -20,7 +20,7 @@ class PartPriceController extends Controller
         Gate::authorize('viewAny', PartPrice::class);
 
         $prices = PartPrice::query()
-            ->with(['supplier:id,supplier_code,supplier_name', 'part:id,part_number,part_name'])
+            ->with(['supplier:id,supplier_code,supplier_name', 'part:id,part_number,part_name,model'])
             ->when($request->input('supplier_id'), fn ($q, $sid) => $q->where('supplier_id', $sid))
             ->when($request->input('search'), function ($q, $search) {
                 $q->where(fn ($w) => $w
@@ -46,7 +46,7 @@ class PartPriceController extends Controller
             'parts' => Part::query()
                 ->where('is_active', true)
                 ->orderBy('part_number')
-                ->get(['id', 'part_number', 'part_name']),
+                ->get(['id', 'part_number', 'part_name', 'model']),
             'supplierParts' => PartSubstitute::supplierParts(),
         ]);
     }

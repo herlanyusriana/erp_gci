@@ -20,8 +20,16 @@ const props = defineProps<{
     cycleTimes: Paginated<MachineCycleTime>;
     filters: { search?: string };
     machines: Array<Pick<Machine, 'id' | 'machine_code' | 'machine_name'>>;
-    parts: Array<Pick<Part, 'id' | 'part_number' | 'part_name'>>;
+    parts: Array<Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'>>;
 }>();
+
+const partOptions = computed(() =>
+    props.parts.map((p) => ({
+        id: p.id,
+        part_number: p.part_number,
+        sublabel: [p.part_name, p.model].filter(Boolean).join(' · '),
+    })),
+);
 
 const search = ref(props.filters.search ?? '');
 
@@ -119,6 +127,7 @@ const fmtNumber = (n: number | null | undefined, decimals = 2) =>
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                         <th scope="col" class="px-4 py-3">{{ t('master.machine') }}</th>
                         <th scope="col" class="px-4 py-3">{{ t('master.part') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.model') }}</th>
                         <th scope="col" class="px-4 py-3 text-right">{{ t('master.cycleTimeSeconds') }}</th>
                         <th scope="col" class="px-4 py-3">{{ t('master.status') }}</th>
                         <th scope="col" class="px-4 py-3 text-right">{{ t('master.actions') }}</th>
@@ -134,6 +143,7 @@ const fmtNumber = (n: number | null | undefined, decimals = 2) =>
                             <div class="font-medium text-ink-primary">{{ c.part?.part_number ?? '—' }}</div>
                             <div class="text-xs text-ink-secondary">{{ c.part?.part_name ?? '' }}</div>
                         </td>
+                        <td class="px-4 py-3 text-ink-secondary">{{ c.part?.model || '—' }}</td>
                         <td class="px-4 py-3 text-right">
                             <div class="tabular-nums font-semibold text-ink-primary">{{ fmtNumber(c.cycle_time_seconds, 4) }}</div>
                             <div class="text-xs text-ink-secondary">{{ t('master.secondsPerPiece') }}</div>
@@ -149,7 +159,7 @@ const fmtNumber = (n: number | null | undefined, decimals = 2) =>
                         </td>
                     </tr>
                     <tr v-if="cycleTimes.data.length === 0">
-                        <td colspan="5" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.cycleTimeEmpty') }}</td>
+                        <td colspan="6" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.cycleTimeEmpty') }}</td>
                     </tr>
                 </tbody>
             </table>
@@ -182,10 +192,10 @@ const fmtNumber = (n: number | null | undefined, decimals = 2) =>
                         <div class="mt-1">
                             <SearchableSelect
                                 v-model="form.part_id"
-                                :options="parts"
+                                :options="partOptions"
                                 value-key="id"
                                 label-key="part_number"
-                                sublabel-key="part_name"
+                                sublabel-key="sublabel"
                                 :placeholder="t('master.selectPart')"
                                 :aria-label="t('master.part')"
                                 :error="form.errors.part_id"

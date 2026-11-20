@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
-import { Head } from '@inertiajs/vue3';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, reactive, ref, watch } from 'vue';
-import { router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import Modal from '@/Components/Modal.vue';
@@ -687,7 +686,7 @@ function submitEdit() {
                                 </td>
                                 <td class="border-l border-borderline bg-surface px-3 py-2.5 group-hover:bg-primary-light/40">
                                     <div class="flex justify-end gap-1">
-                                        <a
+                                        <Link
                                             v-if="row.work_order"
                                             :href="route('work-orders.show', row.work_order.id)"
                                             :title="t('production.viewWo')"
@@ -695,7 +694,7 @@ function submitEdit() {
                                             class="flex h-8 w-8 items-center justify-center rounded-lg text-info transition hover:bg-info/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                                         >
                                             <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                                        </a>
+                                        </Link>
                                         <button
                                             type="button"
                                             :title="t('production.editPlan')"

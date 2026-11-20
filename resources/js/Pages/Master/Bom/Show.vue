@@ -75,6 +75,7 @@ function sourceLabel(source: string | null): string {
                             <th scope="col" class="px-3 py-3">{{ t('master.parent') }}</th>
                             <th scope="col" class="px-3 py-3 text-right">{{ t('master.parentQty') }}</th>
                             <th scope="col" class="px-3 py-3">{{ t('master.child') }}</th>
+                            <th scope="col" class="px-3 py-3">{{ t('master.model') }}</th>
                             <th scope="col" class="px-3 py-3">{{ t('master.size') }}</th>
                             <th scope="col" class="px-3 py-3 text-right">{{ t('master.childQty') }}</th>
                             <th scope="col" class="px-3 py-3">{{ t('master.uom') }}</th>
@@ -89,12 +90,14 @@ function sourceLabel(source: string | null): string {
                             <td class="px-3 py-2.5 text-ink-secondary">{{ it.machine?.machine_name ?? '—' }}</td>
                             <td class="px-3 py-2.5">
                                 <div class="font-medium text-ink-primary">{{ it.parent_part?.part_number ?? it.parent_part_name ?? '—' }}</div>
+                                <div v-if="it.parent_part?.model" class="text-xs text-ink-secondary">{{ it.parent_part.model }}</div>
                             </td>
                             <td class="px-3 py-2.5 text-right tabular-nums text-ink-secondary">{{ fmt(it.parent_qty) }}</td>
                             <td class="px-3 py-2.5">
                                 <div class="font-medium text-ink-primary">{{ it.child_part?.part_number ?? it.child_part_name ?? '—' }}</div>
                                 <div v-if="it.child_part_name" class="text-xs text-ink-secondary">{{ it.child_part_name }}</div>
                             </td>
+                            <td class="px-3 py-2.5 text-ink-secondary">{{ it.child_part?.model || '—' }}</td>
                             <td class="px-3 py-2.5 text-ink-secondary">{{ it.size ?? '—' }}</td>
                             <td class="px-3 py-2.5 text-right tabular-nums text-ink-primary">{{ fmt(it.child_qty) }}</td>
                             <td class="px-3 py-2.5 text-ink-secondary">{{ it.uom_rm ?? '-' }}</td>
@@ -107,7 +110,7 @@ function sourceLabel(source: string | null): string {
                             </td>
                         </tr>
                         <tr v-if="items.length === 0">
-                            <td colspan="11" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.bomItemsEmpty') }}</td>
+                            <td colspan="12" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.bomItemsEmpty') }}</td>
                         </tr>
                     </tbody>
                 </table>

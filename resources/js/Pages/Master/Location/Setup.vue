@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
 import { computed, ref } from 'vue';
-import { router, useForm } from '@inertiajs/vue3';
+import { useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import Pagination from '@/Components/Pagination.vue';
@@ -98,6 +98,7 @@ function assign() {
                             </th>
                             <th scope="col" class="px-4 py-3">{{ t('master.setupTag') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('master.setupPart') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.model') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('master.setupInvoice') }}</th>
                         </tr>
                     </thead>
@@ -117,10 +118,11 @@ function assign() {
                                 {{ receive.part?.part_number ?? '—' }}
                                 <span class="text-ink-secondary">{{ receive.part?.part_name ?? '' }}</span>
                             </td>
+                            <td class="px-4 py-3 text-ink-secondary">{{ receive.part?.model || '—' }}</td>
                             <td class="px-4 py-3 text-ink-secondary">{{ receive.invoice_no ?? '—' }}</td>
                         </tr>
                         <tr v-if="receives.data.length === 0">
-                            <td colspan="4" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.setupEmpty') }}</td>
+                            <td colspan="5" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.setupEmpty') }}</td>
                         </tr>
                     </tbody>
                 </table>

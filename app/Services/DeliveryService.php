@@ -253,41 +253,45 @@ class DeliveryService
      */
     public function passQc(Delivery $delivery, ?int $inspectorId = null, ?string $notes = null): void
     {
-        if (! $delivery->isPicked()) {
-            throw ValidationException::withMessages([
-                'status' => __('OQC hanya bisa dilakukan setelah barang berada di area pengiriman.'),
+        DB::transaction(function () use ($delivery, $inspectorId, $notes): void {
+            $delivery = Delivery::query()->lockForUpdate()->findOrFail($delivery->id);
+
+            if (! $delivery->isPicked()) {
+                throw ValidationException::withMessages([
+                    'status' => __('OQC hanya bisa dilakukan setelah barang berada di area pengiriman.'),
+                ]);
+            }
+
+            $trolleys = $delivery->scans()->where('scan_type', DeliveryScan::TYPE_TROLLEY)->get();
+
+            if ($trolleys->isEmpty()) {
+                throw ValidationException::withMessages([
+                    'status' => __('Belum ada troli yang dipindai.'),
+                ]);
+            }
+
+            $unchecked = $trolleys->whereNull('qc_status')->count();
+            if ($unchecked > 0) {
+                throw ValidationException::withMessages([
+                    'status' => __('Masih ada :count troli yang belum diperiksa OQC.', ['count' => $unchecked]),
+                ]);
+            }
+
+            $rejected = $trolleys->where('qc_status', Delivery::QC_REJECTED)->count();
+            if ($rejected > 0) {
+                throw ValidationException::withMessages([
+                    'status' => __('Masih ada :count troli berstatus NG.', ['count' => $rejected]),
+                ]);
+            }
+
+            $delivery->update([
+                'status' => Delivery::STATUS_QC_PASSED,
+                'qc_status' => Delivery::QC_PASSED,
+                'qc_notes' => $notes,
+                'qc_checked_at' => now(),
+                'qc_checked_by' => $inspectorId,
             ]);
-        }
-
-        $trolleys = $delivery->scans()->where('scan_type', DeliveryScan::TYPE_TROLLEY)->get();
-
-        if ($trolleys->isEmpty()) {
-            throw ValidationException::withMessages([
-                'status' => __('Belum ada troli yang dipindai.'),
-            ]);
-        }
-
-        $unchecked = $trolleys->whereNull('qc_status')->count();
-        if ($unchecked > 0) {
-            throw ValidationException::withMessages([
-                'status' => __('Masih ada :count troli yang belum diperiksa OQC.', ['count' => $unchecked]),
-            ]);
-        }
-
-        $rejected = $trolleys->where('qc_status', Delivery::QC_REJECTED)->count();
-        if ($rejected > 0) {
-            throw ValidationException::withMessages([
-                'status' => __('Masih ada :count troli berstatus NG.', ['count' => $rejected]),
-            ]);
-        }
-
-        $delivery->update([
-            'status' => Delivery::STATUS_QC_PASSED,
-            'qc_status' => Delivery::QC_PASSED,
-            'qc_notes' => $notes,
-            'qc_checked_at' => now(),
-            'qc_checked_by' => $inspectorId,
-        ]);
+        });
     }
 
     /**
@@ -295,24 +299,28 @@ class DeliveryService
      */
     public function rejectQc(Delivery $delivery, ?int $inspectorId = null, ?string $notes = null): void
     {
-        if (! $delivery->isPicked()) {
-            throw ValidationException::withMessages([
-                'status' => __('QC hanya bisa dilakukan setelah barang berada di area pengiriman.'),
+        DB::transaction(function () use ($delivery, $inspectorId, $notes): void {
+            $delivery = Delivery::query()->lockForUpdate()->findOrFail($delivery->id);
+
+            if (! $delivery->isPicked()) {
+                throw ValidationException::withMessages([
+                    'status' => __('QC hanya bisa dilakukan setelah barang berada di area pengiriman.'),
+                ]);
+            }
+
+            $delivery->scans()
+                ->where('scan_type', DeliveryScan::TYPE_TROLLEY)
+                ->update(['qc_status' => null, 'qc_notes' => null, 'qc_checked_at' => null, 'qc_checked_by' => null]);
+
+            $delivery->update([
+                'status' => Delivery::STATUS_DRAFT,
+                'qc_status' => Delivery::QC_REJECTED,
+                'qc_notes' => $notes,
+                'qc_checked_at' => now(),
+                'qc_checked_by' => $inspectorId,
+                'picked_at' => null,
             ]);
-        }
-
-        $delivery->scans()
-            ->where('scan_type', DeliveryScan::TYPE_TROLLEY)
-            ->update(['qc_status' => null, 'qc_notes' => null, 'qc_checked_at' => null, 'qc_checked_by' => null]);
-
-        $delivery->update([
-            'status' => Delivery::STATUS_DRAFT,
-            'qc_status' => Delivery::QC_REJECTED,
-            'qc_notes' => $notes,
-            'qc_checked_at' => now(),
-            'qc_checked_by' => $inspectorId,
-            'picked_at' => null,
-        ]);
+        });
     }
 
     /**
@@ -323,28 +331,32 @@ class DeliveryService
      */
     public function releaseCeisa(Delivery $delivery, ?int $userId = null): void
     {
-        if ($delivery->isReleased()) {
-            throw ValidationException::withMessages([
-                'status' => __('Outgoing sudah disubmit; data CEISA tidak dapat dirilis ulang.'),
-            ]);
-        }
+        DB::transaction(function () use ($delivery, $userId): void {
+            $delivery = Delivery::query()->lockForUpdate()->findOrFail($delivery->id);
 
-        if (! $delivery->isQcPassed()) {
-            throw ValidationException::withMessages([
-                'status' => __('Data CEISA dirilis setelah OQC lolos.'),
-            ]);
-        }
+            if ($delivery->isReleased()) {
+                throw ValidationException::withMessages([
+                    'status' => __('Outgoing sudah disubmit; data CEISA tidak dapat dirilis ulang.'),
+                ]);
+            }
 
-        if ($delivery->ceisaReleased()) {
-            throw ValidationException::withMessages([
-                'status' => __('Data CEISA sudah dirilis untuk pengiriman ini.'),
-            ]);
-        }
+            if (! $delivery->isQcPassed()) {
+                throw ValidationException::withMessages([
+                    'status' => __('Data CEISA dirilis setelah OQC lolos.'),
+                ]);
+            }
 
-        $delivery->update([
-            'ceisa_released_at' => now(),
-            'ceisa_released_by' => $userId,
-        ]);
+            if ($delivery->ceisaReleased()) {
+                throw ValidationException::withMessages([
+                    'status' => __('Data CEISA sudah dirilis untuk pengiriman ini.'),
+                ]);
+            }
+
+            $delivery->update([
+                'ceisa_released_at' => now(),
+                'ceisa_released_by' => $userId,
+            ]);
+        });
     }
 
     /**
@@ -355,39 +367,41 @@ class DeliveryService
      */
     public function submitOutgoing(Delivery $delivery): void
     {
-        if ($delivery->isReleased()) {
-            throw ValidationException::withMessages([
-                'status' => __('Outgoing ini sudah disubmit.'),
-            ]);
-        }
-
-        if (! $delivery->isQcPassed()) {
-            throw ValidationException::withMessages([
-                'status' => __('Outgoing hanya bisa disubmit setelah OQC lolos.'),
-            ]);
-        }
-
-        if (! $delivery->ceisaReleased()) {
-            throw ValidationException::withMessages([
-                'status' => __('Rilis data CEISA dulu sebelum mengisi PEN/AJU dan submit.'),
-            ]);
-        }
-
-        if (trim((string) $delivery->pen_no) === '' || trim((string) $delivery->aju_no) === '') {
-            throw ValidationException::withMessages([
-                'pen_no' => __('No. PEN dan No. AJU wajib diisi sebelum submit.'),
-            ]);
-        }
-
-        $delivery->loadMissing('items');
-
-        if ($delivery->items->isEmpty()) {
-            throw ValidationException::withMessages([
-                'items' => __('Tambahkan minimal satu barang sebelum submit.'),
-            ]);
-        }
-
         DB::transaction(function () use ($delivery): void {
+            $delivery = Delivery::query()->lockForUpdate()->findOrFail($delivery->id);
+
+            if ($delivery->isReleased()) {
+                throw ValidationException::withMessages([
+                    'status' => __('Outgoing ini sudah disubmit.'),
+                ]);
+            }
+
+            if (! $delivery->isQcPassed()) {
+                throw ValidationException::withMessages([
+                    'status' => __('Outgoing hanya bisa disubmit setelah OQC lolos.'),
+                ]);
+            }
+
+            if (! $delivery->ceisaReleased()) {
+                throw ValidationException::withMessages([
+                    'status' => __('Rilis data CEISA dulu sebelum mengisi PEN/AJU dan submit.'),
+                ]);
+            }
+
+            if (trim((string) $delivery->pen_no) === '' || trim((string) $delivery->aju_no) === '') {
+                throw ValidationException::withMessages([
+                    'pen_no' => __('No. PEN dan No. AJU wajib diisi sebelum submit.'),
+                ]);
+            }
+
+            $delivery->loadMissing('items');
+
+            if ($delivery->items->isEmpty()) {
+                throw ValidationException::withMessages([
+                    'items' => __('Tambahkan minimal satu barang sebelum submit.'),
+                ]);
+            }
+
             $delivery->update([
                 'status' => Delivery::STATUS_RELEASED,
                 'released_at' => now(),
@@ -439,6 +453,15 @@ class DeliveryService
 
         if ($stock === null) {
             // Bukan label FG yang dikenal: perlakukan sebagai kode troli.
+            return $this->resolveTrolley($delivery, $raw);
+        }
+
+        $stock = PartStock::query()
+            ->with('part:id,part_number,part_name,part_type_id', 'part.partType:id,code')
+            ->lockForUpdate()
+            ->find($stock->id);
+
+        if ($stock === null) {
             return $this->resolveTrolley($delivery, $raw);
         }
 
@@ -672,7 +695,7 @@ class DeliveryService
         $delivery->loadMissing([
             'customer:id,customer_code,customer_name',
             'pickingList:id,picking_no',
-            'items.part:id,part_number,part_name',
+            'items.part:id,part_number,part_name,model',
         ]);
 
         $items = $delivery->items->sortBy('sequence')->values();
@@ -699,6 +722,7 @@ class DeliveryService
                     'part_id' => (int) $partId,
                     'part_number' => $part?->part_number,
                     'part_name' => $part?->part_name,
+                    'model' => $part?->model,
                     'planned_qty' => round($plannedQty, 4),
                     'scanned_qty' => round($scannedQty, 4),
                     'remaining_qty' => round(max(0.0, $plannedQty - $scannedQty), 4),
@@ -743,6 +767,7 @@ class DeliveryService
                 'tag' => (string) ($item->tag ?? ''),
                 'part_no' => $item->part?->part_number,
                 'part_name' => $item->part?->part_name,
+                'model' => $item->part?->model,
                 'qty' => round((float) $item->qty, 4),
                 'uom' => $item->qty_unit,
                 // Per part, bukan per baris — lihat PHPDoc method ini.

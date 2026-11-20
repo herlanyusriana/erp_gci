@@ -19,7 +19,7 @@ class MachineCycleTimeController extends Controller
         Gate::authorize('viewAny', MachineCycleTime::class);
 
         $cycleTimes = MachineCycleTime::query()
-            ->with(['machine:id,machine_code,machine_name', 'part:id,part_number,part_name'])
+            ->with(['machine:id,machine_code,machine_name', 'part:id,part_number,part_name,model'])
             ->when($request->input('search'), function ($q, $search) {
                 $q->where(fn ($w) => $w
                     ->whereHas('machine', fn ($m) => $m
@@ -45,7 +45,7 @@ class MachineCycleTimeController extends Controller
             'parts' => Part::query()
                 ->where('is_active', true)
                 ->orderBy('part_number')
-                ->get(['id', 'part_number', 'part_name']),
+                ->get(['id', 'part_number', 'part_name', 'model']),
         ]);
     }
 

@@ -27,7 +27,7 @@ class IncomingQualityController extends Controller
             ->with([
                 'supplier:id,supplier_code,supplier_name',
                 'purchaseOrder:id,po_no',
-                'items.part:id,part_number,part_name',
+                'items.part:id,part_number,part_name,model',
                 'items.iqcInspector:id,name',
             ])
             ->when($status === 'pending', function ($q) {
@@ -74,7 +74,7 @@ class IncomingQualityController extends Controller
         $arrival->load([
             'supplier:id,supplier_code,supplier_name',
             'purchaseOrder:id,po_no',
-            'items.part:id,part_number,part_name',
+            'items.part:id,part_number,part_name,model',
             'items.iqcInspector:id,name',
         ]);
 

@@ -12,6 +12,7 @@ use App\Services\ReleaseContextService;
 use App\Support\QrSvg;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -38,8 +39,8 @@ class ProductionLabelController extends Controller
         $status = $request->input('status', '');
         $date = $request->input('date') ?: now($timezone)->toDateString();
 
-        $rows = ProductionResult::query()
-            ->with(['workOrder:id,wo_no', 'parentPart:id,part_number,part_name,part_type_id', 'parentPart.partType:id,code', 'machine:id,machine_code,machine_name', 'reporter:id,name'])
+        $results = ProductionResult::query()
+            ->with(['workOrder:id,wo_no', 'parentPart:id,part_number,part_name,model,part_type_id', 'parentPart.partType:id,code', 'machine:id,machine_code,machine_name', 'reporter:id,name'])
             ->whereDate('result_date', $date)
             ->when($status !== null && $status !== '', fn ($q) => $q->where('label_status', $status))
             ->where(function ($q) {
@@ -48,14 +49,24 @@ class ProductionLabelController extends Controller
             })
             ->orderBy('period_start')
             ->orderBy('id')
-            ->get()
-            ->map(function (ProductionResult $row): array {
-                $carryOverIn = (float) (ProductionResult::query()
-                    ->where('work_order_id', $row->work_order_id)
-                    ->where('parent_part_id', $row->parent_part_id)
-                    ->where('id', '<', $row->id)
-                    ->where('label_carried_over_qty', '>', 0)
-                    ->value('label_carried_over_qty') ?? 0.0);
+            ->get();
+
+        $carryOverPool = $results->isEmpty()
+            ? collect()
+            : ProductionResult::query()
+                ->whereIn('work_order_id', $results->pluck('work_order_id')->unique())
+                ->whereIn('parent_part_id', $results->pluck('parent_part_id')->unique())
+                ->where('label_carried_over_qty', '>', 0)
+                ->orderByDesc('id')
+                ->get(['id', 'work_order_id', 'parent_part_id', 'label_carried_over_qty'])
+                ->groupBy(fn (ProductionResult $r): string => $r->work_order_id.'|'.$r->parent_part_id);
+
+        $rows = $results
+            ->map(function (ProductionResult $row) use ($carryOverPool): array {
+                $key = $row->work_order_id.'|'.$row->parent_part_id;
+                $carryOverRow = ($carryOverPool->get($key) ?? collect())
+                    ->first(fn (ProductionResult $candidate): bool => $candidate->id < $row->id);
+                $carryOverIn = (float) ($carryOverRow?->label_carried_over_qty ?? 0.0);
 
                 return [
                     'id' => (int) $row->id,
@@ -64,6 +75,7 @@ class ProductionLabelController extends Controller
                     'part_id' => (int) $row->parent_part_id,
                     'part_number' => $row->parentPart?->part_number,
                     'part_name' => $row->parentPart?->part_name,
+                    'model' => $row->parentPart?->model,
                     'is_fg' => strtoupper((string) $row->parentPart?->partType?->code) === 'FG',
                     'machine_name' => $row->machine?->machine_name,
                     'shift' => $row->shift,
@@ -108,12 +120,108 @@ class ProductionLabelController extends Controller
 
     public function printLabel(Request $request, ProductionResult $result, string $kind)
     {
-        Gate::authorize('viewAny', WorkOrder::class);
+        $result->loadMissing('workOrder');
+        Gate::authorize('issue', $result->workOrder);
 
         abort_unless(in_array($kind, self::KINDS, true), 404);
 
-        $qty = $kind === 'good' ? (float) $result->qty_good : (float) $result->qty_reject;
-        abort_if($qty <= 0, 404, __('Tidak ada kuantitas untuk jenis label ini.'));
+        // Parameter kemasan dari user (Troli / Box / Pallet)
+        $packingType = strtoupper(trim((string) $request->input('packing_type', 'BOX')));
+        if (! in_array($packingType, ['TROLI', 'BOX', 'PALLET'], true)) {
+            $packingType = 'BOX';
+        }
+
+        $packingQtyInput = (float) $request->input('packing_qty', 0);
+        $deferRemainder = filter_var($request->input('defer_remainder', false), FILTER_VALIDATE_BOOLEAN);
+
+        [$result, $effectiveQty, $labelSheets] = DB::transaction(function () use ($result, $kind, $packingType, $packingQtyInput, $deferRemainder): array {
+            $result = ProductionResult::query()->lockForUpdate()->findOrFail($result->id);
+
+            $qty = $kind === 'good' ? (float) $result->qty_good : (float) $result->qty_reject;
+            abort_if($qty <= 0, 404, __('Tidak ada kuantitas untuk jenis label ini.'));
+
+            // Cek apakah ada sisa carry-over dari periode sebelumnya pada WO & part yang sama
+            $carryOverIn = 0.0;
+            if ($kind === 'good') {
+                $carryOverSource = ProductionResult::query()
+                    ->where('work_order_id', $result->work_order_id)
+                    ->where('parent_part_id', $result->parent_part_id)
+                    ->where('id', '<', $result->id)
+                    ->where('label_carried_over_qty', '>', 0)
+                    ->latest('id')
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($carryOverSource !== null) {
+                    $carryOverIn = (float) $carryOverSource->label_carried_over_qty;
+                    // Serap carry-over ke periode ini
+                    $result->update(['label_carry_over_source_id' => $carryOverSource->id]);
+                    $carryOverSource->update(['label_carried_over_qty' => 0]);
+                }
+            }
+
+            $effectiveQty = $qty + $carryOverIn;
+            $packingQty = $packingQtyInput > 0 ? $packingQtyInput : $effectiveQty;
+
+            $labelSheets = [];
+            if ($kind === 'good' && $packingQty > 0) {
+                $fullPacks = (int) floor($effectiveQty / $packingQty);
+                $remainder = round(fmod($effectiveQty, $packingQty), 4);
+
+                if ($deferRemainder && $remainder > 0) {
+                    $result->update(['label_carried_over_qty' => $remainder]);
+                    $totalLabels = max(1, $fullPacks);
+                } else {
+                    $totalLabels = $fullPacks + ($remainder > 0 ? 1 : 0);
+                }
+
+                for ($i = 1; $i <= $fullPacks; $i++) {
+                    $labelSheets[] = [
+                        'label_number' => $i,
+                        'total_labels' => $totalLabels,
+                        'qty' => $packingQty,
+                        'packing_type' => $packingType,
+                        'is_remainder' => false,
+                    ];
+                }
+
+                if (! $deferRemainder && $remainder > 0) {
+                    $labelSheets[] = [
+                        'label_number' => count($labelSheets) + 1,
+                        'total_labels' => $totalLabels,
+                        'qty' => $remainder,
+                        'packing_type' => $packingType,
+                        'is_remainder' => true,
+                    ];
+                }
+
+                if ($labelSheets === []) {
+                    $labelSheets[] = [
+                        'label_number' => 1,
+                        'total_labels' => 1,
+                        'qty' => $effectiveQty,
+                        'packing_type' => $packingType,
+                        'is_remainder' => false,
+                    ];
+                }
+            } else {
+                // Label NG atau default single sheet
+                $labelSheets[] = [
+                    'label_number' => 1,
+                    'total_labels' => 1,
+                    'qty' => $effectiveQty,
+                    'packing_type' => $packingType,
+                    'is_remainder' => false,
+                ];
+            }
+
+            // Status bergerak pending -> printed; delivered tidak pernah mundur.
+            if ($result->label_status === ProductionResult::LABEL_PENDING) {
+                $result->update(['label_status' => ProductionResult::LABEL_PRINTED]);
+            }
+
+            return [$result, $effectiveQty, $labelSheets];
+        });
 
         $result->load([
             'workOrder.part:id,part_number,part_name',
@@ -129,96 +237,6 @@ class ProductionLabelController extends Controller
         // bukan label WIP.
         $isFinishedGood = strtoupper((string) $result->parentPart?->partType?->code) === 'FG'
             || (int) $result->parent_part_id === (int) $result->workOrder?->part_id;
-
-        // Cek apakah ada sisa carry-over dari periode sebelumnya pada WO & part yang sama
-        $carryOverSource = null;
-        $carryOverIn = 0.0;
-        if ($kind === 'good') {
-            $carryOverSource = ProductionResult::query()
-                ->where('work_order_id', $result->work_order_id)
-                ->where('parent_part_id', $result->parent_part_id)
-                ->where('id', '<', $result->id)
-                ->where('label_carried_over_qty', '>', 0)
-                ->latest('id')
-                ->first();
-
-            if ($carryOverSource !== null) {
-                $carryOverIn = (float) $carryOverSource->label_carried_over_qty;
-                // Serap carry-over ke periode ini
-                $result->update(['label_carry_over_source_id' => $carryOverSource->id]);
-                $carryOverSource->update(['label_carried_over_qty' => 0]);
-            }
-        }
-
-        $effectiveQty = $qty + $carryOverIn;
-
-        // Parameter kemasan dari user (Troli / Box / Pallet)
-        $packingType = strtoupper(trim((string) $request->input('packing_type', 'BOX')));
-        if (! in_array($packingType, ['TROLI', 'BOX', 'PALLET'], true)) {
-            $packingType = 'BOX';
-        }
-
-        $packingQtyInput = (float) $request->input('packing_qty', 0);
-        $packingQty = $packingQtyInput > 0 ? $packingQtyInput : $effectiveQty;
-
-        $deferRemainder = filter_var($request->input('defer_remainder', false), FILTER_VALIDATE_BOOLEAN);
-
-        $labelSheets = [];
-        if ($kind === 'good' && $packingQty > 0) {
-            $fullPacks = (int) floor($effectiveQty / $packingQty);
-            $remainder = round(fmod($effectiveQty, $packingQty), 4);
-
-            if ($deferRemainder && $remainder > 0) {
-                $result->update(['label_carried_over_qty' => $remainder]);
-                $totalLabels = max(1, $fullPacks);
-            } else {
-                $totalLabels = $fullPacks + ($remainder > 0 ? 1 : 0);
-            }
-
-            for ($i = 1; $i <= $fullPacks; $i++) {
-                $labelSheets[] = [
-                    'label_number' => $i,
-                    'total_labels' => $totalLabels,
-                    'qty' => $packingQty,
-                    'packing_type' => $packingType,
-                    'is_remainder' => false,
-                ];
-            }
-
-            if (! $deferRemainder && $remainder > 0) {
-                $labelSheets[] = [
-                    'label_number' => count($labelSheets) + 1,
-                    'total_labels' => $totalLabels,
-                    'qty' => $remainder,
-                    'packing_type' => $packingType,
-                    'is_remainder' => true,
-                ];
-            }
-
-            if ($labelSheets === []) {
-                $labelSheets[] = [
-                    'label_number' => 1,
-                    'total_labels' => 1,
-                    'qty' => $effectiveQty,
-                    'packing_type' => $packingType,
-                    'is_remainder' => false,
-                ];
-            }
-        } else {
-            // Label NG atau default single sheet
-            $labelSheets[] = [
-                'label_number' => 1,
-                'total_labels' => 1,
-                'qty' => $effectiveQty,
-                'packing_type' => $packingType,
-                'is_remainder' => false,
-            ];
-        }
-
-        // Status bergerak pending -> printed; delivered tidak pernah mundur.
-        if ($result->label_status === ProductionResult::LABEL_PENDING) {
-            $result->update(['label_status' => ProductionResult::LABEL_PRINTED]);
-        }
 
         $uniqueStepParentIds = collect($result->workOrder?->items ?? [])
             ->whereNotNull('parent_part_id')
@@ -408,7 +426,8 @@ class ProductionLabelController extends Controller
 
     public function deliver(ProductionResult $result): RedirectResponse
     {
-        Gate::authorize('viewAny', WorkOrder::class);
+        $result->loadMissing('workOrder');
+        Gate::authorize('update', $result->workOrder);
 
         if ($result->label_status !== ProductionResult::LABEL_PRINTED) {
             throw ValidationException::withMessages([

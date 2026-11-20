@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
+import InputError from '@/Components/InputError.vue';
 import SearchableSelect from '@/Components/SearchableSelect.vue';
 import { hasAnyPermission } from '@/utils/permissions';
 
@@ -117,6 +118,7 @@ function reload() {
 }
 
 const filledOnPage = computed(() => form.prices.filter((row) => row.price !== null && row.price !== undefined).length);
+const errorMessages = computed(() => Object.values(form.errors).filter((msg): msg is string => Boolean(msg)));
 
 function submit() {
     if (!canEdit.value || !customerId.value) {
@@ -173,6 +175,10 @@ function submit() {
         </div>
 
         <form v-else @submit.prevent="submit">
+            <div v-if="errorMessages.length" class="mb-4 rounded-xl border border-danger/40 bg-danger/10 px-4 py-3" role="alert">
+                <InputError v-for="(msg, idx) in errorMessages" :key="idx" :message="msg" />
+            </div>
+
             <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-borderline text-sm">

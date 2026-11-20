@@ -65,19 +65,46 @@ class IncomingArrivalController extends Controller
 
     private function resolveMaterialItems(array $items, int $supplierId): array
     {
-        return collect($items)->map(function (array $item, int $index) use ($supplierId) {
+        $partIds = collect($items)
+            ->pluck('part_id')
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        $partsById = $partIds === []
+            ? collect()
+            : Part::query()->whereIn('id', $partIds)->get()->keyBy('id');
+
+        $supplierSubstitutes = PartSubstitute::query()
+            ->where('is_active', true)
+            ->where('supplier_id', $supplierId)
+            ->with('substitutePart:id,size,uom_id')
+            ->orderByRaw("NULLIF(TRIM(COALESCE(material_group, '')), '') IS NULL")
+            ->get();
+
+        $mappingByPartId = $supplierSubstitutes
+            ->groupBy('substitute_part_id')
+            ->map(fn (Collection $rows) => $rows->first());
+
+        $mappingByGroupSize = [];
+        foreach ($supplierSubstitutes as $sub) {
+            if (! $sub->substitutePart) {
+                continue;
+            }
+            $key = strtoupper(trim((string) ($sub->material_group ?? ''))).'|'.strtoupper((string) ($sub->substitutePart->size ?? ''));
+            $mappingByGroupSize[$key] ??= $sub;
+        }
+
+        return collect($items)->map(function (array $item, int $index) use ($partsById, $mappingByPartId, $mappingByGroupSize) {
             // Jika part_id sudah disertakan langsung (misal dari PO auto-fill),
             // group & size tetap diambil dari pemetaan substitute supplier, bukan
             // dari part number. Part number bukan "kelompok material".
             if (! empty($item['part_id'])) {
-                $part = Part::find((int) $item['part_id']);
+                $part = $partsById->get((int) $item['part_id']);
                 if ($part) {
-                    $mapping = PartSubstitute::query()
-                        ->where('is_active', true)
-                        ->where('supplier_id', $supplierId)
-                        ->where('substitute_part_id', $part->id)
-                        ->orderByRaw("NULLIF(TRIM(COALESCE(material_group, '')), '') IS NULL")
-                        ->first();
+                    $mapping = $mappingByPartId->get($part->id);
 
                     $group = trim((string) ($mapping?->material_group ?? ''));
                     $mappedSize = trim((string) ($mapping?->size ?? ''));
@@ -92,13 +119,7 @@ class IncomingArrivalController extends Controller
             $group = trim((string) ($item['material_group'] ?? ''));
             $size = strtoupper(trim((string) ($item['size'] ?? '')));
 
-            $mapping = PartSubstitute::query()
-                ->where('is_active', true)
-                ->where('supplier_id', $supplierId)
-                ->whereRaw('UPPER(TRIM(material_group)) = ?', [strtoupper($group)])
-                ->whereHas('substitutePart', fn ($q) => $q->whereRaw('UPPER(size) = ?', [$size]))
-                ->with('substitutePart:id,size,uom_id')
-                ->first();
+            $mapping = $mappingByGroupSize[strtoupper($group).'|'.$size] ?? null;
 
             if (! $mapping || ! $mapping->substitutePart) {
                 throw ValidationException::withMessages([
@@ -220,6 +241,7 @@ class IncomingArrivalController extends Controller
                         'id' => $it->part->id,
                         'part_number' => $it->part->part_number,
                         'part_name' => $it->part->part_name,
+                        'model' => $it->part->model,
                         'size' => $it->part->size,
                     ] : null,
                 ])->values()->all(),

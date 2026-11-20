@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\ConfigMaster;
 use App\Models\MaterialIssue;
+use App\Models\Part;
 use App\Services\MaterialIssueSummaryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -37,11 +39,11 @@ class MaterialIssueController extends Controller
             'date_to' => $today,
         ], $validated);
 
-        $rows = $this->summaryService->byWorkOrder(
+        $rows = $this->attachModelsToRows($this->summaryService->byWorkOrder(
             $filters['date_from'] ?? null,
             $filters['date_to'] ?? null,
             $filters['search'] ?? null,
-        );
+        ));
 
         $summary = [
             'work_order_count' => count($rows),
@@ -66,13 +68,15 @@ class MaterialIssueController extends Controller
             'date_to' => ['nullable', 'date'],
         ]);
 
+        $row = $this->summaryService->rowForWorkOrder(
+            $workOrder,
+            $validated['date_from'] ?? null,
+            $validated['date_to'] ?? null,
+        );
+
         return response()->json([
             'ok' => true,
-            'data' => $this->summaryService->rowForWorkOrder(
-                $workOrder,
-                $validated['date_from'] ?? null,
-                $validated['date_to'] ?? null,
-            ),
+            'data' => $row !== null ? $this->attachModelsToRows([$row])[0] : null,
         ]);
     }
 
@@ -88,11 +92,11 @@ class MaterialIssueController extends Controller
 
         return response()->json([
             'ok' => true,
-            'data' => $this->summaryService->detailsForWorkOrder(
+            'data' => $this->attachModelsToDetails($this->summaryService->detailsForWorkOrder(
                 $workOrder,
                 $validated['date_from'] ?? null,
                 $validated['date_to'] ?? null,
-            ),
+            )),
         ]);
     }
 
@@ -103,7 +107,7 @@ class MaterialIssueController extends Controller
         $materialIssue->load([
             'workOrder.part',
             'issuer:id,name',
-            'items.part:id,part_number,part_name',
+            'items.part:id,part_number,part_name,model',
             'items.workOrderItem:id,child_part_name,uom_rm',
         ]);
 
@@ -119,7 +123,7 @@ class MaterialIssueController extends Controller
         $materialIssue->load([
             'workOrder.part',
             'issuer:id,name',
-            'items.part:id,part_number,part_name',
+            'items.part:id,part_number,part_name,model',
             'items.workOrderItem:id,child_part_name,uom_rm,qty_required',
         ]);
 
@@ -127,5 +131,66 @@ class MaterialIssueController extends Controller
             'issue' => $materialIssue,
             'companyName' => ConfigMaster::getValue('SYSTEM', 'company_name', 'PT Geum Cheon Indo'),
         ]);
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $rows
+     * @return list<array<string, mixed>>
+     */
+    private function attachModelsToRows(array $rows): array
+    {
+        if ($rows === []) {
+            return [];
+        }
+
+        $woIds = array_values(array_unique(array_column($rows, 'work_order_id')));
+        $fgModels = DB::table('work_orders')
+            ->leftJoin('parts', 'parts.id', '=', 'work_orders.part_id')
+            ->whereIn('work_orders.id', $woIds)
+            ->pluck('parts.model', 'work_orders.id');
+
+        $partIds = collect($rows)
+            ->flatMap(fn (array $row) => array_column($row['materials'] ?? [], 'part_id'))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        $partModels = $partIds === []
+            ? collect()
+            : Part::query()->whereIn('id', $partIds)->pluck('model', 'id');
+
+        return array_map(function (array $row) use ($fgModels, $partModels): array {
+            $row['fg_model'] = $fgModels[$row['work_order_id']] ?? null;
+            $row['materials'] = array_map(function (array $material) use ($partModels): array {
+                $material['model'] = $partModels[$material['part_id']] ?? null;
+
+                return $material;
+            }, $row['materials'] ?? []);
+
+            return $row;
+        }, $rows);
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $details
+     * @return list<array<string, mixed>>
+     */
+    private function attachModelsToDetails(array $details): array
+    {
+        if ($details === []) {
+            return [];
+        }
+
+        $partIds = array_values(array_unique(array_filter(array_column($details, 'part_id'))));
+        $partModels = $partIds === []
+            ? collect()
+            : Part::query()->whereIn('id', $partIds)->pluck('model', 'id');
+
+        return array_map(function (array $detail) use ($partModels): array {
+            $detail['model'] = $partModels[$detail['part_id']] ?? null;
+
+            return $detail;
+        }, $details);
     }
 }

@@ -186,9 +186,25 @@ class PickingListService
 
         $createDeliveries = function () use ($list, $userId): Collection {
             $deliveries = new Collection;
+            $byCustomer = $list->items->groupBy('customer_id');
+            $customerIds = $byCustomer->keys()->map(fn ($id) => (int) $id)->all();
+            $partIds = $list->items->pluck('part_id')->unique()->values()->all();
 
-            foreach ($list->items->groupBy('customer_id') as $customerId => $items) {
-                $customer = Customer::query()->find((int) $customerId);
+            $customers = Customer::query()
+                ->whereIn('id', $customerIds)
+                ->get()
+                ->keyBy('id');
+
+            $pricesByCustomer = CustomerPrice::query()
+                ->whereIn('customer_id', $customerIds)
+                ->whereIn('part_id', $partIds)
+                ->where('is_active', true)
+                ->get(['customer_id', 'part_id', 'price'])
+                ->groupBy('customer_id')
+                ->map(fn (Collection $rows) => $rows->pluck('price', 'part_id'));
+
+            foreach ($byCustomer as $customerId => $items) {
+                $customer = $customers->get((int) $customerId);
 
                 if ($customer === null) {
                     continue;
@@ -205,11 +221,7 @@ class PickingListService
                 ]);
 
                 // Harga jual diambil dari master per customer sebagai snapshot.
-                $prices = CustomerPrice::query()
-                    ->where('customer_id', $customer->id)
-                    ->whereIn('part_id', $items->pluck('part_id')->unique())
-                    ->where('is_active', true)
-                    ->pluck('price', 'part_id');
+                $prices = $pricesByCustomer->get($customer->id, collect());
 
                 foreach ($items->sortBy('sequence') as $item) {
                     $price = $prices[$item->part_id] ?? null;

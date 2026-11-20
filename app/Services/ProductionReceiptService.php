@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\ConfigMaster;
 use App\Models\Machine;
 use App\Models\MaterialIssue;
 use App\Models\MaterialIssueItem;
@@ -182,11 +183,15 @@ class ProductionReceiptService
      */
     public function receiptsByMachine(int $machineId, ?string $date = null): array
     {
-        $targetDate = $date ?? Carbon::now((string) config('app.timezone'))->toDateString();
+        $timezone = (string) ConfigMaster::getValue('SYSTEM', 'timezone', (string) config('app.timezone'));
+        $targetDate = $date ?? Carbon::now($timezone)->toDateString();
+        $start = Carbon::parse($targetDate, $timezone)->startOfDay()->setTimezone((string) config('app.timezone'));
+        $end = $start->copy()->addDay();
 
         return ProductionMaterialReceipt::query()
             ->where('machine_id', $machineId)
-            ->whereDate('received_at', $targetDate)
+            ->where('received_at', '>=', $start)
+            ->where('received_at', '<', $end)
             ->with(['part:id,part_number,part_name,model,size', 'receiver:id,name'])
             ->orderByDesc('received_at')
             ->get()

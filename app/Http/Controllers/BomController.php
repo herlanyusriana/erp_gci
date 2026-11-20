@@ -214,8 +214,8 @@ class BomController extends Controller
         Gate::authorize('update', $bom);
 
         $bom->load([
-            'part:id,part_number,part_name',
-            'items' => fn ($q) => $q->with(['process:id,process_code,process_name', 'machine:id,machine_code,machine_name', 'parentPart:id,part_number,part_name', 'childPart:id,part_number,part_name'])->orderBy('sequence'),
+            'part:id,part_number,part_name,model',
+            'items' => fn ($q) => $q->with(['process:id,process_code,process_name', 'machine:id,machine_code,machine_name', 'parentPart:id,part_number,part_name,model', 'childPart:id,part_number,part_name,model'])->orderBy('sequence'),
         ]);
 
         return Inertia::render('Master/Bom/Form', [

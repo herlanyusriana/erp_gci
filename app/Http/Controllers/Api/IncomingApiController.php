@@ -30,7 +30,7 @@ class IncomingApiController extends Controller
         Gate::authorize('viewAny', Arrival::class);
 
         $arrivals = Arrival::query()
-            ->with(['supplier:id,supplier_name', 'items.receives'])
+            ->with(['supplier:id,supplier_name', 'items.part:id,part_number,part_name,model', 'items.receives'])
             ->orderByDesc('id')
             ->limit(50)
             ->get();
@@ -44,11 +44,13 @@ class IncomingApiController extends Controller
                     'is_local' => (bool) $arrival->is_local,
                     'supplier_name' => $arrival->supplier?->supplier_name,
                     'items' => $arrival->items->map(function (ArrivalItem $item) {
-                        $received = (float) $item->receives()->sum('qty');
+                        $received = (float) $item->receives->sum('qty');
 
                         return [
                             'id' => $item->id,
                             'part_no' => $item->part?->part_number,
+                            'part_name' => $item->part?->part_name,
+                            'model' => $item->part?->model,
                             'qty_goods' => (float) $item->qty_goods,
                             'unit_goods' => $item->unit_goods,
                             'qty_received' => $received,
@@ -73,42 +75,44 @@ class IncomingApiController extends Controller
 
         $arrivalItem->loadMissing(['arrival']);
         $goodsUnit = UomCatalog::normalize($arrivalItem->unit_goods) ?? UomCatalog::WEIGHT;
-
-        try {
-            $this->receiveService->ensureTagsUniqueForArrivalItem($arrivalItem, [
-                ['tag' => trim($validated['tag']), 'qty' => $validated['qty'], 'qc_status' => $validated['qc_status']],
-            ], 'tags');
-        } catch (ValidationException) {
-            return response()->json(['ok' => false, 'message' => __('Tag sudah pernah dipakai pada item ini.')], 422);
-        } catch (HttpResponseException) {
-            return response()->json(['ok' => false, 'message' => __('Tag sudah pernah dipakai pada item ini.')], 422);
-        }
-
         $totalRequested = (float) $validated['qty'];
-        $remainingQty = $this->receiveService->remainingQty($arrivalItem);
-        if ($totalRequested > $remainingQty + 1e-9) {
-            return response()->json([
-                'ok' => false,
-                'message' => __('Qty melebihi sisa (:remaining :unit).', ['remaining' => $remainingQty, 'unit' => $goodsUnit]),
-            ], 422);
-        }
-
-        $poLimit = PurchaseOrderLimit::receiveLimit($arrivalItem);
-        if ($poLimit !== null && $totalRequested > $poLimit['remaining'] + 1e-9) {
-            return response()->json([
-                'ok' => false,
-                'message' => __('Total (:total :unit) melebihi qty PO (:po :unit). Sisa yang boleh diterima :remaining :unit.', [
-                    'total' => $totalRequested,
-                    'unit' => $goodsUnit,
-                    'po' => $poLimit['po_qty'],
-                    'remaining' => $poLimit['remaining'],
-                ]),
-            ], 422);
-        }
-
         $receiveAt = Carbon::parse($validated['receive_date'])->setTimeFromTimeString(now()->format('H:i:s'));
 
-        $receive = DB::transaction(function () use ($validated, $arrivalItem, $goodsUnit, $receiveAt) {
+        $result = DB::transaction(function () use ($validated, $arrivalItem, $goodsUnit, $receiveAt, $totalRequested) {
+            $arrivalItem = ArrivalItem::query()
+                ->with(['arrival', 'receives'])
+                ->lockForUpdate()
+                ->findOrFail($arrivalItem->id);
+
+            try {
+                $this->receiveService->ensureTagsUniqueForArrivalItem($arrivalItem, [
+                    ['tag' => trim($validated['tag']), 'qty' => $validated['qty'], 'qc_status' => $validated['qc_status']],
+                ], 'tags');
+            } catch (ValidationException|HttpResponseException) {
+                return response()->json(['ok' => false, 'message' => __('Tag sudah pernah dipakai pada item ini.')], 422);
+            }
+
+            $remainingQty = $this->receiveService->remainingQty($arrivalItem);
+            if ($totalRequested > $remainingQty + 1e-9) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => __('Qty melebihi sisa (:remaining :unit).', ['remaining' => $remainingQty, 'unit' => $goodsUnit]),
+                ], 422);
+            }
+
+            $poLimit = PurchaseOrderLimit::receiveLimit($arrivalItem);
+            if ($poLimit !== null && $totalRequested > $poLimit['remaining'] + 1e-9) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => __('Total (:total :unit) melebihi qty PO (:po :unit). Sisa yang boleh diterima :remaining :unit.', [
+                        'total' => $totalRequested,
+                        'unit' => $goodsUnit,
+                        'po' => $poLimit['po_qty'],
+                        'remaining' => $poLimit['remaining'],
+                    ]),
+                ], 422);
+            }
+
             $tag = $this->receiveService->normalizeTag($validated['tag']);
 
             $netWeight = UomCatalog::isWeight($goodsUnit) ? (float) $validated['qty'] : null;
@@ -141,6 +145,12 @@ class IncomingApiController extends Controller
 
             return $receive;
         });
+
+        if ($result instanceof JsonResponse) {
+            return $result;
+        }
+
+        $receive = $result;
 
         $arrival = $arrivalItem->arrival()->with('items.receives')->first();
         if ($arrival && ! $this->receiveService->hasPendingReceives($arrival) && empty($arrival->transaction_no)) {

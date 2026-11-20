@@ -41,12 +41,14 @@ class UserController extends Controller
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:' . User::class],
+            'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
             'password' => ['required', Rules\Password::defaults()],
             'is_active' => ['sometimes', 'boolean'],
             'roles' => ['array'],
             'roles.*' => ['exists:roles,id'],
         ]);
+
+        $this->assertCanAssignRoles($request->user(), $data['roles'] ?? []);
 
         $user = User::create([
             'name' => $data['name'],
@@ -65,12 +67,14 @@ class UserController extends Controller
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:' . User::class . ',email,' . $user->id],
+            'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class.',email,'.$user->id],
             'password' => ['nullable', 'confirmed', Rules\Password::defaults()],
             'is_active' => ['sometimes', 'boolean'],
             'roles' => ['array'],
             'roles.*' => ['exists:roles,id'],
         ]);
+
+        $this->assertCanAssignRoles($request->user(), $data['roles'] ?? []);
 
         $user->name = $data['name'];
         $user->email = $data['email'];
@@ -79,6 +83,10 @@ class UserController extends Controller
             $user->password = Hash::make($data['password']);
         }
         $user->save();
+
+        if (! $user->is_active) {
+            $user->tokens()->delete();
+        }
 
         $user->roles()->sync($data['roles'] ?? []);
 
@@ -91,8 +99,26 @@ class UserController extends Controller
 
         abort_if($user->id === $request->user()->id, 400, __('Tidak dapat menonaktifkan diri sendiri.'));
 
+        $user->tokens()->delete();
         $user->delete();
 
         return redirect()->route('users.index')->with('success', __('User dinonaktifkan.'));
+    }
+
+    /**
+     * @param  array<int, int|string>  $roleIds
+     */
+    private function assertCanAssignRoles(User $actor, array $roleIds): void
+    {
+        if ($roleIds === [] || $actor->roles()->where('name', 'super-admin')->exists()) {
+            return;
+        }
+
+        $assigningSuperAdmin = Role::query()
+            ->whereIn('id', $roleIds)
+            ->where('name', 'super-admin')
+            ->exists();
+
+        abort_if($assigningSuperAdmin, 403, __('Hanya super-admin yang dapat menetapkan role super-admin.'));
     }
 }

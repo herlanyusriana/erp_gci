@@ -42,7 +42,7 @@ function formatPrice(price: number | null): string {
             </div>
             <div class="flex items-center gap-2">
                 <a
-                    :href="`/purchase-orders/${purchaseOrder.id}/print`"
+                    :href="route('purchase-orders.print', purchaseOrder.id)"
                     target="_blank"
                     rel="noopener"
                     class="inline-flex items-center gap-1.5 rounded-md border border-borderline bg-surface px-4 py-2 text-sm font-semibold text-ink-primary transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"

@@ -22,7 +22,7 @@ const props = defineProps<{
     prices: Paginated<PartPrice>;
     filters: { search?: string; supplier_id?: string };
     suppliers: Array<Pick<Supplier, 'id' | 'supplier_code' | 'supplier_name'>>;
-    parts: Array<Pick<Part, 'id' | 'part_number' | 'part_name'>>;
+    parts: Array<Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'>>;
     supplierParts: SupplierPart[];
 }>();
 
@@ -66,7 +66,7 @@ const form = useForm({
 /** Part yang boleh dipilih: hanya part supplier terpilih (strict). */
 const partOptions = computed(() => {
     const supplierId = Number(form.supplier_id);
-    const map = new Map<number, { id: number; part_number: string; part_name: string }>();
+    const map = new Map<number, Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'>>();
 
     if (supplierId) {
         for (const sp of props.supplierParts) {
@@ -86,7 +86,13 @@ const partOptions = computed(() => {
         }
     }
 
-    return [...map.values()].sort((a, b) => a.part_number.localeCompare(b.part_number));
+    return [...map.values()]
+        .sort((a, b) => a.part_number.localeCompare(b.part_number))
+        .map((p) => ({
+            id: p.id,
+            part_number: p.part_number,
+            sublabel: [p.part_name, p.model].filter(Boolean).join(' · '),
+        }));
 });
 
 function onSupplierChange() {
@@ -169,6 +175,7 @@ const fmtDate = (value: string | null | undefined) => {
                     <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                         <th scope="col" class="px-4 py-3">{{ t('master.supplier') }}</th>
                         <th scope="col" class="px-4 py-3">{{ t('master.part') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.model') }}</th>
                         <th scope="col" class="px-4 py-3 text-right">{{ t('master.price') }}</th>
                         <th scope="col" class="px-4 py-3">{{ t('master.validFrom') }}</th>
                         <th scope="col" class="px-4 py-3">{{ t('master.status') }}</th>
@@ -185,6 +192,7 @@ const fmtDate = (value: string | null | undefined) => {
                             <div class="font-medium text-ink-primary">{{ p.part?.part_number ?? '—' }}</div>
                             <div class="text-xs text-ink-secondary">{{ p.part?.part_name ?? '' }}</div>
                         </td>
+                        <td class="px-4 py-3 text-ink-secondary">{{ p.part?.model || '—' }}</td>
                         <td class="px-4 py-3 text-right tabular-nums font-semibold text-ink-primary">{{ fmtMoney(p.price, p.currency) }}</td>
                         <td class="px-4 py-3 text-ink-secondary">{{ fmtDate(p.valid_from) }}</td>
                         <td class="px-4 py-3">
@@ -198,7 +206,7 @@ const fmtDate = (value: string | null | undefined) => {
                         </td>
                     </tr>
                     <tr v-if="prices.data.length === 0">
-                        <td colspan="6" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.priceEmpty') }}</td>
+                        <td colspan="7" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.priceEmpty') }}</td>
                     </tr>
                 </tbody>
             </table>
@@ -234,7 +242,7 @@ const fmtDate = (value: string | null | undefined) => {
                                 :options="partOptions"
                                 value-key="id"
                                 label-key="part_number"
-                                sublabel-key="part_name"
+                                sublabel-key="sublabel"
                                 :placeholder="t('master.selectPart')"
                                 :disabled="!form.supplier_id"
                                 :aria-label="t('master.part')"

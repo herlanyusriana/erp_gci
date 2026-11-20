@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
-import { computed, reactive, ref } from 'vue';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
+import InputError from '@/Components/InputError.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
 import SearchableSelect from '@/Components/SearchableSelect.vue';
 import { formatDate } from '@/utils/date';
@@ -21,7 +22,7 @@ interface Item {
     price: number | null;
     total_price: number | null;
     part_id: number;
-    part?: { id: number; part_number: string; part_name: string } | null;
+    part?: { id: number; part_number: string; part_name: string; model?: string | null } | null;
 }
 
 interface Delivery {
@@ -239,12 +240,11 @@ function rejectQc() {
     });
 }
 
-const documents = reactive({
+const documents = useForm({
     pen_no: props.delivery.pen_no ?? '',
     aju_no: props.delivery.aju_no ?? '',
     invoice_no: props.delivery.invoice_no ?? '',
 });
-const savingDocs = ref(false);
 
 function togglePicked(item: Item) {
     router.post(
@@ -255,17 +255,9 @@ function togglePicked(item: Item) {
 }
 
 function saveDocuments() {
-    savingDocs.value = true;
-    router.put(
-        route('deliveries.documents.update', props.delivery.id),
-        { ...documents },
-        {
-            preserveScroll: true,
-            onFinish: () => {
-                savingDocs.value = false;
-            },
-        },
-    );
+    documents.put(route('deliveries.documents.update', props.delivery.id), {
+        preserveScroll: true,
+    });
 }
 
 function releaseCeisa() {
@@ -633,6 +625,7 @@ const missingPriceCount = computed(() => props.delivery.items.filter((item) => i
                             :aria-label="t('outgoing.penNo')"
                             class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
                         />
+                        <InputError :message="documents.errors.pen_no" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('outgoing.ajuNo') }}</label>
@@ -642,6 +635,7 @@ const missingPriceCount = computed(() => props.delivery.items.filter((item) => i
                             :aria-label="t('outgoing.ajuNo')"
                             class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
                         />
+                        <InputError :message="documents.errors.aju_no" class="mt-1" />
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('outgoing.invoiceNo') }}</label>
@@ -651,6 +645,7 @@ const missingPriceCount = computed(() => props.delivery.items.filter((item) => i
                             :aria-label="t('outgoing.invoiceNo')"
                             class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
                         />
+                        <InputError :message="documents.errors.invoice_no" class="mt-1" />
                     </div>
                 </div>
 
@@ -662,10 +657,10 @@ const missingPriceCount = computed(() => props.delivery.items.filter((item) => i
                     <button
                         type="button"
                         @click="saveDocuments"
-                        :disabled="savingDocs"
+                        :disabled="documents.processing"
                         class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-primary transition hover:bg-background disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                     >
-                        {{ savingDocs ? t('outgoing.saving') : t('outgoing.saveDocuments') }}
+                        {{ documents.processing ? t('outgoing.saving') : t('outgoing.saveDocuments') }}
                     </button>
                     <button
                         type="button"
@@ -736,6 +731,7 @@ const missingPriceCount = computed(() => props.delivery.items.filter((item) => i
                         <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                             <th scope="col" class="w-16 px-4 py-3 text-center">{{ t('outgoing.seq') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('outgoing.part') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('master.model') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('outgoing.tag') }}</th>
                             <th scope="col" class="px-4 py-3 text-right">{{ t('outgoing.qty') }}</th>
                             <th scope="col" class="px-4 py-3 text-right">{{ t('outgoing.deliveryPrice') }}</th>
@@ -751,6 +747,7 @@ const missingPriceCount = computed(() => props.delivery.items.filter((item) => i
                                 <div class="font-medium text-ink-primary">{{ item.part?.part_number ?? '—' }}</div>
                                 <div class="text-xs text-ink-secondary">{{ item.part?.part_name ?? '' }}</div>
                             </td>
+                            <td class="px-4 py-3 text-ink-secondary">{{ item.part?.model || '—' }}</td>
                             <td class="px-4 py-3 font-mono text-xs text-ink-primary">
                                 {{ tagsFor(item.part_id) || item.tag || '—' }}
                             </td>
@@ -772,12 +769,12 @@ const missingPriceCount = computed(() => props.delivery.items.filter((item) => i
                             </td>
                         </tr>
                         <tr v-if="delivery.items.length === 0">
-                            <td colspan="8" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('outgoing.deliveryNoItems') }}</td>
+                            <td colspan="9" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('outgoing.deliveryNoItems') }}</td>
                         </tr>
                     </tbody>
                     <tfoot v-if="delivery.items.length">
                         <tr class="border-t-2 border-borderline">
-                            <td colspan="5" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('outgoing.totalAmount') }}</td>
+                            <td colspan="6" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('outgoing.totalAmount') }}</td>
                             <td class="px-4 py-3 text-right tabular-nums font-bold text-ink-primary">{{ money(totalAmount) }}</td>
                             <td></td>
                             <td></td>

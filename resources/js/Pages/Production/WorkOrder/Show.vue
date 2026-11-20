@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import StatusBadge from '@/Components/StatusBadge.vue';
 import { useI18n } from 'vue-i18n';
-import { Head } from '@inertiajs/vue3';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed } from 'vue';
-import { useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import type { WorkOrder, WorkOrderItem } from '@/types';
@@ -34,6 +33,7 @@ interface ProcessGroup {
     machineName: string;
     parentPartNumber: string;
     parentPartName: string;
+    parentModel: string | null;
     parentQty: number | null;
     parentUom: string | null;
     items: WorkOrderItem[];
@@ -54,6 +54,7 @@ const routingGroups = computed(() => {
             if (isTpl) {
                 last.parentPartNumber = it.parent_part?.part_number ?? it.parent_part_name ?? '—';
                 last.parentPartName = it.parent_part?.part_name ?? '';
+                last.parentModel = it.parent_part?.model ?? null;
             }
             continue;
         }
@@ -66,6 +67,7 @@ const routingGroups = computed(() => {
             machineName: it.machine?.machine_name ?? '—',
             parentPartNumber: it.parent_part?.part_number ?? it.parent_part_name ?? '—',
             parentPartName: it.parent_part?.part_name ?? '',
+            parentModel: it.parent_part?.model ?? null,
             parentQty: it.parent_qty,
             parentUom: it.parent_uom,
             items: [it],
@@ -106,6 +108,7 @@ const displayPartInfo = (item: WorkOrderItem) => {
         return {
             partNumber: mainPart?.part_number ?? item.child_part_name ?? '—',
             partName: mainPart?.part_name ?? '',
+            model: mainPart?.model ?? null,
             isSubstitute: false,
             badge: 'Main BOM',
         };
@@ -114,11 +117,13 @@ const displayPartInfo = (item: WorkOrderItem) => {
     // Sesudah issue: tampilkan Part Substitute riil
     const partNumber = substitutePart?.part_number ?? mainPart?.part_number ?? item.child_part_name ?? '—';
     const partName = substitutePart?.part_name ?? mainPart?.part_name ?? '';
+    const model = substitutePart?.model ?? mainPart?.model ?? null;
     const isSub = Boolean(substitutePart && mainPart && substitutePart.id !== mainPart.id);
 
     return {
         partNumber,
         partName,
+        model,
         isSubstitute: isSub,
         badge: isSub ? 'Substitusi' : 'Main BOM',
     };
@@ -164,10 +169,10 @@ function doDestroy() {
             </div>
 
             <div class="flex flex-wrap items-center gap-2">
-                <a v-if="workOrder.status === 'in_progress' && can.complete" :href="route('production-results.create', workOrder.id)"
+                <Link v-if="workOrder.status === 'in_progress' && can.complete" :href="route('production-results.create', workOrder.id)"
                     class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
                     {{ t('production.results') }}
-                </a>
+                </Link>
                 <button v-if="workOrder.status === 'in_progress' && can.complete" @click="doComplete" :disabled="completeForm.processing"
                     class="rounded-md bg-success px-4 py-2 text-sm font-semibold text-white transition hover:bg-success/90 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
                     {{ completeForm.processing ? '…' : t('production.complete') }}
@@ -228,6 +233,7 @@ function doDestroy() {
                             <th scope="col" class="px-3 py-3">{{ t('production.process') }}</th>
                             <th scope="col" class="px-3 py-3">{{ t('production.machine') }}</th>
                             <th scope="col" class="px-3 py-3">Material Input</th>
+                            <th scope="col" class="px-3 py-3">{{ t('master.model') }}</th>
                             <th scope="col" class="px-3 py-3">{{ t('production.parent') }}</th>
                             <th scope="col" class="px-3 py-3 text-right">Rasio</th>
                             <th scope="col" class="px-3 py-3">{{ t('production.uom') }}</th>
@@ -265,9 +271,12 @@ function doDestroy() {
                                         </div>
                                     </div>
                                 </td>
+                                <td class="px-3 py-3 text-ink-secondary">{{ displayPartInfo(g.items[0]).model || '—' }}</td>
                                 <td class="px-3 py-3">
                                     <span class="font-medium text-ink-primary">{{ g.parentPartNumber }}</span>
-                                    <div class="text-xs text-ink-secondary">{{ g.parentPartName }}</div>
+                                    <div class="text-xs text-ink-secondary">
+                                        {{ [g.parentPartName, g.parentModel].filter(Boolean).join(' · ') }}
+                                    </div>
                                 </td>
                                 <td class="px-3 py-3 text-right tabular-nums text-ink-primary">{{ fmt(g.items[0].child_qty) }}</td>
                                 <td class="px-3 py-3 text-ink-secondary">{{ g.items[0].uom_rm ?? '—' }}</td>
@@ -279,7 +288,7 @@ function doDestroy() {
                                     {{ fmt(g.items[g.items.length - 1].qty_consumed) }}
                                 </td>
                                 <td class="px-3 py-3 text-center">
-                                    <a
+                                    <Link
                                         v-if="workOrder.status === 'planned' && can.release"
                                         :href="route('work-orders.items.edit', [workOrder.id, g.items[0].id])"
                                         :title="t('production.editRouting')"
@@ -287,7 +296,7 @@ function doDestroy() {
                                         class="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-secondary transition hover:bg-primary-light hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                                     >
                                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" /></svg>
-                                    </a>
+                                    </Link>
                                     <span v-else class="text-ink-secondary">—</span>
                                 </td>
                             </tr>
@@ -320,10 +329,13 @@ function doDestroy() {
                                         </div>
                                     </div>
                                 </td>
+                                <td class="px-3 py-2.5 text-ink-secondary">{{ displayPartInfo(it).model || '—' }}</td>
                                 <td class="px-3 py-2.5">
                                     <div v-if="idx === 0">
                                         <span class="font-medium text-ink-primary">{{ g.parentPartNumber }}</span>
-                                        <div class="text-xs text-ink-secondary">{{ g.parentPartName }}</div>
+                                        <div class="text-xs text-ink-secondary">
+                                            {{ [g.parentPartName, g.parentModel].filter(Boolean).join(' · ') }}
+                                        </div>
                                     </div>
                                 </td>
                                 <td class="px-3 py-2.5 text-right tabular-nums text-ink-primary">{{ fmt(it.child_qty) }}</td>
@@ -336,7 +348,7 @@ function doDestroy() {
                                     {{ fmt(it.qty_consumed) }}
                                 </td>
                                 <td class="px-3 py-2.5 text-center">
-                                    <a
+                                    <Link
                                         v-if="workOrder.status === 'planned' && can.release"
                                         :href="route('work-orders.items.edit', [workOrder.id, it.id])"
                                         :title="t('production.editRouting')"
@@ -344,13 +356,13 @@ function doDestroy() {
                                         class="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-secondary transition hover:bg-primary-light hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                                     >
                                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" /></svg>
-                                    </a>
+                                    </Link>
                                     <span v-else class="text-ink-secondary">—</span>
                                 </td>
                             </tr>
                         </template>
                         <tr v-if="routingGroups.length === 0">
-                            <td colspan="11" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('production.noRouting') }}</td>
+                            <td colspan="12" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('production.noRouting') }}</td>
                         </tr>
                     </tbody>
                 </table>

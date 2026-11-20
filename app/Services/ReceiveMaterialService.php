@@ -9,6 +9,7 @@ use App\Models\MaterialIssueItem;
 use App\Models\PartStock;
 use App\Models\ProductionMaterialReceipt;
 use App\Models\ProductionResult;
+use App\Models\WorkOrderConsumption;
 use App\Models\WorkOrderMaterialBooking;
 use App\Support\UomCatalog;
 use Brick\Math\BigDecimal;
@@ -343,8 +344,24 @@ class ReceiveMaterialService
                 return;
             }
 
+            $bookedQty = (float) WorkOrderMaterialBooking::query()
+                ->where('part_stock_id', $stock->id)
+                ->where('status', WorkOrderMaterialBooking::STATUS_BOOKED)
+                ->sum('qty');
+
+            $availableAfter = (float) $stock->qty - $bookedQty - $contribution;
+            $hasIssues = MaterialIssueItem::query()->where('part_stock_id', $stock->id)->exists();
+            $hasReceipts = ProductionMaterialReceipt::query()->where('part_stock_id', $stock->id)->exists();
+            $hasConsumptions = WorkOrderConsumption::query()->where('part_stock_id', $stock->id)->exists();
+
+            if ($availableAfter < -1e-9 || $hasIssues || $hasReceipts || $hasConsumptions) {
+                throw ValidationException::withMessages([
+                    'receive' => __('Penerimaan tidak dapat diubah atau dihapus karena stok sudah dibooking, di-issue, atau digunakan produksi.'),
+                ]);
+            }
+
             $newQty = (float) $stock->qty - $contribution;
-            if ($newQty <= 0) {
+            if ($newQty <= 1e-9) {
                 $stock->delete();
             } else {
                 $stock->update(['qty' => $newQty]);

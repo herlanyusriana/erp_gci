@@ -190,8 +190,8 @@ export interface BomItem {
     uom_rm: string | null;
     special_code: string | null;
     source: string | null;
-    parent_part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
-    child_part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
+    parent_part?: Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> | null;
+    child_part?: Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> | null;
 }
 
 export interface Bom {
@@ -342,7 +342,7 @@ export interface IncomingReceive {
     location_code: string | null;
     invoice_no: string | null;
     ata_date: string | null;
-    part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
+    part?: Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> | null;
     arrival_item?: IncomingArrivalItem;
 }
 
@@ -355,7 +355,7 @@ export interface PartPrice {
     valid_from: string;
     is_active: boolean;
     supplier?: Pick<Supplier, 'id' | 'supplier_code' | 'supplier_name'> | null;
-    part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
+    part?: Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> | null;
 }
 
 export interface MachineCycleTime {
@@ -365,7 +365,17 @@ export interface MachineCycleTime {
     cycle_time_seconds: number;
     is_active: boolean;
     machine?: Pick<Machine, 'id' | 'machine_code' | 'machine_name'> | null;
-    part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
+    part?: Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> | null;
+}
+
+export interface IncomingReceivePacking {
+    id: number;
+    receive_id: number;
+    packing_no: string | null;
+    sequence: number;
+    qty: number;
+    uom: string | null;
+    net_weight: number | null;
 }
 
 export interface PartStock {
@@ -374,12 +384,14 @@ export interface PartStock {
     tag: string | null;
     qty: number;
     qty_unit: string | null;
+    location_code?: string | null;
     price: number | null;
     remarks: string | null;
     booked_qty?: number;
     avail_qty?: number;
     part?: (Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> & { part_type?: PartType | null }) | null;
-    receive?: (Pick<IncomingReceive, 'id' | 'invoice_no' | 'location_code'> & {
+    receive?: (Pick<IncomingReceive, 'id' | 'invoice_no' | 'location_code' | 'packing_count' | 'packing_type' | 'bundle_unit' | 'net_weight'> & {
+        packings?: IncomingReceivePacking[];
         arrival_item?: (Pick<IncomingArrivalItem, 'id' | 'arrival_id'> & {
             arrival?: (Pick<IncomingArrival, 'id' | 'invoice_no'> & {
                 supplier?: Pick<Supplier, 'id' | 'supplier_name'> | null;
@@ -416,9 +428,9 @@ export interface WorkOrderItem {
     source: string | null;
     qty_required: number;
     qty_consumed: number;
-    parent_part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
-    child_part?: (Pick<Part, 'id' | 'part_number' | 'part_name'> & { part_substitutes?: PartSubstitute[] }) | null;
-    selected_part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
+    parent_part?: Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> | null;
+    child_part?: (Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> & { part_substitutes?: PartSubstitute[] }) | null;
+    selected_part?: Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> | null;
     allocations?: WorkOrderItemAllocation[];
 }
 
@@ -427,7 +439,7 @@ export interface WorkOrderItemAllocation {
     work_order_item_id: number;
     part_id: number;
     qty: number;
-    part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
+    part?: Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> | null;
 }
 
 export interface WorkOrderConsumption {
@@ -449,7 +461,7 @@ export interface MaterialIssueItem {
     qty: number;
     uom: string | null;
     price: number | null;
-    part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
+    part?: Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> | null;
 }
 
 export interface MaterialIssue {
@@ -463,7 +475,7 @@ export interface MaterialIssue {
     status: string;
     notes: string | null;
     items_count?: number;
-    work_order?: (Pick<WorkOrder, 'id' | 'wo_no' | 'part_id'> & { part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null }) | null;
+    work_order?: (Pick<WorkOrder, 'id' | 'wo_no' | 'part_id'> & { part?: Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> | null }) | null;
     issuer?: Pick<User, 'id' | 'name'> | null;
     items?: MaterialIssueItem[];
 }
@@ -540,9 +552,9 @@ export interface ProductionPlanItem {
     machine?: Pick<Machine, 'id' | 'machine_code' | 'machine_name'> | null;
     process?: Process | null;
     work_order?: Pick<WorkOrder, 'id' | 'wo_no' | 'part_id' | 'qty' | 'status'> & {
-        part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
+        part?: Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> | null;
     } | null;
     fg_part?: Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> | null;
-    input_part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
-    wip_part?: Pick<Part, 'id' | 'part_number' | 'part_name'> | null;
+    input_part?: Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> | null;
+    wip_part?: Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> | null;
 }

@@ -19,11 +19,20 @@ class RolePolicy
 
     public function update(User $user, Role $role): bool
     {
+        if ($role->name === 'super-admin' && ! $this->isSuperAdmin($user)) {
+            return false;
+        }
+
         return $user->hasAnyPermission(['role.update']);
     }
 
     public function delete(User $user, Role $role): bool
     {
         return $user->hasPermission('role.delete') && $role->name !== 'super-admin';
+    }
+
+    private function isSuperAdmin(User $user): bool
+    {
+        return $user->roles()->where('name', 'super-admin')->exists();
     }
 }

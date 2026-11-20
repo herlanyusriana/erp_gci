@@ -190,6 +190,7 @@ class MaterialIssueApiController extends Controller
         ]);
 
         $candidates = PartStock::query()
+            ->with(['part:id,part_number,part_name,model', 'receive.arrivalItem.arrival.supplier:id,supplier_name'])
             ->whereRaw('LOWER(COALESCE(tag, \'\')) = ?', [mb_strtolower(trim($data['tag']))])
             ->where('qty', '>', 0)
             ->when(isset($data['part_id']), fn ($q) => $q->where('part_id', (int) $data['part_id']))
@@ -218,7 +219,7 @@ class MaterialIssueApiController extends Controller
                 'ok' => false,
                 'message' => __('Tag ini dipakai beberapa part. Pilih part yang benar.'),
                 'candidates' => $available->map(function (PartStock $stock) use ($booked): array {
-                    $part = Part::find($stock->part_id);
+                    $part = $stock->part;
                     $stockBooked = (float) ($booked[$stock->id] ?? 0);
 
                     return [
@@ -226,6 +227,7 @@ class MaterialIssueApiController extends Controller
                         'part_id' => (int) $stock->part_id,
                         'part_number' => $part?->part_number,
                         'part_name' => $part?->part_name,
+                        'model' => $part?->model,
                         'qty' => (float) $stock->qty,
                         'available_qty' => max(0.0, (float) $stock->qty - $stockBooked),
                         'uom' => UomCatalog::normalize((string) $stock->qty_unit),
@@ -238,7 +240,7 @@ class MaterialIssueApiController extends Controller
         $stock = $available->first();
         $stockBooked = (float) ($booked[$stock->id] ?? 0);
 
-        $part = Part::find($stock->part_id);
+        $part = $stock->part;
         $receive = $stock->receive;
 
         return response()->json([
@@ -248,6 +250,7 @@ class MaterialIssueApiController extends Controller
                 'part_id' => (int) $stock->part_id,
                 'part_number' => $part?->part_number,
                 'part_name' => $part?->part_name,
+                'model' => $part?->model,
                 'qty' => (float) $stock->qty,
                 'booked' => $stockBooked,
                 'available_qty' => max(0.0, (float) $stock->qty - $stockBooked),
@@ -321,14 +324,26 @@ class MaterialIssueApiController extends Controller
      */
     public function resolveMachine(Request $request): JsonResponse
     {
+        Gate::authorize('viewAny', WorkOrder::class);
+
         $data = $request->validate([
             'machine_code' => ['nullable', 'string', 'max:80'],
             'machine_id' => ['nullable', 'integer', 'exists:machines,id'],
         ]);
 
+        $machineId = $data['machine_id'] ?? null;
+        $machineCode = trim((string) ($data['machine_code'] ?? ''));
+
+        if ($machineId === null && $machineCode === '') {
+            return response()->json([
+                'ok' => false,
+                'message' => __('Mesin tidak ditemukan.'),
+            ], 404);
+        }
+
         $machine = Machine::query()
-            ->when($data['machine_id'] ?? null, fn ($q, $id) => $q->whereKey($id))
-            ->when(! ($data['machine_id'] ?? null) && ($data['machine_code'] ?? null), fn ($q) => $q->whereRaw('LOWER(machine_code) = ?', [mb_strtolower(trim((string) $data['machine_code']))]))
+            ->when($machineId !== null, fn ($q) => $q->whereKey($machineId))
+            ->when($machineId === null && $machineCode !== '', fn ($q) => $q->whereRaw('LOWER(machine_code) = ?', [mb_strtolower($machineCode)]))
             ->where('is_active', true)
             ->first();
 
@@ -526,7 +541,7 @@ class MaterialIssueApiController extends Controller
 
         $items = $workOrder->items()
             ->with([
-                'parentPart:id,part_number,part_name',
+                'parentPart:id,part_number,part_name,model',
                 'parentPart.partType:id,code',
                 'process:id,process_name',
                 'machine:id,machine_code,machine_name',
@@ -543,6 +558,7 @@ class MaterialIssueApiController extends Controller
                     'parent_part_id' => (int) $parentId,
                     'part_number' => $first->parentPart?->part_number,
                     'part_name' => $first->parentPart?->part_name,
+                    'model' => $first->parentPart?->model,
                     'part_type' => strtoupper((string) $first->parentPart?->partType?->code),
                     'process' => $first->process?->process_name,
                     'machine' => $first->machine?->machine_name,

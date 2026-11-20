@@ -225,7 +225,7 @@ function remove(s: Supplier) {
                         <img
                             :src="signaturePreviewSource()"
                             :alt="t('master.supplierSignature')"
-                            class="h-16 rounded-md border border-borderline bg-white object-contain"
+                            class="h-16 rounded-md border border-borderline bg-surface object-contain"
                         />
                         <span class="text-xs text-ink-secondary">{{ t('master.signatureHelp') }}</span>
                     </div>

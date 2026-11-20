@@ -66,12 +66,44 @@ class ProductionPlanTest extends TestCase
         return $groups;
     }
 
-    public function test_creating_wo_does_not_enter_plan_board(): void
+    public function test_creating_wo_immediately_enters_plan_board(): void
     {
         $wo = $this->createWorkOrder();
 
-        // Belum masuk papan selama masih `planned`.
-        $this->assertSame(0, ProductionPlanItem::where('work_order_id', $wo->id)->count());
+        $this->assertSame($this->expectedGroupCount($wo), ProductionPlanItem::where('work_order_id', $wo->id)->count());
+
+        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('items', fn ($list) => collect($list)->pluck('work_order_id')->contains($wo->id))
+                ->where('unplannedWorkOrders', fn ($list) => ! collect($list)->pluck('id')->contains($wo->id)));
+    }
+
+    public function test_creating_wo_from_production_plan_modal_immediately_enters_plan_board(): void
+    {
+        $fg = Part::where('part_number', 'AAN30056405')->firstOrFail();
+
+        $this->post(route('production-plans.store'), [
+            'plan_date' => now()->toDateString(),
+            'fg_part_id' => $fg->id,
+            'qty' => 15,
+        ])->assertRedirect();
+
+        $wo = WorkOrder::latest('id')->firstOrFail();
+        $this->assertSame('planned', $wo->status);
+        $this->assertSame($this->expectedGroupCount($wo), ProductionPlanItem::where('work_order_id', $wo->id)->count());
+
+        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('items', fn ($list) => collect($list)->pluck('work_order_id')->contains($wo->id))
+                ->where('unplannedWorkOrders', fn ($list) => ! collect($list)->pluck('id')->contains($wo->id)));
+    }
+
+    public function test_wo_without_plan_items_appears_in_unplanned_panel(): void
+    {
+        $wo = $this->createWorkOrder();
+        ProductionPlanItem::where('work_order_id', $wo->id)->delete();
 
         $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
             ->assertOk()
@@ -427,29 +459,25 @@ class ProductionPlanTest extends TestCase
                 ->where('offBoardWorkOrders', fn ($list) => ! collect($list)->pluck('id')->contains($wo->id)));
     }
 
-    public function test_planned_work_order_is_not_listed_on_or_off_board(): void
+    public function test_planned_work_order_is_listed_on_board_and_off_board_when_future(): void
     {
         $wo = $this->createWorkOrder();
 
-        $this->post(route('production-plans.attach'), [
-            'work_order_id' => $wo->id,
-            'plan_date' => now()->toDateString(),
-        ])->assertRedirect();
-
         $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->where('items', fn ($list) => ! collect($list)->pluck('work_order_id')->contains($wo->id)));
+                ->where('items', fn ($list) => collect($list)->pluck('work_order_id')->contains($wo->id)));
 
+        $futureDate = now()->addDay()->toDateString();
         ProductionPlanItem::where('work_order_id', $wo->id)
             ->firstOrFail()
             ->plan
-            ->update(['plan_date' => now()->subDay()->toDateString()]);
+            ->update(['plan_date' => $futureDate]);
 
         $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->where('offBoardWorkOrders', fn ($list) => ! collect($list)->pluck('id')->contains($wo->id)));
+                ->where('offBoardWorkOrders', fn ($list) => collect($list)->pluck('id')->contains($wo->id)));
     }
 
     public function test_completed_work_order_with_remaining_quantity_stays_on_board(): void
@@ -495,6 +523,7 @@ class ProductionPlanTest extends TestCase
     public function test_attach_work_order_populates_all_steps(): void
     {
         $wo = $this->createWorkOrder();
+        ProductionPlanItem::where('work_order_id', $wo->id)->delete();
 
         $this->post(route('production-plans.attach'), [
             'work_order_id' => $wo->id,
@@ -602,6 +631,7 @@ class ProductionPlanTest extends TestCase
     public function test_attach_reports_wo_without_routable_step_instead_of_false_success(): void
     {
         $wo = $this->createWorkOrder();
+        ProductionPlanItem::where('work_order_id', $wo->id)->delete();
 
         // Tidak ada parent part → tidak ada step routing yang bisa jadi baris papan.
         $wo->items()->update(['parent_part_id' => null]);

@@ -36,7 +36,7 @@ class ProductionPlanController extends Controller
 
         $items = ProductionPlanItem::query()
             ->whereHas('plan', fn ($query) => $query->whereDate('plan_date', '<=', $date))
-            ->whereHas('workOrder', fn ($query) => $query->whereIn('status', ['in_progress', 'completed']))
+            ->whereHas('workOrder', fn ($query) => $query->whereIn('status', ['planned', 'in_progress', 'completed']))
             ->whereNotIn('machine_id', $subconMachineIds)
             ->with([
                 'machine:id,machine_code,machine_name',
@@ -72,7 +72,7 @@ class ProductionPlanController extends Controller
         });
 
         $items = $items
-            ->filter(fn (ProductionPlanItem $item) => in_array($item->workOrder?->status, ['in_progress', 'completed'], true)
+            ->filter(fn (ProductionPlanItem $item) => in_array($item->workOrder?->status, ['planned', 'in_progress', 'completed'], true)
                 && (float) $item->remaining_qty > 0)
             ->values();
 
@@ -120,7 +120,7 @@ class ProductionPlanController extends Controller
                     ->whereHas('plan', fn ($planQuery) => $planQuery->whereDate('plan_date', '>', $date))
                     ->with('plan:id,plan_date'),
             ])
-            ->whereIn('status', ['in_progress', 'completed'])
+            ->whereIn('status', ['planned', 'in_progress', 'completed'])
             ->whereNotIn('id', $items->pluck('work_order_id')->filter()->unique())
             ->whereHas('planItems', fn ($query) => $query
                 ->whereNotIn('machine_id', $subconMachineIds)
@@ -242,7 +242,10 @@ class ProductionPlanController extends Controller
                 $actorId,
             );
 
-            return [WorkOrder::query()->findOrFail($workOrderId), $warnings];
+            $workOrder = WorkOrder::query()->findOrFail($workOrderId);
+            $this->woService->populatePlanItems($workOrder, $data['plan_date'], $actorId);
+
+            return [$workOrder, $warnings];
         });
 
         [$workOrder, $warnings] = $result;
@@ -253,10 +256,7 @@ class ProductionPlanController extends Controller
             return $redirect->with('error', __('WO dibuat, tapi ada kekurangan stok: :details', ['details' => implode(' · ', array_slice($warnings, 0, 5)).(count($warnings) > 5 ? ' …' : '')]));
         }
 
-        // WO yang baru dibuat masih `planned`; papan produksi baru memuatnya
-        // setelah di-release. Pesan harus mencerminkan itu supaya WO tidak
-        // dikira "hilang" dari papan.
-        return $redirect->with('success', __('WO :number dibuat. WO masuk papan produksi setelah di-release.', ['number' => $workOrder->wo_no]));
+        return $redirect->with('success', __('WO :number dibuat dan masuk ke Production Plan.', ['number' => $workOrder->wo_no]));
     }
 
     /**

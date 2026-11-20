@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\IncomingArrival;
 use App\Models\PartStock;
 use App\Models\WorkOrderMaterialBooking;
 use Illuminate\Http\Request;
@@ -23,12 +24,19 @@ class PartStockController extends Controller
         $tab = (string) $request->input('tab', 'material');
         $tab = in_array($tab, self::TABS, true) ? $tab : 'material';
 
+        $arrivalType = (string) $request->input('arrival_type', '');
+        $arrivalType = in_array($arrivalType, IncomingArrival::TYPES, true) ? $arrivalType : '';
+
         $stocks = PartStock::query()
             ->whereHas('part.partType', fn ($q) => match ($tab) {
                 'wip' => $q->whereRaw('UPPER(code) = ?', ['WIP']),
                 'fg' => $q->whereRaw('UPPER(code) = ?', ['FG']),
                 default => $q->whereRaw("UPPER(code) NOT IN ('WIP', 'FG')"),
             })
+            ->when($arrivalType !== '', fn ($q) => $q->whereHas(
+                'receive.arrivalItem.arrival',
+                fn ($a) => $a->where('arrival_type', $arrivalType),
+            ))
             ->with([
                 'part:id,part_number,part_name,model,part_type_id',
                 'part.partType:id,code,name',
@@ -40,8 +48,10 @@ class PartStockController extends Controller
                 'receive.arrivalItem:id,arrival_id',
                 // invoice_no ikut: kolom Faktur membaca invoice arrival (dokumen
                 // induk), bukan snapshot receive yang bisa basi.
-                'receive.arrivalItem.arrival:id,supplier_id,invoice_no',
+                'receive.arrivalItem.arrival:id,arrival_no,arrival_type,is_local,supplier_id,subcontractor_id,customer_id,invoice_no,delivery_note_no,contract_no',
                 'receive.arrivalItem.arrival.supplier:id,supplier_name',
+                'receive.arrivalItem.arrival.subcontractor:id,subcontractor_name',
+                'receive.arrivalItem.arrival.customer:id,customer_name',
             ])
             // Pencarian dikelompokkan: tanpa pembungkus, `orWhereHas` akan
             // melepas filter tab (material/WIP) saat mencari nomor part.
@@ -77,7 +87,10 @@ class PartStockController extends Controller
         return Inertia::render('Incoming/Stock/Index', [
             'stocks' => $stocks,
             'tab' => $tab,
-            'filters' => $request->only('search'),
+            'filters' => [
+                'search' => $request->input('search'),
+                'arrival_type' => $arrivalType !== '' ? $arrivalType : null,
+            ],
         ]);
     }
 }

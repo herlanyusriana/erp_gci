@@ -6,6 +6,7 @@ use App\Models\IncomingArrival;
 use App\Models\IncomingArrivalItem;
 use App\Models\IncomingReceive;
 use App\Models\Part;
+use App\Models\PartStock;
 use App\Models\Supplier;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -182,5 +183,114 @@ class ReceivePerBundlePackingTest extends TestCase
             'qty' => 0,
             'net_weight' => 4.5,
         ]);
+    }
+
+    public function test_fully_received_item_cannot_open_receive_form_or_receive_again(): void
+    {
+        $item = $this->arrivalItem(20);
+        $tag = 'BUNDLE-FULL-'.strtoupper(uniqid());
+
+        $this->post(route('receive.store', $item), [
+            'receive_date' => now()->toDateString(),
+            'truck_no' => 'B 9105 GCI',
+            'location_code' => 'BULK-AREA',
+            'tags' => [
+                $this->tagPayload($tag, [
+                    ['qty' => 20.0],
+                ]),
+            ],
+        ])->assertSessionHasNoErrors();
+
+        $this->get(route('receive.create', $item))
+            ->assertRedirect(route('receive.show', $item->arrival_id))
+            ->assertSessionHas('error');
+
+        $this->post(route('receive.store', $item), [
+            'receive_date' => now()->toDateString(),
+            'truck_no' => 'B 9105 GCI',
+            'location_code' => 'BULK-AREA',
+            'tags' => [
+                $this->tagPayload($tag.'-2', [
+                    ['qty' => 1.0],
+                ]),
+            ],
+        ])->assertSessionHasErrors('tags');
+
+        $this->post(route('receive.store', $item), [
+            'receive_date' => now()->toDateString(),
+            'truck_no' => 'B 9105 GCI',
+            'location_code' => 'BULK-AREA',
+            'idempotency_key' => 'idem-full-new-'.uniqid(),
+            'tags' => [
+                $this->tagPayload($tag, [
+                    ['qty' => 1.0],
+                ]),
+            ],
+        ])
+            ->assertSessionHasErrors('tags')
+            ->assertSessionDoesntHaveErrors('tags.0.tag');
+    }
+
+    public function test_duplicate_submit_with_same_idempotency_key_is_idempotent_and_does_not_duplicate_stock(): void
+    {
+        $item = $this->arrivalItem(200);
+        $suffix = strtoupper(uniqid());
+        $tagA = 'TAG-IDEM-A-'.$suffix;
+        $tagB = 'TAG-IDEM-B-'.$suffix;
+        $payload = [
+            'receive_date' => now()->toDateString(),
+            'truck_no' => 'B 9106 GCI',
+            'location_code' => 'BULK-AREA',
+            'idempotency_key' => 'idem-'.uniqid(),
+            'tags' => [
+                $this->tagPayload($tagA, [['qty' => 100.0]]),
+                $this->tagPayload($tagB, [['qty' => 100.0]]),
+            ],
+        ];
+
+        $this->post(route('receive.store', $item), $payload)
+            ->assertRedirect(route('receive.show', $item->arrival_id))
+            ->assertSessionHasNoErrors();
+
+        $this->post(route('receive.store', $item), $payload)
+            ->assertRedirect(route('receive.show', $item->arrival_id))
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(2, $item->receives()->count());
+        $totalStockQty = (float) PartStock::query()
+            ->whereIn('tag', [$tagA, $tagB])
+            ->sum('qty');
+        $this->assertSame(200.0, $totalStockQty);
+    }
+
+    public function test_partial_receive_still_rejects_duplicate_tag_with_different_idempotency_key(): void
+    {
+        $item = $this->arrivalItem(200);
+        $dupTag = 'TAG-DUP-'.strtoupper(uniqid());
+
+        $this->post(route('receive.store', $item), [
+            'receive_date' => now()->toDateString(),
+            'truck_no' => 'B 9107 GCI',
+            'location_code' => 'BULK-AREA',
+            'idempotency_key' => 'idem-first-'.uniqid(),
+            'tags' => [
+                $this->tagPayload($dupTag, [['qty' => 100.0]]),
+            ],
+        ])
+            ->assertRedirect(route('receive.show', $item->arrival_id))
+            ->assertSessionHasNoErrors();
+
+        $this->post(route('receive.store', $item), [
+            'receive_date' => now()->toDateString(),
+            'truck_no' => 'B 9107 GCI',
+            'location_code' => 'BULK-AREA',
+            'idempotency_key' => 'idem-second-'.uniqid(),
+            'tags' => [
+                $this->tagPayload($dupTag, [['qty' => 50.0]]),
+            ],
+        ])->assertSessionHasErrors('tags.0.tag');
+
+        $this->assertSame(1, $item->receives()->count());
+        $this->assertSame(100.0, (float) PartStock::where('tag', $dupTag)->sum('qty'));
     }
 }

@@ -255,13 +255,38 @@ export interface IncomingArrivalItem {
     part?: Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> | null;
     arrival?: {
         id: number;
+        arrival_no?: string;
+        arrival_type?: ArrivalType;
+        is_local?: boolean;
         invoice_no: string | null;
+        delivery_note_no?: string | null;
+        contract_no?: string | null;
+        reference_no?: string | null;
         pen_no?: string | null;
         aju_no?: string | null;
         po_no?: string | null;
+        supplier?: Pick<Supplier, 'id' | 'supplier_code' | 'supplier_name'> | null;
+        subcontractor?: Pick<Subcontractor, 'id' | 'subcontractor_code' | 'subcontractor_name'> | null;
+        customer?: { id: number; customer_code: string; customer_name: string } | null;
         purchase_order?: { id: number; po_no: string } | null;
     } | null;
     receives?: IncomingReceive[];
+}
+
+export type ArrivalType = 'import' | 'local' | 'osp_gci' | 'osp_customer';
+
+export interface Subcontractor {
+    id: number;
+    subcontractor_code: string;
+    subcontractor_name: string;
+    address: string | null;
+    phone: string | null;
+    email: string | null;
+    contact_person: string | null;
+    npwp: string | null;
+    bc_facility: string | null;
+    process_notes: string | null;
+    is_active: boolean;
 }
 
 export interface IncomingArrivalContainer {
@@ -289,9 +314,12 @@ export interface IncomingArrival {
     invoice_no: string | null;
     invoice_date: string | null;
     supplier_id: number | null;
+    subcontractor_id?: number | null;
+    customer_id?: number | null;
     purchase_order_id: number | null;
     trucking_company_id: number | null;
     is_local: boolean;
+    arrival_type?: ArrivalType;
     vessel: string | null;
     etd: string | null;
     eta: string | null;
@@ -308,6 +336,8 @@ export interface IncomingArrival {
     notes: string | null;
     remarks?: string | null;
     delivery_note_no?: string | null;
+    contract_no?: string | null;
+    reference_no?: string | null;
     status: string;
     iqc_status?: string;
     iqc_passed_at?: string | null;
@@ -316,6 +346,8 @@ export interface IncomingArrival {
     remaining_qty?: number;
     pending_items_count?: number;
     supplier?: Pick<Supplier, 'id' | 'supplier_code' | 'supplier_name'> | null;
+    subcontractor?: Pick<Subcontractor, 'id' | 'subcontractor_code' | 'subcontractor_name'> | null;
+    customer?: { id: number; customer_code: string; customer_name: string } | null;
     purchase_order?: Pick<PurchaseOrder, 'id' | 'po_no'> | null;
     trucking?: Pick<TruckingCompany, 'id' | 'company_code' | 'company_name'> | null;
     items?: IncomingArrivalItem[];
@@ -394,7 +426,14 @@ export interface PartStock {
         packings?: IncomingReceivePacking[];
         arrival_item?: (Pick<IncomingArrivalItem, 'id' | 'arrival_id'> & {
             arrival?: (Pick<IncomingArrival, 'id' | 'invoice_no'> & {
+                arrival_no?: string;
+                arrival_type?: ArrivalType;
+                is_local?: boolean;
+                delivery_note_no?: string | null;
+                contract_no?: string | null;
                 supplier?: Pick<Supplier, 'id' | 'supplier_name'> | null;
+                subcontractor?: Pick<Subcontractor, 'id' | 'subcontractor_name'> | null;
+                customer?: { id: number; customer_name: string } | null;
             }) | null;
         }) | null;
     }) | null;

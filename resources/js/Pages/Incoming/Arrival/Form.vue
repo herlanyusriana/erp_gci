@@ -1,20 +1,31 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
-import { computed, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import InputError from '@/Components/InputError.vue';
 import SearchableSelect from '@/Components/SearchableSelect.vue';
-import type { IncomingArrival, Supplier, PurchaseOrder, TruckingCompany } from '@/types';
+import type { ArrivalType, IncomingArrival, Subcontractor, Supplier, TruckingCompany } from '@/types';
 
 const { t } = useI18n();
+
+interface OspPartOption {
+    part_id: number;
+    part_number: string;
+    part_name: string;
+    model?: string | null;
+    size: string;
+    unit: string | null;
+    part_type?: string | null;
+}
 
 interface ItemRow {
     id: number | null;
     part_id: number | null;
     part_number?: string;
     part_name?: string;
+    model?: string | null;
     material_group: string;
     size: string;
     qty_goods: number | '';
@@ -40,6 +51,8 @@ interface ContainerRow {
 const props = defineProps<{
     arrival: IncomingArrival | null;
     suppliers: Array<Pick<Supplier, 'id' | 'supplier_code' | 'supplier_name' | 'source'>>;
+    subcontractors: Array<Pick<Subcontractor, 'id' | 'subcontractor_code' | 'subcontractor_name'>>;
+    customers: Array<{ id: number; customer_code: string; customer_name: string; short_name?: string | null }>;
     truckings: Array<Pick<TruckingCompany, 'id' | 'company_code' | 'company_name'>>;
     materialOptions: Array<{
         supplier_id: number;
@@ -51,12 +64,27 @@ const props = defineProps<{
         model?: string | null;
         unit: string | null;
     }>;
+    ospGciParts: OspPartOption[];
+    ospCustomerParts: OspPartOption[];
     purchaseOrders: Array<any>;
     uomCodes: string[];
     packingUnits: string[];
 }>();
 
-const isLocalArrival = ref(Boolean(props.arrival?.is_local ?? false));
+const initialArrivalType = (props.arrival?.arrival_type ?? (props.arrival?.is_local ? 'local' : 'import')) as ArrivalType;
+const isEditingOsp = Boolean(props.arrival) && (initialArrivalType === 'osp_gci' || initialArrivalType === 'osp_customer');
+const isEditingStandard = Boolean(props.arrival) && !isEditingOsp;
+
+const activeTab = ref<'import' | 'local' | 'osp'>(
+    initialArrivalType === 'osp_gci' || initialArrivalType === 'osp_customer' ? 'osp' : initialArrivalType,
+);
+const ospSubType = ref<'osp_gci' | 'osp_customer'>(
+    initialArrivalType === 'osp_customer' ? 'osp_customer' : 'osp_gci',
+);
+const currentArrivalType = computed<ArrivalType>(() => (activeTab.value === 'osp' ? ospSubType.value : activeTab.value));
+const isOspArrival = computed(() => activeTab.value === 'osp');
+const isLocalArrival = computed(() => activeTab.value === 'local');
+const isImportArrival = computed(() => activeTab.value === 'import');
 
 function formatTotalPrice(value: number | string | null | undefined): string {
     if (value === '' || value === null || value === undefined) return '';
@@ -70,10 +98,11 @@ const blankItem = (): ItemRow => ({
     part_id: null,
     part_number: '',
     part_name: '',
+    model: '',
     material_group: '',
     size: '',
     qty_goods: '',
-    unit_goods: 'KGM',
+    unit_goods: isOspArrival.value ? 'PCS' : 'KGM',
     qty_bundle: '',
     unit_bundle: props.packingUnits[0] ?? 'PALLET',
     weight_nett: '',
@@ -107,7 +136,8 @@ const itemRows = ref<ItemRow[]>(
         part_id: i.part_id ?? null,
         part_number: i.part?.part_number ?? '',
         part_name: i.part?.part_name ?? '',
-        material_group: i.material_group ?? i.part?.part_number ?? '',
+        model: i.part?.model ?? '',
+        material_group: i.material_group ?? '',
         size: i.size ?? i.part?.size ?? '',
         qty_goods: i.qty_goods,
         unit_goods: i.unit_goods ?? i.part?.uom?.code ?? 'KGM',
@@ -125,10 +155,15 @@ const itemRows = ref<ItemRow[]>(
 
 const form = useForm({
     is_local: isLocalArrival.value,
+    arrival_type: initialArrivalType,
     invoice_no: props.arrival?.invoice_no ?? '',
-    delivery_note_no: (props.arrival as any)?.delivery_note_no ?? '',
+    delivery_note_no: props.arrival?.delivery_note_no ?? '',
+    contract_no: props.arrival?.contract_no ?? '',
+    reference_no: props.arrival?.reference_no ?? '',
     invoice_date: props.arrival?.invoice_date ?? new Date().toISOString().slice(0, 10),
     supplier_id: props.arrival?.supplier_id ?? ('' as number | ''),
+    subcontractor_id: props.arrival?.subcontractor_id ?? ('' as number | ''),
+    customer_id: props.arrival?.customer_id ?? ('' as number | ''),
     trucking_company_id: props.arrival?.trucking_company_id ?? ('' as number | ''),
     purchase_order_id: props.arrival?.purchase_order_id ?? ('' as number | ''),
     vessel: props.arrival?.vessel ?? '',
@@ -143,7 +178,7 @@ const form = useForm({
     hs_code: props.arrival?.hs_code ?? '',
     port_of_loading: props.arrival?.port_of_loading ?? '',
     country: props.arrival?.country ?? '',
-    currency: props.arrival?.currency ?? 'IDR',
+    currency: props.arrival?.currency ?? (initialArrivalType === 'import' ? 'USD' : 'IDR'),
     notes: props.arrival?.notes ?? '',
     remarks: props.arrival?.remarks ?? '',
     status: props.arrival?.status ?? 'pending',
@@ -203,6 +238,7 @@ function onPurchaseOrderChange() {
                 part_id: it.part_id ?? null,
                 part_number: it.part?.part_number ?? '',
                 part_name: it.part?.part_name ?? '',
+                model: it.part?.model ?? '',
                 material_group: mapped?.group ?? it.material_group ?? '',
                 size: it.size ?? mapped?.size ?? it.part?.size ?? 'STD',
                 qty_goods: it.qty ?? '',
@@ -224,15 +260,62 @@ function onPurchaseOrderChange() {
     }
 }
 
-watch(isLocalArrival, (val) => {
-    form.is_local = val;
-    form.currency = val ? 'IDR' : 'USD';
+function selectTab(tab: 'import' | 'local' | 'osp') {
+    if (isEditingOsp && tab !== 'osp') return;
+    if (isEditingStandard && tab === 'osp') return;
+    if (activeTab.value === tab) return;
+
+    const wasOsp = activeTab.value === 'osp';
+    activeTab.value = tab;
+    form.arrival_type = currentArrivalType.value;
+    form.is_local = tab === 'local';
     form.purchase_order_id = '';
-    // Container hanya relevan untuk kedatangan impor; saat pindah ke Lokal,
-    // baris kosong tidak ikut terkirim karena disaring di submit().
-});
+    form.currency = tab === 'import' ? 'USD' : 'IDR';
+
+    if (tab === 'osp' && !wasOsp) {
+        form.supplier_id = '';
+        resetMaterialRows('PCS');
+    } else if (tab !== 'osp' && wasOsp) {
+        form.subcontractor_id = '';
+        form.customer_id = '';
+        resetMaterialRows('KGM');
+    }
+}
+
+function selectOspSubType(sub: 'osp_gci' | 'osp_customer') {
+    if (ospSubType.value === sub) return;
+    ospSubType.value = sub;
+    form.arrival_type = sub;
+    form.subcontractor_id = '';
+    form.customer_id = '';
+    resetMaterialRows('PCS');
+}
+
+const ospActiveParts = computed(() =>
+    ospSubType.value === 'osp_gci' ? props.ospGciParts : props.ospCustomerParts,
+);
+
+const ospSenderSelected = computed(() =>
+    ospSubType.value === 'osp_gci' ? Boolean(form.subcontractor_id) : Boolean(form.customer_id),
+);
 
 const supplierMaterialOptions = computed(() => {
+    if (isOspArrival.value) {
+        return ospActiveParts.value.map((p) => ({
+            value: p.part_id,
+            label: `${p.part_number} · ${p.part_name}`,
+            sublabel: [
+                `${t('master.model')}: ${p.model || '—'}`,
+                p.part_type ?? '',
+                `Size: ${p.size || 'STD'}`,
+                `UOM: ${p.unit ?? 'PCS'}`,
+            ]
+                .filter((segment) => segment !== '')
+                .join(' · '),
+            raw: p,
+        }));
+    }
+
     const list = props.materialOptions.filter(
         (m) => !form.supplier_id || m.supplier_id === Number(form.supplier_id),
     );
@@ -246,20 +329,56 @@ const supplierMaterialOptions = computed(() => {
     }));
 });
 
+const materialPickerPlaceholder = computed(() => {
+    if (isOspArrival.value) {
+        if (!ospSenderSelected.value) {
+            return ospSubType.value === 'osp_gci' ? t('incoming.chooseSubcontractorFirst') : t('incoming.chooseCustomerFirst');
+        }
+        return ospActiveParts.value.length === 0 ? t('incoming.ospNoParts') : t('incoming.chooseOspPart');
+    }
+    return form.supplier_id ? t('incoming.chooseMaterial') : t('incoming.chooseSupplierFirst');
+});
+
 function onSelectMaterial(r: ItemRow, partId: number | '') {
     if (!partId) {
         r.part_id = null;
         r.part_number = '';
         r.part_name = '';
+        r.model = '';
         r.material_group = '';
         r.size = '';
         return;
     }
-    const match = props.materialOptions.find((m) => m.part_id === Number(partId));
+
+    if (isOspArrival.value) {
+        const ospMatch = ospActiveParts.value.find((p) => p.part_id === Number(partId));
+        if (ospMatch) {
+            r.part_id = ospMatch.part_id;
+            r.part_number = ospMatch.part_number ?? '';
+            r.part_name = ospMatch.part_name ?? '';
+            r.model = ospMatch.model ?? '';
+            r.material_group = '';
+            r.size = ospMatch.size || 'STD';
+            if (ospMatch.unit) {
+                r.unit_goods = ospMatch.unit;
+            }
+            if (r.unit_goods === 'KGM' && r.qty_goods && !r.weight_nett) {
+                r.weight_nett = r.qty_goods;
+            }
+            recalcPrice(r);
+        }
+        return;
+    }
+
+    const match = props.materialOptions.find(
+        (m) => m.part_id === Number(partId) && (!form.supplier_id || m.supplier_id === Number(form.supplier_id)),
+    ) ?? props.materialOptions.find((m) => m.part_id === Number(partId));
+
     if (match) {
         r.part_id = match.part_id;
         r.part_number = match.part_number ?? '';
         r.part_name = match.part_name ?? '';
+        r.model = match.model ?? '';
         r.material_group = match.group;
         r.size = match.size || 'STD';
         if (match.unit && !r.unit_goods) {
@@ -281,13 +400,17 @@ function onQtyGoodsInput(r: ItemRow) {
     recalcPrice(r);
 }
 
-function resetMaterialRows() {
+function resetMaterialRows(defaultUnit?: string) {
     itemRows.value.forEach((row) => {
         row.material_group = '';
         row.size = '';
         row.part_id = null;
         row.part_number = '';
         row.part_name = '';
+        row.model = '';
+        if (defaultUnit) {
+            row.unit_goods = defaultUnit;
+        }
     });
 }
 
@@ -347,15 +470,30 @@ function isRowEmpty(r: ItemRow) {
 }
 
 function submit() {
+    form.arrival_type = currentArrivalType.value;
+    form.is_local = isLocalArrival.value;
+    if (isOspArrival.value) {
+        form.supplier_id = '';
+        form.purchase_order_id = '';
+        if (ospSubType.value === 'osp_gci') {
+            form.customer_id = '';
+        } else {
+            form.subcontractor_id = '';
+        }
+    } else {
+        form.subcontractor_id = '';
+        form.customer_id = '';
+    }
+
     form.items = itemRows.value
         .filter((r) => !isRowEmpty(r))
         .map((r) => ({
             id: r.id,
             part_id: r.part_id,
-            material_group: r.material_group || (r.part_number ? r.part_number : null),
+            material_group: isOspArrival.value ? null : (r.material_group || (r.part_number ? r.part_number : null)),
             size: r.size || 'STD',
             qty_goods: r.qty_goods === '' ? 0 : Number(r.qty_goods),
-            unit_goods: r.unit_goods || 'KGM',
+            unit_goods: r.unit_goods || (isOspArrival.value ? 'PCS' : 'KGM'),
             qty_bundle: r.qty_bundle === '' ? null : Number(r.qty_bundle),
             unit_bundle: r.unit_bundle || null,
             weight_nett: r.weight_nett === '' ? (r.unit_goods === 'KGM' ? Number(r.qty_goods) : null) : Number(r.weight_nett),
@@ -368,7 +506,7 @@ function submit() {
         })) as any;
 
     // Container hanya untuk kedatangan impor; baris tanpa nomor kontainer dibuang.
-    form.containers = isLocalArrival.value
+    form.containers = !isImportArrival.value
         ? []
         : containerRows.value
               .filter((c) => c.container_no.trim() !== '')
@@ -396,23 +534,34 @@ function submit() {
                 {{ arrival ? t('incoming.editArrival', { number: arrival.arrival_no }) : t('incoming.newArrival') }}
             </h1>
 
-            <!-- Switcher Tab: Lokal vs Impor (sesuai keputusan Q2 = B) -->
+            <!-- Switcher Tab: Impor vs Lokal vs OSP -->
             <div class="inline-flex rounded-xl border border-borderline bg-surface p-1 shadow-sm">
                 <button
                     type="button"
-                    class="rounded-lg px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                    :class="!isLocalArrival ? 'bg-primary text-white' : 'text-ink-secondary hover:bg-primary-light'"
-                    @click="isLocalArrival = false"
+                    :disabled="isEditingOsp"
+                    class="rounded-lg px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-40 disabled:cursor-not-allowed"
+                    :class="isImportArrival ? 'bg-primary text-white' : 'text-ink-secondary hover:bg-primary-light'"
+                    @click="selectTab('import')"
                 >
                     {{ t('incoming.tabImportArrival') }}
                 </button>
                 <button
                     type="button"
-                    class="rounded-lg px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    :disabled="isEditingOsp"
+                    class="rounded-lg px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-40 disabled:cursor-not-allowed"
                     :class="isLocalArrival ? 'bg-primary text-white' : 'text-ink-secondary hover:bg-primary-light'"
-                    @click="isLocalArrival = true"
+                    @click="selectTab('local')"
                 >
                     {{ t('incoming.tabLocalArrival') }}
+                </button>
+                <button
+                    type="button"
+                    :disabled="isEditingStandard"
+                    class="rounded-lg px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-40 disabled:cursor-not-allowed"
+                    :class="isOspArrival ? 'bg-primary text-white' : 'text-ink-secondary hover:bg-primary-light'"
+                    @click="selectTab('osp')"
+                >
+                    {{ t('incoming.tabOspArrival') }}
                 </button>
             </div>
         </div>
@@ -503,6 +652,183 @@ function submit() {
                     </div>
 
                     <div class="lg:col-span-3">
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.notes') }}</label>
+                        <input
+                            :aria-label="t('incoming.notes')"
+                            v-model="form.notes"
+                            type="text"
+                            :placeholder="t('incoming.arrivalNotesPlaceholder')"
+                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            <!-- FORM KEDATANGAN OSP (OSP GCI & OSP CUSTOMER) -->
+            <div v-else-if="isOspArrival" class="rounded-xl border border-borderline bg-surface p-5 space-y-4">
+                <div class="flex flex-wrap items-start justify-between gap-3 border-b border-borderline pb-3">
+                    <div>
+                        <h2 class="text-sm font-bold text-ink-primary">{{ t('incoming.ospArrivalTitle') }}</h2>
+                        <p class="text-xs text-ink-secondary">{{ ospSubType === 'osp_gci' ? t('incoming.ospGciHint') : t('incoming.ospCustomerHint') }}</p>
+                    </div>
+                    <div class="inline-flex rounded-lg border border-borderline bg-background p-1">
+                        <button
+                            type="button"
+                            class="rounded-md px-3 py-1.5 text-xs font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                            :class="ospSubType === 'osp_gci' ? 'bg-warning text-white' : 'text-ink-secondary hover:bg-primary-light'"
+                            @click="selectOspSubType('osp_gci')"
+                        >
+                            {{ t('incoming.ospGci') }}
+                        </button>
+                        <button
+                            type="button"
+                            class="rounded-md px-3 py-1.5 text-xs font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                            :class="ospSubType === 'osp_customer' ? 'bg-success text-white' : 'text-ink-secondary hover:bg-primary-light'"
+                            @click="selectOspSubType('osp_customer')"
+                        >
+                            {{ t('incoming.ospCustomer') }}
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <div v-if="ospSubType === 'osp_gci'">
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.subcontractor') }} <span class="text-danger">*</span></label>
+                        <div class="mt-1">
+                            <SearchableSelect
+                                v-model="form.subcontractor_id"
+                                :options="subcontractors"
+                                value-key="id"
+                                label-key="subcontractor_name"
+                                sublabel-key="subcontractor_code"
+                                :placeholder="t('incoming.choose')"
+                                :aria-label="t('incoming.subcontractor')"
+                                :error="form.errors.subcontractor_id"
+                            />
+                        </div>
+                        <InputError :message="form.errors.subcontractor_id" class="mt-1" />
+                    </div>
+
+                    <div v-else>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.customer') }} <span class="text-danger">*</span></label>
+                        <div class="mt-1">
+                            <SearchableSelect
+                                v-model="form.customer_id"
+                                :options="customers"
+                                value-key="id"
+                                label-key="customer_name"
+                                sublabel-key="customer_code"
+                                :placeholder="t('incoming.choose')"
+                                :aria-label="t('incoming.customer')"
+                                :error="form.errors.customer_id"
+                            />
+                        </div>
+                        <InputError :message="form.errors.customer_id" class="mt-1" />
+                    </div>
+
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.contractNo') }}</label>
+                        <input
+                            :aria-label="t('incoming.contractNo')"
+                            v-model="form.contract_no"
+                            type="text"
+                            :placeholder="t('incoming.contractNoPlaceholder')"
+                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                        />
+                        <InputError :message="form.errors.contract_no" class="mt-1" />
+                    </div>
+
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.deliveryNoteNo') }}</label>
+                        <input
+                            :aria-label="t('incoming.deliveryNoteNo')"
+                            v-model="form.delivery_note_no"
+                            type="text"
+                            :placeholder="t('incoming.deliveryNotePlaceholder')"
+                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                        />
+                        <InputError :message="form.errors.delivery_note_no" class="mt-1" />
+                    </div>
+
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.arrivalDate') }}</label>
+                        <input
+                            :aria-label="t('incoming.arrivalDate')"
+                            v-model="form.invoice_date"
+                            type="date"
+                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                        />
+                        <InputError :message="form.errors.invoice_date" class="mt-1" />
+                    </div>
+
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.invoiceNo') }}</label>
+                        <input
+                            :aria-label="t('incoming.invoiceNo')"
+                            v-model="form.invoice_no"
+                            type="text"
+                            :placeholder="t('incoming.invoiceNoPlaceholder')"
+                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                        />
+                        <InputError :message="form.errors.invoice_no" class="mt-1" />
+                    </div>
+
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.referenceNo') }}</label>
+                        <input
+                            :aria-label="t('incoming.referenceNo')"
+                            v-model="form.reference_no"
+                            type="text"
+                            :placeholder="t('incoming.referenceNoPlaceholder')"
+                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                        />
+                        <InputError :message="form.errors.reference_no" class="mt-1" />
+                    </div>
+
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.penNo') }}</label>
+                        <input
+                            :aria-label="t('incoming.penNo')"
+                            v-model="form.pen_no"
+                            type="text"
+                            :placeholder="t('incoming.penNoPlaceholder')"
+                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                        />
+                        <InputError :message="form.errors.pen_no" class="mt-1" />
+                    </div>
+
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.penDate') }}</label>
+                        <input
+                            :aria-label="t('incoming.penDate')"
+                            v-model="form.pen_date"
+                            type="date"
+                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                        />
+                        <InputError :message="form.errors.pen_date" class="mt-1" />
+                    </div>
+
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.ajuNo') }}</label>
+                        <input
+                            :aria-label="t('incoming.ajuNo')"
+                            v-model="form.aju_no"
+                            type="text"
+                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                        />
+                        <InputError :message="form.errors.aju_no" class="mt-1" />
+                    </div>
+
+                    <div>
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.currency') }}</label>
+                        <select :aria-label="t('incoming.currency')" v-model="form.currency" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                            <option value="IDR">IDR</option>
+                            <option value="USD">USD</option>
+                            <option value="KRW">KRW</option>
+                        </select>
+                    </div>
+
+                    <div class="sm:col-span-2">
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.notes') }}</label>
                         <input
                             :aria-label="t('incoming.notes')"
@@ -751,6 +1077,9 @@ function submit() {
                                 <div v-if="r.part_id" class="flex flex-wrap items-baseline gap-2">
                                     <span class="font-mono text-sm font-bold text-ink-primary">{{ r.part_number || r.material_group }}</span>
                                     <span v-if="r.part_name" class="text-xs text-ink-secondary">· {{ r.part_name }}</span>
+                                    <span v-if="r.model" class="rounded bg-background px-1.5 py-0.5 text-[11px] font-medium text-ink-secondary">
+                                        {{ t('master.model') }}: {{ r.model }}
+                                    </span>
                                     <span v-if="r.po_qty_ref" class="rounded bg-primary-light px-2 py-0.5 text-[11px] font-semibold text-primary">
                                         Ref PO: {{ r.po_qty_ref }} {{ r.unit_goods }}
                                     </span>
@@ -792,11 +1121,12 @@ function submit() {
                                         value-key="value"
                                         label-key="label"
                                         sublabel-key="sublabel"
-                                        :placeholder="form.supplier_id ? t('incoming.chooseMaterial') : t('incoming.chooseSupplierFirst')"
-                                        :disabled="!form.supplier_id"
+                                        :placeholder="materialPickerPlaceholder"
+                                        :disabled="isOspArrival ? (!ospSenderSelected || ospActiveParts.length === 0) : !form.supplier_id"
                                         @update:model-value="onSelectMaterial(r, $event)"
                                     />
                                 </div>
+                                <InputError :message="(form.errors as any)[`items.${i}.part_id`]" class="mt-1" />
                             </div>
 
                             <div class="sm:col-span-2">
@@ -896,7 +1226,7 @@ function submit() {
                             </div>
                         </div>
 
-                        <!-- Baris 3: Informasi Opsional (Total Harga, Harga Satuan, Catatan) -->
+                        <!-- Baris 3: Informasi Opsional (Total Harga, Harga Satuan, FOC, Catatan) -->
                         <div class="flex flex-wrap items-center gap-4 border-t border-dashed border-borderline/40 pt-2 text-xs text-ink-secondary">
                             <div class="flex items-center gap-1.5">
                                 <label>{{ t('incoming.totalPrice') }}:</label>
@@ -916,6 +1246,15 @@ function submit() {
                                 <label>{{ t('incoming.autoPrice') }}:</label>
                                 <span class="font-mono font-medium text-ink-primary">{{ r.price !== '' ? Number(r.price).toLocaleString() : '—' }}</span>
                             </div>
+                            <label class="inline-flex cursor-pointer items-center gap-1.5 font-medium text-ink-primary">
+                                <input
+                                    v-model="r.is_foc"
+                                    type="checkbox"
+                                    @change="if (r.is_foc) { r.total_price = ''; r.price = ''; }"
+                                    class="rounded border-borderline text-primary focus:ring-primary"
+                                />
+                                <span>{{ t('incoming.foc') }}</span>
+                            </label>
                             <div class="flex items-center gap-1.5">
                                 <label>{{ t('incoming.notes') }}:</label>
                                 <input

@@ -29,12 +29,21 @@ class ReceiveController extends Controller
 {
     public function __construct(protected ReceiveMaterialService $receiveService) {}
 
-    public function index(): Response
+    public function index(Request $request): Response
     {
         Gate::authorize('viewAny', IncomingReceive::class);
 
+        $arrivalType = (string) $request->input('arrival_type', '');
+        $arrivalType = in_array($arrivalType, IncomingArrival::TYPES, true) ? $arrivalType : '';
+
         $arrivals = IncomingArrival::query()
-            ->with(['supplier:id,supplier_code,supplier_name', 'items.receives'])
+            ->with([
+                'supplier:id,supplier_code,supplier_name',
+                'subcontractor:id,subcontractor_code,subcontractor_name',
+                'customer:id,customer_code,customer_name',
+                'items.receives',
+            ])
+            ->when($arrivalType !== '', fn ($q) => $q->where('arrival_type', $arrivalType))
             ->get()
             ->map(function (IncomingArrival $arrival) {
                 $remaining = $arrival->items->sum(fn ($item) => $this->receiveService->remainingQty($item));
@@ -48,6 +57,9 @@ class ReceiveController extends Controller
 
         return Inertia::render('Incoming/Receive/Index', [
             'pendingArrivals' => $arrivals,
+            'filters' => [
+                'arrival_type' => $arrivalType !== '' ? $arrivalType : null,
+            ],
         ]);
     }
 
@@ -57,6 +69,8 @@ class ReceiveController extends Controller
 
         $arrival->load([
             'supplier',
+            'subcontractor',
+            'customer',
             'trucking',
             'purchaseOrder',
             'items.part',
@@ -82,11 +96,11 @@ class ReceiveController extends Controller
         ]);
     }
 
-    public function create(IncomingArrivalItem $arrivalItem): Response
+    public function create(IncomingArrivalItem $arrivalItem): Response|RedirectResponse
     {
         Gate::authorize('create', IncomingReceive::class);
 
-        $arrivalItem->load(['part.uom', 'arrival.supplier', 'arrival.purchaseOrder', 'receives']);
+        $arrivalItem->load(['part.uom', 'arrival.supplier', 'arrival.subcontractor', 'arrival.customer', 'arrival.purchaseOrder', 'receives']);
         $this->attachMaterialGroupLabel($arrivalItem);
 
         if ($arrivalItem->iqc_status === 'rejected' || $arrivalItem->arrival?->iqc_status === 'rejected') {
@@ -101,6 +115,12 @@ class ReceiveController extends Controller
         $totalReceived = $this->receiveService->receivedQuantity($arrivalItem);
         $poLimit = PurchaseOrderLimit::receiveLimit($arrivalItem);
         $maxReceivable = $poLimit === null ? $remaining : min($remaining, $poLimit['remaining']);
+
+        if ($remaining <= 1e-9 || $maxReceivable <= 1e-9) {
+            return redirect()
+                ->route('receive.show', $arrivalItem->arrival_id)
+                ->with('error', __('Item ini sudah selesai diterima seluruhnya.'));
+        }
 
         return Inertia::render('Incoming/Receive/Form', [
             'arrivalItem' => $arrivalItem,
@@ -142,6 +162,7 @@ class ReceiveController extends Controller
             'location_code' => $this->locationRule(),
             'pen_no' => ['nullable', 'string', 'max:255'],
             'aju_no' => ['nullable', 'string', 'max:255'],
+            'idempotency_key' => ['nullable', 'string', 'max:80'],
             'tags' => ['required', 'array', 'min:1'],
             'tags.*.tag' => ['nullable', 'string', 'max:255'],
             'tags.*.qty' => ['required', 'numeric', 'min:0.0001'],
@@ -192,16 +213,35 @@ class ReceiveController extends Controller
         $receiveAt = Carbon::parse($validated['receive_date'])->setTimeFromTimeString(now()->format('H:i:s'));
         $truckNo = trim((string) ($validated['truck_no'] ?? '')) !== '' ? strtoupper(trim((string) $validated['truck_no'])) : null;
         $locationCode = $this->normalizeLocationCode($validated['location_code'] ?? null);
+        $idempotencyKey = trim((string) ($validated['idempotency_key'] ?? ''));
+        $idempotencyKey = $idempotencyKey !== '' ? $idempotencyKey : null;
 
-        DB::transaction(function () use ($validated, $arrivalItem, $goodsUnit, $receiveAt, $truckNo, $weightBasis, $locationCode, $totalRequested, $unitLabel) {
+        DB::transaction(function () use ($validated, $arrivalItem, $goodsUnit, $receiveAt, $truckNo, $weightBasis, $locationCode, $totalRequested, $unitLabel, $idempotencyKey) {
             $arrivalItem = IncomingArrivalItem::query()
                 ->with(['arrival', 'part', 'receives'])
                 ->lockForUpdate()
                 ->findOrFail($arrivalItem->id);
 
-            $this->receiveService->ensureTagsUniqueForArrivalItem($arrivalItem, $validated['tags'], 'tags');
+            if ($idempotencyKey !== null) {
+                $alreadySaved = IncomingReceive::query()
+                    ->where('arrival_item_id', $arrivalItem->id)
+                    ->where('idempotency_key', $idempotencyKey)
+                    ->exists();
+
+                if ($alreadySaved) {
+                    return;
+                }
+            }
 
             $remainingQty = $this->receiveService->remainingQty($arrivalItem);
+            if ($remainingQty <= 1e-9) {
+                throw ValidationException::withMessages([
+                    'tags' => __('Item ini sudah selesai diterima seluruhnya.'),
+                ]);
+            }
+
+            $this->receiveService->ensureTagsUniqueForArrivalItem($arrivalItem, $validated['tags'], 'tags');
+
             if ($totalRequested > $remainingQty + 1e-9) {
                 throw ValidationException::withMessages([
                     'tags' => __('Total (:total :unit) melebihi sisa (:remaining :unit).', ['total' => $totalRequested, 'unit' => $unitLabel, 'remaining' => $remainingQty]),
@@ -251,6 +291,7 @@ class ReceiveController extends Controller
                     'gross_weight' => $tagData['gross_weight'] ?? null,
                     'qty_unit' => $goodsUnit,
                     'qc_status' => 'pass',
+                    'idempotency_key' => $idempotencyKey,
                     'invoice_no' => $arrivalItem->arrival?->invoice_no,
                     'truck_no' => $truckNo,
                     'location_code' => $locationCode,
@@ -319,6 +360,8 @@ class ReceiveController extends Controller
         $receive->load([
             'arrivalItem.part',
             'arrivalItem.arrival.supplier',
+            'arrivalItem.arrival.subcontractor',
+            'arrivalItem.arrival.customer',
             'packings' => fn ($query) => $query->orderBy('sequence'),
         ]);
 
@@ -344,7 +387,8 @@ class ReceiveController extends Controller
             'net_weight' => (float) ($receive->net_weight ?? 0),
             'qty_unit' => (string) ($receive->qty_unit ?? $arrivalItem?->unit_goods ?? ''),
             'invoice' => (string) ($arrival?->invoice_no ?? '-'),
-            'supplier' => (string) ($arrival?->supplier?->supplier_name ?? '-'),
+            'supplier' => (string) ($arrival?->senderName() ?? '-'),
+            'arrival_type' => (string) ($arrival?->resolvedArrivalType() ?? IncomingArrival::TYPE_IMPORT),
         ];
 
         $qrSvg = QrSvg::make(json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 390, 0);
@@ -356,7 +400,7 @@ class ReceiveController extends Controller
     {
         Gate::authorize('update', $receive);
 
-        $receive->load(['arrivalItem.part', 'arrivalItem.arrival.supplier']);
+        $receive->load(['arrivalItem.part', 'arrivalItem.arrival.supplier', 'arrivalItem.arrival.subcontractor', 'arrivalItem.arrival.customer']);
 
         return Inertia::render('Incoming/Receive/Edit', [
             'receive' => $receive,

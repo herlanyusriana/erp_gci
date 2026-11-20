@@ -60,8 +60,10 @@ class ReceiveMaterialService
         ?int $ignoreReceiveId = null
     ): void {
         $seen = [];
+        $normalizedTags = [];
         foreach ($tags as $idx => $tagData) {
             $tag = $this->normalizeTag($tagData['tag'] ?? null);
+            $normalizedTags[$idx] = $tag;
             if ($tag === null) {
                 continue;
             }
@@ -72,15 +74,25 @@ class ReceiveMaterialService
                 ]);
             }
             $seen[$tag] = true;
+        }
 
-            $existing = IncomingReceive::query()
+        if ($seen === []) {
+            return;
+        }
+
+        $existingTags = array_flip(
+            IncomingReceive::query()
                 ->where('arrival_item_id', $arrivalItem->id)
-                ->where('tag', $tag)
+                ->whereIn('tag', array_keys($seen))
                 ->when($ignoreReceiveId !== null, fn ($q) => $q->where('id', '!=', $ignoreReceiveId))
-                ->exists();
-            if ($existing) {
+                ->pluck('tag')
+                ->all()
+        );
+
+        foreach ($normalizedTags as $idx => $tag) {
+            if ($tag !== null && isset($existingTags[$tag])) {
                 throw ValidationException::withMessages([
-                    $key => __("TAG ':tag' sudah dipakai pada item ini.", ['tag' => $tag]),
+                    $errorKey.'.'.$idx.'.tag' => __("TAG ':tag' sudah dipakai pada item ini.", ['tag' => $tag]),
                 ]);
             }
         }
@@ -560,7 +572,7 @@ class ReceiveMaterialService
                     'uom' => (string) ($stock->qty_unit ?? $uom ?? ''),
                     'price' => $stock->price !== null ? (float) $stock->price : null,
                     'invoice' => $receive?->invoice_no !== null ? (string) $receive->invoice_no : null,
-                    'supplier' => $receive?->arrivalItem?->arrival?->supplier?->supplier_name,
+                    'supplier' => $receive?->arrivalItem?->arrival?->senderName(),
                 ];
 
                 $remaining -= $take;
@@ -658,7 +670,7 @@ class ReceiveMaterialService
                 'uom' => (string) ($stock->qty_unit ?? ''),
                 'price' => $stock->price !== null ? (float) $stock->price : null,
                 'invoice' => $receive?->invoice_no !== null ? (string) $receive->invoice_no : null,
-                'supplier' => $receive?->arrivalItem?->arrival?->supplier?->supplier_name,
+                'supplier' => $receive?->arrivalItem?->arrival?->senderName(),
             ];
         });
     }

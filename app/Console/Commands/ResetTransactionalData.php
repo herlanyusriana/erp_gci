@@ -83,7 +83,7 @@ class ResetTransactionalData extends Command
     private const MASTER = [
         'parts', 'part_types', 'part_substitutes', 'part_prices', 'part_packing_types',
         'boms', 'bom_items',
-        'suppliers', 'customers', 'customer_prices', 'trucking_companies',
+        'suppliers', 'subcontractors', 'customers', 'customer_prices', 'trucking_companies',
         'uoms', 'machines', 'machine_process', 'machine_cycle_times', 'processes',
         'locations', 'trolleys', 'config_masters',
         'roles', 'permissions', 'role_permission', 'role_user', 'users',

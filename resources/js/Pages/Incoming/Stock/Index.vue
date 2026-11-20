@@ -5,6 +5,7 @@ import { Head, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import Pagination from '@/Components/Pagination.vue';
+import { arrivalSenderName, arrivalTypeBadgeClass, arrivalTypeLabel, resolveArrivalType } from '@/utils/arrivalType';
 import type { IncomingReceivePacking, PartStock, Paginated } from '@/types';
 
 const { t, locale } = useI18n();
@@ -12,10 +13,11 @@ const { t, locale } = useI18n();
 const props = defineProps<{
     stocks: Paginated<PartStock>;
     tab: 'material' | 'wip' | 'fg';
-    filters: { search?: string };
+    filters: { search?: string; arrival_type?: string | null };
 }>();
 
 const search = ref(props.filters.search ?? '');
+const arrivalType = ref(props.filters.arrival_type ?? '');
 const expanded = ref<Record<number, boolean>>({});
 let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -25,7 +27,15 @@ const columnCount = computed(() => (isMaterialTab.value ? 13 : showLocationColum
 
 function navigate(tab: 'material' | 'wip' | 'fg') {
     expanded.value = {};
-    router.get(route('stocks.index'), { tab, search: search.value || undefined }, { preserveState: true, replace: true });
+    router.get(
+        route('stocks.index'),
+        {
+            tab,
+            search: search.value || undefined,
+            arrival_type: arrivalType.value || undefined,
+        },
+        { preserveState: true, replace: true },
+    );
 }
 
 function doSearch() {
@@ -122,6 +132,18 @@ function toggleAll() {
             </div>
 
             <div class="flex flex-wrap items-center gap-2">
+                <select
+                    v-model="arrivalType"
+                    :aria-label="t('incoming.arrivalType')"
+                    @change="navigate(props.tab)"
+                    class="rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                >
+                    <option value="">{{ t('incoming.allArrivalTypes') }}</option>
+                    <option value="import">{{ t('incoming.arrivalType_import') }}</option>
+                    <option value="local">{{ t('incoming.arrivalType_local') }}</option>
+                    <option value="osp_gci">{{ t('incoming.arrivalType_osp_gci') }}</option>
+                    <option value="osp_customer">{{ t('incoming.arrivalType_osp_customer') }}</option>
+                </select>
                 <input
                     v-model="search"
                     @input="doSearch"
@@ -152,7 +174,7 @@ function toggleAll() {
                         <th scope="col" class="px-4 py-3">{{ t('incoming.tag') }}</th>
                         <th v-if="isMaterialTab" scope="col" class="px-4 py-3">{{ t('incoming.packing') }}</th>
                         <th v-if="showLocationColumn" scope="col" class="px-4 py-3">{{ t('incoming.location') }}</th>
-                        <th v-if="isMaterialTab" scope="col" class="px-4 py-3">{{ t('incoming.supplier') }}</th>
+                        <th v-if="isMaterialTab" scope="col" class="px-4 py-3">{{ t('incoming.sender') }}</th>
                         <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.qty') }}</th>
                         <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.booked') }}</th>
                         <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.available') }}</th>
@@ -168,9 +190,17 @@ function toggleAll() {
                                 <div class="text-xs text-ink-secondary">{{ st.part?.part_name ?? '' }}</div>
                             </td>
                             <td class="px-4 py-3 text-ink-secondary">{{ st.part?.model || '—' }}</td>
-                            <td class="px-4 py-3 text-ink-primary">{{ st.part?.part_type?.name ?? '—' }}</td>
+                            <td class="px-4 py-3 text-ink-primary">
+                                <div>{{ st.part?.part_type?.name ?? '—' }}</div>
+                                <span
+                                    v-if="!isMaterialTab && st.receive?.arrival_item?.arrival"
+                                    :class="['mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold', arrivalTypeBadgeClass(resolveArrivalType(st.receive.arrival_item.arrival))]"
+                                >
+                                    {{ arrivalTypeLabel(st.receive.arrival_item.arrival, t) }} · {{ arrivalSenderName(st.receive.arrival_item.arrival) }}
+                                </span>
+                            </td>
                             <td v-if="isMaterialTab" class="px-4 py-3 text-ink-primary">
-                                {{ st.receive?.arrival_item?.arrival?.invoice_no ?? st.receive?.invoice_no ?? '—' }}
+                                {{ st.receive?.arrival_item?.arrival?.invoice_no ?? st.receive?.arrival_item?.arrival?.delivery_note_no ?? st.receive?.invoice_no ?? '—' }}
                             </td>
                             <td class="px-4 py-3">
                                 <div class="font-medium text-ink-primary">{{ st.tag ?? '—' }}</div>
@@ -210,7 +240,13 @@ function toggleAll() {
                                 {{ st.receive?.location_code ?? st.location_code ?? t('incoming.locationNone') }}
                             </td>
                             <td v-if="isMaterialTab" class="px-4 py-3 text-ink-primary">
-                                {{ st.receive?.arrival_item?.arrival?.supplier?.supplier_name ?? '—' }}
+                                <div v-if="st.receive?.arrival_item?.arrival">
+                                    <div>{{ arrivalSenderName(st.receive.arrival_item.arrival) }}</div>
+                                    <span :class="['mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold', arrivalTypeBadgeClass(resolveArrivalType(st.receive.arrival_item.arrival))]">
+                                        {{ arrivalTypeLabel(st.receive.arrival_item.arrival, t) }}
+                                    </span>
+                                </div>
+                                <span v-else>—</span>
                             </td>
                             <td class="px-4 py-3 text-right tabular-nums font-semibold text-ink-primary">{{ fmt(st.qty) }}</td>
                             <td class="px-4 py-3 text-right tabular-nums text-warning">{{ fmt(st.booked_qty ?? 0) }}</td>

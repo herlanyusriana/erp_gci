@@ -512,8 +512,16 @@
             $portDisplay = strtoupper(trim((string) ($arrival->country ?? '')));
         }
 
+        $senderEntity = $arrival->senderEntity();
+        $senderName = $arrival->senderName() ?? '-';
+        $senderAddress = (string) ($senderEntity?->address ?? '');
+        $senderPhone = (string) ($senderEntity?->phone ?? '');
+        $senderContact = (string) ($senderEntity?->contact_person ?? '');
+
         $notesText = trim((string) ($arrival->notes ?? ''));
-        $bankAccountText = trim((string) ($arrival->supplier?->bank_account ?? ''));
+        $bankAccountText = $senderEntity instanceof \App\Models\Supplier
+            ? trim((string) ($senderEntity->bank_account ?? ''))
+            : '';
 
         $invoiceCurrency = strtoupper(trim((string) ($arrival->currency ?? ''))) ?: 'USD';
 
@@ -654,16 +662,16 @@
 
         // Signature image source: browser => URL, dompdf => absolute local path.
         $signatureSrc = null;
-        if (!empty($arrival->supplier?->signature_path)) {
+        if ($senderEntity instanceof \App\Models\Supplier && !empty($senderEntity->signature_path)) {
             $signatureSrc = !empty($browserPrint)
-                ? asset('storage/' . $arrival->supplier->signature_path)
-                : \Illuminate\Support\Facades\Storage::disk('public')->path($arrival->supplier->signature_path);
+                ? asset('storage/' . $senderEntity->signature_path)
+                : \Illuminate\Support\Facades\Storage::disk('public')->path($senderEntity->signature_path);
         }
     @endphp
 
     @if (!empty($browserPrint))
         <div class="doc-toolbar">
-            <span>Invoice {{ $arrival->invoice_no ?? $arrival->arrival_no }}</span>
+            <span>Invoice {{ $arrival->invoice_no ?? $arrival->delivery_note_no ?? $arrival->arrival_no }}</span>
             <span class="actions">
                 <a href="{{ route('incoming-arrivals.show', $arrival) }}">Kembali</a>
                 <button class="print" onclick="window.print()">Cetak</button>
@@ -681,9 +689,9 @@
                         <td class="ci-info-left">
                             <div class="ci-section-title">1. SHIPPER</div>
                             <div>
-                                <strong>{{ strtoupper($arrival->supplier?->supplier_name ?? '-') }}</strong><br>
-                                {{ strtoupper($arrival->supplier?->address ?? '') }}<br>
-                                TEL: {{ $arrival->supplier?->phone ?? '' }}
+                                <strong>{{ strtoupper($senderName) }}</strong><br>
+                                {{ strtoupper($senderAddress) }}<br>
+                                TEL: {{ $senderPhone }}
                             </div>
                         </td>
                         <td class="ci-info-right">
@@ -956,7 +964,7 @@
                                                     <div class="ci-sign-top-row">
                                                         <div class="ci-signedby">
                                                             <div>SIGNED BY</div>
-                                                            @php $signedBy = strtoupper(trim((string) ($arrival->supplier?->contact_person ?? ''))); @endphp
+                                                            @php $signedBy = strtoupper(trim($senderContact)); @endphp
                                                             <div>{{ $signedBy !== '' ? $signedBy : ' ' }}</div>
                                                         </div>
 
@@ -1000,9 +1008,9 @@
                 <tr>
                     <td class="col-left">
                         <span class="section-label">1.SHIPPER</span><br><br>
-                        <span class="company-name">{{ strtoupper($arrival->supplier?->supplier_name ?? '-') }}</span><br>
-                        {{ strtoupper($arrival->supplier?->address ?? '') }}<br>
-                        TEL:{{ $arrival->supplier?->phone ?? '' }}
+                        <span class="company-name">{{ strtoupper($senderName) }}</span><br>
+                        {{ strtoupper($senderAddress) }}<br>
+                        TEL:{{ $senderPhone }}
                     </td>
                     <td class="col-right">
                         <span class="section-label">8.INVOICE NO. & DATE</span><br><br>
@@ -1266,7 +1274,7 @@
                                 <div class="ci-sign-top-row">
                                     <div class="ci-signedby">
                                         <div>SIGNED BY</div>
-                                        @php $signedBy = strtoupper(trim((string) ($arrival->supplier?->contact_person ?? ''))); @endphp
+                                        @php $signedBy = strtoupper(trim($senderContact)); @endphp
                                         <div>{{ $signedBy !== '' ? $signedBy : ' ' }}</div>
                                     </div>
 

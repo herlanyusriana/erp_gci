@@ -88,6 +88,10 @@ class CustomerController extends Controller
             return back()->with('error', __('Customer masih dipakai pada dokumen pengiriman.'));
         }
 
+        if ($customer->incomingArrivals()->exists()) {
+            return back()->with('error', __('Customer masih dipakai pada dokumen kedatangan.'));
+        }
+
         $customer->delete();
 
         return redirect()->route('customers.index')->with('success', __('Customer deleted.'));

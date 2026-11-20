@@ -3,22 +3,22 @@
 namespace App\Exports;
 
 use App\Models\IncomingArrival;
+use Illuminate\Support\Enumerable;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithColumnWidths;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
-use Illuminate\Support\Enumerable;
 
-class ArrivalDetailExport implements FromCollection, WithHeadings, WithMapping, WithStyles, WithColumnWidths
+class ArrivalDetailExport implements FromCollection, WithColumnWidths, WithHeadings, WithMapping, WithStyles
 {
     private IncomingArrival $arrival;
 
     public function __construct(IncomingArrival $arrival)
     {
         $this->arrival = $arrival;
-        $this->arrival->loadMissing(['supplier', 'items.part']);
+        $this->arrival->loadMissing(['supplier', 'subcontractor', 'customer', 'items.part']);
     }
 
     public function collection(): Enumerable
@@ -35,7 +35,7 @@ class ArrivalDetailExport implements FromCollection, WithHeadings, WithMapping, 
             'Part No', 'Part Name', 'Material Group', 'Size',
             'Qty Goods', 'Unit Goods', 'Qty Bundle', 'Unit Bundle',
             'Weight Nett (KG)', 'Weight Gross (KG)', 'Price', 'Total Price',
-            'FOC', 'Notes',
+            'FOC', 'Notes', 'Arrival Type', 'Contract No',
         ];
     }
 
@@ -45,9 +45,9 @@ class ArrivalDetailExport implements FromCollection, WithHeadings, WithMapping, 
 
         return [
             $arrival->arrival_no,
-            $arrival->invoice_no ?? '-',
+            $arrival->invoice_no ?? $arrival->delivery_note_no ?? '-',
             optional($arrival->invoice_date)->format('Y-m-d') ?? '-',
-            $arrival->supplier?->supplier_name ?? '-',
+            $arrival->senderName() ?? '-',
             $arrival->vessel ?? '-',
             optional($arrival->etd)->format('Y-m-d') ?? '-',
             optional($arrival->eta_gci)->format('Y-m-d') ?? '-',
@@ -72,6 +72,8 @@ class ArrivalDetailExport implements FromCollection, WithHeadings, WithMapping, 
             (float) ($item->total_price ?? 0),
             $item->is_foc ? 'Y' : 'N',
             $item->notes ?? '-',
+            strtoupper($arrival->resolvedArrivalType()),
+            $arrival->contract_no ?? '-',
         ];
     }
 
@@ -90,8 +92,8 @@ class ArrivalDetailExport implements FromCollection, WithHeadings, WithMapping, 
             'K' => 14, 'L' => 14, 'M' => 12, 'N' => 10,
             'O' => 20, 'P' => 24, 'Q' => 16, 'R' => 18, 'S' => 14,
             'T' => 12, 'U' => 10, 'V' => 12, 'W' => 12,
-            'X' => 14, 'Y' => 14, 'Z' => 12, 'AA' => 12, 'AB' => 4,
-            'AC' => 20,
+            'X' => 14, 'Y' => 14, 'Z' => 12, 'AA' => 12, 'AB' => 20,
+            'AC' => 16, 'AD' => 18,
         ];
     }
 }

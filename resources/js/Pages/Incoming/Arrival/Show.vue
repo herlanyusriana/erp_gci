@@ -7,11 +7,15 @@ import ActionButton from '@/Components/ActionButton.vue';
 import Modal from '@/Components/Modal.vue';
 import InputError from '@/Components/InputError.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { formatDate, formatDateTime } from '@/utils/date';
+import { arrivalSenderName, arrivalTypeBadgeClass, arrivalTypeLabel, isOspType, resolveArrivalType } from '@/utils/arrivalType';
 import type { IncomingArrival, IncomingArrivalContainer } from '@/types';
 
 const { t, locale } = useI18n();
+
+const arrivalType = computed(() => resolveArrivalType(props.arrival));
+const isOsp = computed(() => isOspType(arrivalType.value));
 
 interface PendingRow {
     item: IncomingArrival['items'] extends (infer T)[] | undefined ? T : never;
@@ -89,11 +93,17 @@ function groupLabel(item: PendingRow['item']): string {
 
         <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
             <div>
-                <h1 class="text-2xl font-bold tracking-tight text-ink-primary">{{ arrival.arrival_no }}</h1>
+                <div class="flex flex-wrap items-center gap-2.5">
+                    <h1 class="text-2xl font-bold tracking-tight text-ink-primary">{{ arrival.arrival_no }}</h1>
+                    <span :class="['inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold', arrivalTypeBadgeClass(arrivalType)]">
+                        {{ arrivalTypeLabel(arrival, t) }}
+                    </span>
+                </div>
                 <p class="mt-1 text-sm text-ink-secondary">
-                    {{ arrival.supplier?.supplier_name ?? '—' }}
+                    {{ arrivalSenderName(arrival) }}
+                    <span v-if="arrival.contract_no">· {{ t('incoming.contractNo') }}: {{ arrival.contract_no }}</span>
                     <span v-if="arrival.trucking">· {{ t('incoming.truckingValue', { name: arrival.trucking.company_name }) }}</span>
-                    · {{ t('incoming.invoiceValue', { number: arrival.invoice_no ?? '—' }) }}
+                    · {{ t('incoming.invoiceValue', { number: arrival.invoice_no ?? arrival.delivery_note_no ?? '—' }) }}
                     · <StatusBadge uppercase :status="arrival.status">{{ t('incoming.status_' + arrival.status) }}</StatusBadge>
                     <span v-if="arrival.transaction_no" class="ml-2 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">{{ t('incoming.salesOrder', { number: arrival.transaction_no }) }}</span>
                 </p>
@@ -107,7 +117,37 @@ function groupLabel(item: PendingRow['item']): string {
             </div>
         </div>
 
-        <div class="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div v-if="isOsp" class="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div class="rounded-xl border border-borderline bg-surface p-4">
+                <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('incoming.sender') }}</div>
+                <div class="mt-1 font-semibold text-ink-primary">{{ arrivalSenderName(arrival) }}</div>
+            </div>
+            <div class="rounded-xl border border-borderline bg-surface p-4">
+                <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('incoming.contractNo') }}</div>
+                <div class="mt-1 font-mono text-ink-primary">{{ arrival.contract_no ?? '—' }}</div>
+            </div>
+            <div class="rounded-xl border border-borderline bg-surface p-4">
+                <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('incoming.deliveryNoteNo') }}</div>
+                <div class="mt-1 font-mono text-ink-primary">{{ arrival.delivery_note_no ?? '—' }}</div>
+            </div>
+            <div class="rounded-xl border border-borderline bg-surface p-4">
+                <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('incoming.referenceNo') }}</div>
+                <div class="mt-1 font-mono text-ink-primary">{{ arrival.reference_no ?? '—' }}</div>
+            </div>
+            <div class="rounded-xl border border-borderline bg-surface p-4">
+                <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('incoming.arrivalDate') }}</div>
+                <div class="mt-1 font-semibold text-ink-primary">{{ formatDate(arrival.invoice_date) }}</div>
+            </div>
+            <div class="rounded-xl border border-borderline bg-surface p-4">
+                <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('incoming.penAju') }}</div>
+                <div class="mt-1 text-ink-primary">{{ [arrival.pen_no, arrival.aju_no].filter(Boolean).join(' / ') || '—' }}</div>
+            </div>
+            <div class="rounded-xl border border-borderline bg-surface p-4">
+                <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('incoming.currency') }}</div>
+                <div class="mt-1 text-ink-primary">{{ arrival.currency ?? '—' }}</div>
+            </div>
+        </div>
+        <div v-else class="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div class="rounded-xl border border-borderline bg-surface p-4">
                 <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('incoming.vessel') }}</div>
                 <div class="mt-1 text-ink-primary">{{ arrival.vessel ?? '—' }}</div>
@@ -191,7 +231,8 @@ function groupLabel(item: PendingRow['item']): string {
             </div>
         </div>
 
-        <!-- Containers -->
+        <!-- Containers (hanya impor atau bila ada data) -->
+        <template v-if="arrivalType === 'import' || (arrival.containers && arrival.containers.length > 0)">
         <h2 class="mb-3 mt-8 text-base font-semibold text-ink-primary">{{ t('incoming.containers') }}</h2>
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
                         <div class="overflow-x-auto">
@@ -228,6 +269,7 @@ function groupLabel(item: PendingRow['item']): string {
                 </table>
             </div>
         </div>
+        </template>
 
         <Modal :show="showInspect" max-width="md" @close="closeInspect">
             <form @submit.prevent="submitInspect" class="p-6">

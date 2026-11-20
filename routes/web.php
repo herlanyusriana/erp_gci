@@ -28,6 +28,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\ReceiveController;
 use App\Http\Controllers\RoleController;
+use App\Http\Controllers\SubcontractorController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\TrolleyController;
 use App\Http\Controllers\TruckingCompanyController;
@@ -104,6 +105,7 @@ Route::middleware(['auth'])->group(function () {
     // Master Data — CRUD
     Route::resource('parts', PartController::class)->except(['show']);
     Route::resource('suppliers', SupplierController::class)->except(['show']);
+    Route::resource('subcontractors', SubcontractorController::class)->except(['show', 'create', 'edit']);
     Route::resource('customers', CustomerController::class)->except(['show', 'create', 'edit']);
 
     // Master — harga jual barang jadi per customer

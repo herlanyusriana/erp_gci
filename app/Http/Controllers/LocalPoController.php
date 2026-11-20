@@ -135,6 +135,7 @@ class LocalPoController extends Controller
                 'notes' => $validated['notes'] ?? null,
                 'status' => 'pending',
                 'is_local' => true,
+                'arrival_type' => IncomingArrival::TYPE_LOCAL,
                 'created_by' => $request->user()?->id,
             ]);
 

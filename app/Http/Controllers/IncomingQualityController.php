@@ -26,6 +26,8 @@ class IncomingQualityController extends Controller
         $arrivals = IncomingArrival::query()
             ->with([
                 'supplier:id,supplier_code,supplier_name',
+                'subcontractor:id,subcontractor_code,subcontractor_name',
+                'customer:id,customer_code,customer_name',
                 'purchaseOrder:id,po_no',
                 'items.part:id,part_number,part_name,model',
                 'items.iqcInspector:id,name',
@@ -46,7 +48,11 @@ class IncomingQualityController extends Controller
                         ->orWhere('po_no', 'ilike', "%{$search}%")
                         ->orWhere('invoice_no', 'ilike', "%{$search}%")
                         ->orWhere('delivery_note_no', 'ilike', "%{$search}%")
+                        ->orWhere('contract_no', 'ilike', "%{$search}%")
+                        ->orWhere('reference_no', 'ilike', "%{$search}%")
                         ->orWhereHas('supplier', fn ($s) => $s->where('supplier_name', 'ilike', "%{$search}%"))
+                        ->orWhereHas('subcontractor', fn ($s) => $s->where('subcontractor_name', 'ilike', "%{$search}%"))
+                        ->orWhereHas('customer', fn ($s) => $s->where('customer_name', 'ilike', "%{$search}%"))
                         ->orWhereHas('items.part', fn ($p) => $p->where('part_number', 'ilike', "%{$search}%"));
                 });
             })
@@ -73,6 +79,8 @@ class IncomingQualityController extends Controller
 
         $arrival->load([
             'supplier:id,supplier_code,supplier_name',
+            'subcontractor:id,subcontractor_code,subcontractor_name',
+            'customer:id,customer_code,customer_name',
             'purchaseOrder:id,po_no',
             'items.part:id,part_number,part_name,model',
             'items.iqcInspector:id,name',

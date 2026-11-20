@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Customer extends Model
@@ -30,6 +31,11 @@ class Customer extends Model
     public function deliveries()
     {
         return $this->hasMany(Delivery::class);
+    }
+
+    public function incomingArrivals(): HasMany
+    {
+        return $this->hasMany(IncomingArrival::class, 'customer_id');
     }
 
     public function creator(): BelongsTo

@@ -5,6 +5,7 @@ import { Head, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import InputError from '@/Components/InputError.vue';
+import { arrivalSenderName, arrivalTypeBadgeClass, arrivalTypeLabel, isOspType, resolveArrivalType } from '@/utils/arrivalType';
 import type { IncomingArrivalItem } from '@/types';
 
 const { t } = useI18n();
@@ -77,6 +78,12 @@ const bundleConfig = reactive({
     packing_type: packingTypeOptions.value.includes('COIL') ? 'COIL' : (packingTypeOptions.value[0] ?? 'BOX'),
 });
 
+function createIdempotencyKey(): string {
+    return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `recv-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 // Section 1 Form State
 const form = useForm({
     receive_date: new Date().toISOString().slice(0, 10),
@@ -85,8 +92,11 @@ const form = useForm({
     location_code: props.defaultLocation ?? 'BULK-AREA',
     pen_no: props.arrivalItem.arrival?.pen_no ?? '',
     aju_no: props.arrivalItem.arrival?.aju_no ?? '',
+    idempotency_key: createIdempotencyKey(),
     tags: [] as any[],
 });
+
+const submitting = ref(false);
 
 // Bundles reactive list
 const bundles = ref<BundleGroup[]>([]);
@@ -375,6 +385,10 @@ const otherErrors = computed(() => {
 });
 
 function submit() {
+    if (submitting.value || form.processing) {
+        return;
+    }
+
     clientError.value = '';
 
     if (!form.truck_no.trim()) {
@@ -461,7 +475,15 @@ function submit() {
         };
     }) as any;
 
-    form.post(route('receive.store', props.arrivalItem.id));
+    submitting.value = true;
+    form.post(route('receive.store', props.arrivalItem.id), {
+        onError: () => {
+            submitting.value = false;
+        },
+        onCancel: () => {
+            submitting.value = false;
+        },
+    });
 }
 </script>
 
@@ -472,7 +494,15 @@ function submit() {
 
         <div class="mb-6 flex flex-wrap items-end justify-between gap-4 border-b-2 border-ink-primary pb-3">
             <div>
-                <h1 class="text-2xl font-bold tracking-tight text-ink-primary">{{ t('incoming.receiveGoods') }}</h1>
+                <div class="flex flex-wrap items-center gap-2">
+                    <h1 class="text-2xl font-bold tracking-tight text-ink-primary">{{ t('incoming.receiveGoods') }}</h1>
+                    <span
+                        v-if="isOspType(resolveArrivalType(arrivalItem.arrival))"
+                        :class="['inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold', arrivalTypeBadgeClass(resolveArrivalType(arrivalItem.arrival))]"
+                    >
+                        {{ arrivalTypeLabel(arrivalItem.arrival, t) }} · {{ arrivalSenderName(arrivalItem.arrival) }}
+                    </span>
+                </div>
                 <p class="text-xs text-ink-secondary">Formulir penerimaan barang masuk ke gudang.</p>
             </div>
             <div class="rounded-lg bg-primary-light px-3 py-1.5 text-xs font-semibold text-primary">
@@ -523,6 +553,7 @@ function submit() {
                             v-model="form.receive_date"
                             type="date"
                             :aria-label="t('incoming.receiveDate')"
+                            @keydown.enter.prevent
                             class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
                         />
                         <InputError :message="form.errors.receive_date" class="mt-1" />
@@ -537,6 +568,7 @@ function submit() {
                             placeholder="Contoh: B 9123 GCI"
                             :aria-label="t('incoming.truckNo')"
                             :aria-required="true"
+                            @keydown.enter.prevent
                             class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm font-semibold text-ink-primary focus:border-primary focus:ring-primary"
                         />
                         <InputError :message="form.errors.truck_no" class="mt-1" />
@@ -547,6 +579,7 @@ function submit() {
                             v-model="form.driver_name"
                             type="text"
                             placeholder="Nama driver pengirim"
+                            @keydown.enter.prevent
                             class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
                         />
                     </div>
@@ -555,7 +588,7 @@ function submit() {
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.poNo') }}</label>
                         <input
                             type="text"
-                            :value="arrivalItem.arrival?.purchase_order?.po_no ?? arrivalItem.arrival?.po_no ?? '—'"
+                            :value="arrivalItem.arrival?.purchase_order?.po_no ?? arrivalItem.arrival?.po_no ?? arrivalItem.arrival?.contract_no ?? arrivalItem.arrival?.reference_no ?? '—'"
                             readonly
                             class="mt-1 w-full rounded-lg border-borderline bg-background px-3 py-2 font-mono text-sm font-medium text-ink-primary"
                         />
@@ -568,6 +601,12 @@ function submit() {
                             readonly
                             class="mt-1 w-full rounded-lg border-borderline bg-background px-3 py-2 font-mono text-sm font-medium text-ink-primary"
                         />
+                        <p
+                            v-if="!arrivalItem.arrival?.invoice_no && arrivalItem.arrival?.delivery_note_no"
+                            class="mt-1 text-[11px] text-ink-secondary"
+                        >
+                            {{ t('incoming.deliveryNoteNo') }}: {{ arrivalItem.arrival.delivery_note_no }}
+                        </p>
                     </div>
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.penNo') }}</label>
@@ -576,6 +615,7 @@ function submit() {
                             type="text"
                             :placeholder="t('incoming.penNoPlaceholder')"
                             :aria-label="t('incoming.penNo')"
+                            @keydown.enter.prevent
                             class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
                         />
                         <InputError :message="(form.errors as any).pen_no" class="mt-1" />
@@ -587,6 +627,7 @@ function submit() {
                             type="text"
                             placeholder="No. AJU Bea Cukai"
                             :aria-label="t('incoming.ajuNo')"
+                            @keydown.enter.prevent
                             class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
                         />
                         <InputError :message="(form.errors as any).aju_no" class="mt-1" />
@@ -621,6 +662,7 @@ function submit() {
                             type="number"
                             min="1"
                             max="50"
+                            @keydown.enter.prevent
                             class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm font-bold text-ink-primary focus:border-primary focus:ring-primary"
                         />
                         <p class="mt-1 text-[11px] text-ink-secondary">Jumlah baris bundle / tag</p>
@@ -737,6 +779,7 @@ function submit() {
                                             type="text"
                                             placeholder="Tag bundle"
                                             :aria-label="`${t('incoming.tag')} ${bi + 1}`"
+                                            @keydown.enter.prevent
                                             class="w-full rounded border-borderline bg-surface px-2.5 py-1.5 font-mono text-xs font-bold text-ink-primary focus:border-primary focus:ring-primary"
                                         />
                                     </td>
@@ -752,6 +795,7 @@ function submit() {
                                             :max="MAX_PACKINGS"
                                             inputmode="numeric"
                                             :aria-label="t('incoming.packingCountForBundle', { bundle: bi + 1 })"
+                                            @keydown.enter.prevent
                                             class="w-16 rounded border-borderline bg-surface px-2 py-1.5 text-center text-xs font-bold text-ink-primary focus:border-primary focus:ring-primary"
                                             @input="onBundlePackingCount(b, bi, $event)"
                                         />
@@ -772,6 +816,7 @@ function submit() {
                                             step="any"
                                             min="0"
                                             @input="onQtyChange(r)"
+                                            @keydown.enter.prevent
                                             placeholder="0"
                                             class="w-full rounded border-borderline bg-surface px-2 py-1 text-right text-xs font-bold text-ink-primary focus:border-primary focus:ring-primary"
                                         />
@@ -791,6 +836,7 @@ function submit() {
                                             step="any"
                                             min="0"
                                             placeholder="0.00"
+                                            @keydown.enter.prevent
                                             class="w-full rounded border-borderline bg-surface px-2 py-1 text-right text-xs text-ink-primary focus:border-primary focus:ring-primary"
                                         />
                                     </td>
@@ -838,10 +884,10 @@ function submit() {
                 <BackButton :href="backHref()">{{ t('incoming.cancel') }}</BackButton>
                 <button
                     type="submit"
-                    :disabled="form.processing"
+                    :disabled="submitting || form.processing"
                     class="rounded-md bg-primary px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                 >
-                    {{ form.processing ? t('incoming.saving') : t('incoming.saveReceive') }}
+                    {{ submitting || form.processing ? t('incoming.saving') : t('incoming.saveReceive') }}
                 </button>
             </div>
         </form>

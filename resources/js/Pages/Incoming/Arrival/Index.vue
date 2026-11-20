@@ -9,21 +9,31 @@ import ActionButton from '@/Components/ActionButton.vue';
 import Pagination from '@/Components/Pagination.vue';
 import { Link } from '@inertiajs/vue3';
 import { formatDate } from '@/utils/date';
+import { arrivalSenderName, arrivalTypeBadgeClass, arrivalTypeLabel, resolveArrivalType } from '@/utils/arrivalType';
 import type { IncomingArrival, Paginated } from '@/types';
 
 const { t } = useI18n();
 
 const props = defineProps<{
     arrivals: Paginated<IncomingArrival>;
-    filters: { search?: string; status?: string };
+    filters: { search?: string; status?: string; arrival_type?: string | null };
 }>();
 
 const search = ref(props.filters.search ?? '');
 const status = ref(props.filters.status ?? '');
+const arrivalType = ref(props.filters.arrival_type ?? '');
 let timer: ReturnType<typeof setTimeout> | undefined;
 function doSearch() {
     clearTimeout(timer);
-    timer = setTimeout(() => router.get(route('incoming-arrivals.index'), { search: search.value || undefined, status: status.value || undefined }, { preserveState: true, replace: true }), 300);
+    timer = setTimeout(() => router.get(
+        route('incoming-arrivals.index'),
+        {
+            search: search.value || undefined,
+            status: status.value || undefined,
+            arrival_type: arrivalType.value || undefined,
+        },
+        { preserveState: true, replace: true },
+    ), 300);
 }
 
 function remove(a: IncomingArrival) {
@@ -72,6 +82,13 @@ function pipelineStage(a: IncomingArrival): { label: string; class: string } {
 
         <div class="mb-4 flex flex-col gap-3 sm:flex-row">
             <input v-model="search" @input="doSearch" type="search" :placeholder="t('incoming.searchArrival')" :aria-label="t('incoming.searchArrival')" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-80" />
+            <select :aria-label="t('incoming.arrivalType')" v-model="arrivalType" @change="doSearch" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-44">
+                <option value="">{{ t('incoming.allArrivalTypes') }}</option>
+                <option value="import">{{ t('incoming.arrivalType_import') }}</option>
+                <option value="local">{{ t('incoming.arrivalType_local') }}</option>
+                <option value="osp_gci">{{ t('incoming.arrivalType_osp_gci') }}</option>
+                <option value="osp_customer">{{ t('incoming.arrivalType_osp_customer') }}</option>
+            </select>
             <select :aria-label="t('incoming.allStatuses')" v-model="status" @change="doSearch" class="w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary sm:w-40">
                 <option value="">{{ t('incoming.allStatuses') }}</option>
                 <option value="pending">{{ t('incoming.status_pending') }}</option>
@@ -86,8 +103,9 @@ function pipelineStage(a: IncomingArrival): { label: string; class: string } {
                     <thead class="bg-background">
                         <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                             <th scope="col" class="px-4 py-3">{{ t('incoming.arrivalNo') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('incoming.arrivalType') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('incoming.invoice') }}</th>
-                            <th scope="col" class="px-4 py-3">{{ t('incoming.supplier') }}</th>
+                            <th scope="col" class="px-4 py-3">{{ t('incoming.sender') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('incoming.items') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('incoming.eta') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('incoming.status') }}</th>
@@ -99,10 +117,18 @@ function pipelineStage(a: IncomingArrival): { label: string; class: string } {
                             <td class="px-4 py-3">
                                 <Link :href="route('incoming-arrivals.show', a.id)" class="font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">{{ a.arrival_no }}</Link>
                             </td>
-                            <td class="px-4 py-3 text-ink-primary">{{ a.invoice_no ?? '—' }}</td>
-                            <td class="px-4 py-3 text-ink-primary">{{ a.supplier?.supplier_name ?? '—' }}</td>
+                            <td class="px-4 py-3 whitespace-nowrap">
+                                <span :class="['inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold', arrivalTypeBadgeClass(resolveArrivalType(a))]">
+                                    {{ arrivalTypeLabel(a, t) }}
+                                </span>
+                            </td>
+                            <td class="px-4 py-3 text-ink-primary">
+                                <div>{{ a.invoice_no ?? a.delivery_note_no ?? '—' }}</div>
+                                <div v-if="a.contract_no" class="text-xs text-ink-secondary font-mono">{{ a.contract_no }}</div>
+                            </td>
+                            <td class="px-4 py-3 text-ink-primary">{{ arrivalSenderName(a) }}</td>
                             <td class="px-4 py-3 tabular-nums text-ink-primary">{{ a.items_count ?? 0 }}</td>
-                            <td class="px-4 py-3 text-ink-primary whitespace-nowrap">{{ formatDate(a.eta_gci ?? a.eta) }}</td>
+                            <td class="px-4 py-3 text-ink-primary whitespace-nowrap">{{ formatDate(a.eta_gci ?? a.eta ?? a.invoice_date) }}</td>
                             <td class="px-4 py-3">
                                 <span :class="['inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold', pipelineStage(a).class]">
                                     {{ pipelineStage(a).label }}
@@ -117,7 +143,7 @@ function pipelineStage(a: IncomingArrival): { label: string; class: string } {
                             </td>
                         </tr>
                         <tr v-if="arrivals.data.length === 0">
-                            <td colspan="7" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noArrivals') }}</td>
+                            <td colspan="8" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noArrivals') }}</td>
                         </tr>
                     </tbody>
                 </table>

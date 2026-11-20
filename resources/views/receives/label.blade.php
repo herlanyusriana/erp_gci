@@ -1,9 +1,13 @@
 @php
+    use App\Models\IncomingArrival;
     use App\Support\UomCatalog;
 
     $resolvedTag = $receive->tag ?: '-';
-    $invoiceNo = $arrival?->invoice_no ?? '-';
+    $invoiceNo = $arrival?->invoice_no ?: ($arrival?->delivery_note_no ?: ($arrival?->arrival_no ?? '-'));
     $partName = $part?->part_name ?? '-';
+    $isOsp = (bool) $arrival?->isOsp();
+    $ospBadge = $arrival?->resolvedArrivalType() === IncomingArrival::TYPE_OSP_GCI ? 'OSP GCI' : 'OSP CUSTOMER';
+    $senderName = $arrival?->senderName();
 
     $sizeText = trim((string) ($arrivalItem?->size ?: $part?->size));
     $sizeText = ($sizeText === '' || $sizeText === '-') ? null : $sizeText;
@@ -102,6 +106,7 @@
 
         .part-name { font-size: 12pt; font-weight: 900; text-transform: uppercase; line-height: 1.15; }
         .part-size { font-size: 8.5pt; font-weight: 600; text-transform: uppercase; color: #222; margin-top: 0.5mm; }
+        .osp-tag { display: inline-block; margin-top: 1.5mm; border: 1.5px solid #000; padding: 0.5mm 2mm; font-size: 8pt; font-weight: 800; text-transform: uppercase; letter-spacing: 0.3px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         /* Invoice di atas, tag di bawahnya, ukuran keduanya sama supaya terbaca
            setara dari jarak pandang operator di rak. */
         .invoice { font-size: 19pt; font-weight: 900; text-transform: uppercase; margin-top: 3.5mm; letter-spacing: 0.3px; line-height: 1.1; overflow-wrap: anywhere; }
@@ -148,6 +153,9 @@
                 <div class="part-name">{{ $partName }}</div>
                 @if ($sizeText)
                     <div class="part-size">{{ $sizeText }}</div>
+                @endif
+                @if ($isOsp)
+                    <div class="osp-tag"><span>{{ $ospBadge }}</span>@if($senderName) · {{ $senderName }}@endif</div>
                 @endif
 
                 {{-- Invoice dicetak apa adanya tanpa prefiks: nomor invoice sudah

@@ -30,7 +30,13 @@ class IncomingApiController extends Controller
         Gate::authorize('viewAny', Arrival::class);
 
         $arrivals = Arrival::query()
-            ->with(['supplier:id,supplier_name', 'items.part:id,part_number,part_name,model', 'items.receives'])
+            ->with([
+                'supplier:id,supplier_name',
+                'subcontractor:id,subcontractor_name',
+                'customer:id,customer_name',
+                'items.part:id,part_number,part_name,model',
+                'items.receives',
+            ])
             ->orderByDesc('id')
             ->limit(50)
             ->get();
@@ -41,8 +47,9 @@ class IncomingApiController extends Controller
                     'id' => $arrival->id,
                     'invoice_no' => $arrival->invoice_no,
                     'arrival_no' => $arrival->arrival_no,
+                    'arrival_type' => $arrival->resolvedArrivalType(),
                     'is_local' => (bool) $arrival->is_local,
-                    'supplier_name' => $arrival->supplier?->supplier_name,
+                    'supplier_name' => $arrival->senderName(),
                     'items' => $arrival->items->map(function (ArrivalItem $item) {
                         $received = (float) $item->receives->sum('qty');
 

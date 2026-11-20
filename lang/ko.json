@@ -132,5 +132,13 @@
     "Mesin tidak sesuai grup routing item WO.": "이 기계는 작업 지시 항목의 공정 기계 그룹에 속하지 않습니다.",
     "Qty hasil maksimal empat angka desimal.": "실적 수량은 소수점 이하 네 자리까지 입력할 수 있습니다.",
     "Penerimaan tidak bisa masuk stok: item kedatangan belum terhubung ke part master.": "입고를 재고로 반영할 수 없습니다: 도착 항목이 마스터 품목에 연결되어 있지 않습니다.",
-    "Penerimaan tidak bisa masuk stok: qty/berat bersih yang diposting nol.": "입고를 재고로 반영할 수 없습니다: 반영할 수량/순중량이 0입니다."
+    "Penerimaan tidak bisa masuk stok: qty/berat bersih yang diposting nol.": "입고를 재고로 반영할 수 없습니다: 반영할 수량/순중량이 0입니다.",
+    "Item ini sudah selesai diterima seluruhnya.": "이 항목은 이미 전량 입고 완료되었습니다.",
+    "Subcontractor created.": "외주업체 항목이 생성되었습니다.",
+    "Subcontractor updated.": "외주업체 항목이 수정되었습니다.",
+    "Subcontractor deleted.": "외주업체 항목이 삭제되었습니다.",
+    "Subcont masih dipakai pada dokumen kedatangan.": "이 외주업체는 입고 예정 문서에서 아직 사용 중입니다.",
+    "Customer masih dipakai pada dokumen kedatangan.": "이 고객사는 입고 예정 문서에서 아직 사용 중입니다.",
+    "Part tidak terdaftar sebagai proses Subcon di BOM aktif.": "이 부품은 활성 BOM의 외주 공정에 등록되어 있지 않습니다.",
+    "Part tidak terdaftar sebagai FREE_ISSUE / OSP di BOM aktif.": "이 부품은 활성 BOM의 FREE_ISSUE / OSP로 등록되어 있지 않습니다."
 }

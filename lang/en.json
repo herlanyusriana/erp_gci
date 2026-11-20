@@ -132,5 +132,13 @@
     "Mesin tidak sesuai grup routing item WO.": "The machine is outside this work order item's routing group.",
     "Qty hasil maksimal empat angka desimal.": "Result quantities may have at most four decimal places.",
     "Penerimaan tidak bisa masuk stok: item kedatangan belum terhubung ke part master.": "This receive cannot be posted to stock: the arrival item is not linked to a master part.",
-    "Penerimaan tidak bisa masuk stok: qty/berat bersih yang diposting nol.": "This receive cannot be posted to stock: the posted qty/net weight is zero."
+    "Penerimaan tidak bisa masuk stok: qty/berat bersih yang diposting nol.": "This receive cannot be posted to stock: the posted qty/net weight is zero.",
+    "Item ini sudah selesai diterima seluruhnya.": "This item has already been fully received.",
+    "Subcontractor created.": "Subcontractor created.",
+    "Subcontractor updated.": "Subcontractor updated.",
+    "Subcontractor deleted.": "Subcontractor deleted.",
+    "Subcont masih dipakai pada dokumen kedatangan.": "This subcontractor is still referenced by arrival documents.",
+    "Customer masih dipakai pada dokumen kedatangan.": "This customer is still referenced by arrival documents.",
+    "Part tidak terdaftar sebagai proses Subcon di BOM aktif.": "This part is not registered in an active Subcon BOM step.",
+    "Part tidak terdaftar sebagai FREE_ISSUE / OSP di BOM aktif.": "This part is not registered as FREE_ISSUE / OSP in an active BOM."
 }

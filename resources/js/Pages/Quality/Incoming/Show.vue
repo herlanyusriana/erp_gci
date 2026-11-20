@@ -4,6 +4,8 @@ import { Head, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import { formatDate } from '@/utils/date';
+import { arrivalSenderName, arrivalTypeBadgeClass, arrivalTypeLabel, resolveArrivalType } from '@/utils/arrivalType';
+import type { ArrivalType } from '@/types';
 
 const { t } = useI18n();
 
@@ -28,9 +30,14 @@ interface ArrivalDetail {
     po_no: string | null;
     invoice_no: string | null;
     delivery_note_no: string | null;
+    contract_no: string | null;
+    reference_no: string | null;
     invoice_date: string | null;
     is_local: boolean;
+    arrival_type?: ArrivalType;
     supplier?: { id: number; supplier_code: string; supplier_name: string };
+    subcontractor?: { id: number; subcontractor_code: string; subcontractor_name: string };
+    customer?: { id: number; customer_code: string; customer_name: string };
     purchase_order?: { id: number; po_no: string };
     items?: PartItem[];
 }
@@ -59,11 +66,16 @@ function passAll() {
 
         <div class="mb-5 flex flex-wrap items-end justify-between gap-4">
             <div>
-                <h1 class="text-2xl font-bold tracking-tight text-ink-primary">
-                    {{ t('quality.detailTitle', { number: arrival.arrival_no }) }}
-                </h1>
+                <div class="flex flex-wrap items-center gap-2.5">
+                    <h1 class="text-2xl font-bold tracking-tight text-ink-primary">
+                        {{ t('quality.detailTitle', { number: arrival.arrival_no }) }}
+                    </h1>
+                    <span :class="['inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold', arrivalTypeBadgeClass(resolveArrivalType(arrival))]">
+                        {{ arrivalTypeLabel(arrival, t) }}
+                    </span>
+                </div>
                 <p class="mt-1 text-sm text-ink-secondary">
-                    {{ arrival.supplier?.supplier_name ?? '—' }} · {{ t('quality.materialDetailDesc') }}
+                    {{ arrivalSenderName(arrival) }} · {{ t('quality.materialDetailDesc') }}
                 </p>
             </div>
             <div class="flex items-center gap-2">
@@ -80,12 +92,12 @@ function passAll() {
         <!-- Ringkasan Info Kedatangan -->
         <div class="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div class="rounded-xl border border-borderline bg-surface p-4">
-                <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('quality.supplierName') }}</div>
-                <div class="mt-1 font-semibold text-ink-primary">{{ arrival.supplier?.supplier_name ?? '—' }}</div>
+                <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('incoming.sender') }}</div>
+                <div class="mt-1 font-semibold text-ink-primary">{{ arrivalSenderName(arrival) }}</div>
             </div>
             <div class="rounded-xl border border-borderline bg-surface p-4">
-                <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('quality.poNo') }}</div>
-                <div class="mt-1 font-mono font-semibold text-primary">{{ arrival.po_no ?? arrival.purchase_order?.po_no ?? '—' }}</div>
+                <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ arrival.contract_no ? t('incoming.contractNo') : t('quality.poNo') }}</div>
+                <div class="mt-1 font-mono font-semibold text-primary">{{ arrival.po_no ?? arrival.purchase_order?.po_no ?? arrival.contract_no ?? arrival.reference_no ?? '—' }}</div>
             </div>
             <div class="rounded-xl border border-borderline bg-surface p-4">
                 <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">Dokumen Surat Jalan / Inv</div>

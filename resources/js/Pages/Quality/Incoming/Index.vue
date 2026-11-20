@@ -6,7 +6,8 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import Pagination from '@/Components/Pagination.vue';
 import { formatDate } from '@/utils/date';
-import type { Paginated } from '@/types';
+import { arrivalSenderName, arrivalTypeBadgeClass, arrivalTypeLabel, resolveArrivalType } from '@/utils/arrivalType';
+import type { ArrivalType, Paginated } from '@/types';
 
 const { t } = useI18n();
 
@@ -26,11 +27,16 @@ interface ArrivalRow {
     po_no: string | null;
     invoice_no: string | null;
     delivery_note_no: string | null;
+    contract_no: string | null;
+    reference_no: string | null;
     invoice_date: string | null;
     created_at: string;
     is_local: boolean;
+    arrival_type?: ArrivalType;
     iqc_status: string;
     supplier?: { id: number; supplier_code: string; supplier_name: string };
+    subcontractor?: { id: number; subcontractor_code: string; subcontractor_name: string };
+    customer?: { id: number; customer_code: string; customer_name: string };
     purchase_order?: { id: number; po_no: string };
     items?: PartItem[];
 }
@@ -138,21 +144,25 @@ function passAll(row: ArrivalRow) {
                         <td class="px-4 py-3 align-top whitespace-nowrap">
                             <div class="font-semibold text-ink-primary">{{ formatDate(a.invoice_date ?? a.created_at) }}</div>
                             <div class="text-xs text-ink-secondary">{{ a.arrival_no }}</div>
+                            <span :class="['mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold', arrivalTypeBadgeClass(resolveArrivalType(a))]">
+                                {{ arrivalTypeLabel(a, t) }}
+                            </span>
                         </td>
 
-                        <!-- Supp Name -->
+                        <!-- Pengirim -->
                         <td class="px-4 py-3 align-top">
-                            <div class="font-semibold text-ink-primary">{{ a.supplier?.supplier_name ?? '—' }}</div>
+                            <div class="font-semibold text-ink-primary">{{ arrivalSenderName(a) }}</div>
                             <div class="text-xs text-ink-secondary">
                                 <span v-if="a.delivery_note_no">SJ: {{ a.delivery_note_no }} · </span>
                                 <span v-if="a.invoice_no">Inv: {{ a.invoice_no }}</span>
+                                <span v-if="a.contract_no" class="block font-mono">{{ a.contract_no }}</span>
                             </div>
                         </td>
 
-                        <!-- PO No -->
+                        <!-- PO / Ref No -->
                         <td class="px-4 py-3 align-top whitespace-nowrap">
                             <span class="rounded bg-background px-2 py-1 font-mono text-xs font-semibold text-primary border border-borderline">
-                                {{ a.po_no ?? a.purchase_order?.po_no ?? '—' }}
+                                {{ a.po_no ?? a.purchase_order?.po_no ?? a.reference_no ?? a.contract_no ?? '—' }}
                             </span>
                         </td>
 

@@ -7,6 +7,7 @@ import BackButton from '@/Components/BackButton.vue';
 import ActionButton from '@/Components/ActionButton.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { formatDate } from '@/utils/date';
+import { arrivalSenderName, arrivalTypeBadgeClass, arrivalTypeLabel, resolveArrivalType } from '@/utils/arrivalType';
 import type { IncomingArrival, IncomingReceive } from '@/types';
 
 const { t } = useI18n();
@@ -49,11 +50,17 @@ function removeReceive(r: IncomingReceive) {
 
         <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
             <div>
-                <h1 class="text-2xl font-bold tracking-tight text-ink-primary">
-                    {{ t('incoming.receiveArrivalTitle', { number: arrival.arrival_no }) }}
-                </h1>
+                <div class="flex flex-wrap items-center gap-2.5">
+                    <h1 class="text-2xl font-bold tracking-tight text-ink-primary">
+                        {{ t('incoming.receiveArrivalTitle', { number: arrival.arrival_no }) }}
+                    </h1>
+                    <span :class="['inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold', arrivalTypeBadgeClass(resolveArrivalType(arrival))]">
+                        {{ arrivalTypeLabel(arrival, t) }}
+                    </span>
+                </div>
                 <p class="mt-1 text-sm text-ink-secondary">
-                    {{ arrival.supplier?.supplier_name ?? '—' }} · {{ arrival.invoice_no ?? '—' }}
+                    {{ arrivalSenderName(arrival) }} · {{ arrival.invoice_no ?? arrival.delivery_note_no ?? '—' }}
+                    <span v-if="arrival.contract_no">· {{ t('incoming.contractNo') }}: {{ arrival.contract_no }}</span>
                 </p>
                 <p class="mt-1 text-xs text-ink-secondary">
                     {{ t('incoming.penNo') }}: {{ arrival.pen_no ?? '—' }} · {{ t('incoming.ajuNo') }}: {{ arrival.aju_no ?? '—' }}
@@ -82,12 +89,12 @@ function removeReceive(r: IncomingReceive) {
                 <div class="mt-1 font-semibold text-ink-primary">{{ arrival.arrival_no }}</div>
             </div>
             <div class="rounded-xl border border-borderline bg-surface p-4">
-                <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('incoming.supplier') }}</div>
-                <div class="mt-1 font-semibold text-ink-primary">{{ arrival.supplier?.supplier_name ?? '—' }}</div>
+                <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('incoming.sender') }}</div>
+                <div class="mt-1 font-semibold text-ink-primary">{{ arrivalSenderName(arrival) }}</div>
             </div>
             <div class="rounded-xl border border-borderline bg-surface p-4">
                 <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('incoming.invoice') }}</div>
-                <div class="mt-1 font-semibold text-ink-primary">{{ arrival.invoice_no ?? '—' }}</div>
+                <div class="mt-1 font-semibold text-ink-primary">{{ arrival.invoice_no ?? arrival.delivery_note_no ?? '—' }}</div>
             </div>
             <div class="rounded-xl border border-borderline bg-surface p-4">
                 <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('incoming.arrivalDate') }}</div>

@@ -132,5 +132,13 @@
     "Mesin tidak sesuai grup routing item WO.": "Mesin tidak sesuai grup routing item WO.",
     "Qty hasil maksimal empat angka desimal.": "Qty hasil maksimal empat angka desimal.",
     "Penerimaan tidak bisa masuk stok: item kedatangan belum terhubung ke part master.": "Penerimaan tidak bisa masuk stok: item kedatangan belum terhubung ke part master.",
-    "Penerimaan tidak bisa masuk stok: qty/berat bersih yang diposting nol.": "Penerimaan tidak bisa masuk stok: qty/berat bersih yang diposting nol."
+    "Penerimaan tidak bisa masuk stok: qty/berat bersih yang diposting nol.": "Penerimaan tidak bisa masuk stok: qty/berat bersih yang diposting nol.",
+    "Item ini sudah selesai diterima seluruhnya.": "Item ini sudah selesai diterima seluruhnya.",
+    "Subcontractor created.": "Subcont dibuat.",
+    "Subcontractor updated.": "Subcont diperbarui.",
+    "Subcontractor deleted.": "Subcont dihapus.",
+    "Subcont masih dipakai pada dokumen kedatangan.": "Subcont masih dipakai pada dokumen kedatangan.",
+    "Customer masih dipakai pada dokumen kedatangan.": "Customer masih dipakai pada dokumen kedatangan.",
+    "Part tidak terdaftar sebagai proses Subcon di BOM aktif.": "Part tidak terdaftar sebagai proses Subcon di BOM aktif.",
+    "Part tidak terdaftar sebagai FREE_ISSUE / OSP di BOM aktif.": "Part tidak terdaftar sebagai FREE_ISSUE / OSP di BOM aktif."
 }

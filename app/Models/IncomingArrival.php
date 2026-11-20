@@ -12,9 +12,33 @@ class IncomingArrival extends Model
 {
     use SoftDeletes;
 
+    public const TYPE_IMPORT = 'import';
+
+    public const TYPE_LOCAL = 'local';
+
+    public const TYPE_OSP_GCI = 'osp_gci';
+
+    public const TYPE_OSP_CUSTOMER = 'osp_customer';
+
+    /** @var list<string> */
+    public const TYPES = [
+        self::TYPE_IMPORT,
+        self::TYPE_LOCAL,
+        self::TYPE_OSP_GCI,
+        self::TYPE_OSP_CUSTOMER,
+    ];
+
+    /** @var list<string> */
+    public const OSP_TYPES = [
+        self::TYPE_OSP_GCI,
+        self::TYPE_OSP_CUSTOMER,
+    ];
+
     protected $fillable = [
-        'arrival_no', 'transaction_no', 'po_no', 'invoice_no', 'delivery_note_no', 'invoice_date',
-        'supplier_id', 'purchase_order_id', 'trucking_company_id', 'is_local',
+        'arrival_no', 'transaction_no', 'po_no', 'invoice_no', 'delivery_note_no',
+        'contract_no', 'reference_no', 'invoice_date',
+        'supplier_id', 'subcontractor_id', 'customer_id', 'purchase_order_id',
+        'trucking_company_id', 'is_local', 'arrival_type',
         'vessel', 'etd', 'eta', 'eta_gci',
         'bill_of_lading', 'pen_no', 'pen_date', 'aju_no',
         'bill_of_lading_file', 'delivery_note_file', 'invoice_file', 'packing_list_file',
@@ -43,9 +67,51 @@ class IncomingArrival extends Model
         return $this->belongsTo(Supplier::class);
     }
 
+    public function subcontractor(): BelongsTo
+    {
+        return $this->belongsTo(Subcontractor::class);
+    }
+
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class);
+    }
+
     public function purchaseOrder(): BelongsTo
     {
         return $this->belongsTo(PurchaseOrder::class);
+    }
+
+    public function resolvedArrivalType(): string
+    {
+        if (in_array($this->arrival_type, self::TYPES, true)) {
+            return $this->arrival_type;
+        }
+
+        return $this->is_local ? self::TYPE_LOCAL : self::TYPE_IMPORT;
+    }
+
+    public function isOsp(): bool
+    {
+        return in_array($this->resolvedArrivalType(), self::OSP_TYPES, true);
+    }
+
+    public function senderEntity(): Supplier|Subcontractor|Customer|null
+    {
+        return match ($this->resolvedArrivalType()) {
+            self::TYPE_OSP_GCI => $this->subcontractor,
+            self::TYPE_OSP_CUSTOMER => $this->customer,
+            default => $this->supplier,
+        };
+    }
+
+    public function senderName(): ?string
+    {
+        return match ($this->resolvedArrivalType()) {
+            self::TYPE_OSP_GCI => $this->subcontractor?->subcontractor_name,
+            self::TYPE_OSP_CUSTOMER => $this->customer?->customer_name,
+            default => $this->supplier?->supplier_name,
+        };
     }
 
     public function trucking(): BelongsTo

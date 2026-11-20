@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
-import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { computed, ref, watch } from 'vue';
+import { Head, router, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import InputError from '@/Components/InputError.vue';
-import StatusBadge from '@/Components/StatusBadge.vue';
 
 const { t, locale } = useI18n();
 
@@ -12,6 +12,7 @@ interface Step {
     parent_part_id: number;
     part_number: string | null;
     part_name: string | null;
+    model: string | null;
     part_type: string;
     process: string | null;
     machine: string | null;
@@ -21,13 +22,22 @@ interface Step {
     produced_qty: number;
 }
 
+interface PeriodOption {
+    start: string;
+    end: string;
+    label: string;
+    minutes: number;
+}
+
 interface ResultRow {
     id: number;
     qty_good: number;
     qty_reject: number;
     result_date: string;
     shift: string | null;
-    parent_part?: { part_number: string; part_name: string } | null;
+    period_start?: string | null;
+    period_end?: string | null;
+    parent_part?: { part_number: string; part_name: string; model?: string | null } | null;
     process?: { process_name: string } | null;
     machine?: { machine_name: string } | null;
     reporter?: { name: string } | null;
@@ -35,20 +45,49 @@ interface ResultRow {
 
 const props = defineProps<{
     workOrder: { id: number; wo_no: string; qty: number; status: string };
-    workOrderPart: { id: number; part_number: string; part_name: string } | null;
+    workOrderPart: { id: number; part_number: string; part_name: string; model?: string | null } | null;
     steps: Step[];
+    shiftPeriods?: Record<string, PeriodOption[]>;
+    defaultShift?: string;
     results: ResultRow[];
 }>();
 
 const fmt = (n: number | null | undefined) => n == null ? '—' : Number(n).toLocaleString(locale.value, { maximumFractionDigits: 4 });
+
+const shiftKeys = computed(() => Object.keys(props.shiftPeriods ?? { '1': [], '2': [], '3': [] }));
 
 const form = useForm({
     parent_part_id: '',
     qty_good: '',
     qty_reject: '',
     result_date: new Date().toISOString().slice(0, 10),
-    shift: '',
+    shift: props.defaultShift ?? '1',
+    period_start: '',
+    period_end: '',
     notes: '',
+});
+
+const selectedPeriod = ref('');
+
+const availablePeriods = computed<PeriodOption[]>(() => {
+    return props.shiftPeriods?.[form.shift] ?? [];
+});
+
+watch(() => form.shift, () => {
+    selectedPeriod.value = '';
+    form.period_start = '';
+    form.period_end = '';
+});
+
+watch(selectedPeriod, (val) => {
+    if (!val) {
+        form.period_start = '';
+        form.period_end = '';
+        return;
+    }
+    const [start, end] = val.split('|');
+    form.period_start = start ?? '';
+    form.period_end = end ?? '';
 });
 
 function pick(step: Step) {
@@ -80,7 +119,7 @@ function remove(row: ResultRow) {
         <div class="mb-6">
             <h1 class="text-2xl font-bold tracking-tight text-ink-primary">{{ t('production.results') }}</h1>
             <p class="mt-1 text-sm text-ink-secondary">
-                {{ workOrder.wo_no }} · {{ workOrderPart?.part_number }} {{ workOrderPart?.part_name }} · {{ t('production.fgQty') }} {{ fmt(workOrder.qty) }}
+                {{ workOrder.wo_no }} · {{ workOrderPart?.part_number }} {{ workOrderPart?.part_name }}<span v-if="workOrderPart?.model"> · {{ workOrderPart.model }}</span> · {{ t('production.fgQty') }} {{ fmt(workOrder.qty) }}
             </p>
         </div>
 
@@ -93,6 +132,7 @@ function remove(row: ResultRow) {
                         <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                             <th scope="col" class="px-3 py-3">{{ t('production.sequence') }}</th>
                             <th scope="col" class="px-3 py-3">{{ t('production.parent') }}</th>
+                            <th scope="col" class="px-3 py-3">{{ t('master.model') }}</th>
                             <th scope="col" class="px-3 py-3">{{ t('production.process') }}</th>
                             <th scope="col" class="px-3 py-3">{{ t('production.machine') }}</th>
                             <th scope="col" class="px-3 py-3 text-right">{{ t('production.target') }}</th>
@@ -108,6 +148,7 @@ function remove(row: ResultRow) {
                                 <div class="font-medium text-ink-primary">{{ s.part_number }}</div>
                                 <div class="text-xs text-ink-secondary">{{ s.part_name }}</div>
                             </td>
+                            <td class="px-3 py-2.5 text-ink-secondary">{{ s.model || '—' }}</td>
                             <td class="px-3 py-2.5 text-ink-primary">{{ s.process ?? '—' }}</td>
                             <td class="px-3 py-2.5 text-ink-primary">{{ s.machine ?? '—' }}</td>
                             <td class="px-3 py-2.5 text-right tabular-nums text-ink-secondary">{{ fmt(s.target_qty) }}</td>
@@ -122,7 +163,7 @@ function remove(row: ResultRow) {
                             </td>
                         </tr>
                         <tr v-if="!steps.length">
-                            <td colspan="8" class="px-3 py-10 text-center text-sm text-ink-secondary">{{ t('production.noSteps') }}</td>
+                            <td colspan="9" class="px-3 py-10 text-center text-sm text-ink-secondary">{{ t('production.noSteps') }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -138,7 +179,7 @@ function remove(row: ResultRow) {
                     <select :aria-label="t('production.step')" v-model="form.parent_part_id" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
                         <option value="">{{ t('production.selectStep') }}</option>
                         <option v-for="s in steps" :key="s.parent_part_id" :value="s.parent_part_id">
-                            {{ s.sequence }} · {{ s.part_number }} — {{ s.process ?? '-' }}
+                            {{ s.sequence }} · {{ s.part_number }}{{ s.model ? ` [${s.model}]` : '' }} — {{ s.process ?? '-' }}
                         </option>
                     </select>
                     <InputError :message="form.errors.parent_part_id" class="mt-1" />
@@ -151,6 +192,7 @@ function remove(row: ResultRow) {
                 <div class="sm:col-span-2">
                     <label class="text-xs font-semibold text-ink-secondary">{{ t('production.qtyReject') }}</label>
                     <input :aria-label="t('production.qtyReject')" v-model="form.qty_reject" type="number" step="any" min="0" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                    <InputError :message="form.errors.qty_reject" class="mt-1" />
                 </div>
                 <div class="sm:col-span-2">
                     <label class="text-xs font-semibold text-ink-secondary">{{ t('production.resultDate') }}</label>
@@ -158,9 +200,21 @@ function remove(row: ResultRow) {
                 </div>
                 <div class="sm:col-span-2">
                     <label class="text-xs font-semibold text-ink-secondary">{{ t('production.shift') }}</label>
-                    <input :aria-label="t('production.shift')" v-model="form.shift" type="text" :placeholder="t('production.shiftPlaceholder')" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                    <select :aria-label="t('production.shift')" v-model="form.shift" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                        <option v-for="sk in shiftKeys" :key="sk" :value="sk">{{ t('production.shift') }} {{ sk }}</option>
+                    </select>
                 </div>
-                <div class="sm:col-span-10">
+                <div class="sm:col-span-4">
+                    <label class="text-xs font-semibold text-ink-secondary">{{ t('production.period') }}</label>
+                    <select :aria-label="t('production.period')" v-model="selectedPeriod" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary">
+                        <option value="">{{ t('production.selectPeriod') }}</option>
+                        <option v-for="p in availablePeriods" :key="p.start" :value="`${p.start}|${p.end}`">
+                            {{ p.label }}
+                        </option>
+                    </select>
+                    <InputError :message="form.errors.period_start || form.errors.period_end" class="mt-1" />
+                </div>
+                <div class="sm:col-span-6">
                     <label class="text-xs font-semibold text-ink-secondary">{{ t('production.notes') }}</label>
                     <input :aria-label="t('production.notes')" v-model="form.notes" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
                 </div>
@@ -181,6 +235,7 @@ function remove(row: ResultRow) {
                         <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                             <th scope="col" class="px-3 py-3">{{ t('production.resultDate') }}</th>
                             <th scope="col" class="px-3 py-3">{{ t('production.parent') }}</th>
+                            <th scope="col" class="px-3 py-3">{{ t('master.model') }}</th>
                             <th scope="col" class="px-3 py-3">{{ t('production.process') }}</th>
                             <th scope="col" class="px-3 py-3">{{ t('production.machine') }}</th>
                             <th scope="col" class="px-3 py-3 text-right">{{ t('production.qtyGood') }}</th>
@@ -191,11 +246,17 @@ function remove(row: ResultRow) {
                     </thead>
                     <tbody class="divide-y divide-borderline">
                         <tr v-for="r in results" :key="r.id" class="hover:bg-primary-light/40">
-                            <td class="px-3 py-2.5 text-ink-primary">{{ r.result_date }}</td>
+                            <td class="px-3 py-2.5 text-ink-primary">
+                                <div>{{ r.result_date }}</div>
+                                <div v-if="r.period_start && r.period_end" class="text-xs tabular-nums text-ink-secondary">
+                                    {{ r.shift ? `S${r.shift} · ` : '' }}{{ r.period_start.slice(0, 5) }} - {{ r.period_end.slice(0, 5) }}
+                                </div>
+                            </td>
                             <td class="px-3 py-2.5">
                                 <span class="font-medium text-ink-primary">{{ r.parent_part?.part_number }}</span>
                                 <span class="text-xs text-ink-secondary"> · {{ r.parent_part?.part_name }}</span>
                             </td>
+                            <td class="px-3 py-2.5 text-ink-secondary">{{ r.parent_part?.model || '—' }}</td>
                             <td class="px-3 py-2.5 text-ink-secondary">{{ r.process?.process_name ?? '—' }}</td>
                             <td class="px-3 py-2.5 text-ink-secondary">{{ r.machine?.machine_name ?? '—' }}</td>
                             <td class="px-3 py-2.5 text-right tabular-nums font-semibold text-success">{{ fmt(r.qty_good) }}</td>
@@ -208,7 +269,7 @@ function remove(row: ResultRow) {
                             </td>
                         </tr>
                         <tr v-if="!results.length">
-                            <td colspan="8" class="px-3 py-10 text-center text-sm text-ink-secondary">{{ t('production.noResults') }}</td>
+                            <td colspan="9" class="px-3 py-10 text-center text-sm text-ink-secondary">{{ t('production.noResults') }}</td>
                         </tr>
                     </tbody>
                 </table>

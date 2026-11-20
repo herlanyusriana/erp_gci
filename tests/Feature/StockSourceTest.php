@@ -37,7 +37,7 @@ class StockSourceTest extends TestCase
      */
     private function makeStockSource(string $invoiceNo, string $tag): array
     {
-        $part = Part::where('part_number', 'AAN30056405')->firstOrFail();
+        $part = Part::where('part_number', 'CBKG07256C')->firstOrFail();
 
         $supplier = Supplier::create([
             'supplier_code' => 'SUP-TEST-'.$tag,
@@ -189,9 +189,10 @@ class StockSourceTest extends TestCase
         $this->actingAs($this->admin());
 
         $material = Part::whereRaw('UPPER(part_number) NOT LIKE ?', ['%-WIP%'])
-            ->whereHas('partType', fn ($q) => $q->whereRaw('UPPER(code) <> ?', ['WIP']))
+            ->whereHas('partType', fn ($q) => $q->whereRaw("UPPER(code) NOT IN ('WIP', 'FG')"))
             ->firstOrFail();
         $wip = Part::whereRaw('UPPER(part_number) LIKE ?', ['%-WIP%'])->firstOrFail();
+        $fg = Part::whereHas('partType', fn ($q) => $q->whereRaw('UPPER(code) = ?', ['FG']))->firstOrFail();
 
         PartStock::create([
             'part_id' => $material->id, 'tag' => 'MAT-TAB-1',
@@ -201,14 +202,18 @@ class StockSourceTest extends TestCase
             'part_id' => $wip->id, 'tag' => 'WO-TAB#WIP#R1',
             'qty' => 352, 'qty_unit' => 'PCS', 'received_at' => now(),
         ]);
+        PartStock::create([
+            'part_id' => $fg->id, 'tag' => 'WO-TAB#FG#R1',
+            'qty' => 50, 'qty_unit' => 'PCS', 'location_code' => 'FG-A1', 'received_at' => now(),
+        ]);
 
-        // Tab material: WIP tidak boleh ikut.
+        // Tab material: WIP & FG tidak boleh ikut.
         $this->get(route('stocks.index', ['tab' => 'material']))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->where('tab', 'material')
                 ->where('stocks.data', fn ($rows) => collect($rows)
-                    ->every(fn ($r) => strtoupper((string) ($r['part']['part_type']['code'] ?? '')) !== 'WIP')));
+                    ->every(fn ($r) => ! in_array(strtoupper((string) ($r['part']['part_type']['code'] ?? '')), ['WIP', 'FG'], true))));
 
         // Tab WIP: hanya WIP.
         $this->get(route('stocks.index', ['tab' => 'wip']))
@@ -217,6 +222,14 @@ class StockSourceTest extends TestCase
                 ->where('tab', 'wip')
                 ->where('stocks.data', fn ($rows) => collect($rows)
                     ->every(fn ($r) => strtoupper((string) ($r['part']['part_type']['code'] ?? '')) === 'WIP')));
+
+        // Tab FG: hanya FG.
+        $this->get(route('stocks.index', ['tab' => 'fg']))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('tab', 'fg')
+                ->where('stocks.data', fn ($rows) => collect($rows)->isNotEmpty()
+                    && collect($rows)->every(fn ($r) => strtoupper((string) ($r['part']['part_type']['code'] ?? '')) === 'FG')));
     }
 
     /** Label material dicetak ulang dari halaman Stock, jadi receive.id wajib ikut terkirim. */
@@ -298,5 +311,50 @@ class StockSourceTest extends TestCase
         $this->actingAs($this->admin())
             ->get(route('receive.label', $stock->receive_id))
             ->assertOk();
+    }
+
+    public function test_stock_index_exposes_bundle_packings_and_searches_packing_no(): void
+    {
+        [$stock] = $this->makeStockSource('INV-PACK-0001', 'TAG-PACK-0001');
+
+        $receive = $stock->receive;
+        $receive->update([
+            'packing_count' => 2,
+            'packing_type' => 'COIL',
+            'bundle_unit' => 'PALLET',
+        ]);
+
+        $receive->packings()->create([
+            'packing_no' => 'PK-COIL-002',
+            'sequence' => 2,
+            'qty' => 60,
+            'uom' => 'KGM',
+            'net_weight' => 60,
+        ]);
+        $receive->packings()->create([
+            'packing_no' => 'PK-COIL-001',
+            'sequence' => 1,
+            'qty' => 40,
+            'uom' => 'KGM',
+            'net_weight' => 40,
+        ]);
+
+        $this->actingAs($this->admin())
+            ->get(route('stocks.index', ['search' => 'PK-COIL-002']))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Incoming/Stock/Index')
+                ->where('stocks.data', function ($rows) use ($stock) {
+                    $row = collect($rows)->firstWhere('id', $stock->id);
+                    if ($row === null) {
+                        return false;
+                    }
+                    $packings = $row['receive']['packings'] ?? [];
+
+                    return ($row['receive']['packing_type'] ?? null) === 'COIL'
+                        && count($packings) === 2
+                        && $packings[0]['packing_no'] === 'PK-COIL-001'
+                        && $packings[1]['packing_no'] === 'PK-COIL-002';
+                }));
     }
 }

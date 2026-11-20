@@ -17,6 +17,7 @@ interface LabelRow {
     part_id: number;
     part_number: string | null;
     part_name: string | null;
+    model: string | null;
     is_fg: boolean;
     machine_name: string | null;
     shift: string | null;
@@ -205,6 +206,7 @@ const canDeliver = (row: LabelRow) => row.label_status === 'printed';
                         <th scope="col" class="px-4 py-3">{{ t('production.machine') }}</th>
                         <th scope="col" class="px-4 py-3">{{ t('production.woNo') }}</th>
                         <th scope="col" class="px-4 py-3">{{ t('production.part') }}</th>
+                        <th scope="col" class="px-4 py-3">{{ t('master.model') }}</th>
                         <th scope="col" class="px-4 py-3 text-right">{{ t('production.good') }}</th>
                         <th scope="col" class="px-4 py-3 text-right">{{ t('production.reject') }}</th>
                         <th scope="col" class="px-4 py-3">{{ t('production.labelStatus') }}</th>
@@ -234,6 +236,7 @@ const canDeliver = (row: LabelRow) => row.label_status === 'printed';
                             </div>
                             <div class="text-xs text-ink-secondary">{{ row.part_name ?? '' }}</div>
                         </td>
+                        <td class="px-4 py-3 text-ink-secondary">{{ row.model || '—' }}</td>
                         <td class="px-4 py-3 text-right tabular-nums text-success">
                             {{ fmt(row.qty_good) }}
                             <div v-if="(row.carry_over_in ?? 0) > 0" class="text-[11px] font-normal text-ink-secondary">
@@ -277,7 +280,7 @@ const canDeliver = (row: LabelRow) => row.label_status === 'printed';
                         </td>
                     </tr>
                     <tr v-if="rows.length === 0">
-                        <td colspan="9" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('production.labelQueueEmpty') }}</td>
+                        <td colspan="10" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('production.labelQueueEmpty') }}</td>
                     </tr>
                 </tbody>
             </table>
@@ -288,7 +291,7 @@ const canDeliver = (row: LabelRow) => row.label_status === 'printed';
             <div class="p-5" v-if="selectedRow">
                 <h2 class="text-base font-bold text-ink-primary">{{ t('production.packagingModalTitle') }}</h2>
                 <p class="mt-1 text-xs text-ink-secondary">
-                    {{ selectedRow.wo_no }} · {{ selectedRow.part_number }}
+                    {{ selectedRow.wo_no }} · {{ selectedRow.part_number }}<span v-if="selectedRow.model"> · {{ selectedRow.model }}</span>
                     <span v-if="(selectedRow.carry_over_in ?? 0) > 0"> (termasuk carry-over {{ fmt(selectedRow.carry_over_in) }})</span>
                 </p>
 

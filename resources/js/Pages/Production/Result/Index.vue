@@ -13,6 +13,7 @@ type StepDetail = {
     parent_part_id: number;
     part_number: string | null;
     part_name: string | null;
+    model: string | null;
     qty_good: number;
     qty_reject: number;
     machines: string[];
@@ -52,7 +53,7 @@ const pct = (n: number | null | undefined) => (n == null ? '—' : `${Number(n).
  * sesuai catatan review: satu part FG bisa punya beberapa WO berjalan.
  */
 const groups = computed(() => {
-    const map = new Map<string, { part_number: string; part_name: string; rows: Row[]; woQty: number; produced: number }>();
+    const map = new Map<string, { part_number: string; part_name: string; model: string | null; rows: Row[]; woQty: number; produced: number }>();
 
     for (const wo of props.workOrders.data) {
         const key = wo.part?.part_number ?? '—';
@@ -60,6 +61,7 @@ const groups = computed(() => {
             map.set(key, {
                 part_number: key,
                 part_name: wo.part?.part_name ?? '',
+                model: wo.part?.model ?? null,
                 rows: [],
                 woQty: 0,
                 produced: 0,
@@ -123,6 +125,7 @@ function closeDetail() {
                                     <span class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('production.fgGroup') }}</span>
                                     <span class="font-semibold text-ink-primary">{{ group.part_number }}</span>
                                     <span class="text-xs text-ink-secondary">{{ group.part_name }}</span>
+                                    <span v-if="group.model" class="rounded bg-primary-light px-1.5 py-0.5 text-[11px] font-medium text-primary">{{ group.model }}</span>
                                     <span class="ml-auto text-xs text-ink-secondary">{{ t('production.woCount', { n: group.rows.length }) }}</span>
                                 </div>
                             </td>
@@ -184,7 +187,9 @@ function closeDetail() {
                 <div class="mb-4 flex items-start justify-between gap-4">
                     <div>
                         <h2 class="text-lg font-bold text-ink-primary">{{ detailRow?.wo_no }}</h2>
-                        <p class="text-sm text-ink-secondary">{{ detailRow?.part?.part_number }} · {{ detailRow?.part?.part_name }}</p>
+                        <p class="text-sm text-ink-secondary">
+                            {{ detailRow?.part?.part_number }} · {{ detailRow?.part?.part_name }}<span v-if="detailRow?.part?.model"> · {{ detailRow.part.model }}</span>
+                        </p>
                     </div>
                     <button type="button" class="rounded-md p-1.5 text-ink-secondary transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" :aria-label="t('common.close')" @click="closeDetail">
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -216,6 +221,7 @@ function closeDetail() {
                         <thead class="bg-background">
                             <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                                 <th scope="col" class="px-3 py-2">{{ t('production.wipStep') }}</th>
+                                <th scope="col" class="px-3 py-2">{{ t('master.model') }}</th>
                                 <th scope="col" class="px-3 py-2 text-right">{{ t('production.good') }}</th>
                                 <th scope="col" class="px-3 py-2 text-right">{{ t('production.reject') }}</th>
                                 <th scope="col" class="px-3 py-2">{{ t('production.machine') }}</th>
@@ -228,13 +234,14 @@ function closeDetail() {
                                     <div class="font-medium text-ink-primary">{{ step.part_number ?? '—' }}</div>
                                     <div class="text-xs text-ink-secondary">{{ step.part_name ?? '' }}</div>
                                 </td>
+                                <td class="px-3 py-2 text-ink-secondary">{{ step.model || '—' }}</td>
                                 <td class="px-3 py-2 text-right tabular-nums text-success">{{ fmt(step.qty_good) }}</td>
                                 <td class="px-3 py-2 text-right tabular-nums text-danger">{{ fmt(step.qty_reject) }}</td>
                                 <td class="px-3 py-2 text-ink-secondary">{{ step.machines.length ? step.machines.join(', ') : '—' }}</td>
                                 <td class="px-3 py-2 tabular-nums text-ink-secondary">{{ step.last_date ?? '—' }}</td>
                             </tr>
                             <tr v-if="!detailRow?.detail?.steps?.length">
-                                <td colspan="5" class="px-3 py-8 text-center text-sm text-ink-secondary">{{ t('production.noResultsYet') }}</td>
+                                <td colspan="6" class="px-3 py-8 text-center text-sm text-ink-secondary">{{ t('production.noResultsYet') }}</td>
                             </tr>
                         </tbody>
                     </table>

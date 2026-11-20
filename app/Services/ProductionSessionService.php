@@ -69,7 +69,7 @@ final class ProductionSessionService
         $partsQuery = WorkOrderItem::query()
             ->where('machine_id', $machine->id)
             ->whereNotNull('parent_part_id')
-            ->with(['parentPart:id,part_number,part_name', 'workOrder:id,wo_no,status,qty'])
+            ->with(['parentPart:id,part_number,part_name,model', 'workOrder:id,wo_no,status,qty'])
             ->whereHas('workOrder', fn ($q) => $q->whereIn('status', ['in_progress']))
             ->get();
 
@@ -106,6 +106,7 @@ final class ProductionSessionService
                     'part_id' => (int) $item->parent_part_id,
                     'part_number' => $item->parentPart?->part_number,
                     'part_name' => $item->parentPart?->part_name,
+                    'model' => $item->parentPart?->model,
                     'uom' => $item->parent_uom,
                     'work_order_id' => (int) $item->work_order_id,
                     'wo_no' => $item->workOrder?->wo_no,

@@ -12,26 +12,31 @@ use Inertia\Response;
 class PartStockController extends Controller
 {
     /** Tipe part yang dipisah ke tab masing-masing. */
-    public const TABS = ['material', 'wip'];
+    public const TABS = ['material', 'wip', 'fg'];
 
     public function index(Request $request): Response
     {
         Gate::authorize('viewAny', PartStock::class);
 
-        // Stok WIP tidak boleh tercampur dengan material: WIP lahir dari mesin,
-        // tidak punya invoice/supplier/lokasi, sehingga mencampurnya membuat
-        // tabel penuh kolom kosong dan menyulitkan pembacaan.
+        // Stok dipisah ke tiga tab (material, WIP, FG) agar tiap jenis punya
+        // kolom yang relevan tanpa tercampur.
         $tab = (string) $request->input('tab', 'material');
         $tab = in_array($tab, self::TABS, true) ? $tab : 'material';
 
         $stocks = PartStock::query()
-            ->whereHas('part.partType', fn ($q) => $tab === 'wip'
-                ? $q->whereRaw('UPPER(code) = ?', ['WIP'])
-                : $q->whereRaw('UPPER(code) <> ?', ['WIP']))
+            ->whereHas('part.partType', fn ($q) => match ($tab) {
+                'wip' => $q->whereRaw('UPPER(code) = ?', ['WIP']),
+                'fg' => $q->whereRaw('UPPER(code) = ?', ['FG']),
+                default => $q->whereRaw("UPPER(code) NOT IN ('WIP', 'FG')"),
+            })
             ->with([
                 'part:id,part_number,part_name,model,part_type_id',
                 'part.partType:id,code,name',
-                'receive:id,invoice_no,arrival_item_id,location_code',
+                'receive:id,invoice_no,arrival_item_id,location_code,packing_count,packing_type,bundle_unit,net_weight',
+                'receive.packings' => fn ($q) => $q
+                    ->select('id', 'receive_id', 'packing_no', 'sequence', 'qty', 'uom', 'net_weight')
+                    ->orderBy('sequence')
+                    ->orderBy('id'),
                 'receive.arrivalItem:id,arrival_id',
                 // invoice_no ikut: kolom Faktur membaca invoice arrival (dokumen
                 // induk), bukan snapshot receive yang bisa basi.
@@ -42,7 +47,11 @@ class PartStockController extends Controller
             // melepas filter tab (material/WIP) saat mencari nomor part.
             ->when($request->input('search'), fn ($q, $s) => $q->where(function ($query) use ($s): void {
                 $query->where('tag', 'ilike', "%{$s}%")
-                    ->orWhereHas('part', fn ($w) => $w->where('part_number', 'ilike', "%{$s}%")->orWhere('part_name', 'ilike', "%{$s}%"));
+                    ->orWhereHas('part', fn ($w) => $w
+                        ->where('part_number', 'ilike', "%{$s}%")
+                        ->orWhere('part_name', 'ilike', "%{$s}%")
+                        ->orWhere('model', 'ilike', "%{$s}%"))
+                    ->orWhereHas('receive.packings', fn ($w) => $w->where('packing_no', 'ilike', "%{$s}%"));
             }))
             ->orderBy('part_id')
             ->orderBy('tag')

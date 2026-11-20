@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\ProductionResult;
 use App\Models\WorkOrder;
 use App\Services\ProductionResultService;
+use App\Services\ProductionSessionService;
 use App\Services\WoService;
+use App\Support\ProductionPeriods;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -18,6 +20,7 @@ class ProductionResultController extends Controller
     public function __construct(
         protected ProductionResultService $resultService,
         protected WoService $woService,
+        protected ProductionSessionService $sessionService,
     ) {}
 
     /**
@@ -28,14 +31,15 @@ class ProductionResultController extends Controller
         Gate::authorize('viewAny', WorkOrder::class);
 
         $workOrders = WorkOrder::query()
-            ->with('part:id,part_number,part_name')
+            ->with('part:id,part_number,part_name,model')
             ->where('status', 'in_progress')
             ->withCount('results')
             ->when($request->input('search'), fn ($q, $search) => $q->where(fn ($w) => $w
                 ->where('wo_no', 'ilike', "%{$search}%")
                 ->orWhereHas('part', fn ($p) => $p
                     ->where('part_number', 'ilike', "%{$search}%")
-                    ->orWhere('part_name', 'ilike', "%{$search}%"))))
+                    ->orWhere('part_name', 'ilike', "%{$search}%")
+                    ->orWhere('model', 'ilike', "%{$search}%"))))
             ->orderByDesc('released_at')
             ->paginate(15)
             ->withQueryString();
@@ -85,7 +89,7 @@ class ProductionResultController extends Controller
         $rows = ProductionResult::query()
             ->whereIn('work_order_id', $workOrderIds)
             ->with([
-                'parentPart:id,part_number,part_name',
+                'parentPart:id,part_number,part_name,model',
                 'machine:id,machine_code,machine_name',
             ])
             ->orderBy('result_date')
@@ -115,6 +119,7 @@ class ProductionResultController extends Controller
                             'parent_part_id' => (int) $parentId,
                             'part_number' => $stepRows->first()->parentPart?->part_number,
                             'part_name' => $stepRows->first()->parentPart?->part_name,
+                            'model' => $stepRows->first()->parentPart?->model,
                             'qty_good' => round($good, 4),
                             'qty_reject' => round((float) $stepRows->sum('qty_reject'), 4),
                             'machines' => $stepRows->pluck('machine.machine_name')->filter()->unique()->values()->all(),
@@ -144,15 +149,22 @@ class ProductionResultController extends Controller
             abort(422, __('WO belum di-release.'));
         }
 
-        $workOrder->load(['part:id,part_number,part_name']);
+        $workOrder->load(['part:id,part_number,part_name,model']);
+
+        $shiftPeriods = [];
+        foreach (array_keys(ProductionPeriods::SHIFTS) as $shiftKey) {
+            $shiftPeriods[(string) $shiftKey] = ProductionPeriods::forShift((string) $shiftKey);
+        }
 
         return Inertia::render('Production/Result/Create', [
             'workOrder' => $workOrder->only(['id', 'wo_no', 'qty', 'status']),
             'workOrderPart' => $workOrder->part,
             'steps' => $this->steps($workOrder),
+            'shiftPeriods' => $shiftPeriods,
+            'defaultShift' => $this->sessionService->currentShift($this->sessionService->plantNow()),
             'results' => ProductionResult::query()
                 ->where('work_order_id', $workOrder->id)
-                ->with(['parentPart:id,part_number,part_name', 'process:id,process_name', 'machine:id,machine_code,machine_name', 'reporter:id,name'])
+                ->with(['parentPart:id,part_number,part_name,model', 'process:id,process_name', 'machine:id,machine_code,machine_name', 'reporter:id,name'])
                 ->orderByDesc('id')
                 ->limit(50)
                 ->get(),
@@ -170,6 +182,8 @@ class ProductionResultController extends Controller
             'qty_reject' => ['nullable', 'numeric', 'min:0'],
             'result_date' => ['nullable', 'date'],
             'shift' => ['nullable', 'string', 'max:20'],
+            'period_start' => ['nullable', 'date_format:H:i', 'required_with:period_end'],
+            'period_end' => ['nullable', 'date_format:H:i', 'required_with:period_start'],
             'machine_id' => ['nullable', 'integer', 'exists:machines,id'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
@@ -204,7 +218,7 @@ class ProductionResultController extends Controller
     private function steps(WorkOrder $workOrder): array
     {
         $items = $workOrder->items()
-            ->with(['parentPart:id,part_number,part_name,part_type_id', 'parentPart.partType:id,code', 'process:id,process_name', 'machine:id,machine_code,machine_name'])
+            ->with(['parentPart:id,part_number,part_name,model,part_type_id', 'parentPart.partType:id,code', 'process:id,process_name', 'machine:id,machine_code,machine_name'])
             ->get();
 
         $produced = $workOrder->results()
@@ -221,6 +235,7 @@ class ProductionResultController extends Controller
                     'parent_part_id' => (int) $parentId,
                     'part_number' => $first->parentPart?->part_number,
                     'part_name' => $first->parentPart?->part_name,
+                    'model' => $first->parentPart?->model,
                     'part_type' => strtoupper((string) $first->parentPart?->partType?->code),
                     'process' => $first->process?->process_name,
                     'machine' => $first->machine?->machine_name,

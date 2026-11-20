@@ -12,7 +12,7 @@ const { t } = useI18n();
 const MAX_BUNDLES = 50;
 const MAX_PACKINGS = 999;
 const MAX_TOTAL_ROWS = 1000;
-const requestedPackingCount = ref<number | null>(null);
+const packingCapNotice = ref<number | null>(null);
 
 interface PackingSubRow {
     qty: number | '';
@@ -22,8 +22,6 @@ interface PackingSubRow {
 
 interface BundleGroup {
     tag: string;
-    /** Jenis kemasan bundle ini; boleh berbeda antar bundle dalam satu penerimaan. */
-    packing_type: string;
     packings: PackingSubRow[];
 }
 
@@ -72,24 +70,11 @@ const initialBundleCount = () => {
     return count > 0 ? Math.min(count, MAX_BUNDLES) : 4;
 };
 
-// Section 2 State
-//
-// `packing_count` dan `packing_type` di sini adalah NILAI AWAL, bukan nilai
-// semua bundle: satu penerimaan boleh berisi bundle dengan jumlah packing
-// berbeda (mis. bundle 1 = 3 packing, bundle 2 = 8 packing). Nilai awal hanya
-// dipakai saat baris bundle dibuat; sesudahnya tiap bundle diatur sendiri di
-// kolom Tag pada tabel detail.
+// Section 2 State: jumlah bundle, tipe bundle, dan jenis kemasan (berlaku otomatis ke seluruh bundle/packing).
 const bundleConfig = reactive({
     bundle_count: initialBundleCount() as number | '',
     bundle_unit: initialBundleUnit(),
-    packing_count: 3 as number | '',
     packing_type: packingTypeOptions.value.includes('COIL') ? 'COIL' : (packingTypeOptions.value[0] ?? 'BOX'),
-});
-
-const packingCapNotice = computed(() => {
-    const requested = requestedPackingCount.value;
-
-    return requested !== null && requested > maxPackingsPerBundle.value ? maxPackingsPerBundle.value : null;
 });
 
 // Section 1 Form State
@@ -131,15 +116,6 @@ function bundleRowCap(bundleIndex: number): number {
     return Math.max(1, Math.min(MAX_PACKINGS, MAX_TOTAL_ROWS - otherRows));
 }
 
-const maxPackingsPerBundle = computed(() => {
-    const bundleCount = Math.max(1, Math.floor(Number(bundleConfig.bundle_count) || 1));
-
-    return Math.max(1, Math.min(MAX_PACKINGS, Math.floor(MAX_TOTAL_ROWS / bundleCount)));
-});
-
-const defaultPackingCount = () =>
-    Math.min(maxPackingsPerBundle.value, Math.max(1, Math.floor(Number(bundleConfig.packing_count) || 1)));
-
 /** Baris terakhir yang berisi menentukan batas bawah jumlah packing. */
 function minimumPackingCount(bundle: BundleGroup): number {
     let lastFilled = -1;
@@ -168,6 +144,8 @@ function setBundlePackingCount(bundle: BundleGroup, bundleIndex: number, value: 
 
 function onBundlePackingCount(bundle: BundleGroup, bundleIndex: number, event: Event) {
     const value = Number((event.target as HTMLInputElement).value);
+    const cap = bundleRowCap(bundleIndex);
+    packingCapNotice.value = Number.isFinite(value) && value > cap ? cap : null;
     setBundlePackingCount(bundle, bundleIndex, Number.isFinite(value) && value > 0 ? value : 1);
 
     // Tulis balik nilai yang benar-benar dipakai supaya input tidak menampilkan
@@ -175,16 +153,10 @@ function onBundlePackingCount(bundle: BundleGroup, bundleIndex: number, event: E
     (event.target as HTMLInputElement).value = String(bundle.packings.length);
 }
 
-/** Bundle yang belum diisi qty/berat masih boleh mengikuti nilai awal. */
-function isBundlePristine(bundle: BundleGroup): boolean {
-    return bundle.packings.every((p) => !Number(p.qty) && !Number(p.net_weight));
-}
-
 function createBundle(index: number): BundleGroup {
     return {
         tag: String(index),
-        packing_type: bundleConfig.packing_type,
-        packings: Array.from({ length: defaultPackingCount() }, createPackingRow),
+        packings: [createPackingRow()],
     };
 }
 
@@ -195,47 +167,13 @@ function resizeBundles() {
     const current = bundles.value;
     while (current.length < bundleCount) {
         const bundle = createBundle(current.length + 1);
-        // Jatah baris total bisa lebih kecil dari nilai awal: potong bundle
-        // baru agar gabungan semua bundle tidak melewati MAX_TOTAL_ROWS.
         setBundlePackingCount(bundle, current.length, bundle.packings.length);
         current.push(bundle);
     }
     current.length = bundleCount;
 }
 
-/**
- * Nilai awal diterapkan hanya ke bundle yang belum diisi qty/berat.
- *
- * Tanpa aturan ini, mengubah "Jumlah packing" setelah mengatur bundle 1 = 3
- * dan bundle 2 = 8 akan menghapus pengaturan per bundle yang baru saja dibuat
- * operator. Bundle yang sudah berisi data tidak pernah diubah diam-diam.
- */
-function applyPackingDefaults() {
-    // Tampilkan angka yang benar-benar dipakai, bukan angka yang diminta:
-    // kolom "Jumlah packing" tidak boleh menjanjikan 2000 sementara tabel
-    // hanya mendapat 999.
-    const cap = maxPackingsPerBundle.value;
-    if ((Number(bundleConfig.packing_count) || 0) > cap) {
-        bundleConfig.packing_count = cap;
-    }
-
-    bundles.value.forEach((bundle, index) => {
-        if (!isBundlePristine(bundle)) {
-            return;
-        }
-
-        bundle.packing_type = bundleConfig.packing_type;
-        setBundlePackingCount(bundle, index, defaultPackingCount());
-    });
-}
-
 watch(() => bundleConfig.bundle_count, resizeBundles);
-watch(() => [bundleConfig.packing_count, bundleConfig.packing_type], applyPackingDefaults);
-
-function onPackingCountInput(event: Event) {
-    const value = Number((event.target as HTMLInputElement).value);
-    requestedPackingCount.value = Number.isFinite(value) && value > 0 ? Math.floor(value) : null;
-}
 
 // Otomasi Qty -> Net weight jika UOM = KGM/KG
 function onQtyChange(r: PackingSubRow) {
@@ -258,10 +196,7 @@ const round4 = (n: number) => Math.round(n * 10000) / 10000;
  * dasar pembagian yang jujur, jadi berat diisi manual per baris.
  */
 const splitsNetWeight = computed(
-    () =>
-        props.weightBasis
-        && bundles.value.length > 0
-        && bundles.value.every((b) => String(b.packing_type).toUpperCase() === 'COIL'),
+    () => props.weightBasis && String(bundleConfig.packing_type).toUpperCase() === 'COIL',
 );
 
 /** Baris packing yang benar-benar berisi; baris kosong tidak dikirim ke server. */
@@ -300,7 +235,7 @@ function packingSequence(bundle: BundleGroup, rowIndex: number): number {
  * kedatangan.
  */
 const distribution = computed(() => {
-    const rows = (Number(bundleConfig.bundle_count) || 1) * (Number(bundleConfig.packing_count) || 1);
+    const rows = bundles.value.reduce((sum, b) => sum + b.packings.length, 0);
     const acceptedNet = Math.max(0, Number(props.maxReceivable) || 0);
     const remainingNet = Math.max(0, Number(props.remainingNetWeight) || 0);
     // Limit PO dihitung dalam berat, jadi qty barang ikut diskalakan dengan
@@ -519,7 +454,7 @@ function submit() {
             bundle_qty: 1,
             bundle_unit: bundleConfig.bundle_unit,
             packing_count: packingsData.length,
-            packing_type: b.packing_type,
+            packing_type: bundleConfig.packing_type,
             packing_qty: packingsData.length > 0 ? round4(bQty / packingsData.length) : round4(bQty),
             net_weight: props.weightBasis ? round4(bNet) : (bNet > 0 ? round4(bNet) : null),
             packings: packingsData,
@@ -676,7 +611,7 @@ function submit() {
                     Bundle & Packing
                 </h2>
 
-                <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div class="grid gap-4 sm:grid-cols-3">
                     <div>
                         <label class="text-xs font-semibold text-ink-secondary">
                             {{ t('incoming.bundleQty') }}
@@ -701,24 +636,6 @@ function submit() {
                         >
                             <option v-for="u in bundleTypeOptions" :key="u" :value="u">{{ u }}</option>
                         </select>
-                    </div>
-
-                    <div>
-                        <label class="text-xs font-semibold text-ink-secondary">
-                            {{ t('incoming.packingPerBundle') }}
-                        </label>
-                        <input
-                            v-model="bundleConfig.packing_count"
-                            type="number"
-                            min="1"
-                            :max="MAX_PACKINGS"
-                            @input="onPackingCountInput"
-                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm font-bold text-ink-primary focus:border-primary focus:ring-primary"
-                        />
-                        <p v-if="packingCapNotice" class="mt-1 text-[11px] font-semibold text-warning">
-                            {{ t('incoming.packingRowLimit', { packing: packingCapNotice, max: MAX_TOTAL_ROWS }) }}
-                        </p>
-                        <p v-else class="mt-1 text-[11px] text-ink-secondary">{{ t('incoming.packingDefaultHint') }}</p>
                     </div>
 
                     <div>
@@ -761,6 +678,9 @@ function submit() {
                 </div>
 
                 <InputError :message="form.errors.tags" class="mb-3" />
+                <p v-if="packingCapNotice" class="mb-3 text-xs font-semibold text-warning">
+                    {{ t('incoming.packingRowLimit', { packing: packingCapNotice, max: MAX_TOTAL_ROWS }) }}
+                </p>
 
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-borderline border border-borderline text-sm">
@@ -769,7 +689,8 @@ function submit() {
                                 <th class="w-12 border border-borderline px-3 py-2.5 text-center">No</th>
                                 <th class="w-52 border border-borderline px-3 py-2.5">{{ t('master.partName') }}</th>
                                 <th class="w-32 border border-borderline px-3 py-2.5">{{ t('master.model') }}</th>
-                                <th class="w-48 border border-borderline px-3 py-2.5">Tag # (Bundle)</th>
+                                <th class="w-44 border border-borderline px-3 py-2.5">Tag # (Bundle)</th>
+                                <th class="w-28 border border-borderline px-3 py-2.5 text-center">{{ t('incoming.packingQty') }}</th>
                                 <th class="w-36 border border-borderline px-3 py-2.5">Packing #</th>
                                 <th class="w-32 border border-borderline px-3 py-2.5 text-right">Qty/packing</th>
                                 <th class="w-24 border border-borderline px-3 py-2.5">UOM</th>
@@ -818,24 +739,24 @@ function submit() {
                                             :aria-label="`${t('incoming.tag')} ${bi + 1}`"
                                             class="w-full rounded border-borderline bg-surface px-2.5 py-1.5 font-mono text-xs font-bold text-ink-primary focus:border-primary focus:ring-primary"
                                         />
-                                        <div class="mt-1.5 flex items-center gap-1">
-                                            <input
-                                                :value="b.packings.length"
-                                                type="number"
-                                                min="1"
-                                                :max="MAX_PACKINGS"
-                                                inputmode="numeric"
-                                                :aria-label="t('incoming.packingCountForBundle', { bundle: bi + 1 })"
-                                                class="w-14 rounded border-borderline bg-surface px-1.5 py-1 text-center text-xs font-bold text-ink-primary focus:border-primary focus:ring-primary"
-                                                @input="onBundlePackingCount(b, bi, $event)"
-                                            />
-                                            <select
-                                                v-model="b.packing_type"
-                                                :aria-label="t('incoming.packingTypeForBundle', { bundle: bi + 1 })"
-                                                class="min-w-0 flex-1 rounded border-borderline bg-surface px-1 py-1 text-[11px] font-semibold text-ink-primary focus:border-primary focus:ring-primary"
-                                            >
-                                                <option v-for="p in packingTypeOptions" :key="p" :value="p">{{ p }}</option>
-                                            </select>
+                                    </td>
+                                    <td
+                                        v-if="ri === 0"
+                                        :rowspan="b.packings.length"
+                                        class="border border-borderline bg-surface p-2 text-center align-middle"
+                                    >
+                                        <input
+                                            :value="b.packings.length"
+                                            type="number"
+                                            min="1"
+                                            :max="MAX_PACKINGS"
+                                            inputmode="numeric"
+                                            :aria-label="t('incoming.packingCountForBundle', { bundle: bi + 1 })"
+                                            class="w-16 rounded border-borderline bg-surface px-2 py-1.5 text-center text-xs font-bold text-ink-primary focus:border-primary focus:ring-primary"
+                                            @input="onBundlePackingCount(b, bi, $event)"
+                                        />
+                                        <div class="mt-1 text-[10px] font-semibold uppercase tracking-wide text-ink-secondary">
+                                            {{ bundleConfig.packing_type }}
                                         </div>
                                     </td>
 
@@ -878,7 +799,7 @@ function submit() {
                         </tbody>
                         <tfoot class="border-t-2 border-ink-primary bg-background font-bold text-ink-primary">
                             <tr>
-                                <td colspan="5" class="border border-borderline px-3 py-2 text-right text-xs uppercase">
+                                <td colspan="6" class="border border-borderline px-3 py-2 text-right text-xs uppercase">
                                     TOTAL ({{ totals.bundles }} Bundle, {{ totals.packings }} Packing) :
                                 </td>
                                 <td class="border border-borderline px-3 py-2 text-right tabular-nums text-primary text-xs font-bold">

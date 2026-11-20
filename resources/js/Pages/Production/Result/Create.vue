@@ -23,6 +23,7 @@ interface Step {
 }
 
 interface PeriodOption {
+    period?: number;
     start: string;
     end: string;
     label: string;
@@ -48,6 +49,7 @@ const props = defineProps<{
     workOrderPart: { id: number; part_number: string; part_name: string; model?: string | null } | null;
     steps: Step[];
     shiftPeriods?: Record<string, PeriodOption[]>;
+    shiftPeriodsByDayType?: Record<string, Record<string, PeriodOption[]>>;
     defaultShift?: string;
     results: ResultRow[];
 }>();
@@ -69,11 +71,25 @@ const form = useForm({
 
 const selectedPeriod = ref('');
 
+const dayTypeForDate = (dateStr: string): string => {
+    const parts = dateStr.split('-').map(Number);
+    if (parts.length !== 3 || parts.some(Number.isNaN)) {
+        return 'weekday';
+    }
+    const day = new Date(parts[0], parts[1] - 1, parts[2]).getDay();
+    if (day === 5) return 'friday';
+    if (day === 6) return 'saturday';
+    return 'weekday';
+};
+
 const availablePeriods = computed<PeriodOption[]>(() => {
-    return props.shiftPeriods?.[form.shift] ?? [];
+    const dayType = dayTypeForDate(form.result_date);
+    return props.shiftPeriodsByDayType?.[dayType]?.[form.shift]
+        ?? props.shiftPeriods?.[form.shift]
+        ?? [];
 });
 
-watch(() => form.shift, () => {
+watch(() => [form.shift, form.result_date], () => {
     selectedPeriod.value = '';
     form.period_start = '';
     form.period_end = '';

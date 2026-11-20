@@ -151,17 +151,17 @@ class ProductionResultController extends Controller
 
         $workOrder->load(['part:id,part_number,part_name,model']);
 
-        $shiftPeriods = [];
-        foreach (array_keys(ProductionPeriods::SHIFTS) as $shiftKey) {
-            $shiftPeriods[(string) $shiftKey] = ProductionPeriods::forShift((string) $shiftKey);
-        }
+        $plantNow = $this->sessionService->plantNow();
+        $shiftPeriodsByDayType = ProductionPeriods::allByDayType();
+        $todayDayType = ProductionPeriods::dayType($plantNow);
 
         return Inertia::render('Production/Result/Create', [
             'workOrder' => $workOrder->only(['id', 'wo_no', 'qty', 'status']),
             'workOrderPart' => $workOrder->part,
             'steps' => $this->steps($workOrder),
-            'shiftPeriods' => $shiftPeriods,
-            'defaultShift' => $this->sessionService->currentShift($this->sessionService->plantNow()),
+            'shiftPeriods' => $shiftPeriodsByDayType[$todayDayType] ?? [],
+            'shiftPeriodsByDayType' => $shiftPeriodsByDayType,
+            'defaultShift' => $this->sessionService->currentShift($plantNow),
             'results' => ProductionResult::query()
                 ->where('work_order_id', $workOrder->id)
                 ->with(['parentPart:id,part_number,part_name,model', 'process:id,process_name', 'machine:id,machine_code,machine_name', 'reporter:id,name'])

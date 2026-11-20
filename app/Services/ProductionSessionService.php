@@ -29,27 +29,7 @@ final class ProductionSessionService
 
     public function currentShift(Carbon $nowLocal): string
     {
-        $minutes = ((int) $nowLocal->format('H') * 60) + (int) $nowLocal->format('i');
-
-        foreach (ProductionPeriods::SHIFTS as $shift => $config) {
-            $start = $this->toMinutes($config['start']);
-            $end = $this->toMinutes($config['end']);
-
-            if ($start <= $end) {
-                if ($minutes >= $start && $minutes < $end) {
-                    return (string) $shift;
-                }
-
-                continue;
-            }
-
-            // Shift lintas tengah malam (shift 3).
-            if ($minutes >= $start || $minutes < $end) {
-                return (string) $shift;
-            }
-        }
-
-        return '1';
+        return ProductionPeriods::currentShift($nowLocal, $nowLocal->timezoneName);
     }
 
     /**
@@ -118,8 +98,9 @@ final class ProductionSessionService
             ->values()
             ->all();
 
-        $sessionDate = ProductionPeriods::sessionDate($shift, now(), $zone)?->toDateString()
-            ?? $nowLocal->toDateString();
+        $sessionCarbon = ProductionPeriods::sessionDate($shift, now(), $zone) ?? $nowLocal->copy()->startOfDay();
+        $sessionDate = $sessionCarbon->toDateString();
+        $schedule = ProductionPeriods::scheduleFor($shift, $sessionCarbon);
 
         $downtimes = MachineDowntime::query()
             ->where('machine_id', $machine->id)
@@ -150,19 +131,12 @@ final class ProductionSessionService
             ],
             'shift' => $shift,
             'shifts' => array_map('strval', array_keys(ProductionPeriods::SHIFTS)),
-            // Semua periode dikirim beserta statusnya. Layar menampilkan 7
-            // periode penuh agar operator melihat shift utuh dan tahu mana yang
-            // belum boleh dilaporkan, alih-alih melihat daftar yang terpotong.
+            'session_date' => $sessionDate,
+            'day_type' => $schedule['day_type'] ?? ProductionPeriods::DAY_WEEKDAY,
+            'schedule' => $schedule,
             'periods' => ProductionPeriods::withStatusForShift($shift, now(), $zone),
             'parts' => $parts,
             'downtimes' => $downtimes,
         ];
-    }
-
-    private function toMinutes(string $clock): int
-    {
-        [$hour, $minute] = array_map('intval', explode(':', $clock));
-
-        return ($hour * 60) + $minute;
     }
 }

@@ -310,4 +310,44 @@ class ProductionSessionApiTest extends TestCase
         $this->assertSame(400.0, (float) $after['produced_qty']);
         $this->assertSame(600.0, (float) $after['remaining_qty']);
     }
+
+    public function test_friday_session_returns_friday_periods_and_schedule(): void
+    {
+        // Jumat 15:45 WIB -> masih Shift 1 (07:30-16:00), 6 periode selesai, periode 7 (15:00-16:00) berjalan.
+        $this->travelTo(Carbon::parse('2026-11-20 15:45:00', 'Asia/Jakarta'));
+
+        $data = $this->getJson("/api/machines/{$this->machine->id}/production-session")
+            ->assertOk()
+            ->json('data');
+
+        $this->assertSame('1', $data['shift']);
+        $this->assertSame('friday', $data['day_type']);
+        $this->assertSame('11:30', $data['schedule']['break_start']);
+        $this->assertSame('13:00', $data['schedule']['break_end']);
+        $this->assertCount(7, $data['periods']);
+        $this->assertSame('13:00 - 14:00', $data['periods'][4]['label']);
+        $this->assertTrue($data['periods'][5]['can_report']);
+        $this->assertFalse($data['periods'][6]['can_report']);
+        $this->assertTrue($data['periods'][6]['in_progress']);
+    }
+
+    public function test_saturday_session_returns_five_periods_without_breaks(): void
+    {
+        // Sabtu 14:40 WIB -> Shift 2 Sabtu (12:30-17:30), 2 periode selesai (12:30-13:30, 13:30-14:30).
+        $this->travelTo(Carbon::parse('2026-11-21 14:40:00', 'Asia/Jakarta'));
+
+        $data = $this->getJson("/api/machines/{$this->machine->id}/production-session")
+            ->assertOk()
+            ->json('data');
+
+        $this->assertSame('2', $data['shift']);
+        $this->assertSame('saturday', $data['day_type']);
+        $this->assertNull($data['schedule']['break_start']);
+        $this->assertCount(5, $data['periods']);
+        $this->assertSame('12:30 - 13:30', $data['periods'][0]['label']);
+        $this->assertSame('16:30 - 17:30', $data['periods'][4]['label']);
+        $this->assertTrue($data['periods'][1]['can_report']);
+        $this->assertFalse($data['periods'][2]['can_report']);
+        $this->assertTrue($data['periods'][2]['in_progress']);
+    }
 }

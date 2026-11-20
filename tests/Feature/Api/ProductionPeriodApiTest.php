@@ -190,4 +190,28 @@ class ProductionPeriodApiTest extends TestCase
 
         $this->assertNull($step['label_delivered']);
     }
+
+    public function test_accepts_friday_shift_two_final_period_ending_at_midnight(): void
+    {
+        // Sabtu 00:05 WIB: periode terakhir Shift 2 Jumat (23:00-00:00) baru saja berakhir.
+        $this->travelTo(Carbon::parse('2026-11-21 00:05:00', 'Asia/Jakarta'));
+
+        $this->postJson("/api/work-orders/{$this->wo()->id}/results", $this->payload([
+            'shift' => '2',
+            'period_start' => '23:00',
+            'period_end' => '00:00',
+        ]))->assertOk();
+    }
+
+    public function test_accepts_saturday_shift_three_final_period_ending_at_midnight(): void
+    {
+        // Minggu 00:05 WIB: periode terakhir Shift 3 Sabtu (23:00-00:00) baru saja berakhir.
+        $this->travelTo(Carbon::parse('2026-11-22 00:05:00', 'Asia/Jakarta'));
+
+        $this->postJson("/api/work-orders/{$this->wo()->id}/results", $this->payload([
+            'shift' => '3',
+            'period_start' => '23:00',
+            'period_end' => '00:00',
+        ]))->assertOk();
+    }
 }

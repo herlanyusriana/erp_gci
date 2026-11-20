@@ -85,7 +85,7 @@ class MachineDowntime extends Model
             return $endMinutes - $startMinutes;
         }
 
-        if ($shift !== null && ProductionPeriods::crossesMidnight($shift)) {
+        if ($endMinutes === 0 || ($shift !== null && ProductionPeriods::crossesMidnight($shift))) {
             return ($endMinutes + (24 * 60)) - $startMinutes;
         }
 

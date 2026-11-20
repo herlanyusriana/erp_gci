@@ -129,3 +129,95 @@ test('the session date follows the shift start, not the calendar day', function 
         ->and(ProductionPeriods::sessionDate('9', Carbon::parse('2026-11-03 07:35:00', 'Asia/Jakarta'), 'Asia/Jakarta'))
         ->toBeNull();
 });
+
+test('friday shift 1 skips the 11:30 to 13:00 break and ends at 16:00 across seven periods', function () {
+    $friday = Carbon::parse('2026-11-20', 'Asia/Jakarta');
+    $periods = ProductionPeriods::forShift('1', $friday);
+
+    expect($periods)->toHaveCount(7)
+        ->and(array_column($periods, 'label'))->toBe([
+            '07:30 - 08:30',
+            '08:30 - 09:30',
+            '09:30 - 10:30',
+            '10:30 - 11:30',
+            '13:00 - 14:00',
+            '14:00 - 15:00',
+            '15:00 - 16:00',
+        ]);
+});
+
+test('friday shift 2 skips 18:00 to 19:00 break and runs 16:00 to 00:00 across seven periods', function () {
+    $friday = Carbon::parse('2026-11-20', 'Asia/Jakarta');
+    $periods = ProductionPeriods::forShift('2', $friday);
+
+    expect($periods)->toHaveCount(7)
+        ->and(array_column($periods, 'label'))->toBe([
+            '16:00 - 17:00',
+            '17:00 - 18:00',
+            '19:00 - 20:00',
+            '20:00 - 21:00',
+            '21:00 - 22:00',
+            '22:00 - 23:00',
+            '23:00 - 00:00',
+        ])
+        ->and(ProductionPeriods::crossesMidnight('2', $friday))->toBeTrue();
+});
+
+test('friday shift 3 runs 00:00 to 07:30 with 30-minute final period and skips 04:00 to 05:00 break', function () {
+    $friday = Carbon::parse('2026-11-20', 'Asia/Jakarta');
+    $periods = ProductionPeriods::forShift('3', $friday);
+
+    expect($periods)->toHaveCount(7)
+        ->and(array_column($periods, 'label'))->toBe([
+            '00:00 - 01:00',
+            '01:00 - 02:00',
+            '02:00 - 03:00',
+            '03:00 - 04:00',
+            '05:00 - 06:00',
+            '06:00 - 07:00',
+            '07:00 - 07:30',
+        ])
+        ->and($periods[6]['minutes'])->toBe(30);
+});
+
+test('saturday shifts each have five one-hour periods without breaks', function () {
+    $saturday = Carbon::parse('2026-11-21', 'Asia/Jakarta');
+
+    expect(array_column(ProductionPeriods::forShift('1', $saturday), 'label'))->toBe([
+        '07:30 - 08:30',
+        '08:30 - 09:30',
+        '09:30 - 10:30',
+        '10:30 - 11:30',
+        '11:30 - 12:30',
+    ])->and(array_column(ProductionPeriods::forShift('2', $saturday), 'label'))->toBe([
+        '12:30 - 13:30',
+        '13:30 - 14:30',
+        '14:30 - 15:30',
+        '15:30 - 16:30',
+        '16:30 - 17:30',
+    ])->and(array_column(ProductionPeriods::forShift('3', $saturday), 'label'))->toBe([
+        '19:00 - 20:00',
+        '20:00 - 21:00',
+        '21:00 - 22:00',
+        '22:00 - 23:00',
+        '23:00 - 00:00',
+    ]);
+});
+
+test('currentShift and sessionDate follow friday and saturday schedules seamlessly across midnight', function () {
+    // Jumat 15:45 WIB -> masih Shift 1 (pulang 16:00).
+    expect(ProductionPeriods::currentShift(Carbon::parse('2026-11-20 15:45:00', 'Asia/Jakarta'), 'Asia/Jakarta'))->toBe('1')
+        // Jumat 23:45 WIB -> masih Shift 2 (pulang 00:00).
+        ->and(ProductionPeriods::currentShift(Carbon::parse('2026-11-20 23:45:00', 'Asia/Jakarta'), 'Asia/Jakarta'))->toBe('2')
+        // Sabtu 01:30 WIB -> Shift 3 milik sesi Jumat (00:00-07:30), 1 periode selesai (00:00-01:00).
+        ->and(ProductionPeriods::currentShift(Carbon::parse('2026-11-21 01:30:00', 'Asia/Jakarta'), 'Asia/Jakarta'))->toBe('3')
+        ->and(ProductionPeriods::sessionDate('3', Carbon::parse('2026-11-21 01:30:00', 'Asia/Jakarta'), 'Asia/Jakarta')->toDateString())->toBe('2026-11-20')
+        ->and(ProductionPeriods::reportableForShift('3', Carbon::parse('2026-11-21 01:30:00', 'Asia/Jakarta'), 'Asia/Jakarta'))->toHaveCount(1)
+        // Sabtu 13:00 WIB -> Shift 2 Sabtu (12:30-17:30).
+        ->and(ProductionPeriods::currentShift(Carbon::parse('2026-11-21 13:00:00', 'Asia/Jakarta'), 'Asia/Jakarta'))->toBe('2')
+        // Sabtu 18:00 WIB (jeda 17:30-19:00) -> Shift 2 yang baru selesai.
+        ->and(ProductionPeriods::currentShift(Carbon::parse('2026-11-21 18:00:00', 'Asia/Jakarta'), 'Asia/Jakarta'))->toBe('2')
+        // Sabtu 20:15 WIB -> Shift 3 Sabtu (19:00-00:00), 1 periode selesai (19:00-20:00).
+        ->and(ProductionPeriods::currentShift(Carbon::parse('2026-11-21 20:15:00', 'Asia/Jakarta'), 'Asia/Jakarta'))->toBe('3')
+        ->and(ProductionPeriods::reportableForShift('3', Carbon::parse('2026-11-21 20:15:00', 'Asia/Jakarta'), 'Asia/Jakarta'))->toHaveCount(1);
+});

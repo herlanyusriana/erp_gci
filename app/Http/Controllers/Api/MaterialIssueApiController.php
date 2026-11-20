@@ -621,12 +621,11 @@ class MaterialIssueApiController extends Controller
                 ? (string) $data['shift']
                 : null;
 
-            // Urutan jam: akhir harus setelah mulai. Untuk shift yang melewati
-            // tengah malam (mulai > selesai), akhir boleh lebih kecil dari mulai.
             $start = substr((string) $data['period_start'], 0, 5);
             $end = substr((string) $data['period_end'], 0, 5);
-            $crossesMidnight = ProductionPeriods::crossesMidnight($shift ?? '');
-            $ordered = $crossesMidnight ? $start !== $end : strcmp($end, $start) > 0;
+            $sessionDay = $shift !== null ? ProductionPeriods::sessionDate($shift, now(), $zone) : null;
+            $crossesMidnight = $shift !== null && ProductionPeriods::crossesMidnight($shift, $sessionDay);
+            $ordered = ($crossesMidnight || $end === '00:00') ? $start !== $end : strcmp($end, $start) > 0;
 
             if (! $ordered) {
                 throw ValidationException::withMessages([

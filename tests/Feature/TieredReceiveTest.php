@@ -299,9 +299,9 @@ class TieredReceiveTest extends TestCase
                     'net_weight' => 3000,
                     'gross_weight' => 3100,
                     'packings' => [
-                        ['packing_no' => 'TAG-SUB-01/1', 'sequence' => 1, 'qty' => 1000, 'uom' => 'KGM', 'net_weight' => 1000, 'gross_weight' => 1030],
-                        ['packing_no' => 'TAG-SUB-01/2', 'sequence' => 2, 'qty' => 1000, 'uom' => 'KGM', 'net_weight' => 1000, 'gross_weight' => 1035],
-                        ['packing_no' => 'TAG-SUB-01/3', 'sequence' => 3, 'qty' => 1000, 'uom' => 'KGM', 'net_weight' => 1000, 'gross_weight' => 1035],
+                        ['packing_no' => 'TAG-SUB-01-1', 'sequence' => 1, 'qty' => 1000, 'uom' => 'KGM', 'net_weight' => 1000, 'gross_weight' => 1030],
+                        ['packing_no' => 'TAG-SUB-01-2', 'sequence' => 2, 'qty' => 1000, 'uom' => 'KGM', 'net_weight' => 1000, 'gross_weight' => 1035],
+                        ['packing_no' => 'TAG-SUB-01-3', 'sequence' => 3, 'qty' => 1000, 'uom' => 'KGM', 'net_weight' => 1000, 'gross_weight' => 1035],
                     ],
                 ],
             ],
@@ -314,7 +314,7 @@ class TieredReceiveTest extends TestCase
         $this->assertSame('B 9001 GCI', $receive->truck_no);
 
         $first = $receive->packings()->orderBy('sequence')->first();
-        $this->assertSame('TAG-SUB-01/1', $first->packing_no);
+        $this->assertSame('TAG-SUB-01-1', $first->packing_no);
         $this->assertEqualsWithDelta(1000.0, $first->qty, 1e-6);
         $this->assertSame('KGM', $first->uom);
         $this->assertEqualsWithDelta(1030.0, $first->gross_weight, 1e-6);
@@ -373,8 +373,8 @@ class TieredReceiveTest extends TestCase
                     'packing_qty' => 1000,
                     'net_weight' => 2000,
                     'packings' => [
-                        ['packing_no' => 'TAG-LBL-01/1', 'sequence' => 1, 'qty' => 1000, 'uom' => 'KGM', 'net_weight' => 1000],
-                        ['packing_no' => 'TAG-LBL-01/2', 'sequence' => 2, 'qty' => 1000, 'uom' => 'KGM', 'net_weight' => 1000],
+                        ['packing_no' => 'TAG-LBL-01-1', 'sequence' => 1, 'qty' => 1000, 'uom' => 'KGM', 'net_weight' => 1000],
+                        ['packing_no' => 'TAG-LBL-01-2', 'sequence' => 2, 'qty' => 1000, 'uom' => 'KGM', 'net_weight' => 1000],
                     ],
                 ],
             ],
@@ -388,11 +388,11 @@ class TieredReceiveTest extends TestCase
             ->assertSee('1 PALLET')
             ->assertSee('2,000 KGM')
             ->assertSee('2 COIL @ 1,000 KGM')
-            ->assertDontSee('TAG-LBL-01/1')
-            ->assertDontSee('TAG-LBL-01/2');
+            ->assertDontSee('TAG-LBL-01-1')
+            ->assertDontSee('TAG-LBL-01-2');
 
         expect($receive->packings()->orderBy('sequence')->pluck('packing_no')->all())
-            ->toBe(['TAG-LBL-01/1', 'TAG-LBL-01/2']);
+            ->toBe(['TAG-LBL-01-1', 'TAG-LBL-01-2']);
     }
 
     /**
@@ -459,10 +459,10 @@ class TieredReceiveTest extends TestCase
                     'packing_qty' => 750,
                     'net_weight' => 3000,
                     'packings' => [
-                        ['packing_no' => 'TAG-MIX-01/1', 'sequence' => 1, 'qty' => 1000, 'uom' => 'KGM', 'net_weight' => 1000],
-                        ['packing_no' => 'TAG-MIX-01/2', 'sequence' => 2, 'qty' => 500, 'uom' => 'KGM', 'net_weight' => 500],
-                        ['packing_no' => 'TAG-MIX-01/3', 'sequence' => 3, 'qty' => 500, 'uom' => 'KGM', 'net_weight' => 500],
-                        ['packing_no' => 'TAG-MIX-01/4', 'sequence' => 4, 'qty' => 1000, 'uom' => 'KGM', 'net_weight' => 1000],
+                        ['packing_no' => 'TAG-MIX-01-1', 'sequence' => 1, 'qty' => 1000, 'uom' => 'KGM', 'net_weight' => 1000],
+                        ['packing_no' => 'TAG-MIX-01-2', 'sequence' => 2, 'qty' => 500, 'uom' => 'KGM', 'net_weight' => 500],
+                        ['packing_no' => 'TAG-MIX-01-3', 'sequence' => 3, 'qty' => 500, 'uom' => 'KGM', 'net_weight' => 500],
+                        ['packing_no' => 'TAG-MIX-01-4', 'sequence' => 4, 'qty' => 1000, 'uom' => 'KGM', 'net_weight' => 1000],
                     ],
                 ],
             ],

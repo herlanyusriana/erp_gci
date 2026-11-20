@@ -307,7 +307,10 @@ class ReceiveController extends Controller
                     $currentTag = $receive->tag ?: 'TAG';
                     foreach ($tagData['packings'] as $pIdx => $pData) {
                         $seq = (int) ($pData['sequence'] ?? ($pIdx + 1));
-                        $pNo = ! empty($pData['packing_no']) ? trim((string) $pData['packing_no']) : "{$currentTag}/{$seq}";
+                        $rawNo = ! empty($pData['packing_no']) ? trim((string) $pData['packing_no']) : '';
+                        $pNo = ($rawNo === '' || $rawNo === "{$currentTag}/{$seq}")
+                            ? "{$currentTag}-{$seq}"
+                            : $rawNo;
 
                         $receive->packings()->create([
                             'packing_no' => $pNo,
@@ -490,6 +493,19 @@ class ReceiveController extends Controller
                 'truck_no' => trim((string) ($validated['truck_no'] ?? '')) !== '' ? strtoupper(trim((string) $validated['truck_no'])) : null,
                 'ata_date' => $receiveAt,
             ]);
+
+            $resolved = $this->receiveService->resolveReceiveTag($tag, (int) $receive->id, $receiveAt);
+            if ($resolved !== null && $receive->tag !== $resolved) {
+                $receive->update(['tag' => $resolved]);
+            }
+
+            $currentTag = $receive->tag ?: 'TAG';
+            foreach ($receive->packings()->get() as $packing) {
+                $expectedNo = "{$currentTag}-{$packing->sequence}";
+                if ($packing->packing_no !== $expectedNo) {
+                    $packing->update(['packing_no' => $expectedNo]);
+                }
+            }
 
             $this->receiveService->postStock($receive);
 

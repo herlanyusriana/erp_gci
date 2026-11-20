@@ -450,7 +450,7 @@ function submit() {
             if (nw !== null) bNet += nw;
 
             return {
-                packing_no: `${tag}/${index + 1}`,
+                packing_no: `${tag}-${index + 1}`,
                 sequence: index + 1,
                 qty: q,
                 uom: p.uom,
@@ -701,7 +701,7 @@ function submit() {
                             Detail Bundle & Sub-Packing
                         </h2>
                         <p class="text-xs text-ink-secondary">
-                            Penomoran packing otomatis {TAG}/{1..N}. Tag Bundle adalah identitas utama saat scan fisik.
+                            Penomoran packing otomatis {TAG}-{1..N}. Tag Bundle adalah identitas utama saat scan fisik.
                         </p>
                         <p class="text-xs text-ink-secondary">{{ t('incoming.packingPerBundleTableHint') }}</p>
                     </div>
@@ -806,7 +806,7 @@ function submit() {
 
                                     <!-- Kolom per Packing -->
                                     <td class="border border-borderline px-3 py-2 font-mono text-xs font-semibold text-primary">
-                                        <template v-if="isPackingFilled(r)">{{ b.tag || '-' }}/{{ packingSequence(b, ri) }}</template>
+                                        <template v-if="isPackingFilled(r)">{{ b.tag || '-' }}-{{ packingSequence(b, ri) }}</template>
                                         <span v-else class="text-ink-secondary">—</span>
                                     </td>
                                     <td class="border border-borderline p-1 text-right">

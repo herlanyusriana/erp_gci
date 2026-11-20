@@ -70,7 +70,7 @@ class ReceivePerBundlePackingTest extends TestCase
             'packing_type' => $packingType,
             'packing_qty' => $qty / max(1, count($packings)),
             'packings' => collect($packings)->map(fn (array $p, int $i) => [
-                'packing_no' => $tag.'/'.($i + 1),
+                'packing_no' => $tag.'-'.($i + 1),
                 'sequence' => $i + 1,
                 'qty' => $p['qty'],
                 'uom' => 'PCS',
@@ -104,8 +104,8 @@ class ReceivePerBundlePackingTest extends TestCase
         $this->assertSame(3.0, (float) $first->packing_count);
         $this->assertSame(8.0, (float) $second->packing_count);
 
-        // Nomor packing mengikuti urutan per bundle, bukan menumpuk dari bundle pertama.
-        $this->assertSame($secondTag.'/8', $second->packings()->orderByDesc('sequence')->value('packing_no'));
+        // Nomor packing mengikuti urutan per bundle ({TAG}-{seq}), bukan menumpuk dari bundle pertama.
+        $this->assertSame($secondTag.'-8', $second->packings()->orderByDesc('sequence')->value('packing_no'));
     }
 
     public function test_packing_type_is_stored_per_bundle(): void

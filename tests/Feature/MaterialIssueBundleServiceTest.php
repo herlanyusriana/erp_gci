@@ -205,7 +205,7 @@ it('returns real packings with auto check by net requirement', function () {
 
     foreach ([1 => 2000, 2 => 2000, 3 => 1000] as $seq => $qty) {
         $receive->packings()->create([
-            'packing_no' => 'TAG-REAL/'.$seq,
+            'packing_no' => 'TAG-REAL-'.$seq,
             'sequence' => $seq,
             'qty' => $qty,
             'uom' => 'KGM',
@@ -217,10 +217,10 @@ it('returns real packings with auto check by net requirement', function () {
     $plan = app(MaterialIssueBundleService::class)->forTag($item, $wo, $receive->tag);
 
     expect($plan['packings'])->toHaveCount(3)
-        ->and($plan['packings'][0]['packing_no'])->toBe('TAG-REAL/1')
+        ->and($plan['packings'][0]['packing_no'])->toBe('TAG-REAL-1')
         ->and($plan['packings'][0]['qty'])->toBe(2000.0)
         ->and($plan['packings'][0]['checked'])->toBeTrue()
-        ->and($plan['packings'][2]['packing_no'])->toBe('TAG-REAL/3')
+        ->and($plan['packings'][2]['packing_no'])->toBe('TAG-REAL-3')
         ->and($plan['packings'][2]['qty'])->toBe(1000.0)
         ->and($plan['packings'][2]['net_weight'])->toBe(1000.0);
 });
@@ -237,7 +237,7 @@ it('stops checking packings once the net requirement is covered', function () {
 
     foreach ([1 => 2000, 2 => 2000, 3 => 2000] as $seq => $qty) {
         $receive->packings()->create([
-            'packing_no' => 'TAG-PART/'.$seq,
+            'packing_no' => 'TAG-PART-'.$seq,
             'sequence' => $seq,
             'qty' => $qty,
             'uom' => 'KGM',
@@ -259,7 +259,7 @@ it('serves packings over the issue-plan api', function () {
 
     foreach ([1 => 2000, 2 => 2000] as $seq => $qty) {
         $receive->packings()->create([
-            'packing_no' => 'TAG-API/'.$seq,
+            'packing_no' => 'TAG-API-'.$seq,
             'sequence' => $seq,
             'qty' => $qty,
             'uom' => 'KGM',
@@ -271,7 +271,7 @@ it('serves packings over the issue-plan api', function () {
 
     $this->getJson("/api/work-orders/{$wo->id}/items/{$item->id}/issue-plan?tag={$receive->tag}")
         ->assertOk()
-        ->assertJsonPath('data.packings.0.packing_no', 'TAG-API/1')
-        ->assertJsonPath('data.packings.1.packing_no', 'TAG-API/2')
+        ->assertJsonPath('data.packings.0.packing_no', 'TAG-API-1')
+        ->assertJsonPath('data.packings.1.packing_no', 'TAG-API-2')
         ->assertJsonPath('data.packings.0.checked', true);
 });

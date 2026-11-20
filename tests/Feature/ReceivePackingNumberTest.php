@@ -49,7 +49,7 @@ class ReceivePackingNumberTest extends TestCase
         $qtyPerPacking = 4;
 
         $packings = collect(range(1, 120))->map(fn (int $seq) => [
-            'packing_no' => $tag.'/'.$seq,
+            'packing_no' => $tag.'-'.$seq,
             'sequence' => $seq,
             'qty' => $qtyPerPacking,
             'uom' => 'PCS',
@@ -79,7 +79,34 @@ class ReceivePackingNumberTest extends TestCase
         $this->assertSame(120, (int) $receive->packings()->max('sequence'));
         $this->assertDatabaseHas('incoming_receive_packings', [
             'receive_id' => $receive->id,
-            'packing_no' => $tag.'/120',
+            'packing_no' => $tag.'-120',
+            'sequence' => 120,
+        ]);
+
+        // Ketika tag diedit, semua packing_no otomatis mengikuti {TAG_BARU}-{sequence}.
+        $newTag = $tag.'-EDIT';
+        $this->put(route('receive.update', $receive), [
+            'receive_date' => now()->toDateString(),
+            'tag' => $newTag,
+            'truck_no' => 'B 9012 GCI',
+            'location_code' => 'BULK-AREA',
+            'qty' => $qtyPerPacking * 120,
+            'bundle_count' => 1,
+            'bundle_qty' => 1,
+            'bundle_unit' => 'BUNDLE',
+            'packing_count' => 120,
+            'packing_type' => 'BOX',
+            'packing_qty' => $qtyPerPacking,
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('incoming_receive_packings', [
+            'receive_id' => $receive->id,
+            'packing_no' => $newTag.'-1',
+            'sequence' => 1,
+        ]);
+        $this->assertDatabaseHas('incoming_receive_packings', [
+            'receive_id' => $receive->id,
+            'packing_no' => $newTag.'-120',
             'sequence' => 120,
         ]);
     }

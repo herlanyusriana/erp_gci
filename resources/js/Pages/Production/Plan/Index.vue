@@ -200,6 +200,21 @@ function draftFor(it: ProductionPlanItem) {
     return targetDrafts[it.id];
 }
 
+/** Total Qty yang sedang dijadwalkan di D + D+1 + D+2 (live mengikuti input draft). */
+function plannedTargetQty(it: ProductionPlanItem): number {
+    const draft = draftFor(it);
+    const d = draft.d === '' ? 0 : (Number(draft.d) || 0);
+    const d1 = draft.d1 === '' ? 0 : (Number(draft.d1) || 0);
+    const d2 = draft.d2 === '' ? 0 : (Number(draft.d2) || 0);
+    return d + d1 + d2;
+}
+
+/** Sisa belum dijadwalkan ke D / D+1 / D+2 = Sisa Produksi (avail_qty) − (D + D+1 + D+2). */
+function unscheduledQty(it: ProductionPlanItem): number {
+    const remainingProd = Number(it.avail_qty) || 0;
+    return Number((remainingProd - plannedTargetQty(it)).toFixed(4));
+}
+
 // Setelah server merespons, draft disamakan dengan nilai tersimpan.
 watch(() => props.items, (list) => {
     for (const it of list) {
@@ -571,7 +586,7 @@ function submitEdit() {
                         <col class="w-40" />
                         <col class="w-40" />
                         <col class="w-24" />
-                        <col class="w-24" />
+                        <col class="w-32" />
                         <col class="w-36" />
                         <col class="w-36" />
                         <col class="w-36" />
@@ -617,7 +632,7 @@ function submitEdit() {
                                 v-for="(row, index) in group.rows"
                                 :key="row.id"
                                 class="group border-t border-borderline transition hover:bg-primary-light/40"
-                                :class="[index === 0 && gi > 0 ? 'border-t-2 !border-t-ink-secondary/30' : '', row.avail_qty < 0 ? 'bg-danger/5' : '']"
+                                :class="[index === 0 && gi > 0 ? 'border-t-2 !border-t-ink-secondary/30' : '', unscheduledQty(row) < 0 ? 'bg-danger/5' : '']"
                             >
                                 <td v-if="index === 0" class="sticky left-0 z-10 border-r border-borderline bg-surface px-3 py-2.5 align-top group-hover:bg-primary-light/40" :rowspan="group.rows.length">
                                     <div class="flex flex-col items-start gap-1">
@@ -645,12 +660,15 @@ function submitEdit() {
                                     <span class="tabular-nums font-medium text-ink-primary">{{ fmtDuration(row.estimated_seconds) }}</span>
                                 </td>
                                 <td class="px-3 py-2.5 text-right">
-                                    <span
-                                        class="tabular-nums font-semibold"
-                                        :class="row.avail_qty < 0 ? 'text-danger' : (Number(row.avail_qty) === 0 ? 'text-success' : 'text-ink-secondary')"
+                                    <div
+                                        class="tabular-nums font-bold"
+                                        :class="unscheduledQty(row) < 0 ? 'text-danger' : (unscheduledQty(row) === 0 ? 'text-success' : 'text-warning')"
                                     >
-                                        {{ fmt(row.avail_qty) }}
-                                    </span>
+                                        {{ fmt(unscheduledQty(row)) }}
+                                    </div>
+                                    <div class="mt-0.5 text-[11px] tabular-nums text-ink-secondary">
+                                        {{ t('production.unproducedRemain', { qty: fmt(row.avail_qty) }) }}
+                                    </div>
                                 </td>
                                 <td v-for="(key, idx) in dayKeys" :key="key" class="border-l border-borderline px-2 py-1.5">
                                     <div class="grid gap-1">

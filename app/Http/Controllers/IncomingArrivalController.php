@@ -380,7 +380,7 @@ class IncomingArrivalController extends Controller
                     'unit_weight' => $item['unit_weight'] ?? null,
                     'weight_gross' => $item['weight_gross'] ?? null,
                     'price' => $item['price'] ?? null,
-                    'total_price' => $item['total_price'] ?? null,
+                    'total_price' => isset($item['total_price']) && $item['total_price'] !== '' ? round((float) $item['total_price'], 2) : null,
                     'is_foc' => (bool) ($item['is_foc'] ?? false),
                     'notes' => $item['notes'] ?? null,
                 ]);
@@ -596,6 +596,11 @@ class IncomingArrivalController extends Controller
             foreach ($validated['items'] as $item) {
                 $payload = \Arr::except($item, ['id']);
                 $payload['arrival_id'] = $arrival->id;
+                if (array_key_exists('total_price', $payload)) {
+                    $payload['total_price'] = $payload['total_price'] !== null && $payload['total_price'] !== ''
+                        ? round((float) $payload['total_price'], 2)
+                        : null;
+                }
                 $savedItem = $arrival->items()->updateOrCreate(
                     ['id' => $item['id'] ?? null],
                     $payload,

@@ -11,7 +11,7 @@ import { ref } from 'vue';
 import { formatDate, formatDateTime } from '@/utils/date';
 import type { IncomingArrival, IncomingArrivalContainer } from '@/types';
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 
 interface PendingRow {
     item: IncomingArrival['items'] extends (infer T)[] | undefined ? T : never;
@@ -148,6 +148,8 @@ function groupLabel(item: PendingRow['item']): string {
                             <th scope="col" class="px-4 py-3">{{ t('incoming.bundleQty') }}</th>
                             <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.qtyGoods') }}</th>
                             <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.netWeight') }} ({{ weightUnit }})</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.grossWeight') }} ({{ weightUnit }})</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.totalPrice') }}</th>
                             <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.receivedUnit', { unit: weightUnit }) }}</th>
                             <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.remainingUnit', { unit: weightUnit }) }}</th>
                         </tr>
@@ -172,11 +174,17 @@ function groupLabel(item: PendingRow['item']): string {
                             <td class="px-4 py-3 text-right tabular-nums text-ink-primary">
                                 {{ p.item.weight_nett != null ? p.item.weight_nett : '—' }}
                             </td>
+                            <td class="px-4 py-3 text-right tabular-nums text-ink-primary">
+                                {{ p.item.weight_gross != null ? p.item.weight_gross : '—' }}
+                            </td>
+                            <td class="px-4 py-3 text-right tabular-nums text-ink-primary">
+                                {{ p.item.total_price != null ? Number(p.item.total_price).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—' }}
+                            </td>
                             <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ p.received }}</td>
                             <td class="px-4 py-3 text-right tabular-nums font-semibold" :class="p.remaining > 0 ? 'text-warning' : 'text-success'">{{ p.remaining }}</td>
                         </tr>
                         <tr v-if="!pending.length">
-                            <td colspan="8" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noItems') }}</td>
+                            <td colspan="10" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noItems') }}</td>
                         </tr>
                     </tbody>
                 </table>

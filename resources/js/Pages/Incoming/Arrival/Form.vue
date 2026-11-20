@@ -23,8 +23,9 @@ interface ItemRow {
     unit_bundle: string;
     weight_nett: number | '';
     unit_weight: string;
+    weight_gross: number | '';
     price: number | '';
-    total_price: number | '';
+    total_price: number | string;
     is_foc: boolean;
     notes: string;
     po_qty_ref?: number; // referensi kuantitas asli PO
@@ -57,6 +58,13 @@ const props = defineProps<{
 
 const isLocalArrival = ref(Boolean(props.arrival?.is_local ?? false));
 
+function formatTotalPrice(value: number | string | null | undefined): string {
+    if (value === '' || value === null || value === undefined) return '';
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '';
+    return n.toFixed(2);
+}
+
 const blankItem = (): ItemRow => ({
     id: null,
     part_id: null,
@@ -70,6 +78,7 @@ const blankItem = (): ItemRow => ({
     unit_bundle: props.packingUnits[0] ?? 'PALLET',
     weight_nett: '',
     unit_weight: 'KGM',
+    weight_gross: '',
     price: '',
     total_price: '',
     is_foc: false,
@@ -106,8 +115,9 @@ const itemRows = ref<ItemRow[]>(
         unit_bundle: i.unit_bundle ?? (props.packingUnits[0] ?? 'PALLET'),
         weight_nett: i.weight_nett ?? '',
         unit_weight: i.unit_weight ?? 'KGM',
+        weight_gross: i.weight_gross ?? '',
         price: i.price ?? '',
-        total_price: i.total_price ?? '',
+        total_price: formatTotalPrice(i.total_price),
         is_foc: Boolean(i.is_foc),
         notes: i.notes ?? '',
     })) ?? [blankItem()],
@@ -202,8 +212,11 @@ function onPurchaseOrderChange() {
                 unit_bundle: props.packingUnits[0] ?? 'PALLET',
                 weight_nett: it.unit === 'KGM' || !it.unit ? it.qty : '',
                 unit_weight: 'KGM',
+                weight_gross: '',
                 price: it.price ?? '',
-                total_price: (Number(it.qty) || 0) * (Number(it.price) || 0) || '',
+                total_price: ((Number(it.qty) || 0) * (Number(it.price) || 0)) > 0
+                    ? formatTotalPrice((Number(it.qty) || 0) * (Number(it.price) || 0))
+                    : '',
                 is_foc: false,
                 notes: it.notes ?? '',
             };
@@ -278,7 +291,7 @@ function resetMaterialRows() {
     });
 }
 
-function toCents(value: number | ''): number {
+function toCents(value: number | string): number {
     if (value === '' || value === null) return 0;
     const n = Number(value);
     if (!Number.isFinite(n)) return 0;
@@ -297,6 +310,17 @@ function recalcPrice(row: ItemRow) {
         ? Math.floor((totalCents * 1000 + weightCenti / 2) / weightCenti)
         : Math.floor((totalCents * 10) / qty);
     row.price = priceMilli / 1000;
+}
+
+function normalizeTotalPrice(row: ItemRow) {
+    row.total_price = formatTotalPrice(row.total_price);
+    recalcPrice(row);
+}
+
+function weightInvalid(row: ItemRow) {
+    const nett = Number(row.weight_nett);
+    const gross = Number(row.weight_gross);
+    return Number.isFinite(nett) && Number.isFinite(gross) && nett > 0 && gross > 0 && nett > gross;
 }
 
 function formatMilli(value: number | ''): string {
@@ -336,8 +360,9 @@ function submit() {
             unit_bundle: r.unit_bundle || null,
             weight_nett: r.weight_nett === '' ? (r.unit_goods === 'KGM' ? Number(r.qty_goods) : null) : Number(r.weight_nett),
             unit_weight: 'KGM',
+            weight_gross: r.weight_gross === '' ? null : Number(r.weight_gross),
             price: r.price === '' ? null : Number(r.price),
-            total_price: r.total_price === '' ? null : Number(r.total_price),
+            total_price: r.total_price === '' ? null : Math.round(Number(r.total_price) * 100) / 100,
             is_foc: r.is_foc,
             notes: r.notes,
         })) as any;
@@ -855,6 +880,20 @@ function submit() {
                                     class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
                                 />
                             </div>
+
+                            <div class="sm:col-span-3">
+                                <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.grossWeight') }} (KGM)</label>
+                                <input
+                                    v-model="r.weight_gross"
+                                    :aria-label="t('incoming.grossWeight')"
+                                    type="number"
+                                    step="0.0001"
+                                    min="0"
+                                    placeholder="0.0000"
+                                    class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                                />
+                                <p v-if="weightInvalid(r)" class="mt-0.5 text-[10px] text-danger">{{ t('incoming.invalidWeight') }}</p>
+                            </div>
                         </div>
 
                         <!-- Baris 3: Informasi Opsional (Total Harga, Harga Satuan, Catatan) -->
@@ -868,8 +907,9 @@ function submit() {
                                     step="0.01"
                                     min="0"
                                     @input="recalcPrice(r)"
+                                    @blur="normalizeTotalPrice(r)"
                                     placeholder="0.00"
-                                    class="h-7 w-28 rounded border-borderline bg-surface px-2 py-1 text-xs text-ink-primary"
+                                    class="h-7 w-28 rounded border-borderline bg-surface px-2 py-1 text-xs tabular-nums text-ink-primary"
                                 />
                             </div>
                             <div class="flex items-center gap-1.5">

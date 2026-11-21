@@ -52,6 +52,73 @@ class ProductionReceiptService
             ])->all();
     }
 
+    /**
+     * Daftar tag material yang sudah di-issue gudang (status posted, WO released/in_progress)
+     * namun belum diterima di lantai produksi dan sesuai grup routing mesin ini.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function pendingForMachine(Machine $machine): array
+    {
+        if (! $machine->is_active) {
+            return [];
+        }
+
+        $targetGroup = MachineRouting::groupKey($machine, $machine->id);
+
+        $items = MaterialIssueItem::query()
+            ->where('qty', '>', 0)
+            ->whereNotIn('id', ProductionMaterialReceipt::query()->select('material_issue_item_id'))
+            ->whereHas('materialIssue', fn (Builder $query) => $query
+                ->where('status', 'posted')
+                ->whereHas('workOrder', fn (Builder $wo) => $wo->whereIn('status', ['released', 'in_progress'])))
+            ->with([
+                'materialIssue:id,issue_no,work_order_id,issue_date',
+                'materialIssue.workOrder:id,wo_no,status',
+                'workOrderItem:id,work_order_id,machine_id,sequence,uom_rm',
+                'workOrderItem.machine:id,machine_code,machine_name',
+                'part:id,part_number,part_name,model,size',
+            ])
+            ->orderBy('id')
+            ->get();
+
+        return $items
+            ->filter(function (MaterialIssueItem $item) use ($targetGroup): bool {
+                $woItem = $item->workOrderItem;
+                if ($woItem === null) {
+                    return false;
+                }
+                if ($woItem->machine_id === null) {
+                    return true;
+                }
+
+                return MachineRouting::groupKey($woItem->machine, $woItem->machine_id) === $targetGroup;
+            })
+            ->sortBy(function (MaterialIssueItem $item) use ($machine): array {
+                $exactMachine = (int) ($item->workOrderItem?->machine_id ?? 0) === (int) $machine->id ? 0 : 1;
+
+                return [$exactMachine, (int) ($item->workOrderItem?->sequence ?? 0), (int) $item->id];
+            })
+            ->values()
+            ->map(fn (MaterialIssueItem $item) => [
+                'material_issue_item_id' => (int) $item->id,
+                'material_issue_id' => (int) $item->material_issue_id,
+                'issue_no' => $item->materialIssue?->issue_no,
+                'work_order_id' => (int) $item->materialIssue?->work_order_id,
+                'wo_no' => $item->materialIssue?->workOrder?->wo_no,
+                'work_order_item_id' => (int) $item->work_order_item_id,
+                'tag' => $item->tag,
+                'part_id' => (int) $item->part_id,
+                'part' => $item->part?->only(['part_number', 'part_name', 'model', 'size']),
+                'qty' => (float) $item->qty,
+                'uom' => $item->uom,
+                'invoice' => $item->invoice,
+                'supplier' => $item->supplier,
+                'status' => 'pending',
+            ])
+            ->all();
+    }
+
     private function issuedItemsForTag(string $tag): Builder
     {
         return MaterialIssueItem::query()

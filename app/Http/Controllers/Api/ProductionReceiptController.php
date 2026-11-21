@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Machine;
 use App\Services\ProductionReceiptService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -132,6 +133,26 @@ class ProductionReceiptController extends Controller
         return response()->json(['ok' => true, 'data' => $this->receiptService->resolve(
             $data['tag'], isset($data['part_id']) ? (int) $data['part_id'] : null,
         )]);
+    }
+
+    public function pending(Request $request): JsonResponse
+    {
+        abort_unless(
+            $request->user()?->hasPermission('stock.issue') ?? false,
+            403,
+            __('Tidak berwenang mengakses data stok.'),
+        );
+
+        $data = $request->validate([
+            'machine_id' => ['required', 'integer', 'exists:machines,id'],
+        ]);
+
+        $machine = Machine::query()->findOrFail((int) $data['machine_id']);
+
+        return response()->json([
+            'ok' => true,
+            'data' => $this->receiptService->pendingForMachine($machine),
+        ]);
     }
 
     public function index(Request $request): JsonResponse

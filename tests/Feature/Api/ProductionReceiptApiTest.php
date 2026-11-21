@@ -362,4 +362,43 @@ class ProductionReceiptApiTest extends TestCase
             'material_issue_item_id' => $validItem->id,
         ]);
     }
+
+    public function test_resolve_machine_and_pending_endpoint_return_pending_issued_materials_for_machine(): void
+    {
+        $item1 = $this->seedReceiptFixture('PENDING-TAG-01');
+        $item1->workOrderItem->update(['machine_id' => $this->machine->id]);
+
+        $otherMachine = Machine::create([
+            'machine_code' => 'WLD-OTHER-'.uniqid(),
+            'machine_name' => 'WLD OTHER LINE',
+            'is_active' => true,
+        ]);
+        $itemOther = $this->seedReceiptFixture('PENDING-OTHER-02');
+        $itemOther->workOrderItem->update(['machine_id' => $otherMachine->id]);
+
+        $resolveResp = $this->postJson('/api/machines/resolve', [
+            'machine_code' => $this->machine->machine_code,
+        ])->assertOk();
+
+        $resolveResp->assertJsonCount(1, 'data.pending_receipts')
+            ->assertJsonPath('data.pending_receipts.0.material_issue_item_id', $item1->id)
+            ->assertJsonPath('data.pending_receipts.0.tag', 'PENDING-TAG-01');
+
+        $pendingResp = $this->getJson('/api/receipts/pending?machine_id='.$this->machine->id)
+            ->assertOk();
+
+        $pendingResp->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.material_issue_item_id', $item1->id)
+            ->assertJsonPath('data.0.tag', 'PENDING-TAG-01');
+
+        // Setelah diterima, tidak muncul lagi di daftar pending.
+        $this->postJson('/api/receipts/confirm', [
+            'material_issue_item_id' => $item1->id,
+            'machine_id' => $this->machine->id,
+        ])->assertOk();
+
+        $this->getJson('/api/receipts/pending?machine_id='.$this->machine->id)
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+    }
 }

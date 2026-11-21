@@ -12,6 +12,7 @@ use App\Models\WorkOrder;
 use App\Models\WorkOrderItem;
 use App\Services\DailyScheduleService;
 use App\Services\MaterialIssueBundleService;
+use App\Services\ProductionReceiptService;
 use App\Services\ProductionResultService;
 use App\Services\ProductionSessionService;
 use App\Services\ReceiveMaterialService;
@@ -41,6 +42,7 @@ class MaterialIssueApiController extends Controller
         private WipIdentityService $wipIdentity,
         private ProductionSessionService $sessionService,
         private MaterialIssueBundleService $bundleService,
+        private ProductionReceiptService $receiptService,
     ) {}
 
     /**
@@ -360,6 +362,7 @@ class MaterialIssueApiController extends Controller
                 'id' => (int) $machine->id,
                 'machine_code' => $machine->machine_code,
                 'machine_name' => $machine->machine_name,
+                'pending_receipts' => $this->receiptService->pendingForMachine($machine),
             ],
         ]);
     }

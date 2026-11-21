@@ -139,6 +139,7 @@ final class MaterialIssueSummaryService
     {
         return MaterialIssueItem::query()
             ->join('material_issues', 'material_issues.id', '=', 'material_issue_items.material_issue_id')
+            ->leftJoin('users as issuers', 'issuers.id', '=', 'material_issues.issued_by')
             ->leftJoin('parts', 'parts.id', '=', 'material_issue_items.part_id')
             ->where('material_issues.work_order_id', $workOrderId)
             ->where('material_issues.status', 'posted')
@@ -148,8 +149,12 @@ final class MaterialIssueSummaryService
             ->orderBy('material_issues.id')
             ->orderBy('material_issue_items.id')
             ->get([
+                'material_issues.id as issue_id',
                 'material_issues.issue_no',
                 'material_issues.issue_date',
+                'material_issues.operator_name',
+                'material_issues.received_by',
+                'issuers.name as issuer_name',
                 'material_issue_items.part_id',
                 'material_issue_items.tag',
                 'material_issue_items.qty',
@@ -158,13 +163,18 @@ final class MaterialIssueSummaryService
                 'material_issue_items.supplier',
                 'parts.part_number',
                 'parts.part_name',
+                'parts.model',
             ])
             ->map(fn ($row): array => [
+                'issue_id' => (int) $row->issue_id,
                 'slip_no' => $row->issue_no,
                 'issue_date' => $row->issue_date,
+                'issued_by' => $row->operator_name ?: $row->issuer_name,
+                'received_by' => $row->received_by,
                 'part_id' => (int) $row->part_id,
                 'part_number' => $row->part_number,
                 'part_name' => $row->part_name,
+                'model' => $row->model,
                 'tag' => $row->tag,
                 'qty' => round((float) $row->qty, 4),
                 'uom' => $row->uom,

@@ -15,7 +15,7 @@ class ProductionResult extends Model
         'result_date', 'shift', 'qty_good', 'qty_reject', 'uom',
         'period_start', 'period_end', 'is_backfilled', 'label_status',
         'label_carried_over_qty', 'label_carry_over_source_id',
-        'reported_by', 'notes', 'created_by', 'updated_by',
+        'reported_by', 'operator_name', 'notes', 'created_by', 'updated_by',
         'output_part_stock_id', 'reversed_by', 'idempotency_key',
     ];
 

@@ -655,11 +655,16 @@ class WoService
                     ? Carbon::parse($meta['issue_date'])->toDateString()
                     : now((string) ConfigMaster::getValue('SYSTEM', 'timezone', 'Asia/Jakarta'))->toDateString();
 
+                $operatorName = isset($meta['operator_name']) && trim((string) $meta['operator_name']) !== ''
+                    ? trim((string) $meta['operator_name'])
+                    : null;
+
                 $issue = MaterialIssue::create([
                     'issue_no' => MaterialIssue::generateIssueNo(),
                     'work_order_id' => $workOrder->id,
                     'issue_date' => $issueDate,
                     'issued_by' => $actorId,
+                    'operator_name' => $operatorName,
                     'received_by' => $meta['received_by'] ?? null,
                     'location_code' => $meta['location_code'] ?? null,
                     'status' => 'posted',

@@ -12,7 +12,7 @@ class ProductionMaterialReceipt extends Model
 {
     protected $fillable = [
         'material_issue_item_id', 'tag', 'part_id', 'machine_id',
-        'received_by', 'received_at', 'notes',
+        'received_by', 'operator_name', 'received_at', 'notes',
         'transfer_status', 'work_order_id', 'work_order_item_id', 'part_stock_id',
         'qty', 'qty_consumed', 'uom', 'invoice', 'supplier',
     ];

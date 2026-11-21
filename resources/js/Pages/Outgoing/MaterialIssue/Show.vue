@@ -38,7 +38,7 @@ const totalQty = () => (props.issue.items ?? []).reduce((sum, it) => sum + Numbe
             </div>
             <div class="rounded-xl border border-borderline bg-surface p-4">
                 <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('outgoing.issuedBy') }}</div>
-                <div class="mt-1 text-ink-primary">{{ issue.issuer?.name ?? '—' }}</div>
+                <div class="mt-1 text-ink-primary">{{ issue.operator_name || issue.issuer?.name || '—' }}</div>
             </div>
             <div class="rounded-xl border border-borderline bg-surface p-4">
                 <div class="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('outgoing.receivedBy') }}</div>

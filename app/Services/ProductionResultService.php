@@ -117,6 +117,10 @@ class ProductionResultService
                 $backfilled = $reportedLocal->greaterThan($endOfPeriod);
             }
 
+            $operatorName = isset($data['operator_name']) && trim((string) $data['operator_name']) !== ''
+                ? trim((string) $data['operator_name'])
+                : null;
+
             $result = ProductionResult::create([
                 'work_order_id' => $workOrder->id, 'parent_part_id' => $parentPartId,
                 'process_id' => $first->process_id, 'machine_id' => $machineId,
@@ -124,7 +128,7 @@ class ProductionResultService
                 'period_start' => $periodStart, 'period_end' => $periodEnd,
                 'is_backfilled' => $backfilled, 'label_status' => 'pending',
                 'qty_good' => (string) $goodDecimal, 'qty_reject' => (string) $rejectDecimal, 'uom' => $uom,
-                'reported_by' => $actorId, 'notes' => $data['notes'] ?? null,
+                'reported_by' => $actorId, 'operator_name' => $operatorName, 'notes' => $data['notes'] ?? null,
                 'idempotency_key' => $idempotencyKey,
                 'created_by' => $actorId, 'updated_by' => $actorId,
             ]);

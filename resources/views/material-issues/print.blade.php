@@ -47,7 +47,7 @@
         <div><div class="k">Tanggal</div><div class="v">{{ $issue->issue_date?->format('d/m/Y') }}</div></div>
         <div><div class="k">Work Order</div><div class="v">{{ $issue->workOrder?->wo_no ?? '-' }}</div></div>
         <div><div class="k">Part FG</div><div class="v">{{ $issue->workOrder?->part?->part_number }} · {{ $issue->workOrder?->part?->part_name }}</div></div>
-        <div><div class="k">Dikeluarkan oleh</div><div class="v">{{ $issue->issuer?->name ?? '-' }}</div></div>
+        <div><div class="k">Dikeluarkan oleh</div><div class="v">{{ $issue->operator_name ?: ($issue->issuer?->name ?? '-') }}</div></div>
         <div><div class="k">Diterima oleh</div><div class="v">{{ $issue->received_by ?? '-' }}</div></div>
         <div><div class="k">Lokasi rak</div><div class="v">{{ $issue->location_code ?? '-' }}</div></div>
     </div>

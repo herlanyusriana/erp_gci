@@ -127,9 +127,9 @@ class ProductionReceiptService
                 ->whereHas('workOrder', fn (Builder $wo) => $wo->whereIn('status', ['released', 'in_progress'])));
     }
 
-    public function confirm(?string $tag, int $machineId, ?int $userId = null, ?string $notes = null, ?int $materialIssueItemId = null): ProductionMaterialReceipt
+    public function confirm(?string $tag, int $machineId, ?int $userId = null, ?string $notes = null, ?int $materialIssueItemId = null, ?string $operatorName = null): ProductionMaterialReceipt
     {
-        return DB::transaction(function () use ($tag, $machineId, $userId, $notes, $materialIssueItemId) {
+        return DB::transaction(function () use ($tag, $machineId, $userId, $notes, $materialIssueItemId, $operatorName) {
             if ($materialIssueItemId === null) {
                 $ids = $this->issuedItemsForTag($tag ?? '')->pluck('id');
                 if ($ids->count() !== 1) {
@@ -198,6 +198,11 @@ class ProductionReceiptService
             $warehouseRemaining = BigDecimal::of($stock->getRawOriginal('qty'))->minus($issueItem->getRawOriginal('qty'));
             PartStock::query()->whereKey($stock->id)->update(['qty' => (string) $warehouseRemaining]);
 
+            $cleanOperator = $operatorName !== null && trim($operatorName) !== '' ? trim($operatorName) : null;
+            if ($cleanOperator !== null && blank($issue->received_by)) {
+                $issue->update(['received_by' => $cleanOperator]);
+            }
+
             return ProductionMaterialReceipt::create([
                 'material_issue_item_id' => $issueItem->id,
                 'transfer_status' => 'transferred',
@@ -213,6 +218,7 @@ class ProductionReceiptService
                 'part_id' => $issueItem->part_id,
                 'machine_id' => $machineId,
                 'received_by' => $userId,
+                'operator_name' => $cleanOperator,
                 'received_at' => now(),
                 'notes' => $notes,
             ]);
@@ -225,9 +231,9 @@ class ProductionReceiptService
      * @param  list<array{tag?: string|null, material_issue_item_id?: int|null}>  $items
      * @return list<ProductionMaterialReceipt>
      */
-    public function confirmBatch(array $items, int $machineId, ?int $userId = null, ?string $notes = null): array
+    public function confirmBatch(array $items, int $machineId, ?int $userId = null, ?string $notes = null, ?string $operatorName = null): array
     {
-        return DB::transaction(function () use ($items, $machineId, $userId, $notes) {
+        return DB::transaction(function () use ($items, $machineId, $userId, $notes, $operatorName) {
             $receipts = [];
             foreach ($items as $item) {
                 $receipts[] = $this->confirm(
@@ -236,6 +242,7 @@ class ProductionReceiptService
                     userId: $userId,
                     notes: $notes,
                     materialIssueItemId: isset($item['material_issue_item_id']) ? (int) $item['material_issue_item_id'] : null,
+                    operatorName: $operatorName,
                 );
             }
 

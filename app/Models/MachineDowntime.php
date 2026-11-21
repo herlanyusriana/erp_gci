@@ -39,6 +39,7 @@ class MachineDowntime extends Model
         'duration_minutes',
         'notes',
         'reported_by',
+        'operator_name',
     ];
 
     protected function casts(): array

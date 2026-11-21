@@ -117,6 +117,7 @@ final class ProductionSessionService
                 'end_time' => substr((string) $row->end_time, 0, 5),
                 'duration_minutes' => (int) $row->duration_minutes,
                 'notes' => $row->notes,
+                'operator_name' => $row->operator_name,
                 'work_order_id' => $row->work_order_id !== null ? (int) $row->work_order_id : null,
                 'part_id' => $row->part_id !== null ? (int) $row->part_id : null,
             ])

@@ -41,6 +41,7 @@ interface ResultRow {
     parent_part?: { part_number: string; part_name: string; model?: string | null } | null;
     process?: { process_name: string } | null;
     machine?: { machine_name: string } | null;
+    operator_name?: string | null;
     reporter?: { name: string } | null;
 }
 
@@ -277,7 +278,7 @@ function remove(row: ResultRow) {
                             <td class="px-3 py-2.5 text-ink-secondary">{{ r.machine?.machine_name ?? '—' }}</td>
                             <td class="px-3 py-2.5 text-right tabular-nums font-semibold text-success">{{ fmt(r.qty_good) }}</td>
                             <td class="px-3 py-2.5 text-right tabular-nums text-danger">{{ fmt(r.qty_reject) }}</td>
-                            <td class="px-3 py-2.5 text-ink-secondary">{{ r.reporter?.name ?? '—' }}</td>
+                            <td class="px-3 py-2.5 text-ink-secondary">{{ r.operator_name || r.reporter?.name || '—' }}</td>
                             <td class="px-3 py-2.5 text-right">
                                 <button type="button" class="rounded-md border border-danger/30 px-3 py-1 text-xs font-semibold text-danger transition hover:bg-danger/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface" @click="remove(r)">
                                     {{ t('production.delete') }}

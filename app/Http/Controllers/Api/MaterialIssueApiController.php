@@ -415,6 +415,7 @@ class MaterialIssueApiController extends Controller
             'work_order_id' => ['nullable', 'integer', 'exists:work_orders,id'],
             'part_id' => ['nullable', 'integer', 'exists:parts,id'],
             'notes' => ['nullable', 'string', 'max:1000'],
+            'operator_name' => ['nullable', 'string', 'max:120'],
         ]);
 
         $zone = (string) ConfigMaster::getValue('SYSTEM', 'timezone', 'Asia/Jakarta');
@@ -440,6 +441,10 @@ class MaterialIssueApiController extends Controller
             ? 'qdc'
             : ($data['reason'] ?? 'other');
 
+        $operatorName = isset($data['operator_name']) && trim((string) $data['operator_name']) !== ''
+            ? trim((string) $data['operator_name'])
+            : null;
+
         $downtime = MachineDowntime::create([
             'machine_id' => $machine->id,
             'work_order_id' => $data['work_order_id'] ?? null,
@@ -453,6 +458,7 @@ class MaterialIssueApiController extends Controller
             'duration_minutes' => $duration,
             'notes' => $data['notes'] ?? null,
             'reported_by' => $request->user()?->id,
+            'operator_name' => $operatorName,
         ]);
 
         return response()->json([
@@ -466,6 +472,7 @@ class MaterialIssueApiController extends Controller
                 'end_time' => substr((string) $downtime->end_time, 0, 5),
                 'duration_minutes' => (int) $downtime->duration_minutes,
                 'notes' => $downtime->notes,
+                'operator_name' => $downtime->operator_name,
                 'work_order_id' => $downtime->work_order_id !== null ? (int) $downtime->work_order_id : null,
                 'part_id' => $downtime->part_id !== null ? (int) $downtime->part_id : null,
             ],
@@ -612,6 +619,7 @@ class MaterialIssueApiController extends Controller
             'period_end' => ['nullable', 'date_format:H:i', 'required_with:period_start'],
             'machine_id' => ['nullable', 'integer', 'exists:machines,id'],
             'notes' => ['nullable', 'string', 'max:2000'],
+            'operator_name' => ['nullable', 'string', 'max:120'],
             // Opsional: form web belum mengirim key. APK wajib mengirimnya.
             'idempotency_key' => ['nullable', 'string', 'max:80'],
         ]);
@@ -679,6 +687,7 @@ class MaterialIssueApiController extends Controller
                 'parent_part_id' => (int) $result->parent_part_id,
                 'qty_good' => (float) $result->qty_good,
                 'qty_reject' => (float) $result->qty_reject,
+                'operator_name' => $result->operator_name,
                 'next_step' => $nextStep ? [
                     'parent_part_id' => (int) $nextStep->parent_part_id,
                     'part_number' => $nextStep->parentPart?->part_number,
@@ -703,6 +712,7 @@ class MaterialIssueApiController extends Controller
 
         $data = $request->validate([
             'issue_date' => ['nullable', 'date'],
+            'operator_name' => ['nullable', 'string', 'max:120'],
             'received_by' => ['nullable', 'string', 'max:255'],
             // Lokasi rak bersifat opsional: satu data rak yang basi tidak boleh
             // menghentikan pengeluaran material.
@@ -726,6 +736,7 @@ class MaterialIssueApiController extends Controller
             $data['items'] ?? [],
             [
                 'issue_date' => $data['issue_date'] ?? null,
+                'operator_name' => $data['operator_name'] ?? null,
                 'received_by' => $data['received_by'] ?? null,
                 'location_code' => $data['location_code'] ?? null,
                 'idempotency_key' => $data['idempotency_key'],
@@ -743,6 +754,7 @@ class MaterialIssueApiController extends Controller
                 'issue_no' => $issue->issue_no,
                 'work_order_id' => $wo->id,
                 'status' => $wo->status,
+                'operator_name' => $issue->operator_name,
                 'shortages' => $shortages,
             ],
         ]);

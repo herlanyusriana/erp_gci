@@ -65,7 +65,7 @@ class MaterialIssuePosted implements ShouldBroadcast, ShouldDispatchAfterCommit
             'work_order_id' => (int) $issue->work_order_id,
             'work_order_no' => $issue->workOrder?->wo_no,
             'operator_id' => $issue->issued_by !== null ? (int) $issue->issued_by : null,
-            'operator_name' => $issue->issuer?->name,
+            'operator_name' => $issue->operator_name ?: $issue->issuer?->name,
             'received_by' => $issue->received_by,
             'status' => $issue->status,
             'issue_date' => $issue->issue_date?->toDateString() ?? (string) $issue->issue_date,

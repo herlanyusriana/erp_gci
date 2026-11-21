@@ -1849,4 +1849,68 @@ class MaterialIssueApiTest extends TestCase
             'machine_id' => $firstItem->machine_id,
         ])->assertOk();
     }
+
+    public function test_operator_name_is_persisted_across_release_receipt_result_and_downtime(): void
+    {
+        $wo = $this->createWorkOrder();
+        $this->actingAsApi();
+        $scans = $this->seedStockAndBuildScans($wo);
+
+        $this->postJson("/api/work-orders/{$wo->id}/release", [
+            'idempotency_key' => 'op-name-test-1',
+            'operator_name' => 'Budi Gudang',
+            'items' => $scans,
+        ])->assertOk()
+            ->assertJsonPath('data.operator_name', 'Budi Gudang');
+
+        $issue = MaterialIssue::where('idempotency_key', 'op-name-test-1')->firstOrFail();
+        $this->assertSame('Budi Gudang', $issue->operator_name);
+
+        $firstStep = $wo->items()->orderBy('sequence')->firstOrFail();
+        $firstMachineId = $firstStep->machine_id ?? Machine::where('is_active', true)->value('id');
+
+        foreach ($issue->items as $issueItem) {
+            $row = $wo->items()->findOrFail($issueItem->work_order_item_id);
+            $itemMachineId = $row->machine_id ?? $firstMachineId;
+            $this->postJson('/api/receipts/confirm', [
+                'material_issue_item_id' => $issueItem->id,
+                'machine_id' => $itemMachineId,
+                'operator_name' => 'Andi Produksi',
+            ])->assertOk()
+                ->assertJsonPath('data.operator_name', 'Andi Produksi');
+        }
+
+        // Ketika material diterima di mesin, received_by pada bon issue juga otomatis terisi nama penerima.
+        $this->assertSame('Andi Produksi', $issue->fresh()->received_by);
+
+        $this->postJson("/api/work-orders/{$wo->id}/results", [
+            'parent_part_id' => $firstStep->parent_part_id,
+            'qty_good' => 5,
+            'qty_reject' => 1,
+            'machine_id' => $firstMachineId,
+            'operator_name' => 'Andi Produksi',
+        ])->assertOk()
+            ->assertJsonPath('data.operator_name', 'Andi Produksi');
+
+        $this->assertDatabaseHas('production_results', [
+            'work_order_id' => $wo->id,
+            'parent_part_id' => $firstStep->parent_part_id,
+            'operator_name' => 'Andi Produksi',
+        ]);
+
+        $this->postJson("/api/machines/{$firstMachineId}/downtimes", [
+            'shift' => '1',
+            'category' => 'qdc',
+            'reason' => 'qdc',
+            'start_time' => '08:00',
+            'end_time' => '08:30',
+            'operator_name' => 'Andi Produksi',
+        ])->assertOk()
+            ->assertJsonPath('data.operator_name', 'Andi Produksi');
+
+        $this->assertDatabaseHas('machine_downtimes', [
+            'machine_id' => $firstMachineId,
+            'operator_name' => 'Andi Produksi',
+        ]);
+    }
 }

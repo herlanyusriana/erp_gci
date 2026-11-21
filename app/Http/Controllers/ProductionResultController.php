@@ -185,6 +185,7 @@ class ProductionResultController extends Controller
             'period_start' => ['nullable', 'date_format:H:i', 'required_with:period_end'],
             'period_end' => ['nullable', 'date_format:H:i', 'required_with:period_start'],
             'machine_id' => ['nullable', 'integer', 'exists:machines,id'],
+            'operator_name' => ['nullable', 'string', 'max:120'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
 

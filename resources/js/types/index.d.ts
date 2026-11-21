@@ -513,6 +513,7 @@ export interface MaterialIssue {
     issue_date: string;
     created_at?: string;
     issued_by: number | null;
+    operator_name?: string | null;
     received_by: string | null;
     status: string;
     notes: string | null;

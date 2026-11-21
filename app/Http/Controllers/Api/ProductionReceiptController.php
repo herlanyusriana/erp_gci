@@ -32,6 +32,7 @@ class ProductionReceiptController extends Controller
 
         $data = $request->validate([
             'machine_id' => ['required', 'integer', 'exists:machines,id'],
+            'operator_name' => ['nullable', 'string', 'max:120'],
             'notes' => ['nullable', 'string', 'max:2000'],
             'tag' => ['nullable', 'string', 'max:255'],
             'material_issue_item_id' => ['nullable', 'integer', 'exists:material_issue_items,id'],
@@ -53,6 +54,7 @@ class ProductionReceiptController extends Controller
                     machineId: (int) $data['machine_id'],
                     userId: (int) $request->user()->id,
                     notes: $data['notes'] ?? null,
+                    operatorName: $data['operator_name'] ?? null,
                 );
 
                 $first = $receipts[0];
@@ -89,6 +91,7 @@ class ProductionReceiptController extends Controller
                 userId: (int) $request->user()->id,
                 notes: $data['notes'] ?? null,
                 materialIssueItemId: isset($data['material_issue_item_id']) ? (int) $data['material_issue_item_id'] : null,
+                operatorName: $data['operator_name'] ?? null,
             );
 
             $receipt->loadMissing(['part:id,part_number,part_name,model,size', 'receiver:id,name']);
@@ -109,6 +112,7 @@ class ProductionReceiptController extends Controller
                     ] : null,
                     'machine_id' => $receipt->machine_id,
                     'received_by' => $receipt->received_by,
+                    'operator_name' => $receipt->operator_name,
                     'received_at' => $receipt->received_at?->toIso8601String(),
                     'notes' => $receipt->notes,
                 ],
@@ -187,7 +191,8 @@ class ProductionReceiptController extends Controller
                 ] : null,
                 'machine_id' => $receipt->machine_id,
                 'received_by' => $receipt->received_by,
-                'receiver_name' => $receipt->receiver?->name,
+                'operator_name' => $receipt->operator_name,
+                'receiver_name' => $receipt->operator_name ?: $receipt->receiver?->name,
                 'received_at' => $receipt->received_at?->toIso8601String(),
                 'notes' => $receipt->notes,
             ], $receipts),

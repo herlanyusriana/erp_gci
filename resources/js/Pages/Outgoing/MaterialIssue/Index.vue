@@ -25,8 +25,11 @@ interface WoRow {
 }
 
 interface DetailLine {
+    issue_id?: number;
     slip_no: string;
     issue_date: string | null;
+    issued_by?: string | null;
+    received_by?: string | null;
     part_number: string | null;
     part_name: string | null;
     model?: string | null;
@@ -321,6 +324,11 @@ function closeDetail() {
                                 <td class="px-3 py-2">
                                     <div class="font-medium text-ink-primary">{{ line.slip_no }}</div>
                                     <div class="text-xs text-ink-secondary">{{ line.issue_date ?? '' }}</div>
+                                    <div v-if="line.issued_by || line.received_by" class="mt-0.5 text-xs text-ink-secondary">
+                                        <span v-if="line.issued_by">{{ t('outgoing.issuedBy') }}: <strong class="font-medium text-ink-primary">{{ line.issued_by }}</strong></span>
+                                        <span v-if="line.issued_by && line.received_by"> · </span>
+                                        <span v-if="line.received_by">{{ t('outgoing.receivedBy') }}: <strong class="font-medium text-ink-primary">{{ line.received_by }}</strong></span>
+                                    </div>
                                 </td>
                                 <td class="px-3 py-2">
                                     <div class="text-ink-primary">{{ line.part_number ?? '—' }}</div>

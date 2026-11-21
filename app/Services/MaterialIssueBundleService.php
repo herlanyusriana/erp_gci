@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Models\IncomingReceive;
+use App\Models\MaterialIssueItem;
 use App\Models\PartStock;
+use App\Models\ProductionMaterialReceipt;
 use App\Models\WorkOrder;
 use App\Models\WorkOrderItem;
+use App\Models\WorkOrderMaterialBooking;
 use App\Support\BundlePacking;
 use App\Support\UomCatalog;
 use Illuminate\Support\Facades\DB;
@@ -34,14 +37,24 @@ class MaterialIssueBundleService
      */
     public function forTag(WorkOrderItem $item, WorkOrder $workOrder, string $tag): array
     {
-        $stock = PartStock::query()
+        if ($this->remainingQty($item) <= 1e-9) {
+            throw ValidationException::withMessages([
+                'tag' => __('Kebutuhan item ini sudah terpenuhi.'),
+            ]);
+        }
+
+        $candidates = PartStock::query()
             ->with(['receive:id,invoice_no,arrival_item_id,bundle_count,bundle_qty,bundle_unit,packing_count,packing_type,packing_qty', 'receive.packings', 'receive.arrivalItem:id,arrival_id,part_id,material_group,size,unit_goods'])
             ->whereRaw('LOWER(COALESCE(tag, \'\')) = ?', [mb_strtolower(trim($tag))])
             ->where('qty', '>', 0)
             ->whereIn('part_id', $this->allowedPartIds($item))
             ->orderByRaw('received_at ASC NULLS LAST')
             ->orderBy('id')
-            ->first();
+            ->get();
+
+        $stock = $candidates->first(
+            fn (PartStock $candidate): bool => $this->availableQtyForItem($candidate, $workOrder, $item) > 1e-9,
+        );
 
         if ($stock === null) {
             throw ValidationException::withMessages([
@@ -59,17 +72,54 @@ class MaterialIssueBundleService
      */
     public function forStock(WorkOrderItem $item, WorkOrder $workOrder, int $partStockId): ?array
     {
+        if ($this->remainingQty($item) <= 1e-9) {
+            return null;
+        }
+
         $stock = PartStock::query()
             ->with(['receive:id,invoice_no,arrival_item_id,bundle_count,bundle_qty,bundle_unit,packing_count,packing_type,packing_qty', 'receive.packings', 'receive.arrivalItem:id,arrival_id,part_id,material_group,size,unit_goods'])
             ->whereKey($partStockId)
             ->where('qty', '>', 0)
             ->first();
 
-        if ($stock === null || ! in_array((int) $stock->part_id, $this->allowedPartIds($item), true)) {
+        if ($stock === null
+            || ! in_array((int) $stock->part_id, $this->allowedPartIds($item), true)
+            || $this->availableQtyForItem($stock, $workOrder, $item) <= 1e-9
+        ) {
             return null;
         }
 
         return $this->build($item, $workOrder, $stock);
+    }
+
+    /**
+     * Sisa stok sebuah tag yang masih bisa di-issue untuk item WO ini
+     * (memperhitungkan booking aktif, kecuali booking web milik item ini yang belum di-issue).
+     */
+    private function availableQtyForItem(PartStock $stock, WorkOrder $workOrder, WorkOrderItem $item): float
+    {
+        $booked = (float) WorkOrderMaterialBooking::query()
+            ->where('part_stock_id', $stock->id)
+            ->where('status', WorkOrderMaterialBooking::STATUS_BOOKED)
+            ->sum('qty');
+
+        $ownBooked = (float) WorkOrderMaterialBooking::query()
+            ->where('part_stock_id', $stock->id)
+            ->where('work_order_id', $workOrder->id)
+            ->where('work_order_item_id', $item->id)
+            ->where('status', WorkOrderMaterialBooking::STATUS_BOOKED)
+            ->sum('qty');
+
+        $pendingIssued = (float) MaterialIssueItem::query()
+            ->where('part_stock_id', $stock->id)
+            ->where('work_order_item_id', $item->id)
+            ->whereHas('materialIssue', fn ($q) => $q->where('work_order_id', $workOrder->id)->where('status', 'posted'))
+            ->whereNotIn('id', ProductionMaterialReceipt::query()->select('material_issue_item_id'))
+            ->sum('qty');
+
+        $unissuedOwnBooking = max(0.0, $ownBooked - $pendingIssued);
+
+        return max(0.0, (float) $stock->qty - $booked + $unissuedOwnBooking);
     }
 
     /**
@@ -100,7 +150,13 @@ class MaterialIssueBundleService
 
         $consumed = (float) DB::table('work_order_consumptions')
             ->where('work_order_id', $item->work_order_id)
-            ->where('part_id', $item->child_part_id)
+            ->where(function ($q) use ($item) {
+                $q->where('work_order_item_id', $item->id)
+                    ->orWhere(function ($sub) use ($item) {
+                        $sub->whereNull('work_order_item_id')
+                            ->where('part_id', $item->child_part_id);
+                    });
+            })
             ->sum('qty');
 
         return round(max(0.0, $issued - $consumed), 4);
@@ -112,16 +168,17 @@ class MaterialIssueBundleService
     public function netRequirement(WorkOrderItem $item): array
     {
         $required = $this->requiredQty($item);
-        $issued = $this->issuedQty($item);
+        $issued = round($this->issuedQty($item), 4);
         $stock = $this->stockAtMachine($item);
 
-        // Yang mengurangi kebutuhan hanyalah material yang masih berada di mesin.
-        // Qty yang sudah terpakai produksi tidak boleh dihitung dua kali.
+        // Kebutuhan bersih issue gudang selalu dihitung dari total yang sudah
+        // di-issue terhadap total kebutuhan item WO, supaya material yang sudah
+        // di-issue lalu dikonsumsi mesin tidak pernah bisa di-issue ulang.
         return [
             'required_qty' => $required,
-            'issued_qty' => round($issued, 4),
+            'issued_qty' => $issued,
             'stock_at_machine' => $stock,
-            'net_requirement' => BundlePacking::netRequirement($required, $stock),
+            'net_requirement' => BundlePacking::netRequirement($required, $issued),
         ];
     }
 
@@ -130,7 +187,7 @@ class MaterialIssueBundleService
      */
     public function remainingQty(WorkOrderItem $item): float
     {
-        return BundlePacking::netRequirement($this->requiredQty($item), $this->stockAtMachine($item));
+        return BundlePacking::netRequirement($this->requiredQty($item), round($this->issuedQty($item), 4));
     }
 
     /**
@@ -175,7 +232,7 @@ class MaterialIssueBundleService
         // kurangi dua kali.
         $plan = BundlePacking::plan(
             $net['required_qty'],
-            $net['stock_at_machine'],
+            $net['issued_qty'],
             $totalQty,
             $bundleCount,
         );

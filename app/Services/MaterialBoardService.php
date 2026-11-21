@@ -256,11 +256,21 @@ class MaterialBoardService
             ->selectRaw('COUNT(DISTINCT wo.id) AS wo_count')
             ->get();
 
+        $scheduledWoIds = $this->schedule->scheduledQuantities($date, $boardDate)->select('work_order_id');
+
         $issued = DB::table('material_issue_items as mii')
             ->join('material_issues as mi', 'mi.id', '=', 'mii.material_issue_id')
             ->join('work_order_items as woi', 'woi.id', '=', 'mii.work_order_item_id')
             ->where('mi.status', 'posted')
-            ->where('mi.issue_date', $date)
+            ->where(function ($q) use ($date, $boardDate, $scheduledWoIds) {
+                $q->where('mi.issue_date', $date);
+                if ($date === $boardDate) {
+                    $q->orWhere(function ($carry) use ($date, $scheduledWoIds) {
+                        $carry->where('mi.issue_date', '<', $date)
+                            ->whereIn('woi.work_order_id', $scheduledWoIds);
+                    });
+                }
+            })
             ->whereNotNull('woi.child_part_id')
             ->groupBy('woi.child_part_id', 'mii.uom')
             ->selectRaw('woi.child_part_id AS part_id')

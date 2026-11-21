@@ -275,3 +275,45 @@ it('serves packings over the issue-plan api', function () {
         ->assertJsonPath('data.packings.1.packing_no', 'TAG-API-2')
         ->assertJsonPath('data.packings.0.checked', true);
 });
+
+it('blocks issue plan and keeps net requirement at zero when material is already issued even after production consumes it', function () {
+    [$wo, $item, $stock, $receive] = bundleIssueContext(16000, 16000, 20000, 10);
+
+    DB::table('material_issues')->insert([
+        'issue_no' => 'MI-DONE-'.uniqid(),
+        'work_order_id' => $wo->id,
+        'issue_date' => now()->toDateString(),
+        'status' => 'posted',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    $issueId = (int) DB::table('material_issues')->max('id');
+    DB::table('material_issue_items')->insert([
+        'material_issue_id' => $issueId,
+        'work_order_item_id' => $item->id,
+        'part_id' => $item->child_part_id,
+        'tag' => $receive->tag,
+        'qty' => 16000,
+        'uom' => 'KGM',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    DB::table('work_order_consumptions')->insert([
+        'work_order_id' => $wo->id,
+        'work_order_item_id' => $item->id,
+        'part_id' => $item->child_part_id,
+        'qty' => 6000,
+        'uom' => 'KGM',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $service = app(MaterialIssueBundleService::class);
+    $net = $service->netRequirement($item->fresh());
+    expect($net['net_requirement'])->toBe(0.0)
+        ->and($service->remainingQty($item->fresh()))->toBe(0.0);
+
+    $this->actingAs(User::where('email', 'admin@geumcheon.local')->firstOrFail());
+    $this->getJson("/api/work-orders/{$wo->id}/items/{$item->id}/issue-plan?tag={$receive->tag}")
+        ->assertStatus(422);
+});

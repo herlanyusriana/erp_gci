@@ -159,6 +159,7 @@ class ReleaseContextService
             })->values();
 
             $firstMaterial = $materials->first();
+            $issuedTotal = round((float) $issuedForItem->sum('issued_qty'), 4);
 
             $rows[] = [
                 'work_order_item_id' => $it->id,
@@ -175,11 +176,11 @@ class ReleaseContextService
                 'uom' => $uom,
                 'required' => round((float) $it->qty_required, 4),
                 'consumed' => round((float) $it->qty_consumed, 4),
-                'remaining' => round(max(0.0, (float) $it->qty_required - (float) $it->qty_consumed), 4),
+                'remaining' => round(max(0.0, (float) $it->qty_required - $issuedTotal), 4),
                 'stock_state' => $materials->contains(fn (array $m) => $m['available_qty'] > 1e-9) ? 'available' : 'none',
                 'is_auxiliary' => self::isAuxiliaryItem($it),
                 'size' => $firstMaterial !== null ? $firstMaterial['size'] : $it->size,
-                'issued_qty' => round((float) $issuedForItem->sum('issued_qty'), 4),
+                'issued_qty' => $issuedTotal,
                 'materials' => $materials->all(),
                 'allowed_parts' => $allowed,
                 'recommended_tags' => $recommended,

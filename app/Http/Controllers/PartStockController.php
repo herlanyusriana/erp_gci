@@ -61,11 +61,18 @@ class PartStockController extends Controller
                         ->where('part_number', 'ilike', "%{$s}%")
                         ->orWhere('part_name', 'ilike', "%{$s}%")
                         ->orWhere('model', 'ilike', "%{$s}%"))
+                    ->orWhereHas('receive', fn ($w) => $w
+                        ->where('invoice_no', 'ilike', "%{$s}%")
+                        ->orWhereHas('arrivalItem.arrival', fn ($a) => $a
+                            ->where('invoice_no', 'ilike', "%{$s}%")
+                            ->orWhere('delivery_note_no', 'ilike', "%{$s}%")
+                            ->orWhere('arrival_no', 'ilike', "%{$s}%")))
                     ->orWhereHas('receive.packings', fn ($w) => $w->where('packing_no', 'ilike', "%{$s}%"));
             }))
+            ->orderByDesc('receive_id')
             ->orderBy('part_id')
             ->orderBy('tag')
-            ->paginate(15)
+            ->paginate(100)
             ->withQueryString();
 
         // Qty yang sedang di-book WO (belum terpakai) per baris stok.

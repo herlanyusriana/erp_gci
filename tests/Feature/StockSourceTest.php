@@ -357,4 +357,18 @@ class StockSourceTest extends TestCase
                         && $packings[1]['packing_no'] === 'PK-COIL-002';
                 }));
     }
+
+    public function test_stock_index_searches_by_invoice_number(): void
+    {
+        [$stock] = $this->makeStockSource('INV-GROUP-7788', 'TAG-GROUP-7788');
+        $this->makeStockSource('INV-OTHER-0001', 'TAG-OTHER-0001');
+
+        $this->actingAs($this->admin())
+            ->get(route('stocks.index', ['search' => 'INV-GROUP-7788']))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Incoming/Stock/Index')
+                ->where('stocks.data', fn ($rows) => count($rows) === 1
+                    && (int) $rows[0]['id'] === (int) $stock->id));
+    }
 }

@@ -151,10 +151,12 @@ class ProductionPlanController extends Controller
         foreach ($machines as $machine) {
             $mId = (int) $machine->id;
             $initialQdc = [];
+            $shiftCounts = [];
             foreach ($dayDates as $dayKey => $planDateStr) {
                 $p = $plansByDate->get($planDateStr);
                 $md = $p !== null ? $machineDays->get($p->id.'|'.$mId) : null;
                 $initialQdc[$dayKey] = (bool) ($md?->initial_qdc ?? false);
+                $shiftCounts[$dayKey] = max(1, min(3, (int) ($md?->shift_count ?? 3)));
             }
 
             // Gabungkan semua WO yang punya slot di mesin ini (dengan sisa > 0) ATAU sudah ter-plan di D/D+1/D+2.
@@ -235,6 +237,7 @@ class ProductionPlanController extends Controller
                         'wip_part_id' => $wipPartId,
                         'cycle_time_seconds' => $ct['cycle_time_seconds'],
                         'qdc_minutes' => $ct['qdc_minutes'],
+                        'apply_qdc' => (bool) $pi->apply_qdc,
                     ];
                 }
             }
@@ -245,6 +248,7 @@ class ProductionPlanController extends Controller
                     $dayDates[$dayKey],
                     $dayEntries[$dayKey],
                     $initialQdc[$dayKey],
+                    $shiftCounts[$dayKey],
                 );
             }
 
@@ -269,6 +273,7 @@ class ProductionPlanController extends Controller
                         'id' => (int) $pi->id,
                         'sequence' => (int) ($pi->sequence_d > 0 ? $pi->sequence_d : ($pi->sequence > 0 ? $pi->sequence : 1)),
                         'qty' => (float) $pi->target_d,
+                        'apply_qdc' => (bool) $pi->apply_qdc,
                         'start_time' => $sched['start_time'] ?? null,
                         'end_time' => $sched['end_time'] ?? null,
                         'qdc_applied_minutes' => $sched['qdc_applied_minutes'] ?? 0.0,
@@ -337,6 +342,7 @@ class ProductionPlanController extends Controller
                 'sequence' => $machine->sequence,
                 'avail_wo_count' => $availWoCount,
                 'initial_qdc' => $initialQdc,
+                'shift_counts' => $shiftCounts,
                 'planned_rows' => $plannedRows,
                 'modal_rows' => $modalRows,
                 'fg_part_ids' => $fgIdsByMachine->get($mId, []),
@@ -425,9 +431,16 @@ class ProductionPlanController extends Controller
 
         $plan = $plansByDate->get($dayDates['d']);
 
+        $dayShiftCapacities = [
+            'd' => $this->scheduleService->shiftCapacitiesForDate($dayDates['d']),
+            'd1' => $this->scheduleService->shiftCapacitiesForDate($dayDates['d1']),
+            'd2' => $this->scheduleService->shiftCapacitiesForDate($dayDates['d2']),
+        ];
+
         return Inertia::render('Production/Plan/Index', [
             'date' => $dayDates['d'],
             'dates' => $dayDates,
+            'dayShiftCapacities' => $dayShiftCapacities,
             'plan' => $plan ? $plan->only(['id', 'plan_date', 'notes']) : null,
             'machines' => $boardMachines,
             'availWorkOrders' => $availWorkOrders,
@@ -504,14 +517,21 @@ class ProductionPlanController extends Controller
             'initial_qdc.d' => ['sometimes', 'boolean'],
             'initial_qdc.d1' => ['sometimes', 'boolean'],
             'initial_qdc.d2' => ['sometimes', 'boolean'],
+            'shift_counts' => ['sometimes', 'array'],
+            'shift_counts.d' => ['sometimes', 'integer', 'min:1', 'max:3'],
+            'shift_counts.d1' => ['sometimes', 'integer', 'min:1', 'max:3'],
+            'shift_counts.d2' => ['sometimes', 'integer', 'min:1', 'max:3'],
             'rows' => ['present', 'array'],
             'rows.*.work_order_id' => ['required', 'integer', 'exists:work_orders,id'],
             'rows.*.d_seq' => ['nullable', 'integer', 'min:0'],
             'rows.*.d_qty' => ['nullable', 'numeric', 'min:0'],
+            'rows.*.d_qdc' => ['sometimes', 'nullable', 'boolean'],
             'rows.*.d1_seq' => ['nullable', 'integer', 'min:0'],
             'rows.*.d1_qty' => ['nullable', 'numeric', 'min:0'],
+            'rows.*.d1_qdc' => ['sometimes', 'nullable', 'boolean'],
             'rows.*.d2_seq' => ['nullable', 'integer', 'min:0'],
             'rows.*.d2_qty' => ['nullable', 'numeric', 'min:0'],
+            'rows.*.d2_qdc' => ['sometimes', 'nullable', 'boolean'],
         ]);
 
         $initialQdc = [
@@ -520,12 +540,19 @@ class ProductionPlanController extends Controller
             'd2' => (bool) ($data['initial_qdc']['d2'] ?? false),
         ];
 
+        $shiftCounts = [
+            'd' => (int) ($data['shift_counts']['d'] ?? 3),
+            'd1' => (int) ($data['shift_counts']['d1'] ?? 3),
+            'd2' => (int) ($data['shift_counts']['d2'] ?? 3),
+        ];
+
         $this->scheduleService->saveMachinePlan(
             $machine,
             $data['date'],
             $initialQdc,
             $data['rows'],
             (int) auth()->id(),
+            $shiftCounts,
         );
 
         return redirect()

@@ -625,6 +625,7 @@ export interface ProductionPlanDaySlot {
     id: number;
     sequence: number;
     qty: number;
+    apply_qdc: boolean;
     start_time: string | null;
     end_time: string | null;
     qdc_applied_minutes: number;
@@ -660,6 +661,7 @@ export interface ProductionPlanBoardMachine {
     sequence: number | null;
     avail_wo_count: number;
     initial_qdc: { d: boolean; d1: boolean; d2: boolean };
+    shift_counts: { d: number; d1: number; d2: number };
     planned_rows: ProductionPlanMachineRow[];
     modal_rows: ProductionPlanMachineRow[];
     fg_part_ids: number[];

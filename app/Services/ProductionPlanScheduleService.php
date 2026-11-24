@@ -207,16 +207,16 @@ class ProductionPlanScheduleService
 
     /**
      * Hitung Start – Finish Time untuk 1 mesin pada 1 tanggal kalender.
-     * Mengikuti jadwal 3 shift pabrik di `ProductionPeriods` (mulai 07:30,
-     * melompati jam istirahat). QDC Seq 1 hanya diterapkan jika `$initialQdc`
-     * dicentang; Seq >= 2 otomatis menerapkan QDC saat ganti part (`wip_part_id`).
+     * Mengikuti jadwal shift pabrik di `ProductionPeriods` (1..$shiftCount shift,
+     * mulai 07:30, melompati jam istirahat). QDC per baris mengikuti flag `apply_qdc`
+     * jika disediakan, atau fallback ke `$initialQdc` (Seq 1) & ganti part (Seq >= 2).
      *
-     * @param  list<array{key: string|int, sequence: int, id: int, qty: float, wip_part_id: int|null, cycle_time_seconds: float|null, qdc_minutes: float|null}>  $entries
+     * @param  list<array{key: string|int, sequence: int, id: int, qty: float, wip_part_id: int|null, cycle_time_seconds: float|null, qdc_minutes: float|null, apply_qdc?: bool|null}>  $entries
      * @return array<string|int, array{start_time: string|null, end_time: string|null, qdc_applied_minutes: float, duration_seconds: float|null, is_overload: bool}>
      */
-    public function calculateDaySchedule(string $date, array $entries, bool $initialQdc): array
+    public function calculateDaySchedule(string $date, array $entries, bool $initialQdc = false, int $shiftCount = 3): array
     {
-        $intervals = $this->workingIntervalsForDate($date);
+        $intervals = $this->workingIntervalsForDate($date, $shiftCount);
         if ($intervals === []) {
             return [];
         }
@@ -249,7 +249,11 @@ class ProductionPlanScheduleService
 
             $qdcApplied = 0.0;
             if ($qdc !== null && $qdc > 0) {
-                if ($timedIndex === 0) {
+                if (array_key_exists('apply_qdc', $entry) && $entry['apply_qdc'] !== null) {
+                    if ((bool) $entry['apply_qdc']) {
+                        $qdcApplied = (float) $qdc;
+                    }
+                } elseif ($timedIndex === 0) {
                     if ($initialQdc) {
                         $qdcApplied = (float) $qdc;
                     }
@@ -285,16 +289,47 @@ class ProductionPlanScheduleService
     }
 
     /**
-     * Interval kerja (menit dari 00:00 tanggal tersebut) untuk 3 shift pabrik.
+     * Total menit kerja tersedia untuk 1..$shiftCount shift pada tanggal tertentu.
+     */
+    public function shiftCapacityMinutes(string $date, int $shiftCount = 3): float
+    {
+        $total = 0;
+        foreach ($this->workingIntervalsForDate($date, $shiftCount) as [$start, $end]) {
+            $total += max(0, $end - $start);
+        }
+
+        return (float) $total;
+    }
+
+    /**
+     * Peta kapasitas menit untuk 1, 2, dan 3 shift pada satu tanggal kalender.
+     *
+     * @return array<int, float>
+     */
+    public function shiftCapacitiesForDate(string $date): array
+    {
+        return [
+            1 => $this->shiftCapacityMinutes($date, 1),
+            2 => $this->shiftCapacityMinutes($date, 2),
+            3 => $this->shiftCapacityMinutes($date, 3),
+        ];
+    }
+
+    /**
+     * Interval kerja (menit dari 00:00 tanggal tersebut) untuk 1..$shiftCount shift pabrik.
      *
      * @return list<array{0: int, 1: int}>
      */
-    public function workingIntervalsForDate(string $date): array
+    public function workingIntervalsForDate(string $date, int $shiftCount = 3): array
     {
         $carbon = Carbon::parse($date);
+        $maxShift = max(1, min(3, $shiftCount));
         $intervals = [];
 
         foreach (['1', '2', '3'] as $shift) {
+            if ((int) $shift > $maxShift) {
+                break;
+            }
             $cfg = ProductionPeriods::scheduleFor($shift, $carbon);
             if ($cfg === null) {
                 continue;
@@ -338,14 +373,21 @@ class ProductionPlanScheduleService
     }
 
     /**
-     * Simpan rencana 3 hari (D, D+1, D+2) dan pengaturan QDC Awal untuk satu mesin.
+     * Simpan rencana 3 hari (D, D+1, D+2), jumlah shift per hari, dan QDC per baris untuk satu mesin.
      * Disimpan per tanggal kalender (`plan_date`) agar besok D+1 otomatis bergeser jadi D.
      *
      * @param  array{d: bool, d1: bool, d2: bool}  $initialQdc
-     * @param  list<array{work_order_id: int, d_seq: int|null, d_qty: float|null, d1_seq: int|null, d1_qty: float|null, d2_seq: int|null, d2_qty: float|null}>  $rows
+     * @param  list<array{work_order_id: int, d_seq: int|null, d_qty: float|null, d_qdc?: bool|null, d1_seq: int|null, d1_qty: float|null, d1_qdc?: bool|null, d2_seq: int|null, d2_qty: float|null, d2_qdc?: bool|null}>  $rows
+     * @param  array{d: int, d1: int, d2: int}  $shiftCounts
      */
-    public function saveMachinePlan(Machine $machine, string $boardDate, array $initialQdc, array $rows, int $actorId): void
-    {
+    public function saveMachinePlan(
+        Machine $machine,
+        string $boardDate,
+        array $initialQdc,
+        array $rows,
+        int $actorId,
+        array $shiftCounts = ['d' => 3, 'd1' => 3, 'd2' => 3],
+    ): void {
         $dayDates = [
             'd' => Carbon::parse($boardDate)->toDateString(),
             'd1' => Carbon::parse($boardDate)->addDay()->toDateString(),
@@ -399,14 +441,15 @@ class ProductionPlanScheduleService
             throw ValidationException::withMessages($errors);
         }
 
-        DB::transaction(function () use ($machine, $dayDates, $initialQdc, $rows, $slotsByWo, $actorId): void {
+        DB::transaction(function () use ($machine, $dayDates, $initialQdc, $shiftCounts, $rows, $slotsByWo, $actorId): void {
             $plansByKey = [];
             foreach ($dayDates as $dayKey => $planDate) {
                 $hasAnyQty = collect($rows)->contains(fn (array $r): bool => $this->positiveFloat($r[$dayKey.'_qty'] ?? null) !== null);
                 $flag = (bool) ($initialQdc[$dayKey] ?? false);
+                $shifts = max(1, min(3, (int) ($shiftCounts[$dayKey] ?? 3)));
 
                 $plan = ProductionPlan::query()->whereDate('plan_date', $planDate)->first();
-                if ($plan === null && ($hasAnyQty || $flag)) {
+                if ($plan === null && ($hasAnyQty || $flag || $shifts !== 3)) {
                     $plan = ProductionPlan::create([
                         'plan_date' => $planDate,
                         'created_by' => $actorId,
@@ -420,7 +463,10 @@ class ProductionPlanScheduleService
                             'production_plan_id' => $plan->id,
                             'machine_id' => $machine->id,
                         ],
-                        ['initial_qdc' => $flag],
+                        [
+                            'shift_count' => $shifts,
+                            'initial_qdc' => $flag,
+                        ],
                     );
                 }
             }
@@ -438,6 +484,9 @@ class ProductionPlanScheduleService
                     $qty = $this->positiveFloat($row[$dayKey.'_qty'] ?? null);
                     $seqRaw = isset($row[$dayKey.'_seq']) && $row[$dayKey.'_seq'] !== '' ? (int) $row[$dayKey.'_seq'] : 0;
                     $seq = $seqRaw > 0 ? $seqRaw : 1;
+                    $applyQdc = array_key_exists($dayKey.'_qdc', $row) && $row[$dayKey.'_qdc'] !== null
+                        ? (bool) $row[$dayKey.'_qdc']
+                        : ($seq === 1 ? (bool) ($initialQdc[$dayKey] ?? false) : true);
 
                     $existing = ProductionPlanItem::query()
                         ->where('production_plan_id', $plan->id)
@@ -495,6 +544,7 @@ class ProductionPlanScheduleService
                             'target_d' => $qty,
                             'target_d1' => null,
                             'target_d2' => null,
+                            'apply_qdc' => $applyQdc,
                             'created_by' => $existing?->created_by ?? $actorId,
                             'updated_by' => $actorId,
                         ],

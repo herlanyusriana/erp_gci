@@ -10,10 +10,12 @@ class ProductionPlanMachineDay extends Model
     protected $fillable = [
         'production_plan_id',
         'machine_id',
+        'shift_count',
         'initial_qdc',
     ];
 
     protected $casts = [
+        'shift_count' => 'integer',
         'initial_qdc' => 'boolean',
     ];
 

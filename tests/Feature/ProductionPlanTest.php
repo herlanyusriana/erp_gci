@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Machine;
+use App\Models\MachineCycleTime;
 use App\Models\Part;
 use App\Models\ProductionPlan;
 use App\Models\ProductionPlanItem;
@@ -359,5 +360,59 @@ class ProductionPlanTest extends TestCase
 
         $plan = ProductionPlan::whereDate('plan_date', now()->toDateString())->firstOrFail();
         $this->assertGreaterThan(0, $plan->items()->count());
+    }
+
+    public function test_save_machine_plan_persists_shift_count_and_per_row_qdc_and_detects_shift_overload(): void
+    {
+        $monday = '2026-11-23';
+        $wo = $this->createWo(5000, $monday);
+        $tplKukil = Machine::where('machine_name', 'TPL KUKIL')->firstOrFail();
+        $wip5 = Part::where('part_number', 'AAN30056405-WIP5')->firstOrFail();
+
+        MachineCycleTime::updateOrCreate(
+            ['machine_id' => $tplKukil->id, 'part_id' => $wip5->id],
+            ['cycle_time_seconds' => 6, 'qdc_minutes' => 30, 'is_active' => true],
+        );
+
+        // 1 Shift Senin = 7 jam (420 mnt). 4500 pcs × 6s = 450 mnt + 30 mnt QDC = 480 mnt -> overload pada 1 Shift!
+        $this->put(route('production-plans.machines.save', $tplKukil), [
+            'date' => $monday,
+            'shift_counts' => ['d' => 1, 'd1' => 2, 'd2' => 3],
+            'rows' => [
+                [
+                    'work_order_id' => $wo->id,
+                    'd_seq' => 1,
+                    'd_qty' => 4500,
+                    'd_qdc' => true,
+                    'd1_seq' => 1,
+                    'd1_qty' => 500,
+                    'd1_qdc' => false,
+                    'd2_seq' => null,
+                    'd2_qty' => null,
+                    'd2_qdc' => false,
+                ],
+            ],
+        ])->assertRedirect();
+
+        $this->get(route('production-plans.index', ['date' => $monday]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('dayShiftCapacities.d.1', 420)
+                ->where('dayShiftCapacities.d.3', 1260)
+                ->where('machines', function ($machines) use ($tplKukil, $wo) {
+                    $tpl = collect($machines)->firstWhere('id', $tplKukil->id);
+                    $row = collect($tpl['planned_rows'])->firstWhere('work_order_id', $wo->id);
+
+                    return $tpl !== null
+                        && (int) $tpl['shift_counts']['d'] === 1
+                        && (int) $tpl['shift_counts']['d1'] === 2
+                        && $row !== null
+                        && $row['days']['d']['apply_qdc'] === true
+                        && (float) $row['days']['d']['qdc_applied_minutes'] === 30.0
+                        && $row['days']['d']['is_overload'] === true
+                        && $row['days']['d1']['apply_qdc'] === false
+                        && (float) $row['days']['d1']['qdc_applied_minutes'] === 0.0
+                        && $row['days']['d1']['is_overload'] === false;
+                }));
     }
 }

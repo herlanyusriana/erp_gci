@@ -39,10 +39,34 @@ interface ModalRowDraft {
     qdc_minutes: number | null;
     d_seq: string;
     d_qty: string;
+    d_qdc: boolean;
+    d_qdc_touched: boolean;
     d1_seq: string;
     d1_qty: string;
+    d1_qdc: boolean;
+    d1_qdc_touched: boolean;
     d2_seq: string;
     d2_qty: string;
+    d2_qdc: boolean;
+    d2_qdc_touched: boolean;
+}
+
+interface OverloadPrompt {
+    dayKey: DayKey;
+    nextDayKey: DayKey | null;
+    shifts: number;
+    rowIndex: number;
+    woNo: string;
+    partLabel: string;
+    maxQty: number;
+    overflowQty: number;
+}
+
+interface UnusedShiftItem {
+    dayKey: DayKey;
+    dayLabel: string;
+    shifts: number;
+    remainMinutes: number;
 }
 
 const { t, locale } = useI18n();
@@ -50,6 +74,7 @@ const { t, locale } = useI18n();
 const props = defineProps<{
     date: string;
     dates: { d: string; d1: string; d2: string };
+    dayShiftCapacities: Record<DayKey, Record<number, number>>;
     plan: ProductionPlan | null;
     machines: ProductionPlanBoardMachine[];
     availWorkOrders: AvailWorkOrderSummary[];
@@ -84,8 +109,31 @@ const dayLabels = computed(() => ({
     d2: fmtDate(props.dates.d2),
 }));
 
+const dayShortName = (key: DayKey) => (key === 'd' ? 'D' : (key === 'd1' ? 'D+1' : 'D+2'));
+const dayFullLabel = (key: DayKey) => `${dayShortName(key)} (${dayLabels.value[key]})`;
+
 const fmt = (n: number | null | undefined) =>
     n == null ? '—' : Number(n).toLocaleString(locale.value, { maximumFractionDigits: 2 });
+
+function fmtMinutes(totalMinutes: number): string {
+    const rounded = Math.max(0, Math.round(totalMinutes));
+    const hours = Math.floor(rounded / 60);
+    const mins = rounded % 60;
+    if (hours > 0 && mins > 0) return `${hours} ${t('production.hours')} ${mins} ${t('production.minutes')}`;
+    if (hours > 0) return `${hours} ${t('production.hours')}`;
+    return `${mins} ${t('production.minutes')}`;
+}
+
+function fgPrimaryName(part: Pick<Part, 'part_number' | 'part_name'> | null | undefined): string {
+    const name = part?.part_name?.trim();
+    return name && name !== '' ? name : (part?.part_number ?? '—');
+}
+
+function fgSecondaryNumber(part: Pick<Part, 'part_number' | 'part_name'> | null | undefined): string {
+    const name = part?.part_name?.trim();
+    if (!name || name === '') return '';
+    return part?.part_number ?? '';
+}
 
 const summary = computed(() => {
     const plannedMachineCount = props.machines.filter((m) => m.planned_rows.length > 0).length;
@@ -205,11 +253,11 @@ const activeMachine = computed<ProductionPlanBoardMachine | null>(() =>
 
 const machinePlanForm = useForm<{
     date: string;
-    initial_qdc: { d: boolean; d1: boolean; d2: boolean };
+    shift_counts: { d: number; d1: number; d2: number };
     rows: ModalRowDraft[];
 }>({
     date: props.date,
-    initial_qdc: { d: false, d1: false, d2: false },
+    shift_counts: { d: 3, d1: 3, d2: 3 },
     rows: [],
 });
 
@@ -220,6 +268,9 @@ const inlineWoForm = useForm({
     fg_part_id: '',
     qty: '',
 });
+
+const overloadPrompt = ref<OverloadPrompt | null>(null);
+const unusedShiftItems = ref<UnusedShiftItem[]>([]);
 
 const inlineFgOptions = computed<PartOpt[]>(() => {
     const machine = activeMachine.value;
@@ -243,10 +294,16 @@ function toModalDraft(row: ProductionPlanMachineRow): ModalRowDraft {
         qdc_minutes: row.qdc_minutes,
         d_seq: row.days.d ? String(row.days.d.sequence) : '',
         d_qty: row.days.d ? String(row.days.d.qty) : '',
+        d_qdc: row.days.d ? Boolean(row.days.d.apply_qdc) : false,
+        d_qdc_touched: row.days.d !== null,
         d1_seq: row.days.d1 ? String(row.days.d1.sequence) : '',
         d1_qty: row.days.d1 ? String(row.days.d1.qty) : '',
+        d1_qdc: row.days.d1 ? Boolean(row.days.d1.apply_qdc) : false,
+        d1_qdc_touched: row.days.d1 !== null,
         d2_seq: row.days.d2 ? String(row.days.d2.sequence) : '',
         d2_qty: row.days.d2 ? String(row.days.d2.qty) : '',
+        d2_qdc: row.days.d2 ? Boolean(row.days.d2.apply_qdc) : false,
+        d2_qdc_touched: row.days.d2 !== null,
     };
 }
 
@@ -257,14 +314,16 @@ function openMachineModal(machineId: number) {
     activeMachineId.value = machine.id;
     machinePlanForm.clearErrors();
     machinePlanForm.date = props.date;
-    machinePlanForm.initial_qdc = {
-        d: machine.initial_qdc.d,
-        d1: machine.initial_qdc.d1,
-        d2: machine.initial_qdc.d2,
+    machinePlanForm.shift_counts = {
+        d: machine.shift_counts?.d ?? 3,
+        d1: machine.shift_counts?.d1 ?? 3,
+        d2: machine.shift_counts?.d2 ?? 3,
     };
     machinePlanForm.rows = machine.modal_rows.map(toModalDraft);
     showInlineCreateWo.value = false;
     showAllFgInInlineCreate.value = false;
+    overloadPrompt.value = null;
+    unusedShiftItems.value = [];
     inlineWoForm.reset();
     inlineWoForm.clearErrors();
 }
@@ -272,9 +331,10 @@ function openMachineModal(machineId: number) {
 function closeMachineModal() {
     activeMachineId.value = null;
     showInlineCreateWo.value = false;
+    overloadPrompt.value = null;
+    unusedShiftItems.value = [];
 }
 
-// Bila WO baru dibuat dari dalam modal, sinkronkan baris WO baru ke modal tanpa menghapus ketikan user pada baris lain.
 watch(
     () => activeMachine.value?.modal_rows,
     (nextRows) => {
@@ -298,6 +358,21 @@ function numOrZero(val: string): number {
     return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
+function hasMasterQdc(row: ModalRowDraft): boolean {
+    return row.qdc_minutes != null && Number(row.qdc_minutes) > 0;
+}
+
+/** Auto-default QDC checkbox saat Seq diubah (Seq 1 = roll over / unchecked, Seq >= 2 = checked) selama user belum klik manual. */
+function handleSeqInput(row: ModalRowDraft, key: DayKey) {
+    if (row[`${key}_qdc_touched`] || !hasMasterQdc(row)) return;
+    const seq = Number(row[`${key}_seq`]) || 1;
+    row[`${key}_qdc`] = seq >= 2;
+}
+
+function handleQdcToggle(row: ModalRowDraft, key: DayKey) {
+    row[`${key}_qdc_touched`] = true;
+}
+
 function plannedSumForDraft(row: ModalRowDraft): number {
     return Number((numOrZero(row.d_qty) + numOrZero(row.d1_qty) + numOrZero(row.d2_qty)).toFixed(4));
 }
@@ -310,12 +385,150 @@ const hasAnyOverLimit = computed(() =>
     machinePlanForm.rows.some((row) => liveAvailForDraft(row) < -1e-6),
 );
 
+function capacityMinutesFor(key: DayKey): number {
+    const shifts = machinePlanForm.shift_counts[key] ?? 3;
+    return props.dayShiftCapacities?.[key]?.[shifts] ?? shifts * 420;
+}
+
+function dayUsageSummary(key: DayKey) {
+    const capMinutes = capacityMinutesFor(key);
+    let usedSeconds = 0;
+    let plannedCount = 0;
+    let timedCount = 0;
+
+    for (const row of machinePlanForm.rows) {
+        const qty = numOrZero(row[`${key}_qty`]);
+        if (qty <= 0) continue;
+        plannedCount++;
+        if (row.cycle_time_seconds != null && row.cycle_time_seconds > 0) {
+            timedCount++;
+            const qdcSecs = row[`${key}_qdc`] && hasMasterQdc(row) ? Number(row.qdc_minutes) * 60 : 0;
+            usedSeconds += qdcSecs + (qty * row.cycle_time_seconds);
+        }
+    }
+
+    const usedMinutes = usedSeconds / 60;
+    const diffMinutes = capMinutes - usedMinutes;
+
+    return {
+        capMinutes,
+        usedMinutes,
+        remainMinutes: Math.max(0, diffMinutes),
+        overMinutes: Math.max(0, -diffMinutes),
+        isOverload: diffMinutes < -0.01,
+        plannedCount,
+        timedCount,
+    };
+}
+
+function findFirstOverload(): OverloadPrompt | null {
+    const nextMap: Record<DayKey, DayKey | null> = { d: 'd1', d1: 'd2', d2: null };
+
+    for (const key of dayKeys) {
+        const capSeconds = capacityMinutesFor(key) * 60;
+        const shifts = machinePlanForm.shift_counts[key] ?? 3;
+
+        const ordered = machinePlanForm.rows
+            .map((row, idx) => ({
+                row,
+                idx,
+                seq: Number(row[`${key}_seq`]) > 0 ? Number(row[`${key}_seq`]) : 1,
+                qty: numOrZero(row[`${key}_qty`]),
+            }))
+            .filter((e) => e.qty > 0 && e.row.cycle_time_seconds != null && e.row.cycle_time_seconds > 0)
+            .sort((a, b) => (a.seq - b.seq) || (a.idx - b.idx));
+
+        let remainingSeconds = capSeconds;
+        for (const entry of ordered) {
+            const tt = Number(entry.row.cycle_time_seconds);
+            const qdcSeconds = entry.row[`${key}_qdc`] && hasMasterQdc(entry.row) ? Number(entry.row.qdc_minutes) * 60 : 0;
+            const prodSeconds = entry.qty * tt;
+
+            if (qdcSeconds + prodSeconds > remainingSeconds + 1e-6) {
+                const availForProd = Math.max(0, remainingSeconds - qdcSeconds);
+                const maxQty = Math.max(0, Math.floor(availForProd / tt));
+                const overflowQty = Number(Math.max(0, entry.qty - maxQty).toFixed(4));
+
+                return {
+                    dayKey: key,
+                    nextDayKey: nextMap[key],
+                    shifts,
+                    rowIndex: entry.idx,
+                    woNo: entry.row.wo_no,
+                    partLabel: fgPrimaryName(entry.row.fg_part),
+                    maxQty,
+                    overflowQty,
+                };
+            }
+
+            remainingSeconds -= (qdcSeconds + prodSeconds);
+        }
+    }
+
+    return null;
+}
+
+function collectUnusedShiftDays(): UnusedShiftItem[] {
+    const list: UnusedShiftItem[] = [];
+    for (const key of dayKeys) {
+        const usage = dayUsageSummary(key);
+        if (usage.plannedCount > 0 && usage.timedCount > 0 && !usage.isOverload && usage.remainMinutes >= 1) {
+            list.push({
+                dayKey: key,
+                dayLabel: dayFullLabel(key),
+                shifts: machinePlanForm.shift_counts[key] ?? 3,
+                remainMinutes: usage.remainMinutes,
+            });
+        }
+    }
+    return list;
+}
+
+function applyRollOver() {
+    const prompt = overloadPrompt.value;
+    if (!prompt || !prompt.nextDayKey) return;
+
+    const targetRow = machinePlanForm.rows[prompt.rowIndex];
+    if (!targetRow) return;
+
+    const curr = prompt.dayKey;
+    const next = prompt.nextDayKey;
+
+    // Potong hari saat ini ke maks. qty (kosongkan bila 0).
+    targetRow[`${curr}_qty`] = prompt.maxQty > 0 ? String(prompt.maxQty) : '';
+    if (prompt.maxQty <= 0) {
+        targetRow[`${curr}_seq`] = '';
+        targetRow[`${curr}_qdc`] = false;
+    }
+
+    // Geser sequence baris lain di hari berikutnya (+1) supaya baris roll over masuk sebagai Seq 1 tanpa QDC.
+    for (let i = 0; i < machinePlanForm.rows.length; i++) {
+        if (i === prompt.rowIndex) continue;
+        const other = machinePlanForm.rows[i];
+        if (numOrZero(other[`${next}_qty`]) > 0) {
+            const prevSeq = Number(other[`${next}_seq`]) > 0 ? Number(other[`${next}_seq`]) : 1;
+            other[`${next}_seq`] = String(prevSeq + 1);
+            if (!other[`${next}_qdc_touched`] && hasMasterQdc(other)) {
+                other[`${next}_qdc`] = true;
+            }
+        }
+    }
+
+    const existingNextQty = numOrZero(targetRow[`${next}_qty`]);
+    targetRow[`${next}_qty`] = String(Number((existingNextQty + prompt.overflowQty).toFixed(4)));
+    targetRow[`${next}_seq`] = '1';
+    targetRow[`${next}_qdc`] = false;
+    targetRow[`${next}_qdc_touched`] = true;
+
+    overloadPrompt.value = null;
+}
+
 function rowServerError(idx: number): string | undefined {
     const errors = machinePlanForm.errors as Record<string, string | undefined>;
     return errors[`rows.${idx}.qty`] ?? errors[`rows.${idx}.work_order_id`];
 }
 
-function submitMachinePlan() {
+function executeSaveMachinePlan() {
     if (!activeMachine.value || hasAnyOverLimit.value) return;
 
     const toNullableNum = (v: string) => (v === '' ? null : Number(v));
@@ -323,15 +536,18 @@ function submitMachinePlan() {
     machinePlanForm
         .transform((data) => ({
             date: props.date,
-            initial_qdc: data.initial_qdc,
+            shift_counts: data.shift_counts,
             rows: data.rows.map((r) => ({
                 work_order_id: r.work_order_id,
                 d_seq: toNullableNum(r.d_seq),
                 d_qty: toNullableNum(r.d_qty),
+                d_qdc: r.d_qdc,
                 d1_seq: toNullableNum(r.d1_seq),
                 d1_qty: toNullableNum(r.d1_qty),
+                d1_qdc: r.d1_qdc,
                 d2_seq: toNullableNum(r.d2_seq),
                 d2_qty: toNullableNum(r.d2_qty),
+                d2_qdc: r.d2_qdc,
             })),
         }))
         .put(route('production-plans.machines.save', activeMachine.value.id), {
@@ -340,6 +556,39 @@ function submitMachinePlan() {
                 closeMachineModal();
             },
         });
+}
+
+function handleSaveClick() {
+    if (!activeMachine.value || hasAnyOverLimit.value) return;
+
+    const overload = findFirstOverload();
+    if (overload) {
+        overloadPrompt.value = overload;
+        return;
+    }
+
+    const unused = collectUnusedShiftDays();
+    if (unused.length > 0) {
+        unusedShiftItems.value = unused;
+        return;
+    }
+
+    executeSaveMachinePlan();
+}
+
+function confirmSaveDespiteOverload() {
+    overloadPrompt.value = null;
+    const unused = collectUnusedShiftDays();
+    if (unused.length > 0) {
+        unusedShiftItems.value = unused;
+        return;
+    }
+    executeSaveMachinePlan();
+}
+
+function confirmSaveWithUnusedShift() {
+    unusedShiftItems.value = [];
+    executeSaveMachinePlan();
 }
 
 function openInlineCreateWo(fgPartId?: number | null) {
@@ -392,7 +641,7 @@ function submitInlineCreateWo() {
                     @click="openCreateWo()"
                 >
                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                    {{ t('production.newWo') }}
+                    {{ t('production.newWoClean') }}
                 </button>
             </div>
         </div>
@@ -458,21 +707,24 @@ function submitInlineCreateWo() {
                 >
                     <div class="flex items-start justify-between gap-2">
                         <div class="min-w-0">
-                            <Link
-                                :href="route('work-orders.show', wo.id)"
-                                class="font-semibold text-ink-primary hover:text-primary"
-                            >
-                                {{ wo.wo_no }}
-                            </Link>
-                            <div class="mt-0.5 truncate font-medium text-ink-primary">
-                                {{ wo.part?.part_number ?? '—' }}
-                                <span v-if="wo.part?.model" class="font-normal text-ink-secondary">· {{ wo.part.model }}</span>
+                            <div class="truncate text-sm font-semibold text-ink-primary">
+                                {{ fgPrimaryName(wo.part) }}
                             </div>
-                            <div v-if="wo.part?.part_name" class="truncate text-[11px] text-ink-secondary">{{ wo.part.part_name }}</div>
+                            <div class="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-secondary">
+                                <span v-if="fgSecondaryNumber(wo.part)" class="font-medium text-ink-secondary">{{ fgSecondaryNumber(wo.part) }}</span>
+                                <span v-if="wo.part?.model">· {{ wo.part.model }}</span>
+                                <span>·</span>
+                                <Link
+                                    :href="route('work-orders.show', wo.id)"
+                                    class="font-semibold text-primary hover:underline"
+                                >
+                                    {{ wo.wo_no }}
+                                </Link>
+                            </div>
                         </div>
                         <StatusBadge :tone="statusTone(wo.status)">{{ t(`production.statuses.${wo.status}`) }}</StatusBadge>
                     </div>
-                    <div class="mt-2 flex flex-wrap gap-1.5">
+                    <div class="mt-2.5 flex flex-wrap gap-1.5">
                         <button
                             v-for="m in wo.machines"
                             :key="m.machine_id"
@@ -503,7 +755,7 @@ function submitInlineCreateWo() {
                 <table class="w-full min-w-[1380px] table-fixed border-separate border-spacing-0 text-sm">
                     <colgroup>
                         <col class="w-48" />
-                        <col class="w-44" />
+                        <col class="w-52" />
                         <col class="w-28" />
                         <col class="w-36" />
                         <col class="w-36" />
@@ -511,7 +763,7 @@ function submitInlineCreateWo() {
                         <col class="w-44" />
                         <col class="w-44" />
                         <col class="w-44" />
-                        <col class="w-24" />
+                        <col class="w-28" />
                     </colgroup>
                     <thead class="sticky top-0 z-10 bg-background">
                         <tr class="border-b border-borderline text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
@@ -524,7 +776,7 @@ function submitInlineCreateWo() {
                             <th scope="col" v-for="key in dayKeys" :key="key" class="border-l border-borderline px-3 py-2.5 text-center">
                                 <div>{{ dayLabels[key] }}</div>
                                 <div class="text-[10px] font-normal uppercase text-ink-secondary">
-                                    {{ key === 'd' ? 'D' : (key === 'd1' ? 'D+1' : 'D+2') }}
+                                    {{ dayShortName(key) }}
                                 </div>
                             </th>
                             <th scope="col" class="border-l border-borderline bg-background px-3 py-2.5 text-right">{{ t('production.actions') }}</th>
@@ -532,7 +784,7 @@ function submitInlineCreateWo() {
                     </thead>
                     <tbody>
                         <template v-for="(machine, mi) in filteredMachines" :key="machine.id">
-                            <!-- Mesin kosong (belum ada plan di D / D+1 / D+2) -->
+                            <!-- Mesin kosong -->
                             <tr
                                 v-if="machine.planned_rows.length === 0"
                                 class="group border-t border-borderline hover:bg-primary-light/20"
@@ -603,8 +855,8 @@ function submitInlineCreateWo() {
                                     </div>
                                 </td>
                                 <td class="px-3 py-2.5 align-top">
-                                    <div class="font-medium text-ink-primary">{{ row.fg_part?.part_number ?? '—' }}</div>
-                                    <div v-if="row.fg_part?.part_name" class="truncate text-xs text-ink-secondary">{{ row.fg_part.part_name }}</div>
+                                    <div class="font-semibold leading-snug text-ink-primary">{{ fgPrimaryName(row.fg_part) }}</div>
+                                    <div v-if="fgSecondaryNumber(row.fg_part)" class="mt-0.5 text-xs text-ink-secondary">{{ fgSecondaryNumber(row.fg_part) }}</div>
                                     <div class="mt-1 flex items-center gap-1.5 text-[11px]">
                                         <Link :href="route('work-orders.show', row.work_order_id)" class="font-medium text-primary hover:underline">{{ row.wo_no }}</Link>
                                         <StatusBadge :tone="statusTone(row.wo_status)">{{ t(`production.statuses.${row.wo_status}`) }}</StatusBadge>
@@ -659,11 +911,16 @@ function submitInlineCreateWo() {
                                             </span>
                                         </div>
                                         <div v-else class="mt-1.5 text-[11px] text-ink-secondary">—</div>
-                                        <div
-                                            v-if="row.days[key]!.qdc_applied_minutes > 0"
-                                            class="mt-1 inline-flex rounded bg-info/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-info"
-                                        >
-                                            {{ t('production.qdcShortTag', { minutes: fmt(row.days[key]!.qdc_applied_minutes) }) }}
+                                        <div class="mt-1 flex flex-wrap items-center gap-1">
+                                            <span
+                                                v-if="row.days[key]!.qdc_applied_minutes > 0"
+                                                class="inline-flex rounded bg-info/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-info"
+                                            >
+                                                {{ t('production.qdcShortTag', { minutes: fmt(row.days[key]!.qdc_applied_minutes) }) }}
+                                            </span>
+                                            <span class="inline-flex rounded bg-background px-1.5 py-0.5 text-[10px] font-medium text-ink-secondary">
+                                                {{ t('production.shiftCountOption', { n: machine.shift_counts?.[key] ?? 3 }) }}
+                                            </span>
                                         </div>
                                     </template>
                                     <div v-else class="text-center text-xs text-ink-secondary">—</div>
@@ -701,7 +958,7 @@ function submitInlineCreateWo() {
         </div>
 
         <!-- Modal: Add / Edit Plan per Mesin -->
-        <Modal :show="showMachineModal" max-width="5xl" @close="closeMachineModal">
+        <Modal :show="showMachineModal" max-width="6xl" @close="closeMachineModal">
             <div v-if="activeMachine" class="p-6">
                 <div class="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-borderline pb-4">
                     <div>
@@ -718,7 +975,7 @@ function submitInlineCreateWo() {
                             @click="openInlineCreateWo()"
                         >
                             <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                            {{ t('production.newWo') }}
+                            {{ t('production.newWoClean') }}
                         </button>
                         <button
                             type="button"
@@ -787,42 +1044,58 @@ function submitInlineCreateWo() {
                     </div>
                 </form>
 
-                <!-- Pengaturan QDC Awal (Seq 1) per hari D / D+1 / D+2 -->
-                <div class="mb-4 rounded-lg border border-borderline bg-background px-4 py-3">
-                    <div class="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                            <div class="text-xs font-semibold text-ink-primary">{{ t('production.initialQdcLabel') }}</div>
-                            <div class="text-[11px] text-ink-secondary">{{ t('production.initialQdcHint') }}</div>
-                        </div>
-                        <div class="flex flex-wrap items-center gap-4">
-                            <label
-                                v-for="key in dayKeys"
-                                :key="key"
-                                class="inline-flex cursor-pointer items-center gap-2 text-xs font-medium text-ink-primary"
-                            >
-                                <input
-                                    v-model="machinePlanForm.initial_qdc[key]"
-                                    type="checkbox"
-                                    class="rounded border-borderline text-primary focus:ring-primary"
-                                />
-                                <span>{{ key === 'd' ? 'D' : (key === 'd1' ? 'D+1' : 'D+2') }} ({{ dayLabels[key] }})</span>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Tabel input Add/Edit Plan -->
-                <form @submit.prevent="submitMachinePlan">
-                    <div class="max-h-[55vh] overflow-auto rounded-xl border border-borderline">
+                <!-- Tabel input Add/Edit Plan (Seq | Qty | QDC + Jumlah Shift di header tiap hari) -->
+                <form @submit.prevent="handleSaveClick">
+                    <div class="max-h-[58vh] overflow-auto rounded-xl border border-borderline">
                         <table class="min-w-full divide-y divide-borderline text-xs">
                             <thead class="sticky top-0 z-10 bg-background">
                                 <tr class="text-left font-semibold uppercase tracking-wide text-ink-secondary">
-                                    <th scope="col" class="px-3 py-2.5">{{ t('production.fgPart') }} + {{ t('master.model') }}</th>
-                                    <th scope="col" class="px-3 py-2.5 text-right">{{ t('production.availWoQty') }}</th>
-                                    <th scope="col" v-for="key in dayKeys" :key="key" class="border-l border-borderline px-2 py-2.5 text-center">
-                                        {{ key === 'd' ? 'D' : (key === 'd1' ? 'D+1' : 'D+2') }} · {{ dayLabels[key] }}
+                                    <th scope="col" class="px-3 py-2.5 align-bottom">{{ t('production.fgPart') }} + {{ t('master.model') }}</th>
+                                    <th scope="col" class="px-3 py-2.5 text-right align-bottom">{{ t('production.availWoQty') }}</th>
+                                    <th
+                                        v-for="key in dayKeys"
+                                        :key="key"
+                                        scope="col"
+                                        class="border-l border-borderline px-2.5 py-2 align-top"
+                                    >
+                                        <div class="flex items-center justify-between gap-2">
+                                            <span class="font-semibold text-ink-primary">
+                                                {{ dayShortName(key) }} · {{ dayLabels[key] }}
+                                            </span>
+                                            <select
+                                                v-model.number="machinePlanForm.shift_counts[key]"
+                                                :aria-label="`${t('production.shift')} ${dayFullLabel(key)}`"
+                                                class="rounded-md border-borderline bg-surface px-2 py-0.5 text-[11px] font-semibold normal-case text-ink-primary focus:border-primary focus:ring-primary"
+                                            >
+                                                <option :value="1">{{ t('production.shiftCountOption', { n: 1 }) }}</option>
+                                                <option :value="2">{{ t('production.shiftCountOption', { n: 2 }) }}</option>
+                                                <option :value="3">{{ t('production.shiftCountOption', { n: 3 }) }}</option>
+                                            </select>
+                                        </div>
+                                        <div class="mt-1 flex items-center justify-between gap-1 text-[10px] font-medium normal-case">
+                                            <span class="tabular-nums text-ink-secondary">
+                                                {{ t('production.shiftUsedOf', { used: fmtMinutes(dayUsageSummary(key).usedMinutes), cap: fmtMinutes(dayUsageSummary(key).capMinutes) }) }}
+                                            </span>
+                                            <span
+                                                v-if="dayUsageSummary(key).isOverload"
+                                                class="tabular-nums font-semibold text-danger"
+                                            >
+                                                {{ t('production.shiftOverLabel', { time: fmtMinutes(dayUsageSummary(key).overMinutes) }) }}
+                                            </span>
+                                            <span
+                                                v-else-if="dayUsageSummary(key).plannedCount > 0 && dayUsageSummary(key).remainMinutes >= 1"
+                                                class="tabular-nums text-warning"
+                                            >
+                                                {{ t('production.shiftRemainLabel', { time: fmtMinutes(dayUsageSummary(key).remainMinutes) }) }}
+                                            </span>
+                                        </div>
+                                        <div class="mt-1.5 grid grid-cols-[48px_76px_64px] items-center gap-1.5 border-t border-borderline/70 pt-1 text-[10px] font-semibold uppercase text-ink-secondary">
+                                            <span class="text-center">{{ t('production.sequenceShort') }}</span>
+                                            <span class="text-right">{{ t('production.qtyShort') }}</span>
+                                            <span class="text-center">{{ t('production.qdcCol') }}</span>
+                                        </div>
                                     </th>
-                                    <th scope="col" class="border-l border-borderline px-3 py-2.5 text-right">{{ t('production.actions') }}</th>
+                                    <th scope="col" class="border-l border-borderline px-3 py-2.5 text-right align-bottom">{{ t('production.actions') }}</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-borderline bg-surface">
@@ -833,10 +1106,12 @@ function submitInlineCreateWo() {
                                 >
                                     <td class="px-3 py-2.5 align-top">
                                         <div class="font-semibold text-ink-primary">
-                                            {{ row.fg_part?.part_number ?? '—' }}
+                                            {{ fgPrimaryName(row.fg_part) }}
                                             <span class="font-normal text-ink-secondary">· {{ row.fg_part?.model || '—' }}</span>
                                         </div>
-                                        <div v-if="row.fg_part?.part_name" class="text-[11px] text-ink-secondary">{{ row.fg_part.part_name }}</div>
+                                        <div v-if="fgSecondaryNumber(row.fg_part)" class="text-[11px] text-ink-secondary">
+                                            {{ fgSecondaryNumber(row.fg_part) }}
+                                        </div>
                                         <div class="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
                                             <span class="font-medium text-primary">{{ row.wo_no }}</span>
                                             <StatusBadge :tone="statusTone(row.wo_status)">{{ t(`production.statuses.${row.wo_status}`) }}</StatusBadge>
@@ -855,35 +1130,47 @@ function submitInlineCreateWo() {
                                             {{ t('production.unproducedRemain', { qty: fmt(row.remaining_qty) }) }}
                                         </div>
                                     </td>
-                                    <td v-for="key in dayKeys" :key="key" class="border-l border-borderline px-2 py-2 align-top">
-                                        <div class="grid gap-1">
-                                            <label class="flex items-center gap-1">
-                                                <span class="w-8 text-[10px] font-medium uppercase text-ink-secondary">{{ t('production.sequenceShort') }}</span>
+                                    <td v-for="key in dayKeys" :key="key" class="border-l border-borderline px-2.5 py-2.5 align-top">
+                                        <div class="grid grid-cols-[48px_76px_64px] items-center gap-1.5">
+                                            <input
+                                                v-model="row[`${key}_seq`]"
+                                                type="number"
+                                                step="1"
+                                                min="1"
+                                                inputmode="numeric"
+                                                placeholder="1"
+                                                :aria-label="`${t('production.sequence')} ${dayLabels[key]} ${row.wo_no}`"
+                                                class="w-full rounded-md border border-borderline bg-background px-1.5 py-1 text-center text-xs tabular-nums text-ink-primary focus:border-primary focus:ring-primary"
+                                                @input="handleSeqInput(row, key)"
+                                            />
+                                            <input
+                                                v-model="row[`${key}_qty`]"
+                                                type="number"
+                                                step="any"
+                                                min="0"
+                                                inputmode="decimal"
+                                                placeholder="0"
+                                                :aria-label="`${t('production.qtyShort')} ${dayLabels[key]} ${row.wo_no}`"
+                                                class="w-full rounded-md border px-2 py-1 text-right text-xs tabular-nums text-ink-primary focus:border-primary focus:ring-primary"
+                                                :class="row[`${key}_qty`] !== '' ? 'border-primary/50 bg-primary-light/30' : 'border-borderline bg-background'"
+                                            />
+                                            <label
+                                                v-if="hasMasterQdc(row)"
+                                                class="inline-flex cursor-pointer items-center justify-center gap-1 rounded-md border px-1.5 py-1 text-[11px] font-medium tabular-nums transition"
+                                                :class="row[`${key}_qdc`]
+                                                    ? 'border-info/50 bg-info/10 text-info'
+                                                    : 'border-borderline bg-background text-ink-secondary'"
+                                                :title="t('production.initialQdcHint')"
+                                            >
                                                 <input
-                                                    v-model="row[`${key}_seq`]"
-                                                    type="number"
-                                                    step="1"
-                                                    min="1"
-                                                    inputmode="numeric"
-                                                    placeholder="1"
-                                                    :aria-label="`${t('production.sequence')} ${dayLabels[key]} ${row.wo_no}`"
-                                                    class="w-16 rounded-md border border-borderline bg-background px-2 py-1 text-right text-xs tabular-nums text-ink-primary focus:border-primary focus:ring-primary"
+                                                    v-model="row[`${key}_qdc`]"
+                                                    type="checkbox"
+                                                    class="h-3.5 w-3.5 rounded border-borderline text-primary focus:ring-primary"
+                                                    @change="handleQdcToggle(row, key)"
                                                 />
+                                                <span>{{ fmt(row.qdc_minutes) }}m</span>
                                             </label>
-                                            <label class="flex items-center gap-1">
-                                                <span class="w-8 text-[10px] font-medium uppercase text-ink-secondary">{{ t('production.qtyShort') }}</span>
-                                                <input
-                                                    v-model="row[`${key}_qty`]"
-                                                    type="number"
-                                                    step="any"
-                                                    min="0"
-                                                    inputmode="decimal"
-                                                    placeholder="0"
-                                                    :aria-label="`${t('production.qtyShort')} ${dayLabels[key]} ${row.wo_no}`"
-                                                    class="w-24 rounded-md border px-2 py-1 text-right text-xs tabular-nums text-ink-primary focus:border-primary focus:ring-primary"
-                                                    :class="row[`${key}_qty`] !== '' ? 'border-primary/50 bg-primary-light/30' : 'border-borderline bg-background'"
-                                                />
-                                            </label>
+                                            <span v-else class="text-center text-[11px] text-ink-secondary">—</span>
                                         </div>
                                     </td>
                                     <td class="border-l border-borderline px-3 py-2.5 text-right align-top">
@@ -911,6 +1198,96 @@ function submitInlineCreateWo() {
                         class="mt-3 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-xs font-medium text-danger"
                     >
                         {{ t('production.qtyPlanExceedsAvail') }}
+                    </div>
+
+                    <!-- Dialog Konfirmasi Overload + Roll Over -->
+                    <div
+                        v-if="overloadPrompt"
+                        class="mt-3 rounded-xl border border-danger/50 bg-danger/10 p-4"
+                        role="alertdialog"
+                        aria-modal="false"
+                    >
+                        <h4 class="text-sm font-bold text-danger">{{ t('production.overloadRollOverTitle') }}</h4>
+                        <p class="mt-1 text-xs leading-relaxed text-ink-primary">
+                            {{
+                                overloadPrompt.nextDayKey
+                                    ? t('production.overloadRollOverBody', {
+                                        day: dayFullLabel(overloadPrompt.dayKey),
+                                        shifts: overloadPrompt.shifts,
+                                        part: overloadPrompt.partLabel,
+                                        wo: overloadPrompt.woNo,
+                                        maxQty: fmt(overloadPrompt.maxQty),
+                                        overflow: fmt(overloadPrompt.overflowQty),
+                                        nextDay: dayFullLabel(overloadPrompt.nextDayKey),
+                                    })
+                                    : t('production.overloadLastDayBody', {
+                                        day: dayFullLabel(overloadPrompt.dayKey),
+                                        shifts: overloadPrompt.shifts,
+                                        part: overloadPrompt.partLabel,
+                                        wo: overloadPrompt.woNo,
+                                        maxQty: fmt(overloadPrompt.maxQty),
+                                        overflow: fmt(overloadPrompt.overflowQty),
+                                    })
+                            }}
+                        </p>
+                        <div class="mt-3 flex flex-wrap items-center justify-end gap-2">
+                            <button
+                                type="button"
+                                class="rounded-md border border-borderline bg-surface px-3 py-1.5 text-xs font-medium text-ink-primary hover:bg-background"
+                                @click="overloadPrompt = null"
+                            >
+                                {{ t('production.confirmNoBack') }}
+                            </button>
+                            <button
+                                v-if="overloadPrompt.nextDayKey"
+                                type="button"
+                                class="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-hover"
+                                @click="applyRollOver"
+                            >
+                                {{ t('production.confirmYesRollOver') }}
+                            </button>
+                            <button
+                                v-else
+                                type="button"
+                                class="rounded-md bg-danger px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
+                                @click="confirmSaveDespiteOverload"
+                            >
+                                {{ t('production.confirmKeepOverload') }}
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Dialog Konfirmasi Sisa Waktu Shift Tanpa Planning -->
+                    <div
+                        v-if="unusedShiftItems.length > 0 && !overloadPrompt"
+                        class="mt-3 rounded-xl border border-warning/50 bg-warning/10 p-4"
+                        role="alertdialog"
+                        aria-modal="false"
+                    >
+                        <h4 class="text-sm font-bold text-warning">{{ t('production.unusedShiftTitle') }}</h4>
+                        <ul class="mt-1.5 list-disc space-y-0.5 pl-4 text-xs text-ink-primary">
+                            <li v-for="item in unusedShiftItems" :key="item.dayKey">
+                                {{ t('production.unusedShiftItem', { day: item.dayLabel, shifts: item.shifts, remain: fmtMinutes(item.remainMinutes) }) }}
+                            </li>
+                        </ul>
+                        <p class="mt-2 text-xs font-medium text-ink-primary">{{ t('production.unusedShiftBody') }}</p>
+                        <div class="mt-3 flex flex-wrap items-center justify-end gap-2">
+                            <button
+                                type="button"
+                                class="rounded-md border border-borderline bg-surface px-3 py-1.5 text-xs font-medium text-ink-primary hover:bg-background"
+                                @click="unusedShiftItems = []"
+                            >
+                                {{ t('production.confirmNoBack') }}
+                            </button>
+                            <button
+                                type="button"
+                                :disabled="machinePlanForm.processing"
+                                class="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-hover disabled:opacity-60"
+                                @click="confirmSaveWithUnusedShift"
+                            >
+                                {{ t('production.confirmYesSave') }}
+                            </button>
+                        </div>
                     </div>
 
                     <div class="mt-4 flex items-center justify-end gap-3 border-t border-borderline pt-4">

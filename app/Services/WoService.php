@@ -462,9 +462,6 @@ class WoService
                     'updated_by' => $actorId,
                 ]);
 
-                // WO baru masuk papan Production Plan saat release.
-                $this->enterProductionPlan($workOrder, (int) $actorId);
-
                 return $workOrder->fresh(['items', 'part']);
             });
 
@@ -731,9 +728,6 @@ class WoService
                     'released_at' => $releasedAt,
                     'updated_by' => $actorId,
                 ]);
-
-                // WO baru masuk papan Production Plan saat release.
-                $this->enterProductionPlan($workOrder, (int) $actorId);
 
                 return $issue;
             };

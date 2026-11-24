@@ -226,37 +226,58 @@ class MachineCycleTimeTest extends TestCase
                 }));
     }
 
-    public function test_plan_board_shows_estimated_seconds_and_qdc_from_wo_qty(): void
+    public function test_plan_board_shows_start_finish_time_and_qdc_from_cycle_time(): void
     {
         $fg = Part::where('part_number', 'AAN30056405')->firstOrFail();
+        $monday = '2026-11-23';
 
         $this->post(route('work-orders.store'), [
             'part_id' => $fg->id,
-            'qty' => 10,
-            'planned_date' => now()->toDateString(),
+            'qty' => 600,
+            'planned_date' => $monday,
         ])->assertRedirect();
 
         $wo = WorkOrder::latest('id')->firstOrFail();
-        $this->post(route('work-orders.release', $wo))->assertRedirect();
 
-        // Cycle time 3 detik/pcs + QDC 15 menit untuk mesin + part hasil baris pertama.
+        // Cycle time 6 detik/pcs (600 pcs = 60 menit) + QDC 15 menit.
         MachineCycleTime::create([
             'machine_id' => $this->machine()->id,
             'part_id' => $this->part()->id,
-            'cycle_time_seconds' => 3,
+            'cycle_time_seconds' => 6,
             'qdc_minutes' => 15,
         ]);
 
-        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
+        $this->put(route('production-plans.machines.save', $this->machine()), [
+            'date' => $monday,
+            'initial_qdc' => ['d' => true, 'd1' => false, 'd2' => false],
+            'rows' => [
+                [
+                    'work_order_id' => $wo->id,
+                    'd_seq' => 1,
+                    'd_qty' => 600,
+                    'd1_seq' => null,
+                    'd1_qty' => null,
+                    'd2_seq' => null,
+                    'd2_qty' => null,
+                ],
+            ],
+        ])->assertRedirect(route('production-plans.index', ['date' => $monday]));
+
+        $this->get(route('production-plans.index', ['date' => $monday]))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->where('items', function ($list) {
-                    $row = collect($list)->firstWhere('machine_id', $this->machine()->id);
+                ->where('machines', function ($machines) use ($wo) {
+                    $m = collect($machines)->firstWhere('id', $this->machine()->id);
+                    $row = collect($m['planned_rows'] ?? [])->firstWhere('work_order_id', $wo->id);
+                    $dayD = $row['days']['d'] ?? null;
 
                     return $row !== null
-                        && (float) $row['cycle_time_seconds'] === 3.0
+                        && $dayD !== null
+                        && (float) $row['cycle_time_seconds'] === 6.0
                         && (float) $row['qdc_minutes'] === 15.0
-                        && (float) $row['estimated_seconds'] === 30.0; // 10 pcs × 3 detik
+                        && $dayD['start_time'] === '07:30'
+                        && $dayD['end_time'] === '08:45' // 15m QDC + 60m prod
+                        && (float) $dayD['qdc_applied_minutes'] === 15.0;
                 }));
     }
 
@@ -284,6 +305,7 @@ class MachineCycleTimeTest extends TestCase
         $kukil400 = Machine::where('machine_name', 'KUKIL 400 TON')->firstOrFail();
         $kukil110 = Machine::where('machine_name', 'KUKIL 110 TON')->firstOrFail();
         $wip2 = Part::where('part_number', '4980JA3016F-WIP2')->firstOrFail();
+        $monday = '2026-11-23';
 
         MachineCycleTime::query()
             ->whereIn('machine_id', [$kukil400->id, $kukil110->id])
@@ -295,33 +317,50 @@ class MachineCycleTimeTest extends TestCase
         MachineCycleTime::create([
             'machine_id' => $kukil110->id,
             'part_id' => $wip2->id,
-            'cycle_time_seconds' => 4.5,
+            'cycle_time_seconds' => 6,
             'qdc_minutes' => 60,
             'is_active' => true,
         ]);
 
         $this->post(route('work-orders.store'), [
             'part_id' => $fg->id,
-            'qty' => 20,
-            'planned_date' => now()->toDateString(),
+            'qty' => 300,
+            'planned_date' => $monday,
         ])->assertRedirect();
 
         $wo = WorkOrder::latest('id')->firstOrFail();
-        $this->post(route('work-orders.release', $wo))->assertRedirect();
 
-        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
+        $this->put(route('production-plans.machines.save', $kukil400), [
+            'date' => $monday,
+            'initial_qdc' => ['d' => false, 'd1' => false, 'd2' => false],
+            'rows' => [
+                [
+                    'work_order_id' => $wo->id,
+                    'd_seq' => 1,
+                    'd_qty' => 300,
+                    'd1_seq' => null,
+                    'd1_qty' => null,
+                    'd2_seq' => null,
+                    'd2_qty' => null,
+                ],
+            ],
+        ])->assertRedirect();
+
+        $this->get(route('production-plans.index', ['date' => $monday]))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->where('items', function ($list) use ($kukil400, $wip2) {
-                    $row = collect($list)->first(
-                        fn ($item) => (int) ($item['machine_id'] ?? 0) === $kukil400->id
-                            && (int) ($item['wip_part_id'] ?? 0) === $wip2->id,
-                    );
+                ->where('machines', function ($machines) use ($kukil400, $wo, $wip2) {
+                    $m = collect($machines)->firstWhere('id', $kukil400->id);
+                    $row = collect($m['planned_rows'] ?? [])->firstWhere('work_order_id', $wo->id);
+                    $dayD = $row['days']['d'] ?? null;
 
                     return $row !== null
-                        && (float) $row['cycle_time_seconds'] === 4.5
+                        && (int) ($row['wip_part']['id'] ?? 0) === $wip2->id
+                        && (float) $row['cycle_time_seconds'] === 6.0
                         && (float) $row['qdc_minutes'] === 60.0
-                        && (float) $row['estimated_seconds'] === 90.0; // 20 pcs × 4.5 detik
+                        && $dayD !== null
+                        && $dayD['start_time'] === '07:30'
+                        && $dayD['end_time'] === '08:00'; // 300 × 6s = 30m (roll over, no initial QDC)
                 }));
     }
 }

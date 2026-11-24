@@ -53,6 +53,7 @@ class ResetTransactionalData extends Command
         // Produksi
         'production_material_receipts',
         'production_results',
+        'production_plan_machine_days',
         'production_plan_histories',
         'production_plan_items',
         'production_plans',

@@ -179,6 +179,7 @@ Route::middleware(['auth'])->group(function () {
     // Production Plan (papan harian; sumber WO)
     Route::get('production-plans', [ProductionPlanController::class, 'index'])->name('production-plans.index');
     Route::post('production-plans', [ProductionPlanController::class, 'store'])->name('production-plans.store');
+    Route::put('production-plans/machines/{machine}', [ProductionPlanController::class, 'saveMachinePlan'])->name('production-plans.machines.save');
     Route::post('production-plans/items/reorder', [ProductionPlanController::class, 'reorder'])->name('production-plans.items.reorder');
     Route::post('production-plans/attach', [ProductionPlanController::class, 'attachWorkOrder'])->name('production-plans.attach');
     Route::patch('production-plans/targets', [ProductionPlanController::class, 'updateTargets'])->name('production-plans.targets');

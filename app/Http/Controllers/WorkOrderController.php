@@ -96,15 +96,6 @@ class WorkOrderController extends Controller
             (int) auth()->id(),
         );
 
-        $workOrder = WorkOrder::query()->findOrFail($workOrderId);
-        $today = now()->toDateString();
-        $plannedDate = $workOrder->planned_date?->toDateString();
-        $this->woService->populatePlanItems(
-            $workOrder,
-            ($plannedDate !== null && $plannedDate < $today) ? $plannedDate : $today,
-            (int) auth()->id(),
-        );
-
         if (count($warnings) > 0) {
             return redirect()
                 ->route('work-orders.show', $workOrderId)

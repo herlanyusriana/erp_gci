@@ -22,6 +22,11 @@ class ProductionPlanPolicy
         return $user->hasAnyPermission(['production_plan.create', 'production.update']);
     }
 
+    public function manage(User $user): bool
+    {
+        return $user->hasAnyPermission(['production_plan.create', 'production_plan.update', 'production.update']);
+    }
+
     public function update(User $user, ProductionPlan $plan): bool
     {
         return $user->hasAnyPermission(['production_plan.update', 'production.update']);

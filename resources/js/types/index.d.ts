@@ -620,3 +620,65 @@ export interface ProductionPlanItem {
     input_part?: Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> | null;
     wip_part?: Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> | null;
 }
+
+export interface ProductionPlanDaySlot {
+    id: number;
+    sequence: number;
+    qty: number;
+    start_time: string | null;
+    end_time: string | null;
+    qdc_applied_minutes: number;
+    duration_seconds: number | null;
+    is_overload: boolean;
+}
+
+export interface ProductionPlanMachineRow {
+    work_order_id: number;
+    wo_no: string;
+    wo_status: string;
+    wo_qty: number;
+    remaining_qty: number;
+    planned_total: number;
+    avail_qty: number;
+    fg_part: Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> | null;
+    input_part: Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> | null;
+    wip_part: Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> | null;
+    process_name: string | null;
+    cycle_time_seconds: number | null;
+    qdc_minutes: number | null;
+    days: {
+        d: ProductionPlanDaySlot | null;
+        d1: ProductionPlanDaySlot | null;
+        d2: ProductionPlanDaySlot | null;
+    };
+}
+
+export interface ProductionPlanBoardMachine {
+    id: number;
+    machine_code: string;
+    machine_name: string;
+    sequence: number | null;
+    avail_wo_count: number;
+    initial_qdc: { d: boolean; d1: boolean; d2: boolean };
+    planned_rows: ProductionPlanMachineRow[];
+    modal_rows: ProductionPlanMachineRow[];
+    fg_part_ids: number[];
+}
+
+export interface AvailWorkOrderSummary {
+    id: number;
+    wo_no: string;
+    status: string;
+    qty: number;
+    planned_date: string | null;
+    part: Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> | null;
+    machines: Array<{
+        machine_id: number;
+        machine_name: string;
+        remaining_qty: number;
+        planned_qty: number;
+        avail_qty: number;
+    }>;
+    planned_machines_count: number;
+    total_machines_count: number;
+}

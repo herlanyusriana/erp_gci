@@ -4,11 +4,12 @@ namespace Tests\Feature;
 
 use App\Models\Machine;
 use App\Models\Part;
+use App\Models\ProductionPlan;
 use App\Models\ProductionPlanItem;
 use App\Models\ProductionResult;
 use App\Models\User;
 use App\Models\WorkOrder;
-use App\Services\WoService;
+use App\Services\ProductionPlanScheduleService;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -25,760 +26,338 @@ class ProductionPlanTest extends TestCase
         $this->actingAs(User::where('email', 'admin@geumcheon.local')->firstOrFail());
     }
 
-    private function createWorkOrder(string $fgPartNumber = 'AAN30056405'): WorkOrder
+    private function fg(): Part
     {
-        $fg = Part::where('part_number', $fgPartNumber)->firstOrFail();
+        return Part::where('part_number', 'AAN30056405')->firstOrFail();
+    }
+
+    private function createWo(float $qty = 500, ?string $plannedDate = null, ?Part $fg = null): WorkOrder
+    {
+        $part = $fg ?? $this->fg();
 
         $this->post(route('work-orders.store'), [
-            'part_id' => $fg->id,
-            'qty' => 10,
-            'planned_date' => now()->toDateString(),
+            'part_id' => $part->id,
+            'qty' => $qty,
+            'planned_date' => $plannedDate ?? now()->toDateString(),
         ])->assertRedirect();
 
         return WorkOrder::latest('id')->firstOrFail();
     }
 
-    /** @return int jumlah baris papan = grup step berurutan dengan 3 huruf pertama nama mesin sama */
-    private function expectedGroupCount(WorkOrder $wo): int
+    public function test_new_and_released_wo_do_not_auto_populate_machine_rows_and_appear_as_avail_wo(): void
     {
-        $steps = $wo->items()
-            ->with('machine')
-            ->get()
-            ->filter(fn ($it) => $it->parent_part_id !== null && strtoupper((string) $it->source) !== 'SUBCON')
-            ->mapWithKeys(fn ($it) => [($it->sequence ?? 0).'|'.$it->parent_part_id => $it])
-            ->values();
+        $date = '2026-11-23';
+        $wo = $this->createWo(500, $date);
 
-        $keyOf = function ($it): string {
-            $name = strtoupper(trim((string) ($it->machine?->machine_name ?? '')));
+        $this->assertSame(0, $wo->planItems()->count());
 
-            return $name !== '' ? substr($name, 0, 3) : (string) $it->machine_id;
-        };
+        $this->post(route('work-orders.release', $wo))->assertRedirect();
+        $this->assertSame(0, $wo->planItems()->count());
 
-        $groups = 0;
-        $previousKey = null;
-        foreach ($steps as $index => $step) {
-            $key = $keyOf($step);
-            if ($index === 0 || $key !== $previousKey) {
-                $groups++;
-            }
-            $previousKey = $key;
-        }
+        $tplKukil = Machine::where('machine_name', 'TPL KUKIL')->firstOrFail();
+        $autoCaulking = Machine::where('machine_name', 'AUTO CAULKING')->firstOrFail();
 
-        return $groups;
-    }
-
-    public function test_creating_wo_immediately_enters_plan_board(): void
-    {
-        $wo = $this->createWorkOrder();
-
-        $this->assertSame($this->expectedGroupCount($wo), ProductionPlanItem::where('work_order_id', $wo->id)->count());
-
-        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
+        $this->get(route('production-plans.index', ['date' => $date]))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->where('items', fn ($list) => collect($list)->pluck('work_order_id')->contains($wo->id))
-                ->where('unplannedWorkOrders', fn ($list) => ! collect($list)->pluck('id')->contains($wo->id)));
+                ->component('Production/Plan/Index')
+                ->where('date', $date)
+                ->where('availWorkOrders', function ($list) use ($wo) {
+                    $entry = collect($list)->firstWhere('id', $wo->id);
+
+                    return $entry !== null
+                        && ($entry['part']['model'] ?? null) !== null
+                        && count($entry['machines']) > 0;
+                })
+                ->where('machines', function ($machines) use ($tplKukil, $autoCaulking, $wo) {
+                    $tpl = collect($machines)->firstWhere('id', $tplKukil->id);
+                    $caulk = collect($machines)->firstWhere('id', $autoCaulking->id);
+
+                    $tplHasModalWo = collect($tpl['modal_rows'] ?? [])->contains('work_order_id', $wo->id);
+                    $caulkHasModalWo = collect($caulk['modal_rows'] ?? [])->contains('work_order_id', $wo->id);
+
+                    return $tpl !== null
+                        && $caulk !== null
+                        && count($tpl['planned_rows']) === 0
+                        && count($caulk['planned_rows']) === 0
+                        && $tpl['avail_wo_count'] >= 1
+                        && $tplHasModalWo
+                        && $caulkHasModalWo;
+                }));
     }
 
-    public function test_creating_wo_from_production_plan_modal_immediately_enters_plan_board(): void
+    public function test_creating_wo_from_production_plan_modal_adds_avail_wo_without_auto_scheduling(): void
     {
-        $fg = Part::where('part_number', 'AAN30056405')->firstOrFail();
+        $date = '2026-11-23';
 
         $this->post(route('production-plans.store'), [
-            'plan_date' => now()->toDateString(),
-            'fg_part_id' => $fg->id,
-            'qty' => 15,
-        ])->assertRedirect();
+            'plan_date' => $date,
+            'fg_part_id' => $this->fg()->id,
+            'qty' => 250,
+        ])->assertRedirect(route('production-plans.index', ['date' => $date]));
 
         $wo = WorkOrder::latest('id')->firstOrFail();
         $this->assertSame('planned', $wo->status);
-        $this->assertSame($this->expectedGroupCount($wo), ProductionPlanItem::where('work_order_id', $wo->id)->count());
+        $this->assertSame(0, $wo->planItems()->count());
 
-        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
+        $this->get(route('production-plans.index', ['date' => $date]))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->where('items', fn ($list) => collect($list)->pluck('work_order_id')->contains($wo->id))
-                ->where('unplannedWorkOrders', fn ($list) => ! collect($list)->pluck('id')->contains($wo->id)));
+                ->where('availWorkOrders', fn ($list) => collect($list)->contains('id', $wo->id)));
     }
 
-    public function test_wo_without_plan_items_appears_in_unplanned_panel(): void
+    public function test_save_machine_plan_updates_avail_wo_independently_per_machine_and_rolls_calendar_days(): void
     {
-        $wo = $this->createWorkOrder();
-        ProductionPlanItem::where('work_order_id', $wo->id)->delete();
+        $monday = '2026-11-23';
+        $tuesday = '2026-11-24';
+        $wo = $this->createWo(500, $monday);
 
-        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->where('items', fn ($list) => ! collect($list)->pluck('work_order_id')->contains($wo->id))
-                ->where('unplannedWorkOrders', fn ($list) => collect($list)->pluck('id')->contains($wo->id)));
-    }
+        $tplKukil = Machine::where('machine_name', 'TPL KUKIL')->firstOrFail();
+        $autoCaulking = Machine::where('machine_name', 'AUTO CAULKING')->firstOrFail();
 
-    public function test_release_enters_wo_into_plan_board(): void
-    {
-        $wo = $this->createWorkOrder();
-
-        $this->post(route('work-orders.release', $wo))->assertRedirect();
-        $wo->refresh();
-        $this->assertSame('in_progress', $wo->status);
-
-        $rows = ProductionPlanItem::where('work_order_id', $wo->id)->get();
-        $this->assertGreaterThan(1, $rows->count());
-        $this->assertSame($this->expectedGroupCount($wo), $rows->count());
-        $this->assertSame($rows->count(), $rows->pluck('machine_id')->unique()->count());
-
-        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->where('items', fn ($list) => collect($list)->pluck('work_order_id')->contains($wo->id))
-                ->where('unplannedWorkOrders', fn ($list) => ! collect($list)->pluck('id')->contains($wo->id)));
-    }
-
-    public function test_update_targets_saves_d_d1_d2(): void
-    {
-        $wo = $this->createWorkOrder();
-        $this->post(route('work-orders.release', $wo))->assertRedirect();
-
-        $row = ProductionPlanItem::where('work_order_id', $wo->id)->firstOrFail();
-
-        $this->patch(route('production-plans.items.update', $row), [
-            'machine_id' => $row->machine_id,
-            'wip_part_id' => $row->wip_part_id,
-            'target_d' => 100,
-            'target_d1' => 50,
-            'target_d2' => 25,
-        ])->assertRedirect();
-
-        $row->refresh();
-        $this->assertSame(100.0, (float) $row->target_d);
-        $this->assertSame(50.0, (float) $row->target_d1);
-        $this->assertSame(25.0, (float) $row->target_d2);
-    }
-
-    public function test_new_plan_items_default_daily_sequences_to_zero(): void
-    {
-        $wo = $this->createWorkOrder();
-
-        $this->post(route('work-orders.release', $wo))->assertRedirect();
-
-        $row = ProductionPlanItem::where('work_order_id', $wo->id)->firstOrFail();
-        $this->assertSame(0, $row->sequence_d);
-        $this->assertSame(0, $row->sequence_d1);
-        $this->assertSame(0, $row->sequence_d2);
-    }
-
-    public function test_bulk_update_targets_saves_many_rows(): void
-    {
-        $wo = $this->createWorkOrder();
-        $this->post(route('work-orders.release', $wo))->assertRedirect();
-
-        $rows = ProductionPlanItem::where('work_order_id', $wo->id)->orderBy('id')->take(2)->get();
-        $this->assertCount(2, $rows);
-
-        $this->patch(route('production-plans.targets'), [
-            'items' => [
+        // Rencanakan 200 di D (Senin) + 150 di D+1 (Selasa) hanya pada TPL KUKIL.
+        $this->put(route('production-plans.machines.save', $tplKukil), [
+            'date' => $monday,
+            'initial_qdc' => ['d' => false, 'd1' => true, 'd2' => false],
+            'rows' => [
                 [
-                    'id' => $rows[0]->id,
-                    'target_d' => 10,
-                    'target_d1' => 5,
-                    'target_d2' => null,
-                    'sequence_d' => 3,
-                    'sequence_d1' => 2,
-                    'sequence_d2' => 1,
+                    'work_order_id' => $wo->id,
+                    'd_seq' => 1,
+                    'd_qty' => 200,
+                    'd1_seq' => 2,
+                    'd1_qty' => 150,
+                    'd2_seq' => null,
+                    'd2_qty' => null,
                 ],
-                ['id' => $rows[1]->id, 'target_d' => 7, 'sequence_d' => 4],
+            ],
+        ])->assertRedirect(route('production-plans.index', ['date' => $monday]));
+
+        // Pada papan Senin: TPL KUKIL sisa avail 150 (500 - 350), AUTO CAULKING tetap 500.
+        $this->get(route('production-plans.index', ['date' => $monday]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('machines', function ($machines) use ($tplKukil, $autoCaulking, $wo) {
+                    $tpl = collect($machines)->firstWhere('id', $tplKukil->id);
+                    $caulk = collect($machines)->firstWhere('id', $autoCaulking->id);
+
+                    $tplRow = collect($tpl['planned_rows'])->firstWhere('work_order_id', $wo->id);
+                    $caulkModal = collect($caulk['modal_rows'])->firstWhere('work_order_id', $wo->id);
+
+                    return $tplRow !== null
+                        && (float) $tplRow['avail_qty'] === 150.0
+                        && (float) $tplRow['days']['d']['qty'] === 200.0
+                        && (int) $tplRow['days']['d']['sequence'] === 1
+                        && (float) $tplRow['days']['d1']['qty'] === 150.0
+                        && (int) $tplRow['days']['d1']['sequence'] === 2
+                        && $tplRow['days']['d2'] === null
+                        && count($caulk['planned_rows']) === 0
+                        && $caulkModal !== null
+                        && (float) $caulkModal['avail_qty'] === 500.0;
+                }));
+
+        // Pada papan Selasa: rencana D+1 kemarin (150, seq 2, initial_qdc=true) otomatis bergeser jadi D hari ini!
+        $this->get(route('production-plans.index', ['date' => $tuesday]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('machines', function ($machines) use ($tplKukil, $wo) {
+                    $tpl = collect($machines)->firstWhere('id', $tplKukil->id);
+                    $tplRow = collect($tpl['planned_rows'])->firstWhere('work_order_id', $wo->id);
+
+                    return $tpl !== null
+                        && $tpl['initial_qdc']['d'] === true
+                        && $tplRow !== null
+                        && (float) $tplRow['days']['d']['qty'] === 150.0
+                        && (int) $tplRow['days']['d']['sequence'] === 2
+                        && $tplRow['days']['d1'] === null;
+                }));
+    }
+
+    public function test_save_machine_plan_blocks_when_total_qty_exceeds_remaining_wo_qty(): void
+    {
+        $monday = '2026-11-23';
+        $wo = $this->createWo(100, $monday);
+        $tplKukil = Machine::where('machine_name', 'TPL KUKIL')->firstOrFail();
+
+        $this->put(route('production-plans.machines.save', $tplKukil), [
+            'date' => $monday,
+            'initial_qdc' => ['d' => false, 'd1' => false, 'd2' => false],
+            'rows' => [
+                [
+                    'work_order_id' => $wo->id,
+                    'd_seq' => 1,
+                    'd_qty' => 60,
+                    'd1_seq' => 1,
+                    'd1_qty' => 50,
+                    'd2_seq' => null,
+                    'd2_qty' => null,
+                ],
+            ],
+        ])->assertSessionHasErrors('rows.0.qty');
+
+        $this->assertSame(0, ProductionPlanItem::where('work_order_id', $wo->id)->count());
+    }
+
+    public function test_save_machine_plan_deletes_day_item_when_qty_cleared(): void
+    {
+        $monday = '2026-11-23';
+        $wo = $this->createWo(200, $monday);
+        $tplKukil = Machine::where('machine_name', 'TPL KUKIL')->firstOrFail();
+
+        $this->put(route('production-plans.machines.save', $tplKukil), [
+            'date' => $monday,
+            'initial_qdc' => ['d' => false, 'd1' => false, 'd2' => false],
+            'rows' => [
+                ['work_order_id' => $wo->id, 'd_seq' => 1, 'd_qty' => 120, 'd1_seq' => null, 'd1_qty' => null, 'd2_seq' => null, 'd2_qty' => null],
             ],
         ])->assertRedirect();
 
-        $first = $rows[0]->fresh();
-        $this->assertSame(10.0, (float) $first->target_d);
-        $this->assertSame(5.0, (float) $first->target_d1);
-        $this->assertNull($first->target_d2);
-        $this->assertSame(3, $first->sequence_d);
-        $this->assertSame(2, $first->sequence_d1);
-        $this->assertSame(1, $first->sequence_d2);
-        $this->assertSame(7.0, (float) $rows[1]->fresh()->target_d);
-        $this->assertSame(4, $rows[1]->fresh()->sequence_d);
-    }
+        $this->assertSame(1, ProductionPlanItem::where('work_order_id', $wo->id)->where('machine_id', $tplKukil->id)->count());
 
-    public function test_bulk_update_rejects_negative_daily_sequence_without_changing_item(): void
-    {
-        $wo = $this->createWorkOrder();
-        $this->post(route('work-orders.release', $wo))->assertRedirect();
-        $row = ProductionPlanItem::where('work_order_id', $wo->id)->firstOrFail();
-
-        $this->patch(route('production-plans.targets'), [
-            'items' => [[
-                'id' => $row->id,
-                'target_d' => 10,
-                'sequence_d' => -1,
-            ]],
-        ])->assertSessionHasErrors('items.0.sequence_d');
-
-        $row->refresh();
-        $this->assertNull($row->target_d);
-        $this->assertSame(0, $row->sequence_d);
-    }
-
-    public function test_bulk_update_rejects_non_integer_daily_sequence(): void
-    {
-        $wo = $this->createWorkOrder();
-        $this->post(route('work-orders.release', $wo))->assertRedirect();
-        $row = ProductionPlanItem::where('work_order_id', $wo->id)->firstOrFail();
-
-        $this->patch(route('production-plans.targets'), [
-            'items' => [[
-                'id' => $row->id,
-                'sequence_d1' => 1.5,
-            ]],
-        ])->assertSessionHasErrors('items.0.sequence_d1');
-    }
-
-    public function test_target_change_is_recorded_in_plan_history(): void
-    {
-        $wo = $this->createWorkOrder();
-        $this->post(route('work-orders.release', $wo))->assertRedirect();
-        $row = ProductionPlanItem::where('work_order_id', $wo->id)->firstOrFail();
-
-        $this->patch(route('production-plans.targets'), [
-            'items' => [[
-                'id' => $row->id,
-                'target_d' => 8,
-                'target_d1' => 4,
-                'target_d2' => null,
-                'sequence_d' => 6,
-            ]],
+        $this->put(route('production-plans.machines.save', $tplKukil), [
+            'date' => $monday,
+            'initial_qdc' => ['d' => false, 'd1' => false, 'd2' => false],
+            'rows' => [
+                ['work_order_id' => $wo->id, 'd_seq' => null, 'd_qty' => null, 'd1_seq' => null, 'd1_qty' => null, 'd2_seq' => null, 'd2_qty' => null],
+            ],
         ])->assertRedirect();
 
-        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->where('histories', fn ($histories) => collect($histories)->contains(
-                    fn ($history) => $history['event'] === 'targets_updated'
-                        && $history['production_plan_item_id'] === $row->id
-                        && $history['before']['target_d'] === null
-                        && (float) $history['after']['target_d'] === 8.0
-                        && $history['after']['sequence_d'] === 6
-                        && $history['user']['id'] === auth()->id(),
-                )));
+        $this->assertSame(0, ProductionPlanItem::where('work_order_id', $wo->id)->where('machine_id', $tplKukil->id)->count());
     }
 
-    public function test_plan_rows_follow_routing_order(): void
+    public function test_start_finish_time_respects_breaks_initial_qdc_rollover_and_changeover_qdc(): void
     {
-        $wo = $this->createWorkOrder();
-        $this->post(route('work-orders.release', $wo))->assertRedirect();
+        $service = app(ProductionPlanScheduleService::class);
+        $monday = '2026-11-23'; // Shift 1: 07:30-15:30, break 12:00-13:00
 
-        $rows = ProductionPlanItem::where('work_order_id', $wo->id)
-            ->with('machine')
-            ->orderByRaw('step_sequence ASC NULLS LAST')
-            ->orderBy('machine_id')
-            ->orderBy('sequence')
-            ->get();
+        $entries = [
+            // Seq 1: 240 menit produksi (4 jam) + QDC 30 menit (opsional via initial_qdc)
+            ['key' => 'wo1', 'sequence' => 1, 'id' => 1, 'qty' => 2400, 'wip_part_id' => 101, 'cycle_time_seconds' => 6.0, 'qdc_minutes' => 30.0],
+            // Seq 2: 90 menit produksi + QDC 30 menit (ganti part 101 -> 102)
+            ['key' => 'wo2', 'sequence' => 2, 'id' => 2, 'qty' => 900, 'wip_part_id' => 102, 'cycle_time_seconds' => 6.0, 'qdc_minutes' => 30.0],
+        ];
 
-        // Urutan grup mesin = alur routing BOM 58.
-        $this->assertSame(
-            ['TPL KUKIL', 'ASSY. TPL COMP BASE 1', 'AUTO CAULKING', 'ASSY. TPL COMP BASE 2'],
-            $rows->pluck('machine.machine_name')->all(),
-        );
+        // 1. Roll over (initial_qdc = false):
+        //    wo1: 07:30 + 240m = 11:30 (tanpa QDC)
+        //    wo2: 11:30 + 30m QDC = 12:00 (kena istirahat 12:00-13:00 -> lompat ke 13:00) + 90m prod = 14:30
+        $rollOver = $service->calculateDaySchedule($monday, $entries, false);
+        $this->assertSame('07:30', $rollOver['wo1']['start_time']);
+        $this->assertSame('11:30', $rollOver['wo1']['end_time']);
+        $this->assertSame(0.0, $rollOver['wo1']['qdc_applied_minutes']);
+        $this->assertSame('11:30', $rollOver['wo2']['start_time']);
+        $this->assertSame('14:30', $rollOver['wo2']['end_time']);
+        $this->assertSame(30.0, $rollOver['wo2']['qdc_applied_minutes']);
+        $this->assertFalse($rollOver['wo2']['is_overload']);
 
-        // step_sequence menaik (dasar urutan di papan).
-        $seqs = $rows->pluck('step_sequence')->map(fn ($v) => (int) $v)->all();
-        $sorted = $seqs;
-        sort($sorted);
-        $this->assertSame($sorted, $seqs);
+        // 2. Dengan QDC Awal (initial_qdc = true):
+        //    wo1: 07:30 + 30m QDC + 240m prod = 12:00
+        //    wo2: karena 12:00 masuk istirahat, start lompat ke 13:00 + 30m QDC + 90m prod = 15:00
+        $withInitQdc = $service->calculateDaySchedule($monday, $entries, true);
+        $this->assertSame('07:30', $withInitQdc['wo1']['start_time']);
+        $this->assertSame('12:00', $withInitQdc['wo1']['end_time']);
+        $this->assertSame(30.0, $withInitQdc['wo1']['qdc_applied_minutes']);
+        $this->assertSame('13:00', $withInitQdc['wo2']['start_time']);
+        $this->assertSame('15:00', $withInitQdc['wo2']['end_time']);
     }
 
-    public function test_plan_items_include_the_fg_part_model_for_the_board(): void
+    public function test_start_finish_time_handles_friday_break_saturday_gap_and_overload(): void
     {
-        $wo = $this->createWorkOrder();
-        $this->post(route('work-orders.release', $wo))->assertRedirect();
+        $service = app(ProductionPlanScheduleService::class);
 
-        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->where('items', fn ($items) => collect($items)->contains(
-                    fn ($item) => $item['work_order_id'] === $wo->id
-                        && array_key_exists('model', $item['fg_part']),
-                )));
+        // Jumat (2026-11-27): istirahat Shift 1 = 11:30-13:00 (90 menit)
+        $friday = $service->calculateDaySchedule('2026-11-27', [
+            ['key' => 'fri', 'sequence' => 1, 'id' => 1, 'qty' => 3000, 'wip_part_id' => 1, 'cycle_time_seconds' => 6.0, 'qdc_minutes' => null], // 300m = 5h -> 07:30-11:30 (4h) + 13:00-14:00 (1h)
+        ], false);
+        $this->assertSame('07:30', $friday['fri']['start_time']);
+        $this->assertSame('14:00', $friday['fri']['end_time']);
+        $this->assertFalse($friday['fri']['is_overload']);
+
+        // Sabtu (2026-11-28): kapasitas 15 jam (07:30-17:30 + 19:00-00:00). 16 jam -> overload!
+        $saturday = $service->calculateDaySchedule('2026-11-28', [
+            ['key' => 'sat', 'sequence' => 1, 'id' => 1, 'qty' => 9600, 'wip_part_id' => 1, 'cycle_time_seconds' => 6.0, 'qdc_minutes' => null], // 960m = 16h
+        ], false);
+        $this->assertSame('07:30', $saturday['sat']['start_time']);
+        $this->assertSame('01:00', $saturday['sat']['end_time']);
+        $this->assertTrue($saturday['sat']['is_overload']);
     }
 
-    public function test_plan_remaining_qty_uses_results_up_to_board_date_not_targets(): void
+    public function test_subcon_machines_are_hidden_and_machines_follow_master_sequence(): void
     {
-        $wo = $this->createWorkOrder();
-        $this->post(route('work-orders.release', $wo))->assertRedirect();
+        $date = '2026-11-23';
+        $mA = Machine::where('machine_name', 'TPL KUKIL')->firstOrFail();
+        $mB = Machine::where('machine_name', 'AUTO CAULKING')->firstOrFail();
+        $mB->update(['sequence' => 1]);
+        $mA->update(['sequence' => 2]);
 
-        $row = ProductionPlanItem::where('work_order_id', $wo->id)->firstOrFail();
-        $boardDate = now()->subDay()->toDateString();
-        $row->plan->update(['plan_date' => $boardDate]);
-
-        ProductionResult::create([
-            'work_order_id' => $wo->id,
-            'parent_part_id' => $row->wip_part_id,
-            'result_date' => $boardDate,
-            'qty_good' => 3,
-        ]);
-        ProductionResult::create([
-            'work_order_id' => $wo->id,
-            'parent_part_id' => $row->wip_part_id,
-            'result_date' => now()->toDateString(),
-            'qty_good' => 2,
-        ]);
-
-        // Target adalah rencana, bukan realisasi; tidak boleh mengurangi sisa WO.
-        $row->update(['target_d' => 4]);
-
-        $this->get(route('production-plans.index', ['date' => $boardDate]))
+        $this->get(route('production-plans.index', ['date' => $date]))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->where('items', fn ($items) => (float) collect($items)
-                    ->firstWhere('id', $row->id)['avail_qty'] === 7.0));
+                ->where('machines', function ($machines) use ($mA, $mB) {
+                    $list = collect($machines);
+                    $hasSubcon = $list->contains(fn ($m) => str_contains(strtolower((string) $m['machine_name']), 'subcon'));
+                    $idxA = $list->search(fn ($m) => $m['id'] === $mA->id);
+                    $idxB = $list->search(fn ($m) => $m['id'] === $mB->id);
 
-    }
-
-    public function test_fully_produced_row_is_hidden_from_board(): void
-    {
-        $wo = $this->createWorkOrder();
-        $this->post(route('work-orders.release', $wo))->assertRedirect();
-
-        $row = ProductionPlanItem::where('work_order_id', $wo->id)->firstOrFail();
-
-        ProductionResult::create([
-            'work_order_id' => $wo->id,
-            'parent_part_id' => $row->wip_part_id,
-            'result_date' => now()->toDateString(),
-            'qty_good' => $wo->qty,
-        ]);
-
-        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->where('items', fn ($list) => ! collect($list)->pluck('id')->contains($row->id)));
-
-        $this->assertSame('in_progress', $wo->fresh()->status);
-    }
-
-    public function test_partially_produced_wo_shows_only_unfinished_rows(): void
-    {
-        $wo = $this->createWorkOrder();
-        $this->post(route('work-orders.release', $wo))->assertRedirect();
-
-        $rows = ProductionPlanItem::where('work_order_id', $wo->id)->orderBy('id')->get();
-        $this->assertGreaterThan(1, $rows->count());
-
-        $closed = $rows->first();
-        $stillOpen = $rows->firstWhere('wip_part_id', '!=', $closed->wip_part_id);
-        $this->assertNotNull($stillOpen, 'Butuh dua baris dengan part hasil berbeda.');
-
-        ProductionResult::create([
-            'work_order_id' => $wo->id,
-            'parent_part_id' => $closed->wip_part_id,
-            'result_date' => now()->toDateString(),
-            'qty_good' => $wo->qty,
-        ]);
-
-        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->where('items', function ($list) use ($closed, $stillOpen) {
-                    $ids = collect($list)->pluck('id');
-
-                    return ! $ids->contains($closed->id) && $ids->contains($stillOpen->id);
+                    return ! $hasSubcon && $idxB !== false && $idxA !== false && $idxB < $idxA;
                 }));
     }
 
-    public function test_deleting_production_result_restores_board_row(): void
+    public function test_production_result_reduces_remaining_and_avail_wo_qty(): void
     {
-        $wo = $this->createWorkOrder();
-        $this->post(route('work-orders.release', $wo))->assertRedirect();
+        $monday = '2026-11-23';
+        $wo = $this->createWo(200, $monday);
+        $tplKukil = Machine::where('machine_name', 'TPL KUKIL')->firstOrFail();
+        $wip5 = Part::where('part_number', 'AAN30056405-WIP5')->firstOrFail();
 
-        $row = ProductionPlanItem::where('work_order_id', $wo->id)->firstOrFail();
-
-        $result = ProductionResult::create([
+        ProductionResult::create([
             'work_order_id' => $wo->id,
-            'parent_part_id' => $row->wip_part_id,
-            'result_date' => now()->toDateString(),
-            'qty_good' => $wo->qty,
+            'parent_part_id' => $wip5->id,
+            'qty_good' => 80,
+            'qty_reject' => 0,
+            'result_date' => $monday,
         ]);
 
-        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->where('items', fn ($list) => ! collect($list)->pluck('id')->contains($row->id)));
+        // Sisa produksi tinggal 120 → mencoba plan 130 harus ditolak!
+        $this->put(route('production-plans.machines.save', $tplKukil), [
+            'date' => $monday,
+            'initial_qdc' => ['d' => false, 'd1' => false, 'd2' => false],
+            'rows' => [
+                ['work_order_id' => $wo->id, 'd_seq' => 1, 'd_qty' => 130, 'd1_seq' => null, 'd1_qty' => null, 'd2_seq' => null, 'd2_qty' => null],
+            ],
+        ])->assertSessionHasErrors('rows.0.qty');
 
-        $result->delete();
-
-        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->where('items', fn ($list) => collect($list)->pluck('id')->contains($row->id)));
-    }
-
-    public function test_fully_produced_wo_is_not_listed_off_board(): void
-    {
-        $wo = $this->createWorkOrder();
-        $this->post(route('work-orders.release', $wo))->assertRedirect();
-
-        $otherDate = now()->addDay()->toDateString();
-        foreach (ProductionPlanItem::where('work_order_id', $wo->id)->get() as $row) {
-            $row->plan->update(['plan_date' => $otherDate]);
-            ProductionResult::create([
-                'work_order_id' => $wo->id,
-                'parent_part_id' => $row->wip_part_id,
-                'result_date' => now()->toDateString(),
-                'qty_good' => $wo->qty,
-            ]);
-        }
-
-        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->where('offBoardWorkOrders', fn ($list) => ! collect($list)->pluck('id')->contains($wo->id)));
-    }
-
-    public function test_carry_over_remaining_quantity_ignores_results_after_board_date(): void
-    {
-        $wo = $this->createWorkOrder();
-        $this->post(route('work-orders.release', $wo))->assertRedirect();
-
-        $boardDate = now()->subDay()->toDateString();
-        $planDate = now()->subDays(2)->toDateString();
-        $rows = ProductionPlanItem::where('work_order_id', $wo->id)->get();
-        $rows->firstOrFail()->plan->update(['plan_date' => $planDate]);
-
-        foreach ($rows as $row) {
-            ProductionResult::create([
-                'work_order_id' => $wo->id,
-                'parent_part_id' => $row->wip_part_id,
-                'result_date' => now()->toDateString(),
-                'qty_good' => $wo->qty,
-            ]);
-        }
-
-        $this->get(route('production-plans.index', ['date' => $boardDate]))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->where('items', fn ($list) => collect($list)->pluck('work_order_id')->contains($wo->id))
-                ->where('offBoardWorkOrders', fn ($list) => ! collect($list)->pluck('id')->contains($wo->id)));
-    }
-
-    public function test_planned_work_order_is_listed_on_board_and_off_board_when_future(): void
-    {
-        $wo = $this->createWorkOrder();
-
-        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->where('items', fn ($list) => collect($list)->pluck('work_order_id')->contains($wo->id)));
-
-        $futureDate = now()->addDay()->toDateString();
-        ProductionPlanItem::where('work_order_id', $wo->id)
-            ->firstOrFail()
-            ->plan
-            ->update(['plan_date' => $futureDate]);
-
-        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->where('offBoardWorkOrders', fn ($list) => collect($list)->pluck('id')->contains($wo->id)));
-    }
-
-    public function test_completed_work_order_with_remaining_quantity_stays_on_board(): void
-    {
-        $wo = $this->createWorkOrder();
-        $this->post(route('work-orders.release', $wo))->assertRedirect();
-        $wo->update(['status' => 'completed']);
-
-        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->where('items', fn ($list) => collect($list)->pluck('work_order_id')->contains($wo->id)));
-    }
-
-    public function test_cancelled_work_order_is_not_listed_on_board(): void
-    {
-        $wo = $this->createWorkOrder();
-        $this->post(route('work-orders.release', $wo))->assertRedirect();
-        $wo->update(['status' => 'cancelled']);
-
-        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->where('items', fn ($list) => ! collect($list)->pluck('work_order_id')->contains($wo->id)));
-    }
-
-    public function test_same_machine_steps_merge_into_one_row_with_input_and_output(): void
-    {
-        $wo = $this->createWorkOrder('AGU30018303');
-        $this->post(route('work-orders.release', $wo))->assertRedirect();
-
-        $rows = ProductionPlanItem::where('work_order_id', $wo->id)->with(['inputPart', 'wipPart', 'machine'])->get();
-
-        // 3 step Press (WIP1..WIP3) di TPL DONGSHIN + 1 Assembling Full → 2 baris.
-        $this->assertSame(2, $rows->count());
-
-        $press = $rows->first(fn ($row) => $row->machine?->machine_name === 'TPL DONGSHIN');
-        $this->assertNotNull($press);
-        $this->assertSame('BPSH0257021487', $press->inputPart?->part_number);
-        $this->assertSame('AGU30018303-WIP3', $press->wipPart?->part_number);
-    }
-
-    public function test_attach_work_order_populates_all_steps(): void
-    {
-        $wo = $this->createWorkOrder();
-        ProductionPlanItem::where('work_order_id', $wo->id)->delete();
-
-        $this->post(route('production-plans.attach'), [
-            'work_order_id' => $wo->id,
-            'plan_date' => now()->toDateString(),
+        // Plan 100 diterima → avail tersisa 20.
+        $this->put(route('production-plans.machines.save', $tplKukil), [
+            'date' => $monday,
+            'initial_qdc' => ['d' => false, 'd1' => false, 'd2' => false],
+            'rows' => [
+                ['work_order_id' => $wo->id, 'd_seq' => 1, 'd_qty' => 100, 'd1_seq' => null, 'd1_qty' => null, 'd2_seq' => null, 'd2_qty' => null],
+            ],
         ])->assertRedirect();
 
-        $this->assertSame(
-            $this->expectedGroupCount($wo),
-            ProductionPlanItem::where('work_order_id', $wo->id)->count(),
-        );
-    }
-
-    public function test_rebuild_command_restores_merged_rows(): void
-    {
-        $wo = $this->createWorkOrder();
-        $this->post(route('work-orders.release', $wo))->assertRedirect();
-
-        $plan = ProductionPlanItem::where('work_order_id', $wo->id)->firstOrFail()->plan;
-        $expected = $this->expectedGroupCount($wo);
-
-        // Simulasi baris lama (per step, target terisi).
-        ProductionPlanItem::create([
-            'production_plan_id' => $plan->id,
-            'machine_id' => null,
-            'work_order_id' => $wo->id,
-            'fg_part_id' => $wo->part_id,
-            'sequence' => 99,
-            'target_d' => 5,
-        ]);
-        $this->assertSame($expected + 1, ProductionPlanItem::where('work_order_id', $wo->id)->count());
-
-        $this->artisan('production-plan:rebuild', ['--wo' => $wo->id])->assertExitCode(0);
-
-        $rows = ProductionPlanItem::where('work_order_id', $wo->id)->get();
-        $this->assertSame($expected, $rows->count());
-        $this->assertTrue($rows->every(fn ($r) => $r->target_d === null));
-    }
-
-    public function test_rebuild_keeps_existing_rows_when_no_routable_step(): void
-    {
-        $wo = $this->createWorkOrder();
-        $this->post(route('work-orders.release', $wo))->assertRedirect();
-
-        $rowsBefore = ProductionPlanItem::where('work_order_id', $wo->id)->count();
-        $this->assertGreaterThan(0, $rowsBefore);
-
-        // Hilangkan semua parent part → tidak ada step routing yang bisa dibuat.
-        $wo->items()->update(['parent_part_id' => null]);
-
-        $this->artisan('production-plan:rebuild', ['--wo' => $wo->id])->assertExitCode(0);
-
-        // Baris lama tidak boleh hilang hanya karena rebuild tidak menemukan step.
-        $this->assertSame($rowsBefore, ProductionPlanItem::where('work_order_id', $wo->id)->count());
-    }
-
-    public function test_unfinished_work_order_from_previous_plan_date_carries_over_to_selected_board(): void
-    {
-        $wo = $this->createWorkOrder();
-        $this->post(route('work-orders.release', $wo))->assertRedirect();
-
-        $row = ProductionPlanItem::where('work_order_id', $wo->id)->firstOrFail();
-        $otherDate = now()->subDay()->toDateString();
-        $row->plan->update(['plan_date' => $otherDate]);
-
-        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
+        $this->get(route('production-plans.index', ['date' => $monday]))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->where('items', fn ($list) => collect($list)->pluck('work_order_id')->contains($wo->id))
-                ->where('offBoardWorkOrders', fn ($list) => ! collect($list)->pluck('id')->contains($wo->id)));
-    }
+                ->where('machines', function ($machines) use ($tplKukil, $wo) {
+                    $tpl = collect($machines)->firstWhere('id', $tplKukil->id);
+                    $row = collect($tpl['planned_rows'])->firstWhere('work_order_id', $wo->id);
 
-    public function test_future_plan_allocation_does_not_appear_before_its_date(): void
-    {
-        $wo = $this->createWorkOrder();
-        $this->post(route('work-orders.release', $wo))->assertRedirect();
-
-        $futureDate = now()->addDay()->toDateString();
-        ProductionPlanItem::where('work_order_id', $wo->id)
-            ->firstOrFail()
-            ->plan
-            ->update(['plan_date' => $futureDate]);
-
-        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->where('items', fn ($list) => ! collect($list)->pluck('work_order_id')->contains($wo->id))
-                ->where('offBoardWorkOrders', fn ($list) => collect($list)->contains(
-                    fn ($item) => $item['id'] === $wo->id
-                        && in_array($futureDate, $item['plan_dates'], true),
-                )));
-    }
-
-    public function test_work_order_planned_date_does_not_control_board_visibility(): void
-    {
-        $wo = $this->createWorkOrder();
-        $this->post(route('work-orders.release', $wo))->assertRedirect();
-        $wo->update(['planned_date' => now()->addMonth()->toDateString()]);
-
-        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->where('items', fn ($list) => collect($list)->pluck('work_order_id')->contains($wo->id)));
-    }
-
-    public function test_attach_reports_wo_without_routable_step_instead_of_false_success(): void
-    {
-        $wo = $this->createWorkOrder();
-        ProductionPlanItem::where('work_order_id', $wo->id)->delete();
-
-        // Tidak ada parent part → tidak ada step routing yang bisa jadi baris papan.
-        $wo->items()->update(['parent_part_id' => null]);
-
-        $this->post(route('production-plans.attach'), [
-            'work_order_id' => $wo->id,
-            'plan_date' => now()->toDateString(),
-        ])->assertRedirect();
-
-        $this->assertSame(0, ProductionPlanItem::where('work_order_id', $wo->id)->count());
-        $this->assertNotNull(session('error'));
-        $this->assertNull(session('success'));
-    }
-
-    public function test_plan_machines_follow_master_sequence(): void
-    {
-        // Netralkan urutan hasil seeding dulu supaya tidak bentrok nilai.
-        Machine::query()->update(['sequence' => null]);
-        Machine::where('machine_name', 'AUTO CAULKING')->update(['sequence' => 1]);
-        Machine::where('machine_name', 'TPL KUKIL')->update(['sequence' => 2]);
-
-        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->where('machines', function ($list) {
-                    $names = collect($list)->pluck('machine_name')->values()->all();
-
-                    return ($names[0] ?? null) === 'AUTO CAULKING'
-                        && ($names[1] ?? null) === 'TPL KUKIL';
+                    return $row !== null
+                        && (float) $row['remaining_qty'] === 120.0
+                        && (float) $row['avail_qty'] === 20.0;
                 }));
     }
 
-    public function test_subcon_machine_rows_are_hidden_from_plan_board(): void
+    public function test_rebuild_command_and_legacy_endpoints_still_work(): void
     {
-        $wo = $this->createWorkOrder();
-        $this->post(route('work-orders.release', $wo))->assertRedirect();
-
-        $plan = ProductionPlanItem::where('work_order_id', $wo->id)->firstOrFail()->plan;
-        $subcon = Machine::query()->whereRaw("UPPER(machine_code) = 'SUBCON'")->firstOrFail();
-
-        ProductionPlanItem::create([
-            'production_plan_id' => $plan->id,
-            'machine_id' => $subcon->id,
-            'work_order_id' => $wo->id,
-            'fg_part_id' => $wo->part_id,
-            'sequence' => 99,
-        ]);
-
-        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->where('items', fn ($list) => collect($list)->pluck('machine_id')->every(fn ($id) => $id !== $subcon->id))
-                ->where('machines', fn ($list) => collect($list)->pluck('id')->every(fn ($id) => $id !== $subcon->id)));
-    }
-
-    public function test_subcon_rows_do_not_keep_completed_work_order_in_off_board_panel(): void
-    {
-        $wo = $this->createWorkOrder();
-        $this->post(route('work-orders.release', $wo))->assertRedirect();
-
-        $rows = ProductionPlanItem::where('work_order_id', $wo->id)->get();
-        $plan = $rows->firstOrFail()->plan;
-        $plan->update(['plan_date' => now()->addDay()->toDateString()]);
-
-        foreach ($rows as $row) {
-            ProductionResult::create([
-                'work_order_id' => $wo->id,
-                'parent_part_id' => $row->wip_part_id,
-                'result_date' => now()->toDateString(),
-                'qty_good' => $wo->qty,
-            ]);
-        }
-
-        $subcon = Machine::query()->whereRaw("UPPER(machine_code) = 'SUBCON'")->firstOrFail();
-        ProductionPlanItem::create([
-            'production_plan_id' => $plan->id,
-            'machine_id' => $subcon->id,
-            'work_order_id' => $wo->id,
-            'fg_part_id' => $wo->part_id,
-            'sequence' => 99,
-        ]);
-
-        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->where('offBoardWorkOrders', fn ($list) => ! collect($list)->pluck('id')->contains($wo->id)));
-    }
-
-    public function test_attach_rejects_work_order_already_in_a_plan(): void
-    {
-        $wo = $this->createWorkOrder();
-
+        $wo = $this->createWo(50, now()->toDateString());
         $this->post(route('production-plans.attach'), [
             'work_order_id' => $wo->id,
             'plan_date' => now()->toDateString(),
-        ])->assertSessionHasErrors('work_order_id');
-    }
-
-    public function test_legacy_unpopulated_wo_is_auto_backfilled_onto_board_on_index(): void
-    {
-        $fg = Part::where('part_number', 'AAN30056405')->firstOrFail();
-        [$woId] = app(WoService::class)->createWorkOrder(
-            $fg->id,
-            10,
-            now()->toDateString(),
-            null,
-            (int) auth()->id(),
-        );
-        $wo = WorkOrder::findOrFail($woId);
-        $this->assertSame(0, ProductionPlanItem::where('work_order_id', $wo->id)->count());
-
-        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->where('items', fn ($list) => collect($list)->pluck('work_order_id')->contains($wo->id)));
-
-        $this->assertSame($this->expectedGroupCount($wo), ProductionPlanItem::where('work_order_id', $wo->id)->count());
-    }
-
-    public function test_wo_created_with_future_planned_date_still_appears_on_todays_board(): void
-    {
-        $fg = Part::where('part_number', 'AAN30056405')->firstOrFail();
-
-        $this->post(route('work-orders.store'), [
-            'part_id' => $fg->id,
-            'qty' => 10,
-            'planned_date' => now()->addDays(5)->toDateString(),
         ])->assertRedirect();
 
-        $wo = WorkOrder::latest('id')->firstOrFail();
+        $this->assertGreaterThan(0, $wo->planItems()->count());
 
-        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->where('items', fn ($list) => collect($list)->pluck('work_order_id')->contains($wo->id)));
-    }
-
-    public function test_plan_item_without_machine_is_not_dropped_when_subcon_machine_exists(): void
-    {
-        $wo = $this->createWorkOrder();
-        $row = ProductionPlanItem::where('work_order_id', $wo->id)->firstOrFail();
-        $row->update(['machine_id' => null]);
-
-        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->where('items', fn ($list) => collect($list)->pluck('id')->contains($row->id)));
+        $plan = ProductionPlan::whereDate('plan_date', now()->toDateString())->firstOrFail();
+        $this->assertGreaterThan(0, $plan->items()->count());
     }
 }

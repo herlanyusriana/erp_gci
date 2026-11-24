@@ -22,4 +22,9 @@ class ProductionPlan extends Model
     {
         return $this->hasMany(ProductionPlanHistory::class);
     }
+
+    public function machineDays(): HasMany
+    {
+        return $this->hasMany(ProductionPlanMachineDay::class);
+    }
 }

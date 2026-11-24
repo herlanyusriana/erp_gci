@@ -2,18 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\BomItem;
 use App\Models\Machine;
-use App\Models\MachineCycleTime;
 use App\Models\Part;
 use App\Models\ProductionPlan;
 use App\Models\ProductionPlanHistory;
 use App\Models\ProductionPlanItem;
-use App\Models\ProductionResult;
+use App\Models\ProductionPlanMachineDay;
 use App\Models\WorkOrder;
+use App\Services\ProductionPlanScheduleService;
 use App\Services\WoService;
-use App\Support\MachineRouting;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
@@ -22,122 +23,24 @@ use Inertia\Response;
 
 class ProductionPlanController extends Controller
 {
-    public function __construct(protected WoService $woService) {}
+    public function __construct(
+        protected WoService $woService,
+        protected ProductionPlanScheduleService $scheduleService,
+    ) {}
 
     public function index(Request $request): Response
     {
         Gate::authorize('viewAny', ProductionPlan::class);
 
         $date = $request->input('date') ?: now()->toDateString();
+        $dayDates = [
+            'd' => Carbon::parse($date)->toDateString(),
+            'd1' => Carbon::parse($date)->addDay()->toDateString(),
+            'd2' => Carbon::parse($date)->addDays(2)->toDateString(),
+        ];
 
-        // Subcon bukan mesin internal → tidak boleh muncul di papan produksi.
-        $subconMachineIds = $this->subconMachineIds();
+        $subconMachineIds = $this->scheduleService->subconMachineIds();
 
-        // Auto-backfill WO belum selesai (planned / in_progress) yang dibuat sebelum
-        // auto-populate aktif dan belum pernah tercatat masuk Production Plan.
-        $missingPlanWos = WorkOrder::query()
-            ->whereIn('status', ['planned', 'in_progress'])
-            ->whereDoesntHave('planItems')
-            ->get();
-
-        if ($missingPlanWos->isNotEmpty()) {
-            $alreadyRecordedWoIds = ProductionPlanHistory::query()
-                ->where('event', 'work_order_added')
-                ->get(['after'])
-                ->map(fn (ProductionPlanHistory $h) => (int) ($h->after['work_order_id'] ?? 0))
-                ->filter()
-                ->flip();
-
-            $today = now()->toDateString();
-            foreach ($missingPlanWos as $missingWo) {
-                if ($alreadyRecordedWoIds->has($missingWo->id)) {
-                    continue;
-                }
-                $plannedDate = $missingWo->planned_date?->toDateString();
-                $targetPlanDate = ($plannedDate !== null && $plannedDate < $today) ? $plannedDate : min($date, $today);
-                $this->woService->populatePlanItems($missingWo, $targetPlanDate, (int) ($missingWo->created_by ?? auth()->id()));
-            }
-        }
-
-        $plan = ProductionPlan::query()->whereDate('plan_date', $date)->first();
-
-        $items = ProductionPlanItem::query()
-            ->whereHas('plan', fn ($query) => $query->whereDate('plan_date', '<=', $date))
-            ->whereHas('workOrder', fn ($query) => $query->whereIn('status', ['planned', 'in_progress', 'completed']))
-            ->where(fn ($query) => $query->whereNull('machine_id')->orWhereNotIn('machine_id', $subconMachineIds))
-            ->with([
-                'machine:id,machine_code,machine_name',
-                'process:id,process_name',
-                'workOrder:id,wo_no,part_id,qty,status',
-                'workOrder.part:id,part_number,part_name,model',
-                'fgPart:id,part_number,part_name,model',
-                'inputPart:id,part_number,part_name,model',
-                'wipPart:id,part_number,part_name,model',
-            ])
-            ->orderByRaw('step_sequence ASC NULLS LAST')
-            ->orderBy('machine_id')
-            ->orderBy('sequence')
-            ->orderBy('id')
-            ->get();
-
-        // Sisa WO adalah kuantitas yang belum direalisasikan, bukan target harian
-        // yang masih berupa rencana. Result setelah tanggal papan tidak ikut
-        // mengurangi sisa saat melihat papan tanggal lampau.
-        $producedByStep = ProductionResult::query()
-            ->whereDate('result_date', '<=', $date)
-            ->whereIn('work_order_id', $items->pluck('work_order_id')->filter()->unique())
-            ->whereIn('parent_part_id', $items->pluck('wip_part_id')->filter()->unique())
-            ->selectRaw('work_order_id, parent_part_id, SUM(qty_good) as qty_good')
-            ->groupBy('work_order_id', 'parent_part_id')
-            ->get()
-            ->keyBy(fn (ProductionResult $result) => $result->work_order_id.'|'.$result->parent_part_id);
-
-        $items->each(function (ProductionPlanItem $item) use ($producedByStep) {
-            $key = ($item->work_order_id ?? 0).'|'.($item->wip_part_id ?? 0);
-            $produced = (float) ($producedByStep->get($key)?->qty_good ?? 0);
-            $item->setAttribute('remaining_qty', max(0, (float) ($item->workOrder?->qty ?? 0) - $produced));
-        });
-
-        $items = $items
-            ->filter(fn (ProductionPlanItem $item) => in_array($item->workOrder?->status, ['planned', 'in_progress', 'completed'], true)
-                && (float) $item->remaining_qty > 0)
-            ->values();
-
-        // Estimasi waktu: qty WO × cycle time (mesin × part hasil baris itu) + QDC standar.
-        // Fallback ke grup mesin yang sama (3 huruf awal nama mesin) untuk baris gabungan
-        // seperti KUKIL 400 → KUKIL 110 atau SPOT WELDING 4 → SPOT WELDING 3.
-        $wipPartIds = $items->pluck('wip_part_id')->filter()->unique()->values();
-        $cycleTimeRows = $wipPartIds->isNotEmpty()
-            ? MachineCycleTime::query()
-                ->with('machine:id,machine_name')
-                ->where('is_active', true)
-                ->whereIn('part_id', $wipPartIds)
-                ->get(['machine_id', 'part_id', 'cycle_time_seconds', 'qdc_minutes'])
-            : collect();
-
-        $cycleTimesByMachinePart = $cycleTimeRows->keyBy(
-            fn (MachineCycleTime $row): string => $row->machine_id.'|'.$row->part_id,
-        );
-        $cycleTimesByGroupPart = $cycleTimeRows->keyBy(
-            fn (MachineCycleTime $row): string => MachineRouting::groupKey($row->machine, $row->machine_id).'|'.$row->part_id,
-        );
-
-        $items->each(function (ProductionPlanItem $item) use ($cycleTimesByMachinePart, $cycleTimesByGroupPart) {
-            $exactKey = ($item->machine_id ?? 0).'|'.($item->wip_part_id ?? 0);
-            $groupKey = MachineRouting::groupKey($item->machine, $item->machine_id).'|'.($item->wip_part_id ?? 0);
-            $ct = $cycleTimesByMachinePart->get($exactKey) ?? $cycleTimesByGroupPart->get($groupKey);
-            $seconds = $ct?->cycle_time_seconds;
-            $qty = (float) ($item->workOrder?->qty ?? 0);
-
-            $item->setAttribute('cycle_time_seconds', $seconds !== null ? (float) $seconds : null);
-            $item->setAttribute('qdc_minutes', $ct?->qdc_minutes !== null ? (float) $ct->qdc_minutes : null);
-            $item->setAttribute(
-                'estimated_seconds',
-                $seconds !== null ? round($qty * (float) $seconds, 2) : null,
-            );
-        });
-
-        // Urutan papan = urutan master mesin (kolom `sequence`), fallback abjad.
         $machines = Machine::query()
             ->where('is_active', true)
             ->whereNotIn('id', $subconMachineIds)
@@ -145,63 +48,365 @@ class ProductionPlanController extends Controller
             ->orderBy('machine_name')
             ->get(['id', 'machine_code', 'machine_name', 'sequence']);
 
-        // WO belum selesai (planned / in_progress) yang BELUM masuk plan mana pun → supaya tidak "hilang" dari papan.
-        $unplannedWorkOrders = WorkOrder::query()
-            ->with('part:id,part_number,part_name,model')
-            ->whereIn('status', ['planned', 'in_progress'])
-            ->whereDoesntHave('planItems')
-            ->orderByDesc('id')
-            ->get(['id', 'wo_no', 'part_id', 'qty', 'status', 'planned_date']);
+        $machinesById = $machines->keyBy('id');
 
-        // WO aktif yang baru dialokasikan setelah tanggal papan terpilih.
-        $offBoardWorkOrders = WorkOrder::query()
+        // Ambil rencana 3 hari kalender (D, D+1, D+2) saja — hari baru mulai kosong sampai di-Add Plan.
+        $plansByDate = ProductionPlan::query()
+            ->whereIn(DB::raw('CAST(plan_date AS DATE)'), array_values($dayDates))
+            ->get()
+            ->keyBy(fn (ProductionPlan $p): string => $p->plan_date->toDateString());
+
+        $planIds = $plansByDate->pluck('id')->all();
+
+        $machineDays = $planIds !== []
+            ? ProductionPlanMachineDay::query()
+                ->whereIn('production_plan_id', $planIds)
+                ->get()
+                ->keyBy(fn (ProductionPlanMachineDay $md): string => $md->production_plan_id.'|'.$md->machine_id)
+            : collect();
+
+        $planItems = $planIds !== []
+            ? ProductionPlanItem::query()
+                ->whereIn('production_plan_id', $planIds)
+                ->whereNotNull('machine_id')
+                ->whereNotNull('work_order_id')
+                ->where('target_d', '>', 0)
+                ->whereNotIn('machine_id', $subconMachineIds)
+                ->with([
+                    'plan:id,plan_date',
+                    'machine:id,machine_code,machine_name',
+                    'process:id,process_name',
+                    'workOrder:id,wo_no,part_id,qty,status,planned_date',
+                    'workOrder.part:id,part_number,part_name,model',
+                    'fgPart:id,part_number,part_name,model',
+                    'inputPart:id,part_number,part_name,model',
+                    'wipPart:id,part_number,part_name,model',
+                ])
+                ->orderBy('sequence')
+                ->orderBy('id')
+                ->get()
+            : collect();
+
+        $plannedWoIds = $planItems->pluck('work_order_id')->filter()->unique()->all();
+
+        $activeWorkOrders = WorkOrder::query()
+            ->where(function ($query) use ($plannedWoIds): void {
+                $query->whereIn('status', ['planned', 'in_progress']);
+                if ($plannedWoIds !== []) {
+                    $query->orWhereIn('id', $plannedWoIds);
+                }
+            })
             ->with([
                 'part:id,part_number,part_name,model',
-                'planItems' => fn ($query) => $query
-                    ->where(fn ($q) => $q->whereNull('machine_id')->orWhereNotIn('machine_id', $subconMachineIds))
-                    ->whereHas('plan', fn ($planQuery) => $planQuery->whereDate('plan_date', '>', $date))
-                    ->with('plan:id,plan_date'),
+                'items.machine:id,machine_code,machine_name',
+                'items.process:id,process_name',
+                'items.parentPart:id,part_number,part_name,model',
+                'items.childPart:id,part_number,part_name,model',
             ])
-            ->whereIn('status', ['planned', 'in_progress', 'completed'])
-            ->whereNotIn('id', $items->pluck('work_order_id')->filter()->unique())
-            ->whereHas('planItems', fn ($query) => $query
-                ->where(fn ($q) => $q->whereNull('machine_id')->orWhereNotIn('machine_id', $subconMachineIds))
-                ->whereHas('plan', fn ($planQuery) => $planQuery->whereDate('plan_date', '>', $date)))
             ->orderByDesc('id')
-            ->get(['id', 'wo_no', 'part_id', 'qty', 'status', 'planned_date']);
+            ->get();
 
-        $offBoardProduced = ProductionResult::query()
-            ->whereDate('result_date', '<=', $date)
-            ->whereIn('work_order_id', $offBoardWorkOrders->pluck('id'))
-            ->whereIn('parent_part_id', $offBoardWorkOrders->flatMap->planItems->pluck('wip_part_id')->filter()->unique()->values())
-            ->selectRaw('work_order_id, parent_part_id, SUM(qty_good) as qty_good')
-            ->groupBy('work_order_id', 'parent_part_id')
+        $allSlots = $this->scheduleService->workOrderMachineSlots($activeWorkOrders, $dayDates['d'], $subconMachineIds);
+
+        // Kelompokkan plan items per (machine_id, work_order_id, dayKey).
+        $planKeyByDate = array_flip($dayDates);
+        $plannedByMachineWo = [];
+        foreach ($planItems as $pi) {
+            $planDateStr = $pi->plan?->plan_date?->toDateString();
+            $dayKey = $planDateStr !== null ? ($planKeyByDate[$planDateStr] ?? null) : null;
+            if ($dayKey === null) {
+                continue;
+            }
+            $mId = (int) $pi->machine_id;
+            $woId = (int) $pi->work_order_id;
+            $plannedByMachineWo[$mId][$woId][$dayKey] = $pi;
+        }
+
+        // Kumpulkan semua wip_part_id untuk lookup Tact Time & QDC (1 query saja).
+        $wipPartIds = $allSlots->pluck('wip_part_id')
+            ->merge($planItems->pluck('wip_part_id'))
+            ->filter()
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+        $cycleTimeMaps = $this->scheduleService->cycleTimeMaps($wipPartIds);
+
+        // Pemetaan FG per mesin dari BOM aktif untuk pilihan "Buat WO Baru" di pop-up mesin.
+        $fgIdsByMachine = BomItem::query()
+            ->whereNotNull('machine_id')
+            ->whereNotIn('machine_id', $subconMachineIds)
+            ->whereHas('bom', fn ($q) => $q->where('is_active', true))
+            ->join('boms', 'boms.id', '=', 'bom_items.bom_id')
+            ->select('bom_items.machine_id', 'boms.part_id')
+            ->distinct()
             ->get()
-            ->keyBy(fn (ProductionResult $result) => $result->work_order_id.'|'.$result->parent_part_id);
+            ->groupBy('machine_id')
+            ->map(fn ($rows) => $rows->pluck('part_id')->map(fn ($id): int => (int) $id)->unique()->values()->all());
 
-        $offBoardWorkOrders = $offBoardWorkOrders
-            ->filter(function (WorkOrder $workOrder) use ($offBoardProduced): bool {
-                foreach ($workOrder->planItems as $planItem) {
-                    $produced = (float) ($offBoardProduced->get($workOrder->id.'|'.$planItem->wip_part_id)?->qty_good ?? 0);
-                    if (max(0, (float) $workOrder->qty - $produced) > 0) {
-                        return true;
+        $slotsByMachine = $allSlots->groupBy('machine_id');
+        $boardMachines = [];
+        $availMapByWoMachine = [];
+
+        foreach ($machines as $machine) {
+            $mId = (int) $machine->id;
+            $initialQdc = [];
+            foreach ($dayDates as $dayKey => $planDateStr) {
+                $p = $plansByDate->get($planDateStr);
+                $md = $p !== null ? $machineDays->get($p->id.'|'.$mId) : null;
+                $initialQdc[$dayKey] = (bool) ($md?->initial_qdc ?? false);
+            }
+
+            // Gabungkan semua WO yang punya slot di mesin ini (dengan sisa > 0) ATAU sudah ter-plan di D/D+1/D+2.
+            $machineSlots = ($slotsByMachine->get($mId) ?? collect())->keyBy('work_order_id');
+            $machinePlannedWos = $plannedByMachineWo[$mId] ?? [];
+            $candidateWoIds = $machineSlots->keys()->merge(array_keys($machinePlannedWos))->unique()->values();
+
+            // Siapkan entri per hari untuk menghitung Start–Finish Time berurutan sesuai Sequence.
+            $dayEntries = ['d' => [], 'd1' => [], 'd2' => []];
+            $rowMetaByWo = [];
+
+            foreach ($candidateWoIds as $woId) {
+                $woId = (int) $woId;
+                $slot = $machineSlots->get($woId);
+                $dayItems = $machinePlannedWos[$woId] ?? [];
+
+                $firstPi = reset($dayItems) ?: null;
+                $wipPartId = $slot['wip_part_id'] ?? ($firstPi?->wip_part_id !== null ? (int) $firstPi->wip_part_id : null);
+                $remainingQty = $slot !== null ? (float) $slot['remaining_qty'] : (float) ($firstPi?->workOrder?->qty ?? 0);
+
+                $plannedD = isset($dayItems['d']) ? (float) $dayItems['d']->target_d : 0.0;
+                $plannedD1 = isset($dayItems['d1']) ? (float) $dayItems['d1']->target_d : 0.0;
+                $plannedD2 = isset($dayItems['d2']) ? (float) $dayItems['d2']->target_d : 0.0;
+                $plannedTotal = round($plannedD + $plannedD1 + $plannedD2, 4);
+                $availQty = round(max(0.0, $remainingQty - $plannedTotal), 4);
+
+                $availMapByWoMachine[$woId][$mId] = [
+                    'remaining_qty' => $remainingQty,
+                    'planned_qty' => $plannedTotal,
+                    'avail_qty' => $availQty,
+                ];
+
+                $ct = $this->scheduleService->resolveCycleTime($machine, $mId, $wipPartId, $cycleTimeMaps);
+
+                $rowMetaByWo[$woId] = [
+                    'work_order_id' => $woId,
+                    'wo_no' => $slot['wo_no'] ?? $firstPi?->workOrder?->wo_no ?? '',
+                    'wo_status' => $slot['wo_status'] ?? $firstPi?->workOrder?->status ?? 'planned',
+                    'wo_qty' => $slot['wo_qty'] ?? (float) ($firstPi?->workOrder?->qty ?? 0),
+                    'remaining_qty' => $remainingQty,
+                    'planned_total' => $plannedTotal,
+                    'avail_qty' => $availQty,
+                    'fg_part' => $slot['fg_part'] ?? ($firstPi?->fgPart ? [
+                        'id' => (int) $firstPi->fgPart->id,
+                        'part_number' => $firstPi->fgPart->part_number,
+                        'part_name' => $firstPi->fgPart->part_name,
+                        'model' => $firstPi->fgPart->model,
+                    ] : null),
+                    'input_part' => $slot['input_part'] ?? ($firstPi?->inputPart ? [
+                        'id' => (int) $firstPi->inputPart->id,
+                        'part_number' => $firstPi->inputPart->part_number,
+                        'part_name' => $firstPi->inputPart->part_name,
+                        'model' => $firstPi->inputPart->model,
+                    ] : null),
+                    'wip_part' => $slot['wip_part'] ?? ($firstPi?->wipPart ? [
+                        'id' => (int) $firstPi->wipPart->id,
+                        'part_number' => $firstPi->wipPart->part_number,
+                        'part_name' => $firstPi->wipPart->part_name,
+                        'model' => $firstPi->wipPart->model,
+                    ] : null),
+                    'process_name' => $slot['process_name'] ?? $firstPi?->process?->process_name,
+                    'cycle_time_seconds' => $ct['cycle_time_seconds'],
+                    'qdc_minutes' => $ct['qdc_minutes'],
+                    'day_items' => $dayItems,
+                ];
+
+                foreach (['d', 'd1', 'd2'] as $dayKey) {
+                    if (! isset($dayItems[$dayKey])) {
+                        continue;
                     }
+                    /** @var ProductionPlanItem $pi */
+                    $pi = $dayItems[$dayKey];
+                    $dayEntries[$dayKey][] = [
+                        'key' => $woId,
+                        'sequence' => (int) ($pi->sequence_d > 0 ? $pi->sequence_d : ($pi->sequence > 0 ? $pi->sequence : 1)),
+                        'id' => (int) $pi->id,
+                        'qty' => (float) $pi->target_d,
+                        'wip_part_id' => $wipPartId,
+                        'cycle_time_seconds' => $ct['cycle_time_seconds'],
+                        'qdc_minutes' => $ct['qdc_minutes'],
+                    ];
+                }
+            }
+
+            $daySchedules = [];
+            foreach (['d', 'd1', 'd2'] as $dayKey) {
+                $daySchedules[$dayKey] = $this->scheduleService->calculateDaySchedule(
+                    $dayDates[$dayKey],
+                    $dayEntries[$dayKey],
+                    $initialQdc[$dayKey],
+                );
+            }
+
+            $plannedRows = [];
+            $modalRows = [];
+            $availWoCount = 0;
+
+            foreach ($rowMetaByWo as $woId => $meta) {
+                $daysPayload = [];
+                $hasAnyPlan = false;
+                foreach (['d', 'd1', 'd2'] as $dayKey) {
+                    /** @var ProductionPlanItem|null $pi */
+                    $pi = $meta['day_items'][$dayKey] ?? null;
+                    if ($pi === null) {
+                        $daysPayload[$dayKey] = null;
+
+                        continue;
+                    }
+                    $hasAnyPlan = true;
+                    $sched = $daySchedules[$dayKey][$woId] ?? null;
+                    $daysPayload[$dayKey] = [
+                        'id' => (int) $pi->id,
+                        'sequence' => (int) ($pi->sequence_d > 0 ? $pi->sequence_d : ($pi->sequence > 0 ? $pi->sequence : 1)),
+                        'qty' => (float) $pi->target_d,
+                        'start_time' => $sched['start_time'] ?? null,
+                        'end_time' => $sched['end_time'] ?? null,
+                        'qdc_applied_minutes' => $sched['qdc_applied_minutes'] ?? 0.0,
+                        'duration_seconds' => $sched['duration_seconds'] ?? null,
+                        'is_overload' => (bool) ($sched['is_overload'] ?? false),
+                    ];
                 }
 
-                return false;
-            })
-            ->values()
-            ->map(function (WorkOrder $workOrder): WorkOrder {
-                $workOrder->setAttribute('plan_dates', $workOrder->planItems
-                    ->pluck('plan.plan_date')
-                    ->filter()
-                    ->map(fn ($planDate) => $planDate->toDateString())
-                    ->unique()
-                    ->sort()
-                    ->values());
+                $rowPayload = [
+                    'work_order_id' => $meta['work_order_id'],
+                    'wo_no' => $meta['wo_no'],
+                    'wo_status' => $meta['wo_status'],
+                    'wo_qty' => $meta['wo_qty'],
+                    'remaining_qty' => $meta['remaining_qty'],
+                    'planned_total' => $meta['planned_total'],
+                    'avail_qty' => $meta['avail_qty'],
+                    'fg_part' => $meta['fg_part'],
+                    'input_part' => $meta['input_part'],
+                    'wip_part' => $meta['wip_part'],
+                    'process_name' => $meta['process_name'],
+                    'cycle_time_seconds' => $meta['cycle_time_seconds'],
+                    'qdc_minutes' => $meta['qdc_minutes'],
+                    'days' => $daysPayload,
+                ];
 
-                return $workOrder;
+                $isActiveWo = in_array($meta['wo_status'], ['planned', 'in_progress'], true);
+                if ($isActiveWo && $meta['avail_qty'] > 0) {
+                    $availWoCount++;
+                }
+
+                if ($hasAnyPlan) {
+                    $plannedRows[] = $rowPayload;
+                }
+
+                if ($hasAnyPlan || ($isActiveWo && $meta['avail_qty'] > 0)) {
+                    $modalRows[] = $rowPayload;
+                }
+            }
+
+            usort($plannedRows, function (array $a, array $b): int {
+                $orderOf = function (array $r): array {
+                    foreach (['d', 'd1', 'd2'] as $idx => $key) {
+                        if ($r['days'][$key] !== null) {
+                            return [$idx, (int) $r['days'][$key]['sequence'], $r['work_order_id']];
+                        }
+                    }
+
+                    return [9, 999999, $r['work_order_id']];
+                };
+
+                return $orderOf($a) <=> $orderOf($b);
             });
+
+            usort($modalRows, function (array $a, array $b): int {
+                $aPlanned = $a['planned_total'] > 0 ? 0 : 1;
+                $bPlanned = $b['planned_total'] > 0 ? 0 : 1;
+
+                return [$aPlanned, $a['fg_part']['part_number'] ?? '', $a['wo_no']]
+                    <=> [$bPlanned, $b['fg_part']['part_number'] ?? '', $b['wo_no']];
+            });
+
+            $boardMachines[] = [
+                'id' => $mId,
+                'machine_code' => $machine->machine_code,
+                'machine_name' => $machine->machine_name,
+                'sequence' => $machine->sequence,
+                'avail_wo_count' => $availWoCount,
+                'initial_qdc' => $initialQdc,
+                'planned_rows' => $plannedRows,
+                'modal_rows' => $modalRows,
+                'fg_part_ids' => $fgIdsByMachine->get($mId, []),
+            ];
+        }
+
+        // Panel Avail WO di atas papan: semua WO aktif (planned/in_progress) yang masih punya sisa produksi.
+        $slotsByWo = $allSlots->groupBy('work_order_id');
+        $availWorkOrders = $activeWorkOrders
+            ->filter(fn (WorkOrder $wo): bool => in_array($wo->status, ['planned', 'in_progress'], true))
+            ->map(function (WorkOrder $wo) use ($slotsByWo, $availMapByWoMachine, $machinesById): ?array {
+                $woSlots = $slotsByWo->get($wo->id) ?? collect();
+                $machineSummaries = [];
+                $hasRemaining = false;
+                $hasUnplanned = false;
+                $plannedMachineCount = 0;
+
+                foreach ($woSlots as $slot) {
+                    $mId = (int) $slot['machine_id'];
+                    if (! $machinesById->has($mId)) {
+                        continue;
+                    }
+                    $stats = $availMapByWoMachine[$wo->id][$mId] ?? [
+                        'remaining_qty' => (float) $slot['remaining_qty'],
+                        'planned_qty' => 0.0,
+                        'avail_qty' => (float) $slot['remaining_qty'],
+                    ];
+
+                    if ($stats['remaining_qty'] > 0) {
+                        $hasRemaining = true;
+                    }
+                    if ($stats['planned_qty'] > 0) {
+                        $plannedMachineCount++;
+                    }
+                    if ($stats['avail_qty'] > 0) {
+                        $hasUnplanned = true;
+                    }
+
+                    $machineSummaries[] = [
+                        'machine_id' => $mId,
+                        'machine_name' => $slot['machine']['machine_name'] ?? $machinesById->get($mId)?->machine_name ?? '',
+                        'remaining_qty' => $stats['remaining_qty'],
+                        'planned_qty' => $stats['planned_qty'],
+                        'avail_qty' => $stats['avail_qty'],
+                    ];
+                }
+
+                if (! $hasRemaining || ! $hasUnplanned) {
+                    return null;
+                }
+
+                return [
+                    'id' => (int) $wo->id,
+                    'wo_no' => $wo->wo_no,
+                    'status' => $wo->status,
+                    'qty' => (float) $wo->qty,
+                    'planned_date' => $wo->planned_date?->toDateString(),
+                    'part' => $wo->part ? [
+                        'id' => (int) $wo->part->id,
+                        'part_number' => $wo->part->part_number,
+                        'part_name' => $wo->part->part_name,
+                        'model' => $wo->part->model,
+                    ] : null,
+                    'machines' => $machineSummaries,
+                    'planned_machines_count' => $plannedMachineCount,
+                    'total_machines_count' => count($machineSummaries),
+                ];
+            })
+            ->filter()
+            ->values();
 
         $fgParts = Part::query()
             ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) = ?', ['fg']))
@@ -209,47 +414,34 @@ class ProductionPlanController extends Controller
             ->orderBy('part_number')
             ->get(['id', 'part_number', 'part_name', 'model', 'part_type_id']);
 
-        $wipParts = Part::query()
-            ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) = ?', ['wip']))
-            ->where('is_active', true)
-            ->orderBy('part_number')
-            ->get(['id', 'part_number', 'part_name', 'model']);
-
-        $histories = $plan
-            ? $plan->histories()
+        $histories = $planIds !== []
+            ? ProductionPlanHistory::query()
+                ->whereIn('production_plan_id', $planIds)
                 ->with('user:id,name')
                 ->latest('id')
                 ->limit(100)
                 ->get()
             : collect();
 
+        $plan = $plansByDate->get($dayDates['d']);
+
         return Inertia::render('Production/Plan/Index', [
-            'date' => $date,
+            'date' => $dayDates['d'],
+            'dates' => $dayDates,
             'plan' => $plan ? $plan->only(['id', 'plan_date', 'notes']) : null,
-            'items' => $items,
-            'machines' => $machines,
+            'machines' => $boardMachines,
+            'availWorkOrders' => $availWorkOrders,
             'fgParts' => $fgParts,
-            'wipParts' => $wipParts,
             'histories' => $histories,
-            'unplannedWorkOrders' => $unplannedWorkOrders,
-            'offBoardWorkOrders' => $offBoardWorkOrders,
+            'canManage' => Gate::allows('manage', ProductionPlan::class),
+            'canCreateWo' => Gate::allows('create', ProductionPlan::class),
         ]);
     }
 
     /**
-     * ID mesin Subcon — papan Production Plan hanya untuk mesin internal.
-     *
-     * @return list<int>
+     * Buat WO baru dari Production Plan (mis. dari pop-up Add/Edit Plan).
+     * Tidak otomatis menempel ke papan mesin — langsung tersedia sebagai Avail WO.
      */
-    private function subconMachineIds(): array
-    {
-        return Machine::query()
-            ->whereRaw("UPPER(COALESCE(machine_code, '')) = 'SUBCON' OR LOWER(COALESCE(machine_name, '')) LIKE '%subcon%'")
-            ->pluck('id')
-            ->map(fn ($id) => (int) $id)
-            ->all();
-    }
-
     public function store(Request $request): RedirectResponse
     {
         Gate::authorize('create', ProductionPlan::class);
@@ -275,7 +467,7 @@ class ProductionPlanController extends Controller
 
         $actorId = (int) auth()->id();
 
-        $result = DB::transaction(function () use ($data, $actorId) {
+        [$workOrder, $warnings] = DB::transaction(function () use ($data, $actorId): array {
             [$workOrderId, $warnings] = $this->woService->createWorkOrder(
                 (int) $data['fg_part_id'],
                 (float) $data['qty'],
@@ -284,25 +476,65 @@ class ProductionPlanController extends Controller
                 $actorId,
             );
 
-            $workOrder = WorkOrder::query()->findOrFail($workOrderId);
-            $this->woService->populatePlanItems($workOrder, $data['plan_date'], $actorId);
-
-            return [$workOrder, $warnings];
+            return [WorkOrder::query()->findOrFail($workOrderId), $warnings];
         });
-
-        [$workOrder, $warnings] = $result;
 
         $redirect = redirect()->route('production-plans.index', ['date' => $data['plan_date']]);
 
         if (count($warnings) > 0) {
-            return $redirect->with('error', __('WO dibuat, tapi ada kekurangan stok: :details', ['details' => implode(' · ', array_slice($warnings, 0, 5)).(count($warnings) > 5 ? ' …' : '')]));
+            return $redirect->with('error', __('WO :number dibuat (tersedia di Avail WO), tapi ada kekurangan stok: :details', [
+                'number' => $workOrder->wo_no,
+                'details' => implode(' · ', array_slice($warnings, 0, 5)).(count($warnings) > 5 ? ' …' : ''),
+            ]));
         }
 
-        return $redirect->with('success', __('WO :number dibuat dan masuk ke Production Plan.', ['number' => $workOrder->wo_no]));
+        return $redirect->with('success', __('WO :number dibuat dan tersedia di Avail WO.', ['number' => $workOrder->wo_no]));
     }
 
     /**
-     * Tempel WO yang sudah dibuat (planned) ke Production Plan.
+     * Simpan rencana 3 hari (D, D+1, D+2) + checkbox QDC Awal untuk satu mesin.
+     */
+    public function saveMachinePlan(Request $request, Machine $machine): RedirectResponse
+    {
+        Gate::authorize('manage', ProductionPlan::class);
+
+        $data = $request->validate([
+            'date' => ['required', 'date'],
+            'initial_qdc' => ['sometimes', 'array'],
+            'initial_qdc.d' => ['sometimes', 'boolean'],
+            'initial_qdc.d1' => ['sometimes', 'boolean'],
+            'initial_qdc.d2' => ['sometimes', 'boolean'],
+            'rows' => ['present', 'array'],
+            'rows.*.work_order_id' => ['required', 'integer', 'exists:work_orders,id'],
+            'rows.*.d_seq' => ['nullable', 'integer', 'min:0'],
+            'rows.*.d_qty' => ['nullable', 'numeric', 'min:0'],
+            'rows.*.d1_seq' => ['nullable', 'integer', 'min:0'],
+            'rows.*.d1_qty' => ['nullable', 'numeric', 'min:0'],
+            'rows.*.d2_seq' => ['nullable', 'integer', 'min:0'],
+            'rows.*.d2_qty' => ['nullable', 'numeric', 'min:0'],
+        ]);
+
+        $initialQdc = [
+            'd' => (bool) ($data['initial_qdc']['d'] ?? false),
+            'd1' => (bool) ($data['initial_qdc']['d1'] ?? false),
+            'd2' => (bool) ($data['initial_qdc']['d2'] ?? false),
+        ];
+
+        $this->scheduleService->saveMachinePlan(
+            $machine,
+            $data['date'],
+            $initialQdc,
+            $data['rows'],
+            (int) auth()->id(),
+        );
+
+        return redirect()
+            ->route('production-plans.index', ['date' => $data['date']])
+            ->with('success', __('Rencana mesin :machine disimpan.', ['machine' => $machine->machine_name]));
+    }
+
+    /**
+     * Tempel WO yang sudah dibuat (planned) ke Production Plan (kompatibilitas endpoint).
      */
     public function attachWorkOrder(Request $request): RedirectResponse
     {
@@ -325,8 +557,6 @@ class ProductionPlanController extends Controller
         $this->woService->populatePlanItems($workOrder, $data['plan_date'], (int) auth()->id());
 
         if (! $workOrder->planItems()->exists()) {
-            // Tidak ada step routing yang bisa jadi baris papan (mis. semua Subcon
-            // atau tanpa parent part). Jangan laporkan sukses palsu.
             return redirect()
                 ->route('production-plans.index', ['date' => $data['plan_date']])
                 ->with('error', __('WO :number tidak punya step routing yang bisa masuk papan (cek BOM/mesin, termasuk step Subcon).', ['number' => $workOrder->wo_no]));
@@ -361,10 +591,11 @@ class ProductionPlanController extends Controller
         $this->recordHistory($item, 'item_updated', $before, $this->itemSnapshot($item));
 
         return redirect()
-            ->route('production-plans.index', ['date' => $item->plan?->plan_date?->toDateString()])->with('success', __('Baris Production Plan diperbarui.'));
+            ->route('production-plans.index', ['date' => $item->plan?->plan_date?->toDateString()])
+            ->with('success', __('Baris Production Plan diperbarui.'));
     }
 
-    /** Simpan target dan sequence D / D+1 / D+2 banyak baris sekaligus. */
+    /** Simpan target dan sequence D / D+1 / D+2 banyak baris sekaligus (kompatibilitas endpoint). */
     public function updateTargets(Request $request): RedirectResponse
     {
         $data = $request->validate([
@@ -464,7 +695,8 @@ class ProductionPlanController extends Controller
             : __('Baris dilepas dari Production Plan.');
 
         return redirect()
-            ->route('production-plans.index', ['date' => $planDate])->with('success', $message);
+            ->route('production-plans.index', ['date' => $planDate])
+            ->with('success', $message);
     }
 
     /** @return array{machine_id:int|null,wip_part_id:int|null,target_d:float|null,target_d1:float|null,target_d2:float|null,sequence_d:int,sequence_d1:int,sequence_d2:int} */
@@ -490,8 +722,13 @@ class ProductionPlanController extends Controller
         ];
     }
 
+    /** @param array<string, mixed>|null $before @param array<string, mixed>|null $after */
     private function recordHistory(ProductionPlanItem $item, string $event, ?array $before, ?array $after, ?int $userId = null): void
     {
+        if ($item->production_plan_id === null) {
+            return;
+        }
+
         ProductionPlanHistory::create([
             'production_plan_id' => $item->production_plan_id,
             'production_plan_item_id' => $item->id,

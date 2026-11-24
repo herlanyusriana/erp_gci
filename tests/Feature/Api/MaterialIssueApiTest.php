@@ -307,40 +307,23 @@ class MaterialIssueApiTest extends TestCase
         $this->assertSame([], $this->listedWoNumbers());
     }
 
-    public function test_work_orders_list_uses_the_d_column_for_a_plan_dated_yesterday(): void
+    public function test_work_orders_list_does_not_bleed_past_or_future_plan_dates_into_today(): void
     {
         $this->actingAsApi();
-        $wo = $this->makeWorkOrder('WO-D1');
-        $this->schedulePlanRow($wo, $this->plantDate(-1), ['d' => 500, 'd1' => 40]);
+        $yesterdayWo = $this->makeWorkOrder('WO-YESTERDAY');
+        $this->schedulePlanRow($yesterdayWo, $this->plantDate(-1), ['d' => 500]);
 
-        $row = $this->listedRow('WO-D1');
+        $tomorrowWo = $this->makeWorkOrder('WO-TOMORROW');
+        $this->schedulePlanRow($tomorrowWo, $this->plantDate(1), ['d' => 400]);
 
+        $todayWo = $this->makeWorkOrder('WO-TODAY');
+        $this->schedulePlanRow($todayWo, $this->plantDate(), ['d' => 120]);
+
+        $this->assertSame(['WO-TODAY'], $this->listedWoNumbers());
+        $row = $this->listedRow('WO-TODAY');
         $this->assertNotNull($row);
-        $this->assertSame(500.0, (float) $row['planned_qty']);
-        $this->assertSame($this->plantDate(-1), $row['plan_date']);
-    }
-
-    public function test_work_orders_list_uses_the_d_column_for_a_plan_dated_two_days_ago(): void
-    {
-        $this->actingAsApi();
-        $wo = $this->makeWorkOrder('WO-D2');
-        $this->schedulePlanRow($wo, $this->plantDate(-2), ['d' => 500, 'd1' => 400, 'd2' => 25]);
-
-        $row = $this->listedRow('WO-D2');
-
-        $this->assertNotNull($row);
-        $this->assertSame(500.0, (float) $row['planned_qty']);
-    }
-
-    public function test_work_orders_list_includes_carry_over_from_old_plans(): void
-    {
-        $this->actingAsApi();
-        $wo = $this->makeWorkOrder('WO-TOO-OLD');
-        $wo->update(['status' => 'in_progress']);
-        $this->schedulePlanRow($wo, $this->plantDate(-3), ['d' => 100, 'd1' => 100, 'd2' => 100]);
-
-        // Carry-over: WO lama yang belum selesai tetap muncul karena sisa qty WO.
-        $this->assertContains('WO-TOO-OLD', $this->listedWoNumbers());
+        $this->assertSame(120.0, (float) $row['planned_qty']);
+        $this->assertSame($this->plantDate(), $row['plan_date']);
     }
 
     public function test_work_orders_list_uses_the_largest_target_across_machine_rows(): void
@@ -493,7 +476,7 @@ class MaterialIssueApiTest extends TestCase
         $utcDay = $this->makeWorkOrder('WO-UTC-DAY');
         $this->schedulePlanRow($utcDay, '2026-03-10', ['d' => 100]);
 
-        $this->assertSame(['WO-PLANT-DAY', 'WO-UTC-DAY'], $this->listedWoNumbers());
+        $this->assertSame(['WO-PLANT-DAY'], $this->listedWoNumbers());
     }
 
     public function test_work_orders_list_keeps_legacy_response_fields(): void
@@ -575,7 +558,7 @@ class MaterialIssueApiTest extends TestCase
         $this->assertSame(['WO-SCHEDULED'], $this->listedWoNumbers());
     }
 
-    public function test_work_orders_list_does_not_report_work_orders_without_plan_rows_as_waiting(): void
+    public function test_work_orders_list_reports_released_work_orders_without_plan_rows_as_waiting(): void
     {
         $this->actingAsApi();
         $this->makeWorkOrder('WO-NO-ROWS', status: 'in_progress');
@@ -584,8 +567,8 @@ class MaterialIssueApiTest extends TestCase
 
         $meta = $this->getJson('/api/work-orders')->assertOk()->json('meta');
 
-        $this->assertSame(1, $meta['waiting_for_plan']);
-        $this->assertSame(['WO-WAITING-3'], collect($meta['waiting_work_orders'])->pluck('wo_no')->all());
+        $this->assertSame(2, $meta['waiting_for_plan']);
+        $this->assertSame(['WO-NO-ROWS', 'WO-WAITING-3'], collect($meta['waiting_work_orders'])->pluck('wo_no')->all());
     }
 
     public function test_work_orders_list_does_not_report_unreleased_work_orders_as_waiting(): void
@@ -1656,7 +1639,7 @@ class MaterialIssueApiTest extends TestCase
 
         $this->post(route('work-orders.release', $wo))->assertSessionHasNoErrors();
         $this->assertSame('in_progress', $wo->fresh()->status);
-        $this->assertGreaterThan(0, $wo->planItems()->count());
+        $this->assertSame(0, $wo->planItems()->count());
         $this->assertSame(0, MaterialIssue::where('work_order_id', $wo->id)->count());
         $bookedBeforeIssue = (float) WorkOrderMaterialBooking::where('work_order_id', $wo->id)->where('status', 'booked')->sum('qty');
         $bookingIds = WorkOrderMaterialBooking::where('work_order_id', $wo->id)->where('status', 'booked')->orderBy('id')->pluck('id')->all();

@@ -277,4 +277,51 @@ class MachineCycleTimeTest extends TestCase
         $this->assertSame(6.7, (float) $row->cycle_time_seconds);
         $this->assertSame(25.0, (float) $row->qdc_minutes);
     }
+
+    public function test_plan_board_falls_back_to_same_machine_group_for_merged_rows(): void
+    {
+        $fg = Part::where('part_number', '4980JA3016F')->firstOrFail();
+        $kukil400 = Machine::where('machine_name', 'KUKIL 400 TON')->firstOrFail();
+        $kukil110 = Machine::where('machine_name', 'KUKIL 110 TON')->firstOrFail();
+        $wip2 = Part::where('part_number', '4980JA3016F-WIP2')->firstOrFail();
+
+        MachineCycleTime::query()
+            ->whereIn('machine_id', [$kukil400->id, $kukil110->id])
+            ->where('part_id', $wip2->id)
+            ->delete();
+
+        // Cycle time tersimpan pada mesin step terakhir (KUKIL 110 TON), sedangkan baris
+        // gabungan di Production Plan memakai machine_id mesin pertama (KUKIL 400 TON).
+        MachineCycleTime::create([
+            'machine_id' => $kukil110->id,
+            'part_id' => $wip2->id,
+            'cycle_time_seconds' => 4.5,
+            'qdc_minutes' => 60,
+            'is_active' => true,
+        ]);
+
+        $this->post(route('work-orders.store'), [
+            'part_id' => $fg->id,
+            'qty' => 20,
+            'planned_date' => now()->toDateString(),
+        ])->assertRedirect();
+
+        $wo = WorkOrder::latest('id')->firstOrFail();
+        $this->post(route('work-orders.release', $wo))->assertRedirect();
+
+        $this->get(route('production-plans.index', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('items', function ($list) use ($kukil400, $wip2) {
+                    $row = collect($list)->first(
+                        fn ($item) => (int) ($item['machine_id'] ?? 0) === $kukil400->id
+                            && (int) ($item['wip_part_id'] ?? 0) === $wip2->id,
+                    );
+
+                    return $row !== null
+                        && (float) $row['cycle_time_seconds'] === 4.5
+                        && (float) $row['qdc_minutes'] === 60.0
+                        && (float) $row['estimated_seconds'] === 90.0; // 20 pcs × 4.5 detik
+                }));
+    }
 }

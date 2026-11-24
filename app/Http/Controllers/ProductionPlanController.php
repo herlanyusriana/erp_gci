@@ -11,6 +11,7 @@ use App\Models\ProductionPlanItem;
 use App\Models\ProductionResult;
 use App\Models\WorkOrder;
 use App\Services\WoService;
+use App\Support\MachineRouting;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -103,16 +104,28 @@ class ProductionPlanController extends Controller
             ->values();
 
         // Estimasi waktu: qty WO × cycle time (mesin × part hasil baris itu) + QDC standar.
-        $cycleTimes = MachineCycleTime::query()
-            ->where('is_active', true)
-            ->whereIn('machine_id', $items->pluck('machine_id')->filter()->unique()->values())
-            ->whereIn('part_id', $items->pluck('wip_part_id')->filter()->unique()->values())
-            ->get(['machine_id', 'part_id', 'cycle_time_seconds', 'qdc_minutes'])
-            ->keyBy(fn ($row) => $row->machine_id.'|'.$row->part_id);
+        // Fallback ke grup mesin yang sama (3 huruf awal nama mesin) untuk baris gabungan
+        // seperti KUKIL 400 → KUKIL 110 atau SPOT WELDING 4 → SPOT WELDING 3.
+        $wipPartIds = $items->pluck('wip_part_id')->filter()->unique()->values();
+        $cycleTimeRows = $wipPartIds->isNotEmpty()
+            ? MachineCycleTime::query()
+                ->with('machine:id,machine_name')
+                ->where('is_active', true)
+                ->whereIn('part_id', $wipPartIds)
+                ->get(['machine_id', 'part_id', 'cycle_time_seconds', 'qdc_minutes'])
+            : collect();
 
-        $items->each(function (ProductionPlanItem $item) use ($cycleTimes) {
-            $key = ($item->machine_id ?? 0).'|'.($item->wip_part_id ?? 0);
-            $ct = $cycleTimes->get($key);
+        $cycleTimesByMachinePart = $cycleTimeRows->keyBy(
+            fn (MachineCycleTime $row): string => $row->machine_id.'|'.$row->part_id,
+        );
+        $cycleTimesByGroupPart = $cycleTimeRows->keyBy(
+            fn (MachineCycleTime $row): string => MachineRouting::groupKey($row->machine, $row->machine_id).'|'.$row->part_id,
+        );
+
+        $items->each(function (ProductionPlanItem $item) use ($cycleTimesByMachinePart, $cycleTimesByGroupPart) {
+            $exactKey = ($item->machine_id ?? 0).'|'.($item->wip_part_id ?? 0);
+            $groupKey = MachineRouting::groupKey($item->machine, $item->machine_id).'|'.($item->wip_part_id ?? 0);
+            $ct = $cycleTimesByMachinePart->get($exactKey) ?? $cycleTimesByGroupPart->get($groupKey);
             $seconds = $ct?->cycle_time_seconds;
             $qty = (float) ($item->workOrder?->qty ?? 0);
 

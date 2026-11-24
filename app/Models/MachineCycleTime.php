@@ -11,12 +11,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class MachineCycleTime extends Model
 {
     protected $fillable = [
-        'machine_id', 'part_id', 'cycle_time_seconds', 'is_active',
+        'machine_id', 'part_id', 'cycle_time_seconds', 'qdc_minutes', 'is_active',
         'created_by', 'updated_by',
     ];
 
     protected $casts = [
         'cycle_time_seconds' => 'float',
+        'qdc_minutes' => 'float',
         'is_active' => 'boolean',
     ];
 

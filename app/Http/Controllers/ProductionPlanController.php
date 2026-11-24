@@ -102,19 +102,22 @@ class ProductionPlanController extends Controller
                 && (float) $item->remaining_qty > 0)
             ->values();
 
-        // Estimasi waktu: qty WO × cycle time (mesin × part hasil baris itu).
+        // Estimasi waktu: qty WO × cycle time (mesin × part hasil baris itu) + QDC standar.
         $cycleTimes = MachineCycleTime::query()
             ->where('is_active', true)
             ->whereIn('machine_id', $items->pluck('machine_id')->filter()->unique()->values())
             ->whereIn('part_id', $items->pluck('wip_part_id')->filter()->unique()->values())
-            ->get(['machine_id', 'part_id', 'cycle_time_seconds'])
+            ->get(['machine_id', 'part_id', 'cycle_time_seconds', 'qdc_minutes'])
             ->keyBy(fn ($row) => $row->machine_id.'|'.$row->part_id);
 
         $items->each(function (ProductionPlanItem $item) use ($cycleTimes) {
             $key = ($item->machine_id ?? 0).'|'.($item->wip_part_id ?? 0);
-            $seconds = $cycleTimes->get($key)?->cycle_time_seconds;
+            $ct = $cycleTimes->get($key);
+            $seconds = $ct?->cycle_time_seconds;
             $qty = (float) ($item->workOrder?->qty ?? 0);
 
+            $item->setAttribute('cycle_time_seconds', $seconds !== null ? (float) $seconds : null);
+            $item->setAttribute('qdc_minutes', $ct?->qdc_minutes !== null ? (float) $ct->qdc_minutes : null);
             $item->setAttribute(
                 'estimated_seconds',
                 $seconds !== null ? round($qty * (float) $seconds, 2) : null,

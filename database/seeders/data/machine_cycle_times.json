@@ -1,0 +1,1406 @@
+[
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN73829507-WIP1",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN73829507-WIP2",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN73829507-WIP3",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN73829507-WIP4",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN73829507-WIP5",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN75770702-WIP1",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN75770702-WIP2",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN75770702-WIP3",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN75770702-WIP4",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN75770702-WIP5",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN75770703-WIP1",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN75770703-WIP2",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN75770703-WIP3",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN75770703-WIP4",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN75770703-WIP5",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN74552011-WIP1",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN74552011-WIP2",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN74552011-WIP3",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN74552011-WIP4",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN74552011-WIP5",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN74552005-WIP1",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN74552005-WIP2",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN74552005-WIP3",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN74552005-WIP4",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN74552005-WIP5",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN30056405-WIP1",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN30056405-WIP2",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN30056405-WIP3",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN30056405-WIP4",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN30056405-WIP5",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN30029904-WIP1",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN30029904-WIP2",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN30029904-WIP3",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN30029904-WIP4",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN30029904-WIP5",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN30029906-WIP1",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN30029906-WIP2",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN30029906-WIP3",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN30029906-WIP4",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AAN30029906-WIP5",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73269912-WIP1",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73269912-WIP2",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73269912-WIP3",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73269912-WIP4",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73269903-WIP1",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73269903-WIP2",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73269903-WIP3",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73269903-WIP4",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73710119-WIP1",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73710119-WIP2",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73710119-WIP3",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73710119-WIP4",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73710120-WIP1",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73710120-WIP2",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73710120-WIP3",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73710120-WIP4",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73710110-WIP1",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73710110-WIP2",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73710110-WIP3",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73710110-WIP4",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73710109-WIP1",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73710109-WIP2",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73710109-WIP3",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73710109-WIP4",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73710102-WIP1",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73710102-WIP2",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73710102-WIP3",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73710102-WIP4",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73710101-WIP1",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73710101-WIP2",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73710101-WIP3",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73710101-WIP4",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73710107-WIP1",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73710107-WIP2",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73710107-WIP3",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73710107-WIP4",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73710108-WIP1",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73710108-WIP2",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73710108-WIP3",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "TPL KUKIL",
+        "part_number": "AHF73710108-WIP4",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 25
+    },
+    {
+        "machine_name": "ASSY. TPL COMP BASE 1",
+        "part_number": "AAN74552011-WIP6",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "ASSY. TPL COMP BASE 1",
+        "part_number": "AAN74552005-WIP6",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "ASSY. TPL COMP BASE 1",
+        "part_number": "AAN30056405-WIP6",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "ASSY. TPL COMP BASE 1",
+        "part_number": "AAN30029904-WIP6",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "ASSY. TPL COMP BASE 1",
+        "part_number": "AAN30029906-WIP6",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "AUTO CAULKING",
+        "part_number": "AAN73829507-WIP6",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 10
+    },
+    {
+        "machine_name": "AUTO CAULKING",
+        "part_number": "AAN75770702-WIP6",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 30
+    },
+    {
+        "machine_name": "AUTO CAULKING",
+        "part_number": "AAN75770703-WIP6",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 30
+    },
+    {
+        "machine_name": "AUTO CAULKING",
+        "part_number": "AAN74552011-WIP7",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 10
+    },
+    {
+        "machine_name": "AUTO CAULKING",
+        "part_number": "AAN74552005-WIP7",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 10
+    },
+    {
+        "machine_name": "AUTO CAULKING",
+        "part_number": "AAN30056405-WIP7",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 10
+    },
+    {
+        "machine_name": "AUTO CAULKING",
+        "part_number": "AAN30029904-WIP7",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 10
+    },
+    {
+        "machine_name": "AUTO CAULKING",
+        "part_number": "AAN30029906-WIP7",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": 10
+    },
+    {
+        "machine_name": "ASSY. TPL COMP BASE 2",
+        "part_number": "AAN73829507",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "ASSY. TPL COMP BASE 2",
+        "part_number": "AAN74552011",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "ASSY. TPL COMP BASE 2",
+        "part_number": "AAN74552005",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "ASSY. TPL COMP BASE 2",
+        "part_number": "AAN30056405",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "ASSY. TPL COMP BASE 2",
+        "part_number": "AAN30029904",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "ASSY. TPL COMP BASE 2",
+        "part_number": "AAN30029906",
+        "cycle_time_seconds": 6.7,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "SPOT WELDING 4 -  40 KVA",
+        "part_number": "AHF73269903-WIP5",
+        "cycle_time_seconds": 3.4,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "SPOT WELDING 4 -  40 KVA",
+        "part_number": "AHF73710120-WIP5",
+        "cycle_time_seconds": 3.4,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "SPOT WELDING 4 -  40 KVA",
+        "part_number": "AHF73710109-WIP5",
+        "cycle_time_seconds": 3.4,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "SPOT WELDING 4 -  40 KVA",
+        "part_number": "AHF73710101-WIP5",
+        "cycle_time_seconds": 3.4,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "SPOT WELDING 4 -  40 KVA",
+        "part_number": "AHF73710108-WIP5",
+        "cycle_time_seconds": 3.4,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "SPOT WELDING 3 -  40 KVA",
+        "part_number": "AHF73269903-WIP6",
+        "cycle_time_seconds": 3.4,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "SPOT WELDING 3 -  40 KVA",
+        "part_number": "AHF73710120-WIP6",
+        "cycle_time_seconds": 3.4,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "SPOT WELDING 3 -  40 KVA",
+        "part_number": "AHF73710109-WIP6",
+        "cycle_time_seconds": 3.4,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "SPOT WELDING 3 -  40 KVA",
+        "part_number": "AHF73710101-WIP6",
+        "cycle_time_seconds": 3.4,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "SPOT WELDING 3 -  40 KVA",
+        "part_number": "AHF73710108-WIP6",
+        "cycle_time_seconds": 3.4,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "SPOT WELDING 2 -  40 KVA",
+        "part_number": "AHF73269912-WIP5",
+        "cycle_time_seconds": 3.4,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "SPOT WELDING 2 -  40 KVA",
+        "part_number": "AHF73710119-WIP5",
+        "cycle_time_seconds": 3.4,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "SPOT WELDING 2 -  40 KVA",
+        "part_number": "AHF73710110-WIP5",
+        "cycle_time_seconds": 3.4,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "SPOT WELDING 2 -  40 KVA",
+        "part_number": "AHF73710102-WIP5",
+        "cycle_time_seconds": 3.4,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "SPOT WELDING 2 -  40 KVA",
+        "part_number": "AHF73710107-WIP5",
+        "cycle_time_seconds": 3.4,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "SPOT WELDING 1 -  40 KVA",
+        "part_number": "AHF73269912-WIP6",
+        "cycle_time_seconds": 3.4,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "SPOT WELDING 1 -  40 KVA",
+        "part_number": "AHF73710119-WIP6",
+        "cycle_time_seconds": 3.4,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "SPOT WELDING 1 -  40 KVA",
+        "part_number": "AHF73710110-WIP6",
+        "cycle_time_seconds": 3.4,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "SPOT WELDING 1 -  40 KVA",
+        "part_number": "AHF73710102-WIP6",
+        "cycle_time_seconds": 3.4,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "SPOT WELDING 1 -  40 KVA",
+        "part_number": "AHF73710107-WIP6",
+        "cycle_time_seconds": 3.4,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "SPOT WELDING 1 -  40 KVA",
+        "part_number": "AJJ73022104-WIP2",
+        "cycle_time_seconds": 3.4,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "ASSEMBLING RF",
+        "part_number": "AHF73269912",
+        "cycle_time_seconds": 3.4,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "ASSEMBLING RF",
+        "part_number": "AHF73269903",
+        "cycle_time_seconds": 3.4,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "ASSEMBLING RF",
+        "part_number": "AHF73710119",
+        "cycle_time_seconds": 3.4,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "ASSEMBLING RF",
+        "part_number": "AHF73710120",
+        "cycle_time_seconds": 3.4,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "ASSEMBLING RF",
+        "part_number": "AHF73710110",
+        "cycle_time_seconds": 3.4,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "ASSEMBLING RF",
+        "part_number": "AHF73710109",
+        "cycle_time_seconds": 3.4,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "ASSEMBLING RF",
+        "part_number": "AHF73710102",
+        "cycle_time_seconds": 3.4,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "ASSEMBLING RF",
+        "part_number": "AHF73710101",
+        "cycle_time_seconds": 3.4,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "ASSEMBLING RF",
+        "part_number": "AHF73710107",
+        "cycle_time_seconds": 3.4,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "ASSEMBLING RF",
+        "part_number": "AHF73710108",
+        "cycle_time_seconds": 3.4,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "TPL DONGSHIN",
+        "part_number": "AGU74348517-WIP1",
+        "cycle_time_seconds": 7.8,
+        "qdc_minutes": 55
+    },
+    {
+        "machine_name": "TPL DONGSHIN",
+        "part_number": "AGU74348517-WIP2",
+        "cycle_time_seconds": 7.8,
+        "qdc_minutes": 55
+    },
+    {
+        "machine_name": "TPL DONGSHIN",
+        "part_number": "AGU74348517-WIP3",
+        "cycle_time_seconds": 7.8,
+        "qdc_minutes": 55
+    },
+    {
+        "machine_name": "TPL DONGSHIN",
+        "part_number": "AGU74348518-WIP1",
+        "cycle_time_seconds": 7.8,
+        "qdc_minutes": 55
+    },
+    {
+        "machine_name": "TPL DONGSHIN",
+        "part_number": "AGU74348518-WIP2",
+        "cycle_time_seconds": 7.8,
+        "qdc_minutes": 55
+    },
+    {
+        "machine_name": "TPL DONGSHIN",
+        "part_number": "AGU74348518-WIP3",
+        "cycle_time_seconds": 7.8,
+        "qdc_minutes": 55
+    },
+    {
+        "machine_name": "TPL DONGSHIN",
+        "part_number": "AGU30018319-WIP1",
+        "cycle_time_seconds": 7.8,
+        "qdc_minutes": 55
+    },
+    {
+        "machine_name": "TPL DONGSHIN",
+        "part_number": "AGU30018319-WIP2",
+        "cycle_time_seconds": 7.8,
+        "qdc_minutes": 55
+    },
+    {
+        "machine_name": "TPL DONGSHIN",
+        "part_number": "AGU30018319-WIP3",
+        "cycle_time_seconds": 7.8,
+        "qdc_minutes": 55
+    },
+    {
+        "machine_name": "TPL DONGSHIN",
+        "part_number": "AGU30018320-WIP1",
+        "cycle_time_seconds": 7.8,
+        "qdc_minutes": 55
+    },
+    {
+        "machine_name": "TPL DONGSHIN",
+        "part_number": "AGU30018320-WIP2",
+        "cycle_time_seconds": 7.8,
+        "qdc_minutes": 55
+    },
+    {
+        "machine_name": "TPL DONGSHIN",
+        "part_number": "AGU30018320-WIP3",
+        "cycle_time_seconds": 7.8,
+        "qdc_minutes": 55
+    },
+    {
+        "machine_name": "TPL DONGSHIN",
+        "part_number": "AGU30018318-WIP1",
+        "cycle_time_seconds": 7.8,
+        "qdc_minutes": 55
+    },
+    {
+        "machine_name": "TPL DONGSHIN",
+        "part_number": "AGU30018318-WIP2",
+        "cycle_time_seconds": 7.8,
+        "qdc_minutes": 55
+    },
+    {
+        "machine_name": "TPL DONGSHIN",
+        "part_number": "AGU30018318-WIP3",
+        "cycle_time_seconds": 7.8,
+        "qdc_minutes": 55
+    },
+    {
+        "machine_name": "TPL DONGSHIN",
+        "part_number": "AGU30018309-WIP1",
+        "cycle_time_seconds": 7.8,
+        "qdc_minutes": 55
+    },
+    {
+        "machine_name": "TPL DONGSHIN",
+        "part_number": "AGU30018309-WIP2",
+        "cycle_time_seconds": 7.8,
+        "qdc_minutes": 55
+    },
+    {
+        "machine_name": "TPL DONGSHIN",
+        "part_number": "AGU30018309-WIP3",
+        "cycle_time_seconds": 7.8,
+        "qdc_minutes": 55
+    },
+    {
+        "machine_name": "TPL DONGSHIN",
+        "part_number": "AGU30018301-WIP1",
+        "cycle_time_seconds": 7.8,
+        "qdc_minutes": 55
+    },
+    {
+        "machine_name": "TPL DONGSHIN",
+        "part_number": "AGU30018301-WIP2",
+        "cycle_time_seconds": 7.8,
+        "qdc_minutes": 55
+    },
+    {
+        "machine_name": "TPL DONGSHIN",
+        "part_number": "AGU30018301-WIP3",
+        "cycle_time_seconds": 7.8,
+        "qdc_minutes": 55
+    },
+    {
+        "machine_name": "TPL DONGSHIN",
+        "part_number": "AGU30018303-WIP1",
+        "cycle_time_seconds": 7.8,
+        "qdc_minutes": 55
+    },
+    {
+        "machine_name": "TPL DONGSHIN",
+        "part_number": "AGU30018303-WIP2",
+        "cycle_time_seconds": 7.8,
+        "qdc_minutes": 55
+    },
+    {
+        "machine_name": "TPL DONGSHIN",
+        "part_number": "AGU30018303-WIP3",
+        "cycle_time_seconds": 7.8,
+        "qdc_minutes": 55
+    },
+    {
+        "machine_name": "ASSY. TPL DONGSHIN",
+        "part_number": "AGU74348517",
+        "cycle_time_seconds": 7.6,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "ASSY. TPL DONGSHIN",
+        "part_number": "AGU74348518",
+        "cycle_time_seconds": 7.6,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "ASSY. TPL DONGSHIN",
+        "part_number": "AGU30018319",
+        "cycle_time_seconds": 7.6,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "ASSY. TPL DONGSHIN",
+        "part_number": "AGU30018320",
+        "cycle_time_seconds": 7.6,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "ASSY. TPL DONGSHIN",
+        "part_number": "AGU30018318",
+        "cycle_time_seconds": 7.6,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "ASSY. TPL DONGSHIN",
+        "part_number": "AGU30018309",
+        "cycle_time_seconds": 7.6,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "ASSY. TPL DONGSHIN",
+        "part_number": "AGU30018301",
+        "cycle_time_seconds": 7.6,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "ASSY. TPL DONGSHIN",
+        "part_number": "AGU30018303",
+        "cycle_time_seconds": 7.6,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "SHANGYANG 25 TON",
+        "part_number": "AEH74296203-WIP2",
+        "cycle_time_seconds": 4.42,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "SHANGYANG 25 TON",
+        "part_number": "AEH74216705-WIP2",
+        "cycle_time_seconds": 2.61,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "WASINO 150 TON",
+        "part_number": "4810JM3004B-WIP1",
+        "cycle_time_seconds": 3,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "WASINO 150 TON",
+        "part_number": "MJB63210101-WIP1",
+        "cycle_time_seconds": 3,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "WASINO 150 TON",
+        "part_number": "MCK67989701-WIP1",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "WASINO 150 TON",
+        "part_number": "MCK67989701-WIP2",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "WASINO 150 TON",
+        "part_number": "MFA62123401-WIP1",
+        "cycle_time_seconds": 3,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "WASINO 150 TON",
+        "part_number": "MJH54544903-WIP",
+        "cycle_time_seconds": 3,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "WASINO 150 TON",
+        "part_number": "PINHOLHL01",
+        "cycle_time_seconds": 3,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "KUKIL 110 TON",
+        "part_number": "MCK71382401-WIP4",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "KUKIL 110 TON",
+        "part_number": "MCK67989701-WIP3",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "KUKIL 110 TON",
+        "part_number": "MCK68586003-WIP3",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "KUKIL 110 TON",
+        "part_number": "MCK68586003-WIP4",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "KUKIL 110 TON",
+        "part_number": "MCK68586001-WIP3",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "KUKIL 110 TON",
+        "part_number": "MCK68586001-WIP4",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "KUKIL 110 TON",
+        "part_number": "MJH62437102-WIP2",
+        "cycle_time_seconds": 4.5,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "KUKIL 110 TON",
+        "part_number": "MJS65339804-WIP3",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "KUKIL 110 TON",
+        "part_number": "MJS65339804-WIP4",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "KUKIL 110 TON",
+        "part_number": "MCK30025901-WIP",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "KUKIL 160 TON",
+        "part_number": "MBN63922903-WIP2",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "KUKIL 160 TON",
+        "part_number": "MBN63922901-WIP2",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "KUKIL 160 TON",
+        "part_number": "MBN63922904-WIP2",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "KUKIL 160 TON",
+        "part_number": "MBN63922902-WIP2",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "KUKIL 160 TON",
+        "part_number": "MCK71382401-WIP1",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "KUKIL 160 TON",
+        "part_number": "MCK68586003-WIP2",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "KUKIL 160 TON",
+        "part_number": "MCK68586001-WIP2",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "KUKIL 160 TON",
+        "part_number": "4980JA3016M-WIP2",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "KUKIL 160 TON",
+        "part_number": "4980JA3016F-WIP2",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "KUKIL 160 TON",
+        "part_number": "MJS65339804-WIP2",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "JENJI 200 TON",
+        "part_number": "MBN63922903-WIP3",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "JENJI 200 TON",
+        "part_number": "MBN63922901-WIP3",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "JENJI 200 TON",
+        "part_number": "MBN63922904-WIP3",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "JENJI 200 TON",
+        "part_number": "MBN63922902-WIP3",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "JENJI 200 TON",
+        "part_number": "MCK71382401-WIP2",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "JENJI 200 TON",
+        "part_number": "MCK71382401-WIP3",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "JENJI 200 TON",
+        "part_number": "MCK68586003-WIP5",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "JENJI 200 TON",
+        "part_number": "MCK68586001-WIP5",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "KYOKUTO 300 TON",
+        "part_number": "MBN63922903-WIP4",
+        "cycle_time_seconds": 15.6,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "KYOKUTO 300 TON",
+        "part_number": "MBN63922901-WIP4",
+        "cycle_time_seconds": 15.6,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "KYOKUTO 300 TON",
+        "part_number": "MBN63922904-WIP4",
+        "cycle_time_seconds": 15.6,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "KYOKUTO 300 TON",
+        "part_number": "MBN63922902-WIP4",
+        "cycle_time_seconds": 15.6,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "AIDA 60 TON",
+        "part_number": "AEH76183701-WIP3",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "AIDA 60 TON",
+        "part_number": "AEH76183702-WIP3",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "AIDA 100 TON",
+        "part_number": "AEH73776308-WIP2",
+        "cycle_time_seconds": 9.5,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "HANOUL 250 TON",
+        "part_number": "MAZ65643601-WIP1",
+        "cycle_time_seconds": 4.5,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "HANOUL 250 TON",
+        "part_number": "MAZ65643701-WIP1",
+        "cycle_time_seconds": 4.5,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "HANOUL 250 TON",
+        "part_number": "MBN63922901-WIP1",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "HANOUL 250 TON",
+        "part_number": "MCK68586003-WIP1",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "HANOUL 250 TON",
+        "part_number": "MCK68586001-WIP1",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "HANOUL 250 TON",
+        "part_number": "AEH74296203-WIP1",
+        "cycle_time_seconds": 3,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "HANOUL 250 TON",
+        "part_number": "MJB63249701-WIP1",
+        "cycle_time_seconds": 3,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "HANOUL 250 TON",
+        "part_number": "AJJ73022104-WIP1",
+        "cycle_time_seconds": 3,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "HANOUL 250 TON",
+        "part_number": "4980JA3016F-WIP1",
+        "cycle_time_seconds": 4.5,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "HANOUL 250 TON",
+        "part_number": "MJS65339804-WIP1",
+        "cycle_time_seconds": 7,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "KUKIL 400 TON",
+        "part_number": "AEH76183701-WIP1",
+        "cycle_time_seconds": 3,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "KUKIL 400 TON",
+        "part_number": "AEH73776308-WIP1",
+        "cycle_time_seconds": 3,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "KUKIL 400 TON",
+        "part_number": "AEH74216705-WIP1",
+        "cycle_time_seconds": 3,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "KUKIL 400 TON",
+        "part_number": "MJB64309701-WIP1",
+        "cycle_time_seconds": 3,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "KUKIL 400 TON",
+        "part_number": "MJB62889901-WIP1",
+        "cycle_time_seconds": 3,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "KUKIL 400 TON",
+        "part_number": "MJB65181101-WIP1",
+        "cycle_time_seconds": 3,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "KUKIL 400 TON",
+        "part_number": "4980JA3016M-WIP1",
+        "cycle_time_seconds": 3,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "KUKIL 400 TON",
+        "part_number": "4980JA3016F-WIP1",
+        "cycle_time_seconds": 3,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "KUKIL 400 TON",
+        "part_number": "MJH62437102-WIP1",
+        "cycle_time_seconds": 3,
+        "qdc_minutes": 60
+    },
+    {
+        "machine_name": "SPOT WELDING 5 - 35 KVA",
+        "part_number": "MBN63922903-WIP5",
+        "cycle_time_seconds": 28,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "SPOT WELDING 5 - 35 KVA",
+        "part_number": "MBN63922901-WIP5",
+        "cycle_time_seconds": 28,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "SPOT WELDING 5 - 35 KVA",
+        "part_number": "MBN63922904-WIP6",
+        "cycle_time_seconds": 28,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "SPOT WELDING 5 - 35 KVA",
+        "part_number": "MBN63922902-WIP5",
+        "cycle_time_seconds": 28,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "SPOT WELDING 5 - 35 KVA",
+        "part_number": "MCK71382401-WIP5",
+        "cycle_time_seconds": 12.6,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "SPOT WELDING 5 - 35 KVA",
+        "part_number": "MCK67989701-WIP4",
+        "cycle_time_seconds": 12.6,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "WELDING ROBOT",
+        "part_number": "AEH73776308-WIP3",
+        "cycle_time_seconds": 16.8,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "BARREL",
+        "part_number": "AEH76183701-WIP2",
+        "cycle_time_seconds": 2.8,
+        "qdc_minutes": null
+    },
+    {
+        "machine_name": "TAPPING 2",
+        "part_number": "MFA62123401-WIP2",
+        "cycle_time_seconds": 2.5,
+        "qdc_minutes": null
+    }
+]

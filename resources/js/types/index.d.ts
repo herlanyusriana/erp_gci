@@ -190,6 +190,8 @@ export interface BomItem {
     uom_rm: string | null;
     special_code: string | null;
     source: string | null;
+    tact_time_seconds?: number | null;
+    qdc_minutes?: number | null;
     parent_part?: Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> | null;
     child_part?: Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> | null;
 }
@@ -398,9 +400,24 @@ export interface MachineCycleTime {
     machine_id: number;
     part_id: number;
     cycle_time_seconds: number;
+    qdc_minutes?: number | null;
     is_active: boolean;
     machine?: Pick<Machine, 'id' | 'machine_code' | 'machine_name'> | null;
     part?: Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> | null;
+}
+
+export interface MachineCycleTimeMatrixRow {
+    part_id: number;
+    part_number: string | null;
+    part_name: string | null;
+    model: string | null;
+    fg_part_number: string | null;
+    fg_part_name: string | null;
+    fg_model: string | null;
+    process_name: string | null;
+    cycle_time_seconds: number | null;
+    qdc_minutes: number | null;
+    is_active: boolean;
 }
 
 export interface IncomingReceivePacking {
@@ -591,6 +608,8 @@ export interface ProductionPlanItem {
     target_d1: number | null;
     target_d2: number | null;
     avail_qty: number;
+    cycle_time_seconds?: number | null;
+    qdc_minutes?: number | null;
     estimated_seconds?: number | null;
     machine?: Pick<Machine, 'id' | 'machine_code' | 'machine_name'> | null;
     process?: Process | null;

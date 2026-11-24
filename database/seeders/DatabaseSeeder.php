@@ -22,6 +22,7 @@ class DatabaseSeeder extends Seeder
             DeliveryLocationSeeder::class,
             TrolleySeeder::class,
             BomSeeder::class,
+            MachineCycleTimeSeeder::class,
             DerivedDataSeeder::class,
         ]);
     }

@@ -657,7 +657,10 @@ function submitEdit() {
                                     <div class="truncate text-xs text-ink-secondary">{{ row.wip_part?.part_name ?? '' }}</div>
                                 </td>
                                 <td class="px-3 py-2.5 text-right">
-                                    <span class="tabular-nums font-medium text-ink-primary">{{ fmtDuration(row.estimated_seconds) }}</span>
+                                    <div class="tabular-nums font-medium text-ink-primary">{{ fmtDuration(row.estimated_seconds) }}</div>
+                                    <div v-if="row.qdc_minutes != null && Number(row.qdc_minutes) > 0" class="mt-0.5 text-[11px] tabular-nums text-ink-secondary">
+                                        {{ t('production.qdcBadge', { minutes: fmt(row.qdc_minutes) }) }}
+                                    </div>
                                 </td>
                                 <td class="px-3 py-2.5 text-right">
                                     <div

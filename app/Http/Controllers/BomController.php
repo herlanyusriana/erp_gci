@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Bom;
 use App\Models\Machine;
+use App\Models\MachineCycleTime;
 use App\Models\Part;
 use App\Models\Process;
 use App\Support\DocumentNumber;
@@ -203,6 +204,25 @@ class BomController extends Controller
             'part' => fn ($q) => $q->with('partType', 'uom'),
             'items' => fn ($q) => $q->with(['process', 'machine', 'parentPart', 'childPart']),
         ]);
+
+        // Lookup Tact Time & QDC otomatis dari master `machine_cycle_times` (Single Source of Truth).
+        $machineIds = $bom->items->pluck('machine_id')->filter()->unique()->values();
+        $parentPartIds = $bom->items->pluck('parent_part_id')->filter()->unique()->values();
+
+        $cycleTimes = ($machineIds->isNotEmpty() && $parentPartIds->isNotEmpty())
+            ? MachineCycleTime::query()
+                ->where('is_active', true)
+                ->whereIn('machine_id', $machineIds)
+                ->whereIn('part_id', $parentPartIds)
+                ->get(['machine_id', 'part_id', 'cycle_time_seconds', 'qdc_minutes'])
+                ->keyBy(fn (MachineCycleTime $row): string => $row->machine_id.'|'.$row->part_id)
+            : collect();
+
+        $bom->items->each(function ($item) use ($cycleTimes): void {
+            $ct = $cycleTimes->get(($item->machine_id ?? 0).'|'.($item->parent_part_id ?? 0));
+            $item->setAttribute('tact_time_seconds', $ct?->cycle_time_seconds);
+            $item->setAttribute('qdc_minutes', $ct?->qdc_minutes);
+        });
 
         return Inertia::render('Master/Bom/Show', [
             'bom' => $bom,

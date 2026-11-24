@@ -2,7 +2,7 @@
 import StatusBadge from '@/Components/StatusBadge.vue';
 import { useI18n } from 'vue-i18n';
 import { computed } from 'vue';
-import { usePage } from '@inertiajs/vue3';
+import { Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import ActionButton from '@/Components/ActionButton.vue';
@@ -21,6 +21,11 @@ const items = computed(() => props.bom.items ?? []);
 const canUpdate = computed(() => {
     const list: string[] = page.props.auth.permissions ?? [];
     return list.some((x) => ['bom.update', 'master.bom.update'].includes(x));
+});
+
+const canViewCycleTimes = computed(() => {
+    const list: string[] = page.props.auth.permissions ?? [];
+    return list.some((x) => ['machine.view', 'machine.update', 'master.machine.view', 'master.machine.update'].includes(x));
 });
 
 const fmt = (n: number | null | undefined) => {
@@ -60,6 +65,13 @@ function sourceLabel(source: string | null): string {
                 · {{ t('master.uom') }}: <span class="font-semibold text-ink-primary">{{ bom.part?.uom?.code ?? '—' }}</span>
             </div>
             <div class="flex gap-2">
+                <Link
+                    v-if="canViewCycleTimes"
+                    :href="route('cycle-times.index')"
+                    class="inline-flex items-center rounded-md border border-borderline bg-surface px-3 py-1.5 text-xs font-semibold text-ink-primary transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                >
+                    {{ t('master.manageCycleTime') }}
+                </Link>
                 <ActionButton v-if="canUpdate" :href="route('boms.edit', bom.id)" :label="t('master.edit')" variant="edit" />
             </div>
         </div>
@@ -81,6 +93,8 @@ function sourceLabel(source: string | null): string {
                             <th scope="col" class="px-3 py-3">{{ t('master.uom') }}</th>
                             <th scope="col" class="px-3 py-3">{{ t('master.special') }}</th>
                             <th scope="col" class="px-3 py-3">{{ t('master.source') }}</th>
+                            <th scope="col" class="px-3 py-3 text-right">{{ t('master.tactTimeShort') }}</th>
+                            <th scope="col" class="px-3 py-3 text-right">{{ t('master.qdcShort') }}</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-borderline">
@@ -108,9 +122,15 @@ function sourceLabel(source: string | null): string {
                             <td class="px-3 py-2.5">
                                 <StatusBadge :status="it.source">{{ sourceLabel(it.source) }}</StatusBadge>
                             </td>
+                            <td class="px-3 py-2.5 text-right tabular-nums text-ink-primary">
+                                {{ it.tact_time_seconds != null ? `${fmt(it.tact_time_seconds)} ${t('master.secondShort')}` : '—' }}
+                            </td>
+                            <td class="px-3 py-2.5 text-right tabular-nums text-ink-secondary">
+                                {{ it.qdc_minutes != null ? `${fmt(it.qdc_minutes)} ${t('master.minuteShort')}` : '—' }}
+                            </td>
                         </tr>
                         <tr v-if="items.length === 0">
-                            <td colspan="12" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.bomItemsEmpty') }}</td>
+                            <td colspan="14" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.bomItemsEmpty') }}</td>
                         </tr>
                     </tbody>
                 </table>

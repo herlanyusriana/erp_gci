@@ -137,6 +137,7 @@ Route::middleware(['auth'])->group(function () {
     Route::resource('uoms', UomController::class)->except(['show']);
     Route::resource('substitutes', PartSubstituteController::class)->except(['show']);
     Route::post('substitutes/packing-types', [PartSubstituteController::class, 'storePackingType'])->name('substitutes.packing-types.store');
+    Route::post('cycle-times/bulk', [MachineCycleTimeController::class, 'bulkSave'])->name('cycle-times.bulk');
     Route::resource('cycle-times', MachineCycleTimeController::class)->except(['show']);
     Route::resource('prices', PartPriceController::class)->except(['show']);
     Route::resource('boms', BomController::class)->only(['index', 'create', 'store', 'show', 'edit', 'update']);

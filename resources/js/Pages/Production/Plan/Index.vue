@@ -620,8 +620,8 @@ function submitInlineCreateWo() {
         <BackButton :href="route('production-data')" class="mb-4" />
 
         <div class="mb-5 flex flex-wrap items-end justify-between gap-4">
-            <div>
-                <h1 class="text-2xl font-bold tracking-tight text-ink-primary">{{ t('production.plan') }}</h1>
+            <div class="min-w-0">
+                <h1 class="min-w-0 break-words text-2xl font-bold tracking-tight text-ink-primary">{{ t('production.plan') }}</h1>
                 <p class="mt-1 text-sm text-ink-secondary">
                     {{ t('production.planDateDescription', { date: fmtDate(date), d: dayLabels.d, d1: dayLabels.d1, d2: dayLabels.d2 }) }}
                 </p>
@@ -629,7 +629,7 @@ function submitInlineCreateWo() {
             <div class="flex items-center gap-2">
                 <button
                     type="button"
-                    class="inline-flex items-center gap-1.5 rounded-md border border-borderline bg-surface px-4 py-2 text-sm font-semibold text-ink-primary transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                    class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-borderline bg-surface px-4 py-2 text-sm font-semibold text-ink-primary transition hover:bg-background active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                     @click="showHistory = true"
                 >
                     {{ t('production.planHistory') }}
@@ -637,10 +637,10 @@ function submitInlineCreateWo() {
                 <button
                     v-if="canCreateWo"
                     type="button"
-                    class="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                    class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                     @click="openCreateWo()"
                 >
-                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                    <svg aria-hidden="true" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
                     {{ t('production.newWoClean') }}
                 </button>
             </div>
@@ -649,7 +649,7 @@ function submitInlineCreateWo() {
         <!-- Toolbar: filter + ringkasan papan -->
         <div class="mb-4 flex flex-wrap items-end gap-3 rounded-xl border border-borderline bg-surface p-3">
             <div class="min-w-56 flex-1">
-                <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('production.search') }}</label>
+                <label class="mb-1 block text-xs font-medium text-ink-secondary">{{ t('production.search') }}</label>
                 <input
                     v-model="search"
                     type="search"
@@ -659,7 +659,7 @@ function submitInlineCreateWo() {
                 />
             </div>
             <div class="min-w-48">
-                <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('production.machineFilter') }}</label>
+                <label class="mb-1 block text-xs font-medium text-ink-secondary">{{ t('production.machineFilter') }}</label>
                 <input
                     v-model="machineFilter"
                     type="search"
@@ -669,7 +669,7 @@ function submitInlineCreateWo() {
                 />
             </div>
             <div>
-                <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-secondary">{{ t('production.startDate') }}</label>
+                <label class="mb-1 block text-xs font-medium text-ink-secondary">{{ t('production.startDate') }}</label>
                 <input
                     v-model="date"
                     type="date"
@@ -680,21 +680,21 @@ function submitInlineCreateWo() {
             </div>
             <div class="flex flex-wrap items-center gap-2 sm:ml-auto">
                 <span class="inline-flex items-center gap-1.5 rounded-lg border border-borderline bg-background px-2.5 py-1.5 text-xs text-ink-secondary">
-                    <span class="font-semibold text-ink-primary">{{ summary.plannedMachines }}</span> {{ t('production.plannedMachinesLabel') }}
+                    <span class="font-semibold tabular-nums text-ink-primary">{{ summary.plannedMachines }}</span> {{ t('production.plannedMachinesLabel') }}
                 </span>
                 <span class="inline-flex items-center gap-1.5 rounded-lg border border-borderline bg-background px-2.5 py-1.5 text-xs text-ink-secondary">
-                    <span class="font-semibold text-ink-primary">{{ summary.plannedWo }}</span> {{ t('production.woLabel') }}
+                    <span class="font-semibold tabular-nums text-ink-primary">{{ summary.plannedWo }}</span> {{ t('production.woLabel') }}
                 </span>
                 <span class="inline-flex items-center gap-1.5 rounded-lg border border-warning/40 bg-warning/10 px-2.5 py-1.5 text-xs text-warning">
-                    <span class="font-semibold">{{ summary.availWo }}</span> {{ t('production.availWoShort') }}
+                    <span class="font-semibold tabular-nums">{{ summary.availWo }}</span> {{ t('production.availWoShort') }}
                 </span>
             </div>
         </div>
 
         <!-- Panel Avail WO di atas papan -->
-        <div v-if="availWorkOrders.length" class="mb-4 rounded-xl border border-warning/40 bg-warning/5 p-4">
+        <div v-if="availWorkOrders.length" class="mb-4 rounded-xl bg-warning/5 p-4">
             <div class="mb-1 flex flex-wrap items-center justify-between gap-2">
-                <h2 class="text-sm font-semibold text-warning">
+                <h2 class="min-w-0 break-words text-sm font-semibold text-warning">
                     {{ t('production.availWoTitle', { count: availWorkOrders.length }) }}
                 </h2>
             </div>
@@ -710,10 +710,9 @@ function submitInlineCreateWo() {
                             <div class="truncate text-sm font-semibold text-ink-primary">
                                 {{ fgPrimaryName(wo.part) }}
                             </div>
-                            <div class="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-secondary">
+                            <div class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-ink-secondary">
                                 <span v-if="fgSecondaryNumber(wo.part)" class="font-medium text-ink-secondary">{{ fgSecondaryNumber(wo.part) }}</span>
-                                <span v-if="wo.part?.model">· {{ wo.part.model }}</span>
-                                <span>·</span>
+                                <span v-if="wo.part?.model" class="rounded bg-background px-1.5 py-0.5 text-ink-secondary">{{ wo.part.model }}</span>
                                 <Link
                                     :href="route('work-orders.show', wo.id)"
                                     class="font-semibold text-primary hover:underline"
@@ -729,7 +728,7 @@ function submitInlineCreateWo() {
                             v-for="m in wo.machines"
                             :key="m.machine_id"
                             type="button"
-                            class="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                            class="inline-flex items-center gap-1 whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-medium transition active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                             :class="m.avail_qty > 0
                                 ? 'border-warning/50 bg-warning/10 text-ink-primary hover:border-primary hover:bg-primary-light/50'
                                 : 'border-success/40 bg-success/10 text-success'"
@@ -746,8 +745,8 @@ function submitInlineCreateWo() {
         <!-- Papan Harian (Read-Only) -->
         <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
             <div class="flex flex-wrap items-center justify-between gap-2 border-b border-borderline px-4 py-3">
-                <div class="flex flex-wrap items-center gap-2">
-                    <h2 class="text-sm font-semibold text-ink-primary">{{ t('production.boardTitle') }}</h2>
+                <div class="flex min-w-0 flex-wrap items-center gap-2">
+                    <h2 class="min-w-0 break-words text-sm font-semibold text-ink-primary">{{ t('production.boardTitle') }}</h2>
                     <span class="text-xs text-ink-secondary">{{ t('production.boardReadOnlyHint') }}</span>
                 </div>
             </div>
@@ -766,7 +765,7 @@ function submitInlineCreateWo() {
                         <col class="w-28" />
                     </colgroup>
                     <thead class="sticky top-0 z-10 bg-background">
-                        <tr class="border-b border-borderline text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
+                        <tr class="border-b border-borderline text-left text-xs font-semibold text-ink-secondary">
                             <th scope="col" class="sticky left-0 z-30 border-r border-borderline bg-background px-3 py-2.5">{{ t('production.machine') }}</th>
                             <th scope="col" class="px-3 py-2.5">{{ t('production.fgPart') }}</th>
                             <th scope="col" class="px-3 py-2.5">{{ t('master.model') }}</th>
@@ -775,7 +774,7 @@ function submitInlineCreateWo() {
                             <th scope="col" class="px-3 py-2.5 text-right">{{ t('production.availWoShort') }}</th>
                             <th scope="col" v-for="key in dayKeys" :key="key" class="border-l border-borderline px-3 py-2.5 text-center">
                                 <div>{{ dayLabels[key] }}</div>
-                                <div class="text-[10px] font-normal uppercase text-ink-secondary">
+                                <div class="text-[11px] font-normal text-ink-secondary">
                                     {{ dayShortName(key) }}
                                 </div>
                             </th>
@@ -804,15 +803,18 @@ function submitInlineCreateWo() {
                                 <td colspan="5" class="px-3 py-3 text-xs text-ink-secondary">
                                     {{ t('production.noMachinePlanYet') }}
                                 </td>
-                                <td v-for="key in dayKeys" :key="key" class="border-l border-borderline px-3 py-3 text-center text-xs text-ink-secondary">—</td>
+                                <td v-for="key in dayKeys" :key="key" class="border-l border-borderline px-3 py-3 text-center text-xs text-ink-secondary">-</td>
                                 <td class="border-l border-borderline bg-surface px-3 py-3 text-right group-hover:bg-primary-light/20">
                                     <button
                                         v-if="canManage"
                                         type="button"
-                                        class="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1.5 text-xs font-semibold text-white transition hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                                        class="inline-flex items-center gap-1 whitespace-nowrap rounded-md border px-2.5 py-1.5 text-xs font-semibold transition active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                                        :class="machine.avail_wo_count > 0
+                                            ? 'border-primary/50 bg-primary-light/60 text-primary hover:bg-primary hover:text-white'
+                                            : 'border-borderline bg-surface text-ink-secondary hover:border-primary hover:text-primary'"
                                         @click="openMachineModal(machine.id)"
                                     >
-                                        <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                                        <svg aria-hidden="true" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
                                         {{ t('production.addPlan') }}
                                     </button>
                                 </td>
@@ -832,7 +834,7 @@ function submitInlineCreateWo() {
                                 >
                                     <div class="flex flex-col items-start gap-1.5">
                                         <span class="font-semibold leading-tight text-ink-primary">{{ machine.machine_name }}</span>
-                                        <span v-if="processNames(machine.planned_rows)" class="text-[11px] tracking-wide text-ink-secondary">{{ processNames(machine.planned_rows) }}</span>
+                                        <span v-if="processNames(machine.planned_rows)" class="text-[11px] text-ink-secondary">{{ processNames(machine.planned_rows) }}</span>
                                         <div class="flex flex-wrap items-center gap-1">
                                             <span class="inline-flex rounded-md bg-background px-1.5 py-0.5 text-[11px] font-medium text-ink-secondary">
                                                 {{ t('production.rowsCount', { n: machine.planned_rows.length }) }}
@@ -847,7 +849,7 @@ function submitInlineCreateWo() {
                                         <button
                                             v-if="canManage"
                                             type="button"
-                                            class="mt-1 inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary-light/40 px-2 py-1 text-[11px] font-semibold text-primary transition hover:bg-primary hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                                            class="mt-1 inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-primary/40 bg-primary-light/40 px-2 py-1 text-[11px] font-semibold text-primary transition hover:bg-primary hover:text-white active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                                             @click="openMachineModal(machine.id)"
                                         >
                                             {{ t('production.addEditPlan') }}
@@ -902,28 +904,28 @@ function submitInlineCreateWo() {
                                             class="mt-1.5 flex items-center justify-between gap-1 text-xs tabular-nums"
                                             :class="row.days[key]!.is_overload ? 'font-semibold text-danger' : 'font-medium text-primary'"
                                         >
-                                            <span>{{ row.days[key]!.start_time }} – {{ row.days[key]!.end_time }}</span>
+                                            <span>{{ row.days[key]!.start_time }} - {{ row.days[key]!.end_time }}</span>
                                             <span
                                                 v-if="row.days[key]!.is_overload"
-                                                class="rounded bg-danger px-1 py-0.5 text-[10px] font-semibold uppercase text-white"
+                                                class="rounded bg-danger px-1.5 py-0.5 text-[11px] font-semibold text-white"
                                             >
                                                 {{ t('production.overloadTag') }}
                                             </span>
                                         </div>
-                                        <div v-else class="mt-1.5 text-[11px] text-ink-secondary">—</div>
+                                        <div v-else class="mt-1.5 text-[11px] text-ink-secondary">-</div>
                                         <div class="mt-1 flex flex-wrap items-center gap-1">
                                             <span
                                                 v-if="row.days[key]!.qdc_applied_minutes > 0"
-                                                class="inline-flex rounded bg-info/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-info"
+                                                class="inline-flex rounded bg-info/10 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-info"
                                             >
                                                 {{ t('production.qdcShortTag', { minutes: fmt(row.days[key]!.qdc_applied_minutes) }) }}
                                             </span>
-                                            <span class="inline-flex rounded bg-background px-1.5 py-0.5 text-[10px] font-medium text-ink-secondary">
+                                            <span class="inline-flex rounded bg-background px-1.5 py-0.5 text-[11px] font-medium text-ink-secondary">
                                                 {{ t('production.shiftCountOption', { n: machine.shift_counts?.[key] ?? 3 }) }}
                                             </span>
                                         </div>
                                     </template>
-                                    <div v-else class="text-center text-xs text-ink-secondary">—</div>
+                                    <div v-else class="text-center text-xs text-ink-secondary">-</div>
                                 </td>
                                 <td class="border-l border-borderline bg-surface px-3 py-2.5 align-top group-hover:bg-primary-light/30">
                                     <div class="flex justify-end gap-1">
@@ -931,19 +933,19 @@ function submitInlineCreateWo() {
                                             :href="route('work-orders.show', row.work_order_id)"
                                             :title="t('production.viewWo')"
                                             :aria-label="t('production.viewWo')"
-                                            class="flex h-8 w-8 items-center justify-center rounded-lg text-info transition hover:bg-info/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                                            class="flex h-8 w-8 items-center justify-center rounded-lg text-info transition hover:bg-info/10 active:scale-[0.96] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                                         >
-                                            <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                            <svg aria-hidden="true" class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                                         </Link>
                                         <button
                                             v-if="canManage"
                                             type="button"
                                             :title="t('production.addEditPlan')"
                                             :aria-label="t('production.addEditPlan')"
-                                            class="flex h-8 w-8 items-center justify-center rounded-lg text-primary transition hover:bg-primary-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                                            class="flex h-8 w-8 items-center justify-center rounded-lg text-primary transition hover:bg-primary-light active:scale-[0.96] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                                             @click="openMachineModal(machine.id)"
                                         >
-                                            <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg>
+                                            <svg aria-hidden="true" class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg>
                                         </button>
                                     </div>
                                 </td>
@@ -959,10 +961,10 @@ function submitInlineCreateWo() {
 
         <!-- Modal: Add / Edit Plan per Mesin -->
         <Modal :show="showMachineModal" max-width="6xl" @close="closeMachineModal">
-            <div v-if="activeMachine" class="p-6">
+            <div v-if="activeMachine" class="relative p-6">
                 <div class="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-borderline pb-4">
-                    <div>
-                        <h3 class="text-lg font-bold text-ink-primary">
+                    <div class="min-w-0">
+                        <h3 class="min-w-0 break-words text-lg font-bold text-ink-primary">
                             {{ t('production.machinePlanModalTitle', { machine: activeMachine.machine_name }) }}
                         </h3>
                         <p class="mt-1 text-xs text-ink-secondary">{{ t('production.machinePlanModalHint') }}</p>
@@ -971,15 +973,15 @@ function submitInlineCreateWo() {
                         <button
                             v-if="canCreateWo"
                             type="button"
-                            class="inline-flex items-center gap-1.5 rounded-md border border-primary bg-primary-light/40 px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                            class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-primary bg-primary-light/40 px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary hover:text-white active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                             @click="openInlineCreateWo()"
                         >
-                            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                            <svg aria-hidden="true" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
                             {{ t('production.newWoClean') }}
                         </button>
                         <button
                             type="button"
-                            class="rounded-md border border-borderline px-3 py-1.5 text-xs font-medium text-ink-secondary hover:bg-background"
+                            class="whitespace-nowrap rounded-md border border-borderline px-3 py-1.5 text-xs font-medium text-ink-secondary transition hover:bg-background active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                             @click="closeMachineModal"
                         >
                             {{ t('production.cancel') }}
@@ -1001,7 +1003,7 @@ function submitInlineCreateWo() {
                         <button
                             v-if="activeMachine.fg_part_ids.length > 0"
                             type="button"
-                            class="text-xs font-medium text-primary hover:underline"
+                            class="whitespace-nowrap text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
                             @click="showAllFgInInlineCreate = !showAllFgInInlineCreate"
                         >
                             {{ showAllFgInInlineCreate ? t('production.onlyMachineFg') : t('production.showAllFg') }}
@@ -1029,13 +1031,14 @@ function submitInlineCreateWo() {
                             <button
                                 type="submit"
                                 :disabled="inlineWoForm.processing"
-                                class="w-full rounded-md bg-primary px-3 py-2 text-xs font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60"
+                                class="w-full whitespace-nowrap rounded-md bg-primary px-3 py-2 text-xs font-semibold text-white transition hover:bg-primary-hover active:scale-[0.98] motion-reduce:active:scale-100 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                             >
                                 {{ inlineWoForm.processing ? t('production.saving') : t('production.saveWo') }}
                             </button>
                             <button
                                 type="button"
-                                class="rounded-md border border-borderline bg-surface px-2.5 py-2 text-xs text-ink-secondary hover:bg-background"
+                                :aria-label="t('production.cancel')"
+                                class="rounded-md border border-borderline bg-surface px-2.5 py-2 text-xs text-ink-secondary transition hover:bg-background active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                                 @click="showInlineCreateWo = false"
                             >
                                 ×
@@ -1049,7 +1052,7 @@ function submitInlineCreateWo() {
                     <div class="max-h-[58vh] overflow-auto rounded-xl border border-borderline">
                         <table class="min-w-full divide-y divide-borderline text-xs">
                             <thead class="sticky top-0 z-10 bg-background">
-                                <tr class="text-left font-semibold uppercase tracking-wide text-ink-secondary">
+                                <tr class="text-left font-semibold text-ink-secondary">
                                     <th scope="col" class="px-3 py-2.5 align-bottom">{{ t('production.fgPart') }} + {{ t('master.model') }}</th>
                                     <th scope="col" class="px-3 py-2.5 text-right align-bottom">{{ t('production.availWoQty') }}</th>
                                     <th
@@ -1059,20 +1062,21 @@ function submitInlineCreateWo() {
                                         class="border-l border-borderline px-2.5 py-2 align-top"
                                     >
                                         <div class="flex items-center justify-between gap-2">
-                                            <span class="font-semibold text-ink-primary">
-                                                {{ dayShortName(key) }} · {{ dayLabels[key] }}
+                                            <span class="inline-flex items-center gap-1.5 font-semibold text-ink-primary">
+                                                <span>{{ dayShortName(key) }}</span>
+                                                <span class="font-normal text-ink-secondary">{{ dayLabels[key] }}</span>
                                             </span>
                                             <select
                                                 v-model.number="machinePlanForm.shift_counts[key]"
                                                 :aria-label="`${t('production.shift')} ${dayFullLabel(key)}`"
-                                                class="rounded-md border-borderline bg-surface px-2 py-0.5 text-[11px] font-semibold normal-case text-ink-primary focus:border-primary focus:ring-primary"
+                                                class="rounded-md border-borderline bg-surface px-2 py-0.5 text-[11px] font-semibold text-ink-primary focus:border-primary focus:ring-primary"
                                             >
                                                 <option :value="1">{{ t('production.shiftCountOption', { n: 1 }) }}</option>
                                                 <option :value="2">{{ t('production.shiftCountOption', { n: 2 }) }}</option>
                                                 <option :value="3">{{ t('production.shiftCountOption', { n: 3 }) }}</option>
                                             </select>
                                         </div>
-                                        <div class="mt-1 flex items-center justify-between gap-1 text-[10px] font-medium normal-case">
+                                        <div class="mt-1 flex items-center justify-between gap-1 text-[11px] font-medium">
                                             <span class="tabular-nums text-ink-secondary">
                                                 {{ t('production.shiftUsedOf', { used: fmtMinutes(dayUsageSummary(key).usedMinutes), cap: fmtMinutes(dayUsageSummary(key).capMinutes) }) }}
                                             </span>
@@ -1089,7 +1093,7 @@ function submitInlineCreateWo() {
                                                 {{ t('production.shiftRemainLabel', { time: fmtMinutes(dayUsageSummary(key).remainMinutes) }) }}
                                             </span>
                                         </div>
-                                        <div class="mt-1.5 grid grid-cols-[48px_76px_64px] items-center gap-1.5 border-t border-borderline/70 pt-1 text-[10px] font-semibold uppercase text-ink-secondary">
+                                        <div class="mt-1.5 grid grid-cols-[48px_76px_64px] items-center gap-1.5 border-t border-borderline/70 pt-1 text-[11px] font-semibold text-ink-secondary">
                                             <span class="text-center">{{ t('production.sequenceShort') }}</span>
                                             <span class="text-right">{{ t('production.qtyShort') }}</span>
                                             <span class="text-center">{{ t('production.qdcCol') }}</span>
@@ -1105,9 +1109,9 @@ function submitInlineCreateWo() {
                                     :class="liveAvailForDraft(row) < -1e-6 ? 'bg-danger/5' : ''"
                                 >
                                     <td class="px-3 py-2.5 align-top">
-                                        <div class="font-semibold text-ink-primary">
-                                            {{ fgPrimaryName(row.fg_part) }}
-                                            <span class="font-normal text-ink-secondary">· {{ row.fg_part?.model || '—' }}</span>
+                                        <div class="flex flex-wrap items-center gap-1.5 font-semibold text-ink-primary">
+                                            <span>{{ fgPrimaryName(row.fg_part) }}</span>
+                                            <span class="rounded bg-background px-1.5 py-0.5 text-[11px] font-normal text-ink-secondary">{{ row.fg_part?.model || '-' }}</span>
                                         </div>
                                         <div v-if="fgSecondaryNumber(row.fg_part)" class="text-[11px] text-ink-secondary">
                                             {{ fgSecondaryNumber(row.fg_part) }}
@@ -1170,14 +1174,14 @@ function submitInlineCreateWo() {
                                                 />
                                                 <span>{{ fmt(row.qdc_minutes) }}m</span>
                                             </label>
-                                            <span v-else class="text-center text-[11px] text-ink-secondary">—</span>
+                                            <span v-else class="text-center text-[11px] text-ink-secondary">-</span>
                                         </div>
                                     </td>
                                     <td class="border-l border-borderline px-3 py-2.5 text-right align-top">
                                         <button
                                             v-if="canCreateWo"
                                             type="button"
-                                            class="inline-flex items-center gap-1 rounded-md border border-borderline bg-background px-2.5 py-1.5 text-[11px] font-semibold text-ink-primary transition hover:border-primary hover:text-primary"
+                                            class="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-borderline bg-background px-2.5 py-1.5 text-[11px] font-semibold text-ink-primary transition hover:border-primary hover:text-primary active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                                             @click="openInlineCreateWo(row.fg_part?.id)"
                                         >
                                             + {{ t('production.createWoAction') }}
@@ -1200,100 +1204,104 @@ function submitInlineCreateWo() {
                         {{ t('production.qtyPlanExceedsAvail') }}
                     </div>
 
-                    <!-- Dialog Konfirmasi Overload + Roll Over -->
+                    <!-- Dialog Konfirmasi Overload + Roll Over (Centered Overlay inside Modal) -->
                     <div
                         v-if="overloadPrompt"
-                        class="mt-3 rounded-xl border border-danger/50 bg-danger/10 p-4"
+                        class="absolute inset-0 z-30 flex items-center justify-center rounded-lg bg-ink-primary/40 p-4"
                         role="alertdialog"
-                        aria-modal="false"
+                        aria-modal="true"
                     >
-                        <h4 class="text-sm font-bold text-danger">{{ t('production.overloadRollOverTitle') }}</h4>
-                        <p class="mt-1 text-xs leading-relaxed text-ink-primary">
-                            {{
-                                overloadPrompt.nextDayKey
-                                    ? t('production.overloadRollOverBody', {
-                                        day: dayFullLabel(overloadPrompt.dayKey),
-                                        shifts: overloadPrompt.shifts,
-                                        part: overloadPrompt.partLabel,
-                                        wo: overloadPrompt.woNo,
-                                        maxQty: fmt(overloadPrompt.maxQty),
-                                        overflow: fmt(overloadPrompt.overflowQty),
-                                        nextDay: dayFullLabel(overloadPrompt.nextDayKey),
-                                    })
-                                    : t('production.overloadLastDayBody', {
-                                        day: dayFullLabel(overloadPrompt.dayKey),
-                                        shifts: overloadPrompt.shifts,
-                                        part: overloadPrompt.partLabel,
-                                        wo: overloadPrompt.woNo,
-                                        maxQty: fmt(overloadPrompt.maxQty),
-                                        overflow: fmt(overloadPrompt.overflowQty),
-                                    })
-                            }}
-                        </p>
-                        <div class="mt-3 flex flex-wrap items-center justify-end gap-2">
-                            <button
-                                type="button"
-                                class="rounded-md border border-borderline bg-surface px-3 py-1.5 text-xs font-medium text-ink-primary hover:bg-background"
-                                @click="overloadPrompt = null"
-                            >
-                                {{ t('production.confirmNoBack') }}
-                            </button>
-                            <button
-                                v-if="overloadPrompt.nextDayKey"
-                                type="button"
-                                class="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-hover"
-                                @click="applyRollOver"
-                            >
-                                {{ t('production.confirmYesRollOver') }}
-                            </button>
-                            <button
-                                v-else
-                                type="button"
-                                class="rounded-md bg-danger px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
-                                @click="confirmSaveDespiteOverload"
-                            >
-                                {{ t('production.confirmKeepOverload') }}
-                            </button>
+                        <div class="w-full max-w-lg rounded-xl border-t-4 border-danger bg-surface p-5 shadow-xl">
+                            <h4 class="min-w-0 break-words text-sm font-bold text-danger">{{ t('production.overloadRollOverTitle') }}</h4>
+                            <p class="mt-1.5 text-xs leading-relaxed text-ink-primary">
+                                {{
+                                    overloadPrompt.nextDayKey
+                                        ? t('production.overloadRollOverBody', {
+                                            day: dayFullLabel(overloadPrompt.dayKey),
+                                            shifts: overloadPrompt.shifts,
+                                            part: overloadPrompt.partLabel,
+                                            wo: overloadPrompt.woNo,
+                                            maxQty: fmt(overloadPrompt.maxQty),
+                                            overflow: fmt(overloadPrompt.overflowQty),
+                                            nextDay: dayFullLabel(overloadPrompt.nextDayKey),
+                                        })
+                                        : t('production.overloadLastDayBody', {
+                                            day: dayFullLabel(overloadPrompt.dayKey),
+                                            shifts: overloadPrompt.shifts,
+                                            part: overloadPrompt.partLabel,
+                                            wo: overloadPrompt.woNo,
+                                            maxQty: fmt(overloadPrompt.maxQty),
+                                            overflow: fmt(overloadPrompt.overflowQty),
+                                        })
+                                }}
+                            </p>
+                            <div class="mt-4 flex flex-wrap items-center justify-end gap-2">
+                                <button
+                                    type="button"
+                                    class="whitespace-nowrap rounded-md border border-borderline bg-surface px-3 py-1.5 text-xs font-medium text-ink-primary transition hover:bg-background active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                                    @click="overloadPrompt = null"
+                                >
+                                    {{ t('production.confirmNoBack') }}
+                                </button>
+                                <button
+                                    v-if="overloadPrompt.nextDayKey"
+                                    type="button"
+                                    class="whitespace-nowrap rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-primary-hover active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                                    @click="applyRollOver"
+                                >
+                                    {{ t('production.confirmYesRollOver') }}
+                                </button>
+                                <button
+                                    v-else
+                                    type="button"
+                                    class="whitespace-nowrap rounded-md bg-danger px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                                    @click="confirmSaveDespiteOverload"
+                                >
+                                    {{ t('production.confirmKeepOverload') }}
+                                </button>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Dialog Konfirmasi Sisa Waktu Shift Tanpa Planning -->
+                    <!-- Dialog Konfirmasi Sisa Waktu Shift Tanpa Planning (Centered Overlay inside Modal) -->
                     <div
                         v-if="unusedShiftItems.length > 0 && !overloadPrompt"
-                        class="mt-3 rounded-xl border border-warning/50 bg-warning/10 p-4"
+                        class="absolute inset-0 z-30 flex items-center justify-center rounded-lg bg-ink-primary/40 p-4"
                         role="alertdialog"
-                        aria-modal="false"
+                        aria-modal="true"
                     >
-                        <h4 class="text-sm font-bold text-warning">{{ t('production.unusedShiftTitle') }}</h4>
-                        <ul class="mt-1.5 list-disc space-y-0.5 pl-4 text-xs text-ink-primary">
-                            <li v-for="item in unusedShiftItems" :key="item.dayKey">
-                                {{ t('production.unusedShiftItem', { day: item.dayLabel, shifts: item.shifts, remain: fmtMinutes(item.remainMinutes) }) }}
-                            </li>
-                        </ul>
-                        <p class="mt-2 text-xs font-medium text-ink-primary">{{ t('production.unusedShiftBody') }}</p>
-                        <div class="mt-3 flex flex-wrap items-center justify-end gap-2">
-                            <button
-                                type="button"
-                                class="rounded-md border border-borderline bg-surface px-3 py-1.5 text-xs font-medium text-ink-primary hover:bg-background"
-                                @click="unusedShiftItems = []"
-                            >
-                                {{ t('production.confirmNoBack') }}
-                            </button>
-                            <button
-                                type="button"
-                                :disabled="machinePlanForm.processing"
-                                class="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-hover disabled:opacity-60"
-                                @click="confirmSaveWithUnusedShift"
-                            >
-                                {{ t('production.confirmYesSave') }}
-                            </button>
+                        <div class="w-full max-w-lg rounded-xl border-t-4 border-warning bg-surface p-5 shadow-xl">
+                            <h4 class="min-w-0 break-words text-sm font-bold text-warning">{{ t('production.unusedShiftTitle') }}</h4>
+                            <ul class="mt-2 list-disc space-y-1 pl-4 text-xs text-ink-primary">
+                                <li v-for="item in unusedShiftItems" :key="item.dayKey">
+                                    {{ t('production.unusedShiftItem', { day: item.dayLabel, shifts: item.shifts, remain: fmtMinutes(item.remainMinutes) }) }}
+                                </li>
+                            </ul>
+                            <p class="mt-2.5 text-xs font-medium text-ink-primary">{{ t('production.unusedShiftBody') }}</p>
+                            <div class="mt-4 flex flex-wrap items-center justify-end gap-2">
+                                <button
+                                    type="button"
+                                    class="whitespace-nowrap rounded-md border border-borderline bg-surface px-3 py-1.5 text-xs font-medium text-ink-primary transition hover:bg-background active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                                    @click="unusedShiftItems = []"
+                                >
+                                    {{ t('production.confirmNoBack') }}
+                                </button>
+                                <button
+                                    type="button"
+                                    :disabled="machinePlanForm.processing"
+                                    class="whitespace-nowrap rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-primary-hover active:scale-[0.98] motion-reduce:active:scale-100 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                                    @click="confirmSaveWithUnusedShift"
+                                >
+                                    {{ t('production.confirmYesSave') }}
+                                </button>
+                            </div>
                         </div>
                     </div>
 
                     <div class="mt-4 flex items-center justify-end gap-3 border-t border-borderline pt-4">
                         <button
                             type="button"
-                            class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-secondary transition hover:bg-background"
+                            class="whitespace-nowrap rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-secondary transition hover:bg-background active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                             @click="closeMachineModal"
                         >
                             {{ t('production.cancel') }}
@@ -1301,7 +1309,7 @@ function submitInlineCreateWo() {
                         <button
                             type="submit"
                             :disabled="machinePlanForm.processing || hasAnyOverLimit"
-                            class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
+                            class="whitespace-nowrap rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover active:scale-[0.98] motion-reduce:active:scale-100 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                         >
                             {{ machinePlanForm.processing ? t('production.saving') : t('production.savePlan') }}
                         </button>
@@ -1314,11 +1322,11 @@ function submitInlineCreateWo() {
         <Modal :show="showHistory" max-width="2xl" @close="showHistory = false">
             <div class="p-6">
                 <div class="mb-4 flex items-start justify-between gap-4">
-                    <div>
-                        <h3 class="text-lg font-bold text-ink-primary">{{ t('production.planHistory') }}</h3>
+                    <div class="min-w-0">
+                        <h3 class="min-w-0 break-words text-lg font-bold text-ink-primary">{{ t('production.planHistory') }}</h3>
                         <p class="mt-1 text-sm text-ink-secondary">{{ t('production.historyForDate', { date: fmtDate(props.date) }) }}</p>
                     </div>
-                    <button type="button" class="text-sm text-ink-secondary hover:text-ink-primary" @click="showHistory = false">{{ t('production.cancel') }}</button>
+                    <button type="button" class="whitespace-nowrap rounded-md px-2 py-1 text-sm text-ink-secondary transition hover:text-ink-primary active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" @click="showHistory = false">{{ t('production.cancel') }}</button>
                 </div>
                 <div v-if="histories.length" class="max-h-[60vh] space-y-3 overflow-y-auto pr-1">
                     <div v-for="history in histories" :key="history.id" class="rounded-lg border border-borderline bg-background p-3">
@@ -1337,7 +1345,7 @@ function submitInlineCreateWo() {
         <!-- Modal: WO Baru (tombol toolbar atas) -->
         <Modal :show="showCreateWo" max-width="lg" @close="showCreateWo = false">
             <form class="space-y-4 p-6" @submit.prevent="submitCreateWo">
-                <h3 class="text-lg font-bold text-ink-primary">{{ t('production.addWo') }}</h3>
+                <h3 class="min-w-0 break-words text-lg font-bold text-ink-primary">{{ t('production.addWo') }}</h3>
 
                 <div>
                     <label class="mb-1 block text-sm font-medium text-ink-primary">{{ t('production.finishedGood') }}</label>
@@ -1361,8 +1369,8 @@ function submitInlineCreateWo() {
                 <p class="rounded-lg border border-borderline bg-background px-3 py-2 text-xs text-ink-secondary">{{ t('production.createWoForMachineHint') }}</p>
 
                 <div class="flex items-center justify-end gap-3 border-t border-borderline pt-4">
-                    <button type="button" class="rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-secondary transition hover:bg-background" @click="showCreateWo = false">{{ t('production.cancel') }}</button>
-                    <button type="submit" :disabled="createWoForm.processing" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover disabled:opacity-60">
+                    <button type="button" class="whitespace-nowrap rounded-md border border-borderline px-4 py-2 text-sm font-medium text-ink-secondary transition hover:bg-background active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface" @click="showCreateWo = false">{{ t('production.cancel') }}</button>
+                    <button type="submit" :disabled="createWoForm.processing" class="whitespace-nowrap rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover active:scale-[0.98] motion-reduce:active:scale-100 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface">
                         {{ createWoForm.processing ? t('production.saving') : t('production.saveWo') }}
                     </button>
                 </div>

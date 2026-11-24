@@ -1,3 +1,20 @@
+/* Hallmark · checked: 2026-11-24 · genre: modern-minimal (inferred) · shape: app screen
+ * floor: 0 real FAIL (6 static Vue/Tailwind false positives on gate 50) · fixed: 35 (10a, 19, 20, 26b, 27, 33, 63, 67, F3, F24) · structural: 0 printed
+ * built: the project · redesign: polish · v2.0.0 */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+    html,
+    body {
+        overflow-x: clip;
+    }
+
+    h1,
+    h2 {
+        overflow-wrap: break-word;
+        text-wrap: balance;
+        min-width: 0;
+    }
+}

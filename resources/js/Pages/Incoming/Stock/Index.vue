@@ -232,8 +232,8 @@ function toggleAllPackings() {
         <BackButton :href="route('incoming-data')" class="mb-4" />
 
         <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
-            <div>
-                <h1 class="text-2xl font-bold tracking-tight text-ink-primary">{{ t('incoming.stock') }}</h1>
+            <div class="min-w-0">
+                <h1 class="min-w-0 break-words text-2xl font-bold tracking-tight text-ink-primary">{{ t('incoming.stock') }}</h1>
                 <p class="mt-1 text-sm text-ink-secondary">
                     {{ isMaterialTab ? t('incoming.clickInvoiceToViewTags') : t('incoming.stockDescription') }}
                 </p>
@@ -242,7 +242,7 @@ function toggleAllPackings() {
                 <template v-if="isMaterialTab">
                     <span class="font-semibold tabular-nums text-ink-primary">{{ invoiceGroups.length }}</span>
                     <span>{{ t('incoming.invoiceGroups') }}</span>
-                    <span>·</span>
+                    <span class="h-3.5 w-px bg-borderline" aria-hidden="true" />
                 </template>
                 <span>{{ t('incoming.total') }}</span>
                 <span class="font-semibold tabular-nums text-ink-primary">{{ stocks.total }}</span>
@@ -254,19 +254,19 @@ function toggleAllPackings() {
             <div class="inline-flex rounded-xl border border-borderline bg-surface p-1">
                 <button
                     type="button"
-                    class="rounded-lg px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    class="whitespace-nowrap rounded-lg px-4 py-2 text-sm font-semibold transition active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                     :class="tab === 'material' ? 'bg-primary text-white' : 'text-ink-secondary hover:bg-primary-light'"
                     @click="navigate('material')"
                 >{{ t('incoming.tabMaterialStock') }}</button>
                 <button
                     type="button"
-                    class="rounded-lg px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    class="whitespace-nowrap rounded-lg px-4 py-2 text-sm font-semibold transition active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                     :class="tab === 'wip' ? 'bg-primary text-white' : 'text-ink-secondary hover:bg-primary-light'"
                     @click="navigate('wip')"
                 >{{ t('incoming.tabWipStock') }}</button>
                 <button
                     type="button"
-                    class="rounded-lg px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    class="whitespace-nowrap rounded-lg px-4 py-2 text-sm font-semibold transition active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                     :class="tab === 'fg' ? 'bg-primary text-white' : 'text-ink-secondary hover:bg-primary-light'"
                     @click="navigate('fg')"
                 >{{ t('incoming.tabFgStock') }}</button>
@@ -296,7 +296,7 @@ function toggleAllPackings() {
                 <button
                     v-if="isMaterialTab && invoiceGroups.length > 0"
                     type="button"
-                    class="rounded-lg border border-borderline bg-surface px-3 py-2 text-xs font-semibold text-ink-secondary transition hover:bg-primary-light hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    class="whitespace-nowrap rounded-lg border border-borderline bg-surface px-3 py-2 text-xs font-semibold text-ink-secondary transition hover:bg-primary-light hover:text-primary active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                     @click="toggleAllInvoices"
                 >
                     {{ allInvoicesExpanded ? t('incoming.collapseAllInvoices') : t('incoming.expandAllInvoices') }}
@@ -304,7 +304,7 @@ function toggleAllPackings() {
                 <button
                     v-if="isMaterialTab && expandableTagIds.length > 0"
                     type="button"
-                    class="rounded-lg border border-borderline bg-surface px-3 py-2 text-xs font-semibold text-ink-secondary transition hover:bg-primary-light hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    class="whitespace-nowrap rounded-lg border border-borderline bg-surface px-3 py-2 text-xs font-semibold text-ink-secondary transition hover:bg-primary-light hover:text-primary active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                     @click="toggleAllPackings"
                 >
                     {{ allPackingsExpanded ? t('incoming.collapseAllPackings') : t('incoming.expandAllPackings') }}
@@ -323,7 +323,7 @@ function toggleAllPackings() {
                 <button
                     type="button"
                     :aria-expanded="isInvoiceOpen(group.key)"
-                    class="flex w-full flex-wrap items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-primary-light/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+                    class="flex w-full flex-wrap items-center justify-between gap-4 whitespace-nowrap px-5 py-4 text-left transition hover:bg-primary-light/40 active:scale-[0.995] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
                     :class="isInvoiceOpen(group.key) ? 'border-b border-borderline bg-primary-light/25' : ''"
                     @click="toggleInvoice(group.key)"
                 >
@@ -333,7 +333,8 @@ function toggleAllPackings() {
                             :class="isInvoiceOpen(group.key) ? 'border-primary bg-primary text-white' : ''"
                         >
                             <svg
-                                class="h-4 w-4 transition-transform duration-150"
+                                aria-hidden="true"
+                                class="h-4 w-4 transition-transform duration-150 motion-reduce:transition-none"
                                 :class="isInvoiceOpen(group.key) ? 'rotate-90' : ''"
                                 fill="none"
                                 viewBox="0 0 24 24"
@@ -344,9 +345,9 @@ function toggleAllPackings() {
                             </svg>
                         </span>
 
-                        <div class="min-w-0">
+                        <div class="min-w-0 whitespace-normal">
                             <div class="flex flex-wrap items-center gap-2">
-                                <span class="text-xs font-semibold uppercase tracking-wider text-ink-secondary">
+                                <span class="text-xs font-medium text-ink-secondary">
                                     {{ t('incoming.invoice') }}
                                 </span>
                                 <span class="text-base font-bold text-ink-primary">
@@ -359,11 +360,11 @@ function toggleAllPackings() {
                                     {{ arrivalTypeLabel(group.arrival, t) }}
                                 </span>
                             </div>
-                            <div class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink-secondary">
+                            <div class="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs text-ink-secondary">
                                 <span v-if="group.arrival" class="font-medium text-ink-primary">
                                     {{ arrivalSenderName(group.arrival) }}
                                 </span>
-                                <span v-if="group.arrival?.arrival_no">· {{ group.arrival.arrival_no }}</span>
+                                <span v-if="group.arrival?.arrival_no">{{ group.arrival.arrival_no }}</span>
                             </div>
                         </div>
                     </div>
@@ -412,7 +413,7 @@ function toggleAllPackings() {
                         <div class="overflow-x-auto rounded-lg border border-borderline bg-surface">
                             <table class="min-w-full divide-y divide-borderline text-sm">
                                 <thead class="bg-background">
-                                    <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
+                                    <tr class="text-left text-xs font-semibold text-ink-secondary">
                                         <th scope="col" class="px-4 py-2.5">{{ t('incoming.tag') }}</th>
                                         <th scope="col" class="px-4 py-2.5">{{ t('incoming.part') }}</th>
                                         <th scope="col" class="px-4 py-2.5">{{ t('master.model') }}</th>
@@ -438,7 +439,7 @@ function toggleAllPackings() {
                                                     <span class="mt-0.5 select-none font-bold text-primary" aria-hidden="true">↳</span>
                                                     <div>
                                                         <div class="font-semibold text-ink-primary">{{ st.tag ?? '—' }}</div>
-                                                        <div v-if="st.receive?.bundle_unit" class="text-[11px] uppercase text-ink-secondary">
+                                                        <div v-if="st.receive?.bundle_unit" class="text-[11px] text-ink-secondary">
                                                             1 {{ st.receive.bundle_unit }}
                                                         </div>
                                                     </div>
@@ -455,12 +456,13 @@ function toggleAllPackings() {
                                                     v-if="hasPackings(st)"
                                                     type="button"
                                                     :aria-expanded="Boolean(expandedTags[st.id])"
-                                                    class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-primary/30 bg-primary-light px-2.5 py-1 text-xs font-semibold text-primary transition hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                                                    class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-primary/30 bg-primary-light px-2.5 py-1 text-xs font-semibold text-primary transition hover:border-primary active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                                                     @click="toggleTag(st.id)"
                                                 >
                                                     <span>{{ packingSummary(st) }}</span>
                                                     <svg
-                                                        class="h-3.5 w-3.5 shrink-0 transition-transform"
+                                                        aria-hidden="true"
+                                                        class="h-3.5 w-3.5 shrink-0 transition-transform motion-reduce:transition-none"
                                                         :class="expandedTags[st.id] ? 'rotate-180' : ''"
                                                         fill="none"
                                                         viewBox="0 0 24 24"
@@ -476,7 +478,7 @@ function toggleAllPackings() {
                                                 >
                                                     {{ packingSummary(st) }}
                                                 </span>
-                                                <span v-else class="text-ink-secondary">—</span>
+                                                <span v-else class="text-ink-secondary">-</span>
                                             </td>
                                             <td class="px-4 py-3 text-ink-primary">
                                                 {{ st.receive?.location_code ?? st.location_code ?? t('incoming.locationNone') }}
@@ -494,11 +496,11 @@ function toggleAllPackings() {
                                                     target="_blank"
                                                     rel="noopener"
                                                     :aria-label="`${t('incoming.printLabel')} ${st.tag ?? ''}`.trim()"
-                                                    class="inline-flex rounded-md border border-borderline px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                                                    class="inline-flex whitespace-nowrap rounded-md border border-borderline px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary-light active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                                                 >
                                                     {{ t('incoming.label') }}
                                                 </a>
-                                                <span v-else class="text-xs text-ink-secondary">—</span>
+                                                <span v-else class="text-xs text-ink-secondary">-</span>
                                             </td>
                                         </tr>
 
@@ -510,20 +512,23 @@ function toggleAllPackings() {
                                                         <div class="flex flex-wrap items-center justify-between gap-2 border-b border-borderline bg-primary-light/20 px-4 py-2 text-xs">
                                                             <span class="flex items-center gap-1.5 font-semibold text-ink-primary">
                                                                 <span class="font-bold text-primary" aria-hidden="true">↳</span>
-                                                                {{ t('incoming.packingDetailTitle', { tag: st.tag ?? '—' }) }}
+                                                                {{ t('incoming.packingDetailTitle', { tag: st.tag ?? '-' }) }}
                                                             </span>
-                                                            <span class="text-ink-secondary">
-                                                                {{ packingSummary(st) }} · {{ t('incoming.qty') }}:
-                                                                <span class="font-semibold tabular-nums text-ink-primary">{{ fmt(totalPackingQty(st)) }} {{ st.qty_unit ?? '' }}</span>
-                                                                <template v-if="totalPackingNetWeight(st) !== null">
-                                                                    · {{ t('incoming.netWeight') }}:
+                                                            <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-ink-secondary">
+                                                                <span>{{ packingSummary(st) }}</span>
+                                                                <span>
+                                                                    {{ t('incoming.qty') }}:
+                                                                    <span class="font-semibold tabular-nums text-ink-primary">{{ fmt(totalPackingQty(st)) }} {{ st.qty_unit ?? '' }}</span>
+                                                                </span>
+                                                                <span v-if="totalPackingNetWeight(st) !== null">
+                                                                    {{ t('incoming.netWeight') }}:
                                                                     <span class="font-semibold tabular-nums text-ink-primary">{{ fmt(totalPackingNetWeight(st)) }} KGM</span>
-                                                                </template>
-                                                            </span>
+                                                                </span>
+                                                            </div>
                                                         </div>
                                                         <table class="min-w-full divide-y divide-borderline text-xs">
                                                             <thead class="bg-background">
-                                                                <tr class="text-left font-semibold uppercase tracking-wide text-ink-secondary">
+                                                                <tr class="text-left font-semibold text-ink-secondary">
                                                                     <th scope="col" class="px-4 py-2">#</th>
                                                                     <th scope="col" class="px-4 py-2">{{ t('incoming.packingNo') }}</th>
                                                                     <th scope="col" class="px-4 py-2">{{ t('incoming.packingType') }}</th>
@@ -569,7 +574,7 @@ function toggleAllPackings() {
         <div v-else class="overflow-x-auto rounded-xl border border-borderline bg-surface">
             <table class="min-w-full divide-y divide-borderline text-sm">
                 <thead class="bg-background">
-                    <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
+                    <tr class="text-left text-xs font-semibold text-ink-secondary">
                         <th scope="col" class="px-4 py-3">{{ t('incoming.part') }}</th>
                         <th scope="col" class="px-4 py-3">{{ t('master.model') }}</th>
                         <th scope="col" class="px-4 py-3">{{ t('incoming.type') }}</th>
@@ -593,9 +598,10 @@ function toggleAllPackings() {
                             <div>{{ st.part?.part_type?.name ?? '—' }}</div>
                             <span
                                 v-if="st.receive?.arrival_item?.arrival"
-                                :class="['mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold', arrivalTypeBadgeClass(resolveArrivalType(st.receive.arrival_item.arrival))]"
+                                :class="['mt-1 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold', arrivalTypeBadgeClass(resolveArrivalType(st.receive.arrival_item.arrival))]"
                             >
-                                {{ arrivalTypeLabel(st.receive.arrival_item.arrival, t) }} · {{ arrivalSenderName(st.receive.arrival_item.arrival) }}
+                                <span>{{ arrivalTypeLabel(st.receive.arrival_item.arrival, t) }}</span>
+                                <span class="font-normal opacity-80">{{ arrivalSenderName(st.receive.arrival_item.arrival) }}</span>
                             </span>
                         </td>
                         <td class="px-4 py-3 font-medium text-ink-primary">{{ st.tag ?? '—' }}</td>
@@ -615,11 +621,11 @@ function toggleAllPackings() {
                                 target="_blank"
                                 rel="noopener"
                                 :aria-label="`${t('incoming.printLabel')} ${st.tag ?? ''}`.trim()"
-                                class="inline-flex rounded-md border border-borderline px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                                class="inline-flex whitespace-nowrap rounded-md border border-borderline px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary-light active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                             >
                                 {{ t('incoming.label') }}
                             </a>
-                            <span v-else class="text-xs text-ink-secondary">—</span>
+                            <span v-else class="text-xs text-ink-secondary">-</span>
                         </td>
                     </tr>
                     <tr v-if="!stocks.data.length">

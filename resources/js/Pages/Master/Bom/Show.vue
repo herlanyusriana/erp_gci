@@ -50,25 +50,27 @@ function sourceLabel(source: string | null): string {
         <BackButton :href="route('boms.index')" class="mb-4" />
 
         <div class="mb-6 flex flex-wrap items-start justify-between gap-3">
-            <div>
-                <h1 class="text-2xl font-bold tracking-tight text-ink-primary">
+            <div class="min-w-0">
+                <h1 class="min-w-0 break-words text-2xl font-bold tracking-tight text-ink-primary">
                     {{ t('master.bomPartTitle', { name: bom.part?.part_number ?? '' }) }}
                 </h1>
-                <p class="mt-1 text-sm text-ink-secondary">
-                    {{ bom.part?.part_name }} · {{ bom.part?.model ?? '—' }} ·
-                    <span class="font-medium text-ink-primary">{{ t('master.version', { version: bom.version }) }}</span> ·
-                    {{ t('master.operationCount', { count: items.length }) }}
-                </p>
+                <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-secondary">
+                    <span v-if="bom.part?.part_name">{{ bom.part.part_name }}</span>
+                    <span v-if="bom.part?.model" class="rounded bg-background px-1.5 py-0.5 text-xs text-ink-secondary">{{ bom.part.model }}</span>
+                    <span class="font-medium text-ink-primary">{{ t('master.version', { version: bom.version }) }}</span>
+                    <span>{{ t('master.operationCount', { count: items.length }) }}</span>
+                </div>
             </div>
-            <div class="rounded-lg border border-borderline bg-surface px-4 py-2 text-sm text-ink-secondary">
-                {{ t('master.type') }}: <span class="font-semibold text-primary">{{ bom.part?.part_type?.code ?? '—' }}</span>
-                · {{ t('master.uom') }}: <span class="font-semibold text-ink-primary">{{ bom.part?.uom?.code ?? '—' }}</span>
+            <div class="flex items-center gap-3 rounded-lg border border-borderline bg-surface px-4 py-2 text-sm text-ink-secondary">
+                <span>{{ t('master.type') }}: <span class="font-semibold text-primary">{{ bom.part?.part_type?.code ?? '-' }}</span></span>
+                <span class="h-3.5 w-px bg-borderline" aria-hidden="true" />
+                <span>{{ t('master.uom') }}: <span class="font-semibold text-ink-primary">{{ bom.part?.uom?.code ?? '-' }}</span></span>
             </div>
             <div class="flex gap-2">
                 <Link
                     v-if="canViewCycleTimes"
                     :href="route('cycle-times.index')"
-                    class="inline-flex items-center rounded-md border border-borderline bg-surface px-3 py-1.5 text-xs font-semibold text-ink-primary transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                    class="inline-flex items-center whitespace-nowrap rounded-md border border-borderline bg-surface px-3 py-1.5 text-xs font-semibold text-ink-primary transition hover:bg-background active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
                 >
                     {{ t('master.manageCycleTime') }}
                 </Link>
@@ -80,7 +82,7 @@ function sourceLabel(source: string | null): string {
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-borderline text-sm">
                     <thead class="bg-background">
-                        <tr class="text-left text-xs font-semibold uppercase tracking-wide text-ink-secondary">
+                        <tr class="text-left text-xs font-semibold text-ink-secondary">
                             <th scope="col" class="px-3 py-3">{{ t('master.sequence') }}</th>
                             <th scope="col" class="px-3 py-3">{{ t('master.process') }}</th>
                             <th scope="col" class="px-3 py-3">{{ t('master.machine') }}</th>
@@ -117,7 +119,7 @@ function sourceLabel(source: string | null): string {
                             <td class="px-3 py-2.5 text-ink-secondary">{{ it.uom_rm ?? '-' }}</td>
                             <td class="px-3 py-2.5">
                                 <StatusBadge v-if="it.special_code" tone="danger">{{ it.special_code }}</StatusBadge>
-                                <span v-else class="text-ink-secondary">—</span>
+                                <span v-else class="text-ink-secondary">-</span>
                             </td>
                             <td class="px-3 py-2.5">
                                 <StatusBadge :status="it.source">{{ sourceLabel(it.source) }}</StatusBadge>

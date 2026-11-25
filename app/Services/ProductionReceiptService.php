@@ -8,6 +8,7 @@ use App\Models\MaterialIssue;
 use App\Models\MaterialIssueItem;
 use App\Models\PartStock;
 use App\Models\ProductionMaterialReceipt;
+use App\Models\ProductionPlanItem;
 use App\Models\WorkOrder;
 use App\Models\WorkOrderItem;
 use App\Models\WorkOrderMaterialBooking;
@@ -75,15 +76,43 @@ class ProductionReceiptService
             ->with([
                 'materialIssue:id,issue_no,work_order_id,issue_date',
                 'materialIssue.workOrder:id,wo_no,status',
-                'workOrderItem:id,work_order_id,machine_id,sequence,uom_rm',
+                'workOrderItem:id,work_order_id,machine_id,parent_part_id,sequence,uom_rm',
                 'workOrderItem.machine:id,machine_code,machine_name',
                 'part:id,part_number,part_name,model,size',
             ])
             ->orderBy('id')
             ->get();
 
+        $woIds = $items
+            ->pluck('workOrderItem.work_order_id')
+            ->filter()
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        $plannedByOrigin = [];
+        $plannedByWip = [];
+        if ($woIds !== []) {
+            $plannedItems = ProductionPlanItem::query()
+                ->where('machine_id', $machine->id)
+                ->where('target_d', '>', 0)
+                ->whereIn('work_order_id', $woIds)
+                ->get(['work_order_id', 'origin_machine_id', 'wip_part_id']);
+
+            foreach ($plannedItems as $pi) {
+                $wId = (int) $pi->work_order_id;
+                if ($pi->origin_machine_id !== null) {
+                    $plannedByOrigin[$wId.'|'.((int) $pi->origin_machine_id)] = true;
+                }
+                if ($pi->wip_part_id !== null) {
+                    $plannedByWip[$wId.'|'.((int) $pi->wip_part_id)] = true;
+                }
+            }
+        }
+
         return $items
-            ->filter(function (MaterialIssueItem $item) use ($targetGroup): bool {
+            ->filter(function (MaterialIssueItem $item) use ($targetGroup, $plannedByOrigin, $plannedByWip): bool {
                 $woItem = $item->workOrderItem;
                 if ($woItem === null) {
                     return false;
@@ -91,13 +120,28 @@ class ProductionReceiptService
                 if ($woItem->machine_id === null) {
                     return true;
                 }
+                if (MachineRouting::groupKey($woItem->machine, $woItem->machine_id) === $targetGroup) {
+                    return true;
+                }
 
-                return MachineRouting::groupKey($woItem->machine, $woItem->machine_id) === $targetGroup;
+                $wId = (int) $woItem->work_order_id;
+                if (isset($plannedByOrigin[$wId.'|'.((int) $woItem->machine_id)])) {
+                    return true;
+                }
+
+                return $woItem->parent_part_id !== null
+                    && isset($plannedByWip[$wId.'|'.((int) $woItem->parent_part_id)]);
             })
-            ->sortBy(function (MaterialIssueItem $item) use ($machine): array {
-                $exactMachine = (int) ($item->workOrderItem?->machine_id ?? 0) === (int) $machine->id ? 0 : 1;
+            ->sortBy(function (MaterialIssueItem $item) use ($machine, $plannedByOrigin, $plannedByWip): array {
+                $woItem = $item->workOrderItem;
+                $wId = (int) ($woItem?->work_order_id ?? 0);
+                $isPlannedHere = $woItem !== null && (
+                    ($woItem->machine_id !== null && isset($plannedByOrigin[$wId.'|'.((int) $woItem->machine_id)]))
+                    || ($woItem->parent_part_id !== null && isset($plannedByWip[$wId.'|'.((int) $woItem->parent_part_id)]))
+                );
+                $exactMachine = ((int) ($woItem?->machine_id ?? 0) === (int) $machine->id || $isPlannedHere) ? 0 : 1;
 
-                return [$exactMachine, (int) ($item->workOrderItem?->sequence ?? 0), (int) $item->id];
+                return [$exactMachine, (int) ($woItem?->sequence ?? 0), (int) $item->id];
             })
             ->values()
             ->map(fn (MaterialIssueItem $item) => [

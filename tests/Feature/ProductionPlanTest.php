@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\Machine;
 use App\Models\MachineCycleTime;
+use App\Models\MaterialIssue;
+use App\Models\MaterialIssueItem;
 use App\Models\Part;
 use App\Models\PartStock;
 use App\Models\ProductionPlan;
@@ -12,8 +14,12 @@ use App\Models\ProductionResult;
 use App\Models\User;
 use App\Models\WorkOrder;
 use App\Services\ProductionPlanScheduleService;
+use App\Services\ProductionReceiptService;
+use App\Services\ProductionSessionService;
+use App\Support\MachineRouting;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Validation\ValidationException;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -846,5 +852,280 @@ class ProductionPlanTest extends TestCase
             200.0,
             (float) ProductionPlanItem::where('work_order_id', $wo->id)->where('machine_id', $aida->id)->value('target_d'),
         );
+    }
+
+    public function test_per_day_machine_reassignment_updates_both_boards_modals_cycle_time_fallback_and_upstream_gating(): void
+    {
+        $monday = '2026-11-23';
+        $tuesday = '2026-11-24';
+        $wednesday = '2026-11-25';
+        $this->clearStocksForParts(['AAN30056405-WIP5', 'AAN30056405-WIP6', 'AAN30056405-WIP7']);
+        $wo = $this->createWo(500, $monday);
+
+        $tplKukil = Machine::where('machine_name', 'TPL KUKIL')->firstOrFail();
+        $aida100 = Machine::where('machine_name', 'AIDA 100 TON')->firstOrFail();
+        $assy1 = Machine::where('machine_name', 'ASSY. TPL COMP BASE 1')->firstOrFail();
+        $wip5 = Part::where('part_number', 'AAN30056405-WIP5')->firstOrFail();
+
+        ProductionPlanItem::whereIn('machine_id', [$tplKukil->id, $aida100->id])
+            ->whereHas('plan', fn ($q) => $q->whereIn('plan_date', [$monday, $tuesday, $wednesday]))
+            ->delete();
+
+        MachineCycleTime::updateOrCreate(
+            ['machine_id' => $tplKukil->id, 'part_id' => $wip5->id],
+            ['cycle_time_seconds' => 6.0, 'qdc_minutes' => 15.0, 'is_active' => true],
+        );
+        MachineCycleTime::where('part_id', $wip5->id)
+            ->where('machine_id', '!=', $tplKukil->id)
+            ->delete();
+
+        $this->put(route('production-plans.machines.save', $tplKukil), [
+            'date' => $monday,
+            'rows' => [
+                [
+                    'work_order_id' => $wo->id,
+                    'd_seq' => 1,
+                    'd_qty' => 200,
+                    'd_machine_id' => $tplKukil->id,
+                    'd1_seq' => 1,
+                    'd1_qty' => 150,
+                    'd1_machine_id' => $aida100->id,
+                    'd2_seq' => null,
+                    'd2_qty' => null,
+                ],
+            ],
+        ])->assertRedirect(route('production-plans.index', ['date' => $monday]));
+
+        $this->get(route('production-plans.index', ['date' => $monday]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('machines', function ($machines) use ($tplKukil, $aida100, $assy1, $wo) {
+                    $byId = collect($machines)->keyBy('id');
+                    $tpl = $byId->get($tplKukil->id);
+                    $aida = $byId->get($aida100->id);
+                    $p2 = $byId->get($assy1->id);
+
+                    if ($tpl === null || $aida === null || $p2 === null) {
+                        return false;
+                    }
+
+                    $tplPlanned = collect($tpl['planned_rows'] ?? [])->firstWhere('work_order_id', $wo->id);
+                    $tplModal = collect($tpl['modal_rows'] ?? [])->firstWhere('work_order_id', $wo->id);
+                    $aidaPlanned = collect($aida['planned_rows'] ?? [])->firstWhere('work_order_id', $wo->id);
+                    $aidaModal = collect($aida['modal_rows'] ?? [])->firstWhere('work_order_id', $wo->id);
+                    $p2Modal = collect($p2['modal_rows'] ?? [])->firstWhere('work_order_id', $wo->id);
+
+                    return $tplPlanned !== null
+                        && (float) $tplPlanned['days']['d']['qty'] === 200.0
+                        && $tplPlanned['days']['d1'] === null
+                        && $tplPlanned['days']['d2'] === null
+                        && $tplModal !== null
+                        && (float) $tplModal['avail_qty'] === 150.0
+                        && (int) $tplModal['days']['d']['machine_id'] === $tplKukil->id
+                        && (int) $tplModal['days']['d1']['machine_id'] === $aida100->id
+                        && (float) $tplModal['days']['d1']['qty'] === 150.0
+                        && $aidaPlanned !== null
+                        && $aidaPlanned['is_reassigned'] === true
+                        && (int) $aidaPlanned['origin_machine_id'] === $tplKukil->id
+                        && $aidaPlanned['origin_machine_name'] === 'TPL KUKIL'
+                        && $aidaPlanned['days']['d'] === null
+                        && (float) $aidaPlanned['days']['d1']['qty'] === 150.0
+                        && $aidaPlanned['days']['d1']['start_time'] === '07:30'
+                        && (float) $aidaPlanned['cycle_time_seconds'] === 6.0
+                        && (float) $aidaPlanned['qdc_minutes'] === 15.0
+                        && $aidaModal !== null
+                        && $aidaModal['is_reassigned'] === true
+                        && (int) $aidaModal['origin_machine_id'] === $tplKukil->id
+                        && (int) $aidaModal['days']['d']['machine_id'] === $tplKukil->id
+                        && (int) $aidaModal['days']['d1']['machine_id'] === $aida100->id
+                        && $p2Modal !== null
+                        && (float) $p2Modal['day_caps']['d'] === 200.0
+                        && (float) $p2Modal['day_caps']['d1'] === 350.0
+                        && (float) $p2Modal['day_caps']['d2'] === 350.0;
+                }));
+
+        $this->put(route('production-plans.machines.save', $aida100), [
+            'date' => $monday,
+            'rows' => [
+                [
+                    'work_order_id' => $wo->id,
+                    'origin_machine_id' => $tplKukil->id,
+                    'd_seq' => 1,
+                    'd_qty' => 200,
+                    'd_machine_id' => $tplKukil->id,
+                    'd1_seq' => 1,
+                    'd1_qty' => 150,
+                    'd1_machine_id' => $tplKukil->id,
+                    'd2_seq' => null,
+                    'd2_qty' => null,
+                ],
+            ],
+        ])->assertRedirect(route('production-plans.index', ['date' => $monday]));
+
+        $woPlanItems = ProductionPlanItem::query()
+            ->where('work_order_id', $wo->id)
+            ->get();
+
+        $this->assertCount(2, $woPlanItems);
+        $this->assertTrue(
+            $woPlanItems->every(fn (ProductionPlanItem $item): bool => (int) $item->machine_id === $tplKukil->id && $item->origin_machine_id === null),
+        );
+
+        $this->get(route('production-plans.index', ['date' => $monday]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('machines', function ($machines) use ($tplKukil, $aida100, $wo) {
+                    $byId = collect($machines)->keyBy('id');
+                    $tpl = $byId->get($tplKukil->id);
+                    $aida = $byId->get($aida100->id);
+
+                    if ($tpl === null || $aida === null) {
+                        return false;
+                    }
+
+                    $tplPlanned = collect($tpl['planned_rows'] ?? [])->firstWhere('work_order_id', $wo->id);
+                    $aidaHasPlanned = collect($aida['planned_rows'] ?? [])->contains('work_order_id', $wo->id);
+                    $aidaHasModal = collect($aida['modal_rows'] ?? [])->contains('work_order_id', $wo->id);
+
+                    return ! $aidaHasPlanned
+                        && ! $aidaHasModal
+                        && $tplPlanned !== null
+                        && $tplPlanned['is_reassigned'] === false
+                        && (float) $tplPlanned['days']['d']['qty'] === 200.0
+                        && (float) $tplPlanned['days']['d1']['qty'] === 150.0
+                        && $tplPlanned['days']['d2'] === null;
+                }));
+    }
+
+    public function test_machine_reassignment_rejects_subcon_and_inactive_target_machines(): void
+    {
+        $monday = '2026-11-23';
+        $wo = $this->createWo(200, $monday);
+        $tplKukil = Machine::where('machine_name', 'TPL KUKIL')->firstOrFail();
+        $subcon = Machine::whereRaw("UPPER(COALESCE(machine_code, '')) = 'SUBCON' OR LOWER(COALESCE(machine_name, '')) LIKE '%subcon%'")
+            ->firstOrFail();
+        $inactive = Machine::create([
+            'machine_code' => 'TEST_INACTIVE_'.uniqid(),
+            'machine_name' => 'TEST INACTIVE MACHINE',
+            'is_active' => false,
+        ]);
+
+        $this->put(route('production-plans.machines.save', $tplKukil), [
+            'date' => $monday,
+            'rows' => [
+                [
+                    'work_order_id' => $wo->id,
+                    'd_seq' => 1,
+                    'd_qty' => 100,
+                    'd_machine_id' => $subcon->id,
+                    'd1_seq' => null,
+                    'd1_qty' => null,
+                    'd2_seq' => null,
+                    'd2_qty' => null,
+                ],
+            ],
+        ])->assertSessionHasErrors([
+            'rows.0.d_machine_id' => __('Mesin pengganti tidak valid atau tidak aktif.'),
+        ]);
+
+        $this->assertSame(0, ProductionPlanItem::where('work_order_id', $wo->id)->count());
+
+        $this->put(route('production-plans.machines.save', $tplKukil), [
+            'date' => $monday,
+            'rows' => [
+                [
+                    'work_order_id' => $wo->id,
+                    'd_seq' => 1,
+                    'd_qty' => 100,
+                    'd_machine_id' => $inactive->id,
+                    'd1_seq' => null,
+                    'd1_qty' => null,
+                    'd2_seq' => null,
+                    'd2_qty' => null,
+                ],
+            ],
+        ])->assertSessionHasErrors([
+            'rows.0.d_machine_id' => __('Mesin pengganti tidak valid atau tidak aktif.'),
+        ]);
+
+        $this->assertSame(0, ProductionPlanItem::where('work_order_id', $wo->id)->count());
+    }
+
+    public function test_reassigned_machine_is_eligible_in_apk_routing_session_and_material_receipt(): void
+    {
+        $monday = '2026-11-23';
+        $wo = $this->createWo(200, $monday);
+        $wo->update(['status' => 'in_progress']);
+
+        $tplKukil = Machine::where('machine_name', 'TPL KUKIL')->firstOrFail();
+        $aida100 = Machine::where('machine_name', 'AIDA 100 TON')->firstOrFail();
+        $wip5 = Part::where('part_number', 'AAN30056405-WIP5')->firstOrFail();
+        $rmPart = Part::where('part_number', 'CBKG07256C')->firstOrFail();
+
+        $tplWoItem = $wo->items()
+            ->with('machine')
+            ->where('machine_id', $tplKukil->id)
+            ->where('child_part_id', $rmPart->id)
+            ->firstOrFail();
+
+        $sessionService = app(ProductionSessionService::class);
+        $receiptService = app(ProductionReceiptService::class);
+
+        $issue = MaterialIssue::create([
+            'issue_no' => 'MI-REASSIGN-'.uniqid(),
+            'work_order_id' => $wo->id,
+            'issue_date' => $monday,
+            'status' => 'posted',
+        ]);
+        $issueItem = MaterialIssueItem::create([
+            'material_issue_id' => $issue->id,
+            'work_order_item_id' => $tplWoItem->id,
+            'part_id' => $rmPart->id,
+            'tag' => 'TAG-REASSIGN-'.uniqid(),
+            'qty' => 50,
+            'uom' => $tplWoItem->uom_rm ?? 'KGM',
+        ]);
+
+        $rejectedBefore = false;
+        try {
+            MachineRouting::assertEligible($aida100, $tplWoItem);
+        } catch (ValidationException $e) {
+            $rejectedBefore = array_key_exists('machine_id', $e->errors());
+        }
+        $this->assertTrue($rejectedBefore);
+
+        $partsBefore = collect($sessionService->context($aida100)['parts']);
+        $this->assertFalse(
+            $partsBefore->contains(fn (array $p): bool => (int) $p['work_order_id'] === $wo->id && (int) $p['part_id'] === $wip5->id),
+        );
+
+        $pendingBefore = collect($receiptService->pendingForMachine($aida100));
+        $this->assertFalse($pendingBefore->contains('material_issue_item_id', $issueItem->id));
+
+        $this->put(route('production-plans.machines.save', $tplKukil), [
+            'date' => $monday,
+            'rows' => [
+                [
+                    'work_order_id' => $wo->id,
+                    'd_seq' => 1,
+                    'd_qty' => 100,
+                    'd_machine_id' => $aida100->id,
+                    'd1_seq' => null,
+                    'd1_qty' => null,
+                    'd2_seq' => null,
+                    'd2_qty' => null,
+                ],
+            ],
+        ])->assertRedirect(route('production-plans.index', ['date' => $monday]));
+
+        MachineRouting::assertEligible($aida100, $tplWoItem);
+
+        $partsAfter = collect($sessionService->context($aida100)['parts']);
+        $this->assertTrue(
+            $partsAfter->contains(fn (array $p): bool => (int) $p['work_order_id'] === $wo->id && (int) $p['part_id'] === $wip5->id),
+        );
+
+        $pendingAfter = collect($receiptService->pendingForMachine($aida100));
+        $this->assertTrue($pendingAfter->contains('material_issue_item_id', $issueItem->id));
     }
 }

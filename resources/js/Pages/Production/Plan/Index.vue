@@ -30,6 +30,9 @@ type PlanHistory = {
 
 interface ModalRowDraft {
     work_order_id: number;
+    origin_machine_id: number;
+    origin_machine_name: string | null;
+    is_reassigned: boolean;
     wo_no: string;
     wo_status: string;
     remaining_qty: number;
@@ -43,14 +46,17 @@ interface ModalRowDraft {
     d_qty: string;
     d_qdc: boolean;
     d_qdc_touched: boolean;
+    d_machine_id: number;
     d1_seq: string;
     d1_qty: string;
     d1_qdc: boolean;
     d1_qdc_touched: boolean;
+    d1_machine_id: number;
     d2_seq: string;
     d2_qty: string;
     d2_qdc: boolean;
     d2_qdc_touched: boolean;
+    d2_machine_id: number;
 }
 
 interface OverloadPrompt {
@@ -284,9 +290,12 @@ const inlineFgOptions = computed<PartOpt[]>(() => {
     return filtered.length > 0 ? filtered : props.fgParts;
 });
 
-function toModalDraft(row: ProductionPlanMachineRow): ModalRowDraft {
+function toModalDraft(row: ProductionPlanMachineRow, machineId: number): ModalRowDraft {
     return {
         work_order_id: row.work_order_id,
+        origin_machine_id: row.origin_machine_id ?? machineId,
+        origin_machine_name: row.origin_machine_name ?? null,
+        is_reassigned: Boolean(row.is_reassigned),
         wo_no: row.wo_no,
         wo_status: row.wo_status,
         remaining_qty: row.remaining_qty,
@@ -302,14 +311,17 @@ function toModalDraft(row: ProductionPlanMachineRow): ModalRowDraft {
         d_qty: row.days.d ? String(row.days.d.qty) : '',
         d_qdc: row.days.d ? Boolean(row.days.d.apply_qdc) : false,
         d_qdc_touched: row.days.d !== null,
+        d_machine_id: row.days.d?.machine_id ?? machineId,
         d1_seq: row.days.d1 ? String(row.days.d1.sequence) : '',
         d1_qty: row.days.d1 ? String(row.days.d1.qty) : '',
         d1_qdc: row.days.d1 ? Boolean(row.days.d1.apply_qdc) : false,
         d1_qdc_touched: row.days.d1 !== null,
+        d1_machine_id: row.days.d1?.machine_id ?? machineId,
         d2_seq: row.days.d2 ? String(row.days.d2.sequence) : '',
         d2_qty: row.days.d2 ? String(row.days.d2.qty) : '',
         d2_qdc: row.days.d2 ? Boolean(row.days.d2.apply_qdc) : false,
         d2_qdc_touched: row.days.d2 !== null,
+        d2_machine_id: row.days.d2?.machine_id ?? machineId,
     };
 }
 
@@ -325,7 +337,7 @@ function openMachineModal(machineId: number) {
         d1: machine.shift_counts?.d1 ?? 3,
         d2: machine.shift_counts?.d2 ?? 3,
     };
-    machinePlanForm.rows = machine.modal_rows.map(toModalDraft);
+    machinePlanForm.rows = machine.modal_rows.map((row) => toModalDraft(row, machine.id));
     showInlineCreateWo.value = false;
     showAllFgInInlineCreate.value = false;
     overloadPrompt.value = null;
@@ -344,13 +356,20 @@ function closeMachineModal() {
 watch(
     () => activeMachine.value?.modal_rows,
     (nextRows) => {
-        if (!showMachineModal.value || !nextRows) return;
-        const existingByWo = new Map(machinePlanForm.rows.map((r) => [r.work_order_id, r]));
+        const machineId = activeMachine.value?.id;
+        if (!showMachineModal.value || !nextRows || machineId == null) return;
+        const existingByKey = new Map(
+            machinePlanForm.rows.map((r) => [`${r.work_order_id}-${r.origin_machine_id}`, r]),
+        );
         machinePlanForm.rows = nextRows.map((row) => {
-            const kept = existingByWo.get(row.work_order_id);
-            if (!kept) return toModalDraft(row);
+            const rowOriginId = row.origin_machine_id ?? machineId;
+            const kept = existingByKey.get(`${row.work_order_id}-${rowOriginId}`);
+            if (!kept) return toModalDraft(row, machineId);
             return {
                 ...kept,
+                origin_machine_id: rowOriginId,
+                origin_machine_name: row.origin_machine_name ?? null,
+                is_reassigned: Boolean(row.is_reassigned),
                 remaining_qty: row.remaining_qty,
                 wo_status: row.wo_status,
                 has_upstream: Boolean(row.has_upstream),
@@ -430,11 +449,13 @@ function capacityMinutesFor(key: DayKey): number {
 
 function dayUsageSummary(key: DayKey) {
     const capMinutes = capacityMinutesFor(key);
+    const currentMachineId = activeMachine.value?.id;
     let usedSeconds = 0;
     let plannedCount = 0;
     let timedCount = 0;
 
     for (const row of machinePlanForm.rows) {
+        if (currentMachineId != null && row[`${key}_machine_id`] !== currentMachineId) continue;
         const qty = numOrZero(row[`${key}_qty`]);
         if (qty <= 0) continue;
         plannedCount++;
@@ -461,6 +482,7 @@ function dayUsageSummary(key: DayKey) {
 
 function findFirstOverload(): OverloadPrompt | null {
     const nextMap: Record<DayKey, DayKey | null> = { d: 'd1', d1: 'd2', d2: null };
+    const currentMachineId = activeMachine.value?.id;
 
     for (const key of dayKeys) {
         const capSeconds = capacityMinutesFor(key) * 60;
@@ -473,7 +495,12 @@ function findFirstOverload(): OverloadPrompt | null {
                 seq: Number(row[`${key}_seq`]) > 0 ? Number(row[`${key}_seq`]) : 1,
                 qty: numOrZero(row[`${key}_qty`]),
             }))
-            .filter((e) => e.qty > 0 && e.row.cycle_time_seconds != null && e.row.cycle_time_seconds > 0)
+            .filter((e) =>
+                (currentMachineId == null || e.row[`${key}_machine_id`] === currentMachineId)
+                && e.qty > 0
+                && e.row.cycle_time_seconds != null
+                && e.row.cycle_time_seconds > 0,
+            )
             .sort((a, b) => (a.seq - b.seq) || (a.idx - b.idx));
 
         let remainingSeconds = capSeconds;
@@ -531,18 +558,18 @@ function applyRollOver() {
 
     const curr = prompt.dayKey;
     const next = prompt.nextDayKey;
+    const currentMachineId = activeMachine.value?.id;
 
-    // Potong hari saat ini ke maks. qty (kosongkan bila 0).
     targetRow[`${curr}_qty`] = prompt.maxQty > 0 ? String(prompt.maxQty) : '';
     if (prompt.maxQty <= 0) {
         targetRow[`${curr}_seq`] = '';
         targetRow[`${curr}_qdc`] = false;
     }
 
-    // Geser sequence baris lain di hari berikutnya (+1) supaya baris roll over masuk sebagai Seq 1 tanpa QDC.
     for (let i = 0; i < machinePlanForm.rows.length; i++) {
         if (i === prompt.rowIndex) continue;
         const other = machinePlanForm.rows[i];
+        if (currentMachineId != null && other[`${next}_machine_id`] !== currentMachineId) continue;
         if (numOrZero(other[`${next}_qty`]) > 0) {
             const prevSeq = Number(other[`${next}_seq`]) > 0 ? Number(other[`${next}_seq`]) : 1;
             other[`${next}_seq`] = String(prevSeq + 1);
@@ -553,6 +580,9 @@ function applyRollOver() {
     }
 
     const existingNextQty = numOrZero(targetRow[`${next}_qty`]);
+    if (currentMachineId != null) {
+        targetRow[`${next}_machine_id`] = currentMachineId;
+    }
     targetRow[`${next}_qty`] = String(Number((existingNextQty + prompt.overflowQty).toFixed(4)));
     targetRow[`${next}_seq`] = '1';
     targetRow[`${next}_qdc`] = false;
@@ -563,7 +593,12 @@ function applyRollOver() {
 
 function rowServerError(idx: number): string | undefined {
     const errors = machinePlanForm.errors as Record<string, string | undefined>;
-    return errors[`rows.${idx}.qty`] ?? errors[`rows.${idx}.work_order_id`];
+    return errors[`rows.${idx}.qty`]
+        ?? errors[`rows.${idx}.work_order_id`]
+        ?? errors[`rows.${idx}.origin_machine_id`]
+        ?? errors[`rows.${idx}.d_machine_id`]
+        ?? errors[`rows.${idx}.d1_machine_id`]
+        ?? errors[`rows.${idx}.d2_machine_id`];
 }
 
 function executeSaveMachinePlan() {
@@ -577,15 +612,19 @@ function executeSaveMachinePlan() {
             shift_counts: data.shift_counts,
             rows: data.rows.map((r) => ({
                 work_order_id: r.work_order_id,
+                origin_machine_id: r.origin_machine_id,
                 d_seq: toNullableNum(r.d_seq),
                 d_qty: toNullableNum(r.d_qty),
                 d_qdc: r.d_qdc,
+                d_machine_id: r.d_machine_id,
                 d1_seq: toNullableNum(r.d1_seq),
                 d1_qty: toNullableNum(r.d1_qty),
                 d1_qdc: r.d1_qdc,
+                d1_machine_id: r.d1_machine_id,
                 d2_seq: toNullableNum(r.d2_seq),
                 d2_qty: toNullableNum(r.d2_qty),
                 d2_qdc: r.d2_qdc,
+                d2_machine_id: r.d2_machine_id,
             })),
         }))
         .put(route('production-plans.machines.save', activeMachine.value.id), {
@@ -861,7 +900,7 @@ function submitInlineCreateWo() {
                             <!-- Mesin dengan rencana D / D+1 / D+2 -->
                             <tr
                                 v-for="(row, rIdx) in machine.planned_rows"
-                                :key="`${machine.id}-${row.work_order_id}`"
+                                :key="`${machine.id}-${row.work_order_id}-${row.origin_machine_id ?? machine.id}`"
                                 class="group border-t border-borderline transition hover:bg-primary-light/30"
                                 :class="rIdx === 0 && mi > 0 ? 'border-t-2 !border-t-ink-secondary/30' : ''"
                             >
@@ -897,9 +936,15 @@ function submitInlineCreateWo() {
                                 <td class="px-3 py-2.5 align-top">
                                     <div class="font-semibold leading-snug text-ink-primary">{{ fgPrimaryName(row.fg_part) }}</div>
                                     <div v-if="fgSecondaryNumber(row.fg_part)" class="mt-0.5 text-xs text-ink-secondary">{{ fgSecondaryNumber(row.fg_part) }}</div>
-                                    <div class="mt-1 flex items-center gap-1.5 text-[11px]">
+                                    <div class="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
                                         <Link :href="route('work-orders.show', row.work_order_id)" class="font-medium text-primary hover:underline">{{ row.wo_no }}</Link>
                                         <StatusBadge :tone="statusTone(row.wo_status)">{{ t(`production.statuses.${row.wo_status}`) }}</StatusBadge>
+                                        <span
+                                            v-if="row.is_reassigned && row.origin_machine_name"
+                                            class="inline-flex rounded bg-info/10 px-1.5 py-0.5 text-[11px] font-medium text-info"
+                                        >
+                                            {{ t('production.reassignedFrom', { machine: row.origin_machine_name }) }}
+                                        </span>
                                     </div>
                                 </td>
                                 <td class="px-3 py-2.5 align-top text-ink-primary">{{ row.fg_part?.model || '—' }}</td>
@@ -1143,7 +1188,7 @@ function submitInlineCreateWo() {
                             <tbody class="divide-y divide-borderline bg-surface">
                                 <tr
                                     v-for="(row, idx) in machinePlanForm.rows"
-                                    :key="row.work_order_id"
+                                    :key="`${row.work_order_id}-${row.origin_machine_id}`"
                                     :class="liveAvailForDraft(row) < -1e-6 || dayKeys.some((k) => isDayOverCap(row, k)) ? 'bg-danger/5' : ''"
                                 >
                                     <td class="px-3 py-2.5 align-top">
@@ -1158,6 +1203,12 @@ function submitInlineCreateWo() {
                                             <span class="font-medium text-primary">{{ row.wo_no }}</span>
                                             <StatusBadge :tone="statusTone(row.wo_status)">{{ t(`production.statuses.${row.wo_status}`) }}</StatusBadge>
                                             <span v-if="row.wip_part?.part_number" class="text-ink-secondary">→ {{ row.wip_part.part_number }}</span>
+                                            <span
+                                                v-if="row.is_reassigned && row.origin_machine_name"
+                                                class="inline-flex rounded bg-info/10 px-1.5 py-0.5 text-[11px] font-medium text-info"
+                                            >
+                                                {{ t('production.reassignedFrom', { machine: row.origin_machine_name }) }}
+                                            </span>
                                         </div>
                                         <InputError :message="rowServerError(idx)" class="mt-1" />
                                     </td>
@@ -1222,6 +1273,23 @@ function submitInlineCreateWo() {
                                             </label>
                                             <span v-else class="text-center text-[11px] text-ink-secondary">-</span>
                                         </div>
+                                        <select
+                                            v-model.number="row[`${key}_machine_id`]"
+                                            :disabled="isDayLockedForDraft(row, key)"
+                                            :aria-label="`${t('production.machine')} ${dayLabels[key]} ${row.wo_no}`"
+                                            class="mt-1.5 w-full rounded-md border px-2 py-1 text-[11px] focus:border-primary focus:ring-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+                                            :class="row[`${key}_machine_id`] !== activeMachine.id
+                                                ? 'border-info/60 bg-info/10 font-medium text-info'
+                                                : 'border-borderline bg-surface text-ink-secondary'"
+                                        >
+                                            <option
+                                                v-for="m in props.machines"
+                                                :key="m.id"
+                                                :value="m.id"
+                                            >
+                                                {{ m.machine_name }}
+                                            </option>
+                                        </select>
                                         <div
                                             v-if="row.has_upstream"
                                             class="mt-1 text-[11px] tabular-nums"

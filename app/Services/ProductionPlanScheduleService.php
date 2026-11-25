@@ -369,8 +369,14 @@ class ProductionPlanScheduleService
      * @param  array{exact: Collection<string, MachineCycleTime>, group: Collection<string, MachineCycleTime>}  $maps
      * @return array{cycle_time_seconds: float|null, qdc_minutes: float|null}
      */
-    public function resolveCycleTime(?Machine $machine, ?int $machineId, ?int $wipPartId, array $maps): array
-    {
+    public function resolveCycleTime(
+        ?Machine $machine,
+        ?int $machineId,
+        ?int $wipPartId,
+        array $maps,
+        ?Machine $originMachine = null,
+        ?int $originMachineId = null,
+    ): array {
         if ($machineId === null || $wipPartId === null) {
             return ['cycle_time_seconds' => null, 'qdc_minutes' => null];
         }
@@ -378,6 +384,12 @@ class ProductionPlanScheduleService
         $exactKey = $machineId.'|'.$wipPartId;
         $groupKey = MachineRouting::groupKey($machine, $machineId).'|'.$wipPartId;
         $ct = $maps['exact']->get($exactKey) ?? $maps['group']->get($groupKey);
+
+        if ($ct === null && $originMachineId !== null && $originMachineId !== $machineId) {
+            $originExactKey = $originMachineId.'|'.$wipPartId;
+            $originGroupKey = MachineRouting::groupKey($originMachine, $originMachineId).'|'.$wipPartId;
+            $ct = $maps['exact']->get($originExactKey) ?? $maps['group']->get($originGroupKey);
+        }
 
         return [
             'cycle_time_seconds' => $ct?->cycle_time_seconds !== null ? (float) $ct->cycle_time_seconds : null,
@@ -557,7 +569,7 @@ class ProductionPlanScheduleService
      * Disimpan per tanggal kalender (`plan_date`) agar besok D+1 otomatis bergeser jadi D.
      *
      * @param  array{d: bool, d1: bool, d2: bool}  $initialQdc
-     * @param  list<array{work_order_id: int, d_seq: int|null, d_qty: float|null, d_qdc?: bool|null, d1_seq: int|null, d1_qty: float|null, d1_qdc?: bool|null, d2_seq: int|null, d2_qty: float|null, d2_qdc?: bool|null}>  $rows
+     * @param  list<array{work_order_id: int, origin_machine_id?: int|null, d_seq: int|null, d_qty: float|null, d_qdc?: bool|null, d_machine_id?: int|null, d1_seq: int|null, d1_qty: float|null, d1_qdc?: bool|null, d1_machine_id?: int|null, d2_seq: int|null, d2_qty: float|null, d2_qdc?: bool|null, d2_machine_id?: int|null}>  $rows
      * @param  array{d: int, d1: int, d2: int}  $shiftCounts
      */
     public function saveMachinePlan(
@@ -573,6 +585,14 @@ class ProductionPlanScheduleService
             'd1' => Carbon::parse($boardDate)->addDay()->toDateString(),
             'd2' => Carbon::parse($boardDate)->addDays(2)->toDateString(),
         ];
+
+        $subconMachineIds = $this->subconMachineIds();
+        $activeMachines = Machine::query()
+            ->where('is_active', true)
+            ->whereNotIn('id', $subconMachineIds)
+            ->pluck('id')
+            ->flip()
+            ->all();
 
         $submittedWoIds = collect($rows)->pluck('work_order_id')->map(fn ($id): int => (int) $id)->unique()->values()->all();
 
@@ -590,8 +610,8 @@ class ProductionPlanScheduleService
                 ->get()
             : collect();
 
-        $allSlots = $this->workOrderMachineSlots($workOrders, $dayDates['d'], $this->subconMachineIds());
-        $slotsByWo = $allSlots->where('machine_id', $machine->id)->keyBy('work_order_id');
+        $allSlots = $this->workOrderMachineSlots($workOrders, $dayDates['d'], $subconMachineIds);
+        $slotsByWoOrigin = $allSlots->keyBy(fn (array $slot): string => ((int) $slot['work_order_id']).'|'.((int) $slot['machine_id']));
         $wipStockByPartId = $this->availableWipStockMap($allSlots);
 
         $existingPlans = $submittedWoIds !== []
@@ -616,25 +636,26 @@ class ProductionPlanScheduleService
                 ->whereIn('work_order_id', $submittedWoIds)
                 ->whereNotNull('machine_id')
                 ->where('target_d', '>', 0)
-                ->get(['production_plan_id', 'machine_id', 'work_order_id', 'target_d']);
+                ->get(['production_plan_id', 'machine_id', 'origin_machine_id', 'work_order_id', 'target_d']);
 
             foreach ($existingItems as $ei) {
                 $dayKey = $dayKeyByPlanId[(int) $ei->production_plan_id] ?? null;
-                if ($dayKey === null) {
+                $originId = $ei->slotOriginMachineId();
+                if ($dayKey === null || $originId === null) {
                     continue;
                 }
-                $mId = (int) $ei->machine_id;
                 $wId = (int) $ei->work_order_id;
-                $existingPlannedQty[$mId][$wId][$dayKey] = ($existingPlannedQty[$mId][$wId][$dayKey] ?? 0.0) + (float) $ei->target_d;
+                $existingPlannedQty[$originId][$wId][$dayKey] = ($existingPlannedQty[$originId][$wId][$dayKey] ?? 0.0) + (float) $ei->target_d;
             }
         }
-
-        $supplyCaps = $this->computeSlotSupplyCaps($allSlots, $existingPlannedQty, $wipStockByPartId);
 
         $simulatedPlannedQty = $existingPlannedQty;
         foreach ($rows as $row) {
             $woId = (int) $row['work_order_id'];
-            $simulatedPlannedQty[$machine->id][$woId] = [
+            $originMachineId = isset($row['origin_machine_id']) && $row['origin_machine_id'] !== null && $row['origin_machine_id'] !== ''
+                ? (int) $row['origin_machine_id']
+                : (int) $machine->id;
+            $simulatedPlannedQty[$originMachineId][$woId] = [
                 'd' => $this->positiveFloat($row['d_qty'] ?? null) ?? 0.0,
                 'd1' => $this->positiveFloat($row['d1_qty'] ?? null) ?? 0.0,
                 'd2' => $this->positiveFloat($row['d2_qty'] ?? null) ?? 0.0,
@@ -646,7 +667,10 @@ class ProductionPlanScheduleService
         $errors = [];
         foreach ($rows as $idx => $row) {
             $woId = (int) $row['work_order_id'];
-            $slot = $slotsByWo->get($woId);
+            $originMachineId = isset($row['origin_machine_id']) && $row['origin_machine_id'] !== null && $row['origin_machine_id'] !== ''
+                ? (int) $row['origin_machine_id']
+                : (int) $machine->id;
+            $slot = $slotsByWoOrigin->get($woId.'|'.$originMachineId);
             $dQty = $this->positiveFloat($row['d_qty'] ?? null);
             $d1Qty = $this->positiveFloat($row['d1_qty'] ?? null);
             $d2Qty = $this->positiveFloat($row['d2_qty'] ?? null);
@@ -663,6 +687,24 @@ class ProductionPlanScheduleService
                 continue;
             }
 
+            $hasInvalidTargetMachine = false;
+            foreach (['d' => $dQty, 'd1' => $d1Qty, 'd2' => $d2Qty] as $dayKey => $dayQty) {
+                if ($dayQty === null) {
+                    continue;
+                }
+                $rawTarget = $row[$dayKey.'_machine_id'] ?? null;
+                $targetMachineId = $rawTarget !== null && $rawTarget !== ''
+                    ? (int) $rawTarget
+                    : (int) $machine->id;
+                if (! isset($activeMachines[$targetMachineId])) {
+                    $errors["rows.{$idx}.{$dayKey}_machine_id"] = __('Mesin pengganti tidak valid atau tidak aktif.');
+                    $hasInvalidTargetMachine = true;
+                }
+            }
+            if ($hasInvalidTargetMachine) {
+                continue;
+            }
+
             if ($totalPlanned > (float) $slot['remaining_qty'] + 1e-6) {
                 $errors["rows.{$idx}.qty"] = __('Total Qty Plan (:planned) melebihi sisa WO (:remain). Klik "Buat WO" untuk menambah WO baru.', [
                     'planned' => $this->formatQty($totalPlanned),
@@ -672,7 +714,7 @@ class ProductionPlanScheduleService
                 continue;
             }
 
-            $capInfo = $supplyCaps[$woId.'|'.$machine->id] ?? null;
+            $capInfo = $nextSupplyCaps[$woId.'|'.$originMachineId] ?? null;
             if ($capInfo !== null && $capInfo['has_upstream']) {
                 $caps = $capInfo['day_caps'];
                 if ($dVal > $caps['d'] + 1e-6) {
@@ -707,7 +749,7 @@ class ProductionPlanScheduleService
             foreach ($allSlotsByWo->get($woId, collect()) as $downSlot) {
                 $dependsOnCurrent = false;
                 foreach ($downSlot['upstream_deps'] ?? [] as $dep) {
-                    if ((int) $dep['machine_id'] === (int) $machine->id) {
+                    if ((int) $dep['machine_id'] === $originMachineId) {
                         $dependsOnCurrent = true;
                         break;
                     }
@@ -717,9 +759,9 @@ class ProductionPlanScheduleService
                 }
 
                 $downMachineId = (int) $downSlot['machine_id'];
-                $downD = $this->plannedDayQty($existingPlannedQty, $downMachineId, $woId, 'd');
-                $downD1 = $this->plannedDayQty($existingPlannedQty, $downMachineId, $woId, 'd1');
-                $downD2 = $this->plannedDayQty($existingPlannedQty, $downMachineId, $woId, 'd2');
+                $downD = $this->plannedDayQty($simulatedPlannedQty, $downMachineId, $woId, 'd');
+                $downD1 = $this->plannedDayQty($simulatedPlannedQty, $downMachineId, $woId, 'd1');
+                $downD2 = $this->plannedDayQty($simulatedPlannedQty, $downMachineId, $woId, 'd2');
 
                 if ($downD + $downD1 + $downD2 <= 0.0) {
                     continue;
@@ -766,7 +808,7 @@ class ProductionPlanScheduleService
             throw ValidationException::withMessages($errors);
         }
 
-        DB::transaction(function () use ($machine, $dayDates, $initialQdc, $shiftCounts, $rows, $slotsByWo, $actorId): void {
+        DB::transaction(function () use ($machine, $dayDates, $initialQdc, $shiftCounts, $rows, $slotsByWoOrigin, $actorId): void {
             $plansByKey = [];
             foreach ($dayDates as $dayKey => $planDate) {
                 $hasAnyQty = collect($rows)->contains(fn (array $r): bool => $this->positiveFloat($r[$dayKey.'_qty'] ?? null) !== null);
@@ -798,7 +840,10 @@ class ProductionPlanScheduleService
 
             foreach ($rows as $row) {
                 $woId = (int) $row['work_order_id'];
-                $slot = $slotsByWo->get($woId);
+                $originMachineId = isset($row['origin_machine_id']) && $row['origin_machine_id'] !== null && $row['origin_machine_id'] !== ''
+                    ? (int) $row['origin_machine_id']
+                    : (int) $machine->id;
+                $slot = $slotsByWoOrigin->get($woId.'|'.$originMachineId);
 
                 foreach (['d', 'd1', 'd2'] as $dayKey) {
                     $plan = $plansByKey[$dayKey] ?? null;
@@ -815,8 +860,14 @@ class ProductionPlanScheduleService
 
                     $existing = ProductionPlanItem::query()
                         ->where('production_plan_id', $plan->id)
-                        ->where('machine_id', $machine->id)
                         ->where('work_order_id', $woId)
+                        ->where(function ($q) use ($originMachineId): void {
+                            $q->where('origin_machine_id', $originMachineId)
+                                ->orWhere(function ($q2) use ($originMachineId): void {
+                                    $q2->whereNull('origin_machine_id')
+                                        ->where('machine_id', $originMachineId);
+                                });
+                        })
                         ->first();
 
                     if ($qty === null) {
@@ -845,47 +896,84 @@ class ProductionPlanScheduleService
                         continue;
                     }
 
+                    $rawTarget = $row[$dayKey.'_machine_id'] ?? null;
+                    $targetMachineId = $rawTarget !== null && $rawTarget !== ''
+                        ? (int) $rawTarget
+                        : (int) $machine->id;
+                    $storedOriginId = $targetMachineId !== $originMachineId ? $originMachineId : null;
+
                     $before = $existing ? [
                         'target_d' => $existing->target_d,
                         'sequence_d' => $existing->sequence_d,
+                        'machine_id' => $existing->machine_id,
                     ] : null;
 
-                    $item = ProductionPlanItem::updateOrCreate(
-                        [
-                            'production_plan_id' => $plan->id,
-                            'machine_id' => $machine->id,
-                            'work_order_id' => $woId,
-                        ],
-                        [
-                            'process_id' => $slot['process_id'],
-                            'fg_part_id' => $slot['fg_part_id'],
-                            'input_part_id' => $slot['input_part_id'],
-                            'wip_part_id' => $slot['wip_part_id'],
-                            'step_sequence' => $slot['step_sequence'],
-                            'sequence' => $seq,
-                            'sequence_d' => $seq,
-                            'sequence_d1' => 0,
-                            'sequence_d2' => 0,
-                            'target_d' => $qty,
-                            'target_d1' => null,
-                            'target_d2' => null,
-                            'apply_qdc' => $applyQdc,
-                            'created_by' => $existing?->created_by ?? $actorId,
-                            'updated_by' => $actorId,
-                        ],
-                    );
+                    $attributes = [
+                        'machine_id' => $targetMachineId,
+                        'origin_machine_id' => $storedOriginId,
+                        'process_id' => $slot['process_id'],
+                        'fg_part_id' => $slot['fg_part_id'],
+                        'input_part_id' => $slot['input_part_id'],
+                        'wip_part_id' => $slot['wip_part_id'],
+                        'step_sequence' => $slot['step_sequence'],
+                        'sequence' => $seq,
+                        'sequence_d' => $seq,
+                        'sequence_d1' => 0,
+                        'sequence_d2' => 0,
+                        'target_d' => $qty,
+                        'target_d1' => null,
+                        'target_d2' => null,
+                        'apply_qdc' => $applyQdc,
+                        'updated_by' => $actorId,
+                    ];
 
+                    if ($existing !== null) {
+                        $existing->update($attributes);
+                        $item = $existing->refresh();
+                    } else {
+                        $item = ProductionPlanItem::create([
+                            'production_plan_id' => $plan->id,
+                            'work_order_id' => $woId,
+                            ...$attributes,
+                            'created_by' => $actorId,
+                        ]);
+                    }
+
+                    if ($targetMachineId !== (int) $machine->id) {
+                        ProductionPlanMachineDay::firstOrCreate(
+                            [
+                                'production_plan_id' => $plan->id,
+                                'machine_id' => $targetMachineId,
+                            ],
+                            [
+                                'shift_count' => 3,
+                                'initial_qdc' => false,
+                            ],
+                        );
+                    }
+
+                    $machineChanged = $before !== null && (int) $before['machine_id'] !== (int) $item->machine_id;
                     $after = [
                         'target_d' => $item->target_d,
                         'sequence_d' => $item->sequence_d,
+                        ...($machineChanged || $before === null ? ['machine_id' => $item->machine_id] : []),
                     ];
+                    $beforePayload = $before === null
+                        ? null
+                        : ($machineChanged
+                            ? $before
+                            : ['target_d' => $before['target_d'], 'sequence_d' => $before['sequence_d']]);
 
-                    if ($before === null || $before['target_d'] !== $after['target_d'] || $before['sequence_d'] !== $after['sequence_d']) {
+                    if ($before === null
+                        || $before['target_d'] !== $after['target_d']
+                        || $before['sequence_d'] !== $after['sequence_d']
+                        || $machineChanged
+                    ) {
                         ProductionPlanHistory::create([
                             'production_plan_id' => $plan->id,
                             'production_plan_item_id' => $item->id,
                             'event' => 'targets_updated',
-                            'before' => $before,
+                            'before' => $beforePayload,
                             'after' => $after,
                             'user_id' => $actorId,
                         ]);

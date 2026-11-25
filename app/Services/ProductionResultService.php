@@ -44,7 +44,11 @@ class ProductionResultService
                 }
             }
             abort_if($workOrder->status !== 'in_progress', 422, __('WO belum di-release.'));
-            $rows = $workOrder->items()->with(['parentPart:id,part_number,part_name', 'childPart:id,part_number,part_name'])
+            $rows = $workOrder->items()->with([
+                'machine:id,machine_code,machine_name',
+                'parentPart:id,part_number,part_name',
+                'childPart:id,part_number,part_name',
+            ])
                 ->where('parent_part_id', $parentPartId)->lockForUpdate()->get();
             if ($rows->isEmpty()) {
                 throw ValidationException::withMessages(['parent_part_id' => __('Step ini tidak ada di WO.')]);
@@ -145,15 +149,21 @@ class ProductionResultService
                     // Step perantara (WIP1, WIP2, dst.) tidak dilaporkan terpisah dan tidak
                     // memegang stok fisik. Bila yang dilaporkan adalah step akhir TPL dan
                     // stok perantara tidak ada, langsung konsumsi Raw Material di stasiun 1 TPL.
-                    if ($machine !== null
-                        && MachineRouting::isTplPressLine($machine)
-                        && $this->isFinalTplStep($workOrder, $machine, $row)
-                        && $this->isIntermediateTplChild($workOrder, $machine, (int) $childId)
-                        && $this->stockService->availableFifo((int) $childId) < $need->toFloat()
-                    ) {
-                        $this->consumeTplRootInputs($workOrder, $row, $machine, $result, $goodDecimal->plus($rejectDecimal));
+                    if ($machine !== null) {
+                        $tplChainMachineId = (int) ($row->machine_id ?? $machine->id);
+                        $isTplStep = $row->machine !== null
+                            ? MachineRouting::isTplPressLine($row->machine)
+                            : MachineRouting::isTplPressLine($machine);
 
-                        continue;
+                        if ($isTplStep
+                            && $this->isFinalTplStep($workOrder, $tplChainMachineId, $row)
+                            && $this->isIntermediateTplChild($workOrder, $tplChainMachineId, (int) $childId)
+                            && $this->stockService->availableFifo((int) $childId) < $need->toFloat()
+                        ) {
+                            $this->consumeTplRootInputs($workOrder, $row, $machine, $tplChainMachineId, $result, $goodDecimal->plus($rejectDecimal));
+
+                            continue;
+                        }
                     }
 
                     $taken = BigDecimal::zero();
@@ -362,10 +372,10 @@ class ProductionResultService
      * Cek apakah item merupakan step akhir pada mesin TPL (tidak menjadi child
      * bagi step lain di mesin TPL yang sama).
      */
-    private function isFinalTplStep(WorkOrder $workOrder, Machine $machine, WorkOrderItem $item): bool
+    private function isFinalTplStep(WorkOrder $workOrder, int $tplMachineId, WorkOrderItem $item): bool
     {
         return ! $workOrder->items()
-            ->where('machine_id', $machine->id)
+            ->where('machine_id', $tplMachineId)
             ->where('child_part_id', $item->parent_part_id)
             ->exists();
     }
@@ -373,10 +383,10 @@ class ProductionResultService
     /**
      * Cek apakah childPartId merupakan step perantara di mesin TPL yang sama.
      */
-    private function isIntermediateTplChild(WorkOrder $workOrder, Machine $machine, int $childPartId): bool
+    private function isIntermediateTplChild(WorkOrder $workOrder, int $tplMachineId, int $childPartId): bool
     {
         return $workOrder->items()
-            ->where('machine_id', $machine->id)
+            ->where('machine_id', $tplMachineId)
             ->where('parent_part_id', $childPartId)
             ->exists();
     }
@@ -384,9 +394,9 @@ class ProductionResultService
     /**
      * Konsumsi raw material di stasiun awal mesin TPL (Tandem Press Line) secara langsung.
      */
-    private function consumeTplRootInputs(WorkOrder $workOrder, WorkOrderItem $finalItem, Machine $machine, ProductionResult $result, BigDecimal $totalQty): void
+    private function consumeTplRootInputs(WorkOrder $workOrder, WorkOrderItem $finalItem, Machine $machine, int $tplMachineId, ProductionResult $result, BigDecimal $totalQty): void
     {
-        $inputs = $this->resolveTplInputs($workOrder, $finalItem, $machine, $totalQty);
+        $inputs = $this->resolveTplInputs($workOrder, $finalItem, $tplMachineId, $totalQty);
 
         foreach ($inputs as $input) {
             $rootItem = $input['item'];
@@ -462,10 +472,10 @@ class ProductionResultService
      *
      * @return list<array{item: WorkOrderItem, need: BigDecimal}>
      */
-    private function resolveTplInputs(WorkOrder $workOrder, WorkOrderItem $finalItem, Machine $machine, BigDecimal $totalQty): array
+    private function resolveTplInputs(WorkOrder $workOrder, WorkOrderItem $finalItem, int $tplMachineId, BigDecimal $totalQty): array
     {
         $tplItems = $workOrder->items()
-            ->where('machine_id', $machine->id)
+            ->where('machine_id', $tplMachineId)
             ->with(['parentPart', 'childPart'])
             ->get()
             ->keyBy('parent_part_id');

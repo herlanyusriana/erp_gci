@@ -75,6 +75,7 @@ class ProductionPlanController extends Controller
                 ->with([
                     'plan:id,plan_date',
                     'machine:id,machine_code,machine_name',
+                    'originMachine:id,machine_code,machine_name',
                     'process:id,process_name',
                     'workOrder:id,wo_no,part_id,qty,status,planned_date',
                     'workOrder.part:id,part_number,part_name,model',
@@ -108,22 +109,27 @@ class ProductionPlanController extends Controller
 
         $allSlots = $this->scheduleService->workOrderMachineSlots($activeWorkOrders, $dayDates['d'], $subconMachineIds);
 
-        // Kelompokkan plan items per (machine_id, work_order_id, dayKey).
         $planKeyByDate = array_flip($dayDates);
-        $plannedByMachineWo = [];
+        $plannedByOriginWo = [];
+        $plannedByExecMachine = [];
         foreach ($planItems as $pi) {
             $planDateStr = $pi->plan?->plan_date?->toDateString();
             $dayKey = $planDateStr !== null ? ($planKeyByDate[$planDateStr] ?? null) : null;
             if ($dayKey === null) {
                 continue;
             }
-            $mId = (int) $pi->machine_id;
+            $execMachineId = (int) $pi->machine_id;
+            $originMachineId = $pi->slotOriginMachineId();
+            if ($originMachineId === null) {
+                continue;
+            }
             $woId = (int) $pi->work_order_id;
-            $plannedByMachineWo[$mId][$woId][$dayKey] = $pi;
+            $plannedByOriginWo[$originMachineId][$woId][$dayKey] = $pi;
+            $plannedByExecMachine[$execMachineId][] = $pi;
         }
 
         $wipStockByPartId = $this->scheduleService->availableWipStockMap($allSlots);
-        $supplyCaps = $this->scheduleService->computeSlotSupplyCaps($allSlots, $plannedByMachineWo, $wipStockByPartId);
+        $supplyCaps = $this->scheduleService->computeSlotSupplyCaps($allSlots, $plannedByOriginWo, $wipStockByPartId);
 
         // Kumpulkan semua wip_part_id untuk lookup Tact Time & QDC (1 query saja).
         $wipPartIds = $allSlots->pluck('wip_part_id')
@@ -147,6 +153,7 @@ class ProductionPlanController extends Controller
             ->groupBy('machine_id')
             ->map(fn ($rows) => $rows->pluck('part_id')->map(fn ($id): int => (int) $id)->unique()->values()->all());
 
+        $slotsByWoOrigin = $allSlots->keyBy(fn (array $slot): string => ((int) $slot['work_order_id']).'|'.((int) $slot['machine_id']));
         $slotsByMachine = $allSlots->groupBy('machine_id');
         $boardMachines = [];
         $availMapByWoMachine = [];
@@ -162,25 +169,39 @@ class ProductionPlanController extends Controller
                 $shiftCounts[$dayKey] = max(1, min(3, (int) ($md?->shift_count ?? 3)));
             }
 
-            // Gabungkan semua WO yang punya slot di mesin ini (dengan sisa > 0) ATAU sudah ter-plan di D/D+1/D+2.
-            $machineSlots = ($slotsByMachine->get($mId) ?? collect())->keyBy('work_order_id');
-            $machinePlannedWos = $plannedByMachineWo[$mId] ?? [];
-            $candidateWoIds = $machineSlots->keys()->merge(array_keys($machinePlannedWos))->unique()->values();
+            $candidatePairs = [];
+            foreach ($slotsByMachine->get($mId) ?? collect() as $slot) {
+                $wId = (int) $slot['work_order_id'];
+                $candidatePairs[$wId.'|'.$mId] = ['wo_id' => $wId, 'origin_machine_id' => $mId];
+            }
+            foreach (array_keys($plannedByOriginWo[$mId] ?? []) as $wId) {
+                $wId = (int) $wId;
+                $candidatePairs[$wId.'|'.$mId] = ['wo_id' => $wId, 'origin_machine_id' => $mId];
+            }
+            foreach ($plannedByExecMachine[$mId] ?? [] as $pi) {
+                $wId = (int) $pi->work_order_id;
+                $originId = $pi->slotOriginMachineId();
+                if ($originId === null) {
+                    continue;
+                }
+                $candidatePairs[$wId.'|'.$originId] = ['wo_id' => $wId, 'origin_machine_id' => $originId];
+            }
 
             // Siapkan entri per hari untuk menghitung Start–Finish Time berurutan sesuai Sequence.
             $dayEntries = ['d' => [], 'd1' => [], 'd2' => []];
-            $rowMetaByWo = [];
+            $rowMetaByPair = [];
 
-            foreach ($candidateWoIds as $woId) {
-                $woId = (int) $woId;
-                $slot = $machineSlots->get($woId);
-                $dayItems = $machinePlannedWos[$woId] ?? [];
+            foreach ($candidatePairs as $pairKey => $pair) {
+                $woId = $pair['wo_id'];
+                $originId = $pair['origin_machine_id'];
+                $slot = $slotsByWoOrigin->get($pairKey);
+                $dayItems = $plannedByOriginWo[$originId][$woId] ?? [];
 
                 $firstPi = reset($dayItems) ?: null;
                 $wipPartId = $slot['wip_part_id'] ?? ($firstPi?->wip_part_id !== null ? (int) $firstPi->wip_part_id : null);
                 $remainingQty = $slot !== null ? (float) $slot['remaining_qty'] : (float) ($firstPi?->workOrder?->qty ?? 0);
 
-                $capInfo = $supplyCaps[$woId.'|'.$mId] ?? [
+                $capInfo = $supplyCaps[$pairKey] ?? [
                     'has_upstream' => false,
                     'day_caps' => [
                         'd' => $remainingQty,
@@ -196,16 +217,30 @@ class ProductionPlanController extends Controller
                 $plannedTotal = round($plannedD + $plannedD1 + $plannedD2, 4);
                 $availQty = round(max(0.0, (float) $capInfo['eligible_qty'] - $plannedTotal), 4);
 
-                $availMapByWoMachine[$woId][$mId] = [
-                    'remaining_qty' => $remainingQty,
-                    'planned_qty' => $plannedTotal,
-                    'avail_qty' => $availQty,
-                ];
+                if ($originId === $mId) {
+                    $availMapByWoMachine[$woId][$mId] = [
+                        'remaining_qty' => $remainingQty,
+                        'planned_qty' => $plannedTotal,
+                        'avail_qty' => $availQty,
+                    ];
+                }
 
-                $ct = $this->scheduleService->resolveCycleTime($machine, $mId, $wipPartId, $cycleTimeMaps);
+                $originMachine = $machinesById->get($originId) ?? $firstPi?->originMachine;
+                $originMachineName = $originMachine?->machine_name ?? $slot['machine']['machine_name'] ?? null;
+                $ct = $this->scheduleService->resolveCycleTime(
+                    $machine,
+                    $mId,
+                    $wipPartId,
+                    $cycleTimeMaps,
+                    $originMachine,
+                    $originId,
+                );
 
-                $rowMetaByWo[$woId] = [
+                $rowMetaByPair[$pairKey] = [
                     'work_order_id' => $woId,
+                    'origin_machine_id' => $originId,
+                    'origin_machine_name' => $originMachineName,
+                    'is_reassigned' => $originId !== $mId,
                     'wo_no' => $slot['wo_no'] ?? $firstPi?->workOrder?->wo_no ?? '',
                     'wo_status' => $slot['wo_status'] ?? $firstPi?->workOrder?->status ?? 'planned',
                     'wo_qty' => $slot['wo_qty'] ?? (float) ($firstPi?->workOrder?->qty ?? 0),
@@ -245,8 +280,11 @@ class ProductionPlanController extends Controller
                     }
                     /** @var ProductionPlanItem $pi */
                     $pi = $dayItems[$dayKey];
+                    if ((int) $pi->machine_id !== $mId) {
+                        continue;
+                    }
                     $dayEntries[$dayKey][] = [
-                        'key' => $woId,
+                        'key' => $pairKey,
                         'sequence' => (int) ($pi->sequence_d > 0 ? $pi->sequence_d : ($pi->sequence > 0 ? $pi->sequence : 1)),
                         'id' => (int) $pi->id,
                         'qty' => (float) $pi->target_d,
@@ -272,21 +310,32 @@ class ProductionPlanController extends Controller
             $modalRows = [];
             $availWoCount = 0;
 
-            foreach ($rowMetaByWo as $woId => $meta) {
-                $daysPayload = [];
-                $hasAnyPlan = false;
+            foreach ($rowMetaByPair as $pairKey => $meta) {
+                $plannedDaysPayload = [];
+                $modalDaysPayload = [];
+                $hasAnyExecOnThisMachine = false;
+                $hasAnyPlanAnywhere = false;
+
                 foreach (['d', 'd1', 'd2'] as $dayKey) {
                     /** @var ProductionPlanItem|null $pi */
                     $pi = $meta['day_items'][$dayKey] ?? null;
                     if ($pi === null) {
-                        $daysPayload[$dayKey] = null;
+                        $plannedDaysPayload[$dayKey] = null;
+                        $modalDaysPayload[$dayKey] = null;
 
                         continue;
                     }
-                    $hasAnyPlan = true;
-                    $sched = $daySchedules[$dayKey][$woId] ?? null;
-                    $daysPayload[$dayKey] = [
+
+                    $hasAnyPlanAnywhere = true;
+                    $execMachineId = (int) $pi->machine_id;
+                    $execMachineName = $pi->machine?->machine_name ?? $machinesById->get($execMachineId)?->machine_name;
+                    $isExecHere = $execMachineId === $mId;
+                    $sched = $isExecHere ? ($daySchedules[$dayKey][$pairKey] ?? null) : null;
+
+                    $dayObj = [
                         'id' => (int) $pi->id,
+                        'machine_id' => $execMachineId,
+                        'machine_name' => $execMachineName,
                         'sequence' => (int) ($pi->sequence_d > 0 ? $pi->sequence_d : ($pi->sequence > 0 ? $pi->sequence : 1)),
                         'qty' => (float) $pi->target_d,
                         'apply_qdc' => (bool) $pi->apply_qdc,
@@ -296,10 +345,21 @@ class ProductionPlanController extends Controller
                         'duration_seconds' => $sched['duration_seconds'] ?? null,
                         'is_overload' => (bool) ($sched['is_overload'] ?? false),
                     ];
+
+                    $modalDaysPayload[$dayKey] = $dayObj;
+                    if ($isExecHere) {
+                        $hasAnyExecOnThisMachine = true;
+                        $plannedDaysPayload[$dayKey] = $dayObj;
+                    } else {
+                        $plannedDaysPayload[$dayKey] = null;
+                    }
                 }
 
-                $rowPayload = [
+                $baseRowPayload = [
                     'work_order_id' => $meta['work_order_id'],
+                    'origin_machine_id' => $meta['origin_machine_id'],
+                    'origin_machine_name' => $meta['origin_machine_name'],
+                    'is_reassigned' => $meta['is_reassigned'],
                     'wo_no' => $meta['wo_no'],
                     'wo_status' => $meta['wo_status'],
                     'wo_qty' => $meta['wo_qty'],
@@ -315,20 +375,30 @@ class ProductionPlanController extends Controller
                     'process_name' => $meta['process_name'],
                     'cycle_time_seconds' => $meta['cycle_time_seconds'],
                     'qdc_minutes' => $meta['qdc_minutes'],
-                    'days' => $daysPayload,
                 ];
 
+                $isNative = $meta['origin_machine_id'] === $mId;
                 $isActiveWo = in_array($meta['wo_status'], ['planned', 'in_progress'], true);
-                if ($isActiveWo && $meta['avail_qty'] > 0) {
+                if ($isNative && $isActiveWo && $meta['avail_qty'] > 0) {
                     $availWoCount++;
                 }
 
-                if ($hasAnyPlan) {
-                    $plannedRows[] = $rowPayload;
+                if ($hasAnyExecOnThisMachine) {
+                    $plannedRows[] = [
+                        ...$baseRowPayload,
+                        'days' => $plannedDaysPayload,
+                    ];
                 }
 
-                if ($hasAnyPlan || ($isActiveWo && $meta['avail_qty'] > 0)) {
-                    $modalRows[] = $rowPayload;
+                $includeInModal = $isNative
+                    ? ($hasAnyPlanAnywhere || ($isActiveWo && $meta['avail_qty'] > 0))
+                    : $hasAnyExecOnThisMachine;
+
+                if ($includeInModal) {
+                    $modalRows[] = [
+                        ...$baseRowPayload,
+                        'days' => $modalDaysPayload,
+                    ];
                 }
             }
 
@@ -336,11 +406,11 @@ class ProductionPlanController extends Controller
                 $orderOf = function (array $r): array {
                     foreach (['d', 'd1', 'd2'] as $idx => $key) {
                         if ($r['days'][$key] !== null) {
-                            return [$idx, (int) $r['days'][$key]['sequence'], $r['work_order_id']];
+                            return [$idx, (int) $r['days'][$key]['sequence'], $r['work_order_id'], $r['origin_machine_id']];
                         }
                     }
 
-                    return [9, 999999, $r['work_order_id']];
+                    return [9, 999999, $r['work_order_id'], $r['origin_machine_id']];
                 };
 
                 return $orderOf($a) <=> $orderOf($b);
@@ -350,8 +420,8 @@ class ProductionPlanController extends Controller
                 $aPlanned = $a['planned_total'] > 0 ? 0 : 1;
                 $bPlanned = $b['planned_total'] > 0 ? 0 : 1;
 
-                return [$aPlanned, $a['fg_part']['part_number'] ?? '', $a['wo_no']]
-                    <=> [$bPlanned, $b['fg_part']['part_number'] ?? '', $b['wo_no']];
+                return [$aPlanned, $a['fg_part']['part_number'] ?? '', $a['wo_no'], $a['origin_machine_id']]
+                    <=> [$bPlanned, $b['fg_part']['part_number'] ?? '', $b['wo_no'], $b['origin_machine_id']];
             });
 
             $boardMachines[] = [
@@ -548,15 +618,19 @@ class ProductionPlanController extends Controller
             'shift_counts.d2' => ['sometimes', 'integer', 'min:1', 'max:3'],
             'rows' => ['present', 'array'],
             'rows.*.work_order_id' => ['required', 'integer', 'exists:work_orders,id'],
+            'rows.*.origin_machine_id' => ['sometimes', 'nullable', 'integer', 'exists:machines,id'],
             'rows.*.d_seq' => ['nullable', 'integer', 'min:0'],
             'rows.*.d_qty' => ['nullable', 'numeric', 'min:0'],
             'rows.*.d_qdc' => ['sometimes', 'nullable', 'boolean'],
+            'rows.*.d_machine_id' => ['sometimes', 'nullable', 'integer', 'exists:machines,id'],
             'rows.*.d1_seq' => ['nullable', 'integer', 'min:0'],
             'rows.*.d1_qty' => ['nullable', 'numeric', 'min:0'],
             'rows.*.d1_qdc' => ['sometimes', 'nullable', 'boolean'],
+            'rows.*.d1_machine_id' => ['sometimes', 'nullable', 'integer', 'exists:machines,id'],
             'rows.*.d2_seq' => ['nullable', 'integer', 'min:0'],
             'rows.*.d2_qty' => ['nullable', 'numeric', 'min:0'],
             'rows.*.d2_qdc' => ['sometimes', 'nullable', 'boolean'],
+            'rows.*.d2_machine_id' => ['sometimes', 'nullable', 'integer', 'exists:machines,id'],
         ]);
 
         $initialQdc = [

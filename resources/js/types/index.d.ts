@@ -631,10 +631,15 @@ export interface ProductionPlanDaySlot {
     qdc_applied_minutes: number;
     duration_seconds: number | null;
     is_overload: boolean;
+    machine_id?: number;
+    machine_name?: string | null;
 }
 
 export interface ProductionPlanMachineRow {
     work_order_id: number;
+    origin_machine_id?: number;
+    origin_machine_name?: string | null;
+    is_reassigned?: boolean;
     wo_no: string;
     wo_status: string;
     wo_qty: number;

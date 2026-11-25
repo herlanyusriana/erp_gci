@@ -144,5 +144,6 @@
     "Part tidak terdaftar sebagai FREE_ISSUE / OSP di BOM aktif.": "This part is not registered as FREE_ISSUE / OSP in an active BOM.",
     "Qty Plan tanggal :date (:planned) melebihi suplai proses sebelumnya / stok WIP (:max). Rencanakan proses sebelumnya terlebih dahulu.": "Planned qty on :date (:planned) exceeds upstream process supply / WIP stock (:max). Plan the upstream process first.",
     "Akumulasi Qty Plan s.d. tanggal :date (:planned) melebihi suplai proses sebelumnya / stok WIP (:max). Rencanakan proses sebelumnya terlebih dahulu.": "Cumulative planned qty through :date (:planned) exceeds upstream process supply / WIP stock (:max). Plan the upstream process first.",
-    "Tidak dapat mengurangi rencana: mesin proses berikutnya :machine sudah merencanakan akumulasi :planned s.d. tanggal :date (suplai baru hanya :max). Kurangi rencana :machine terlebih dahulu.": "Cannot reduce plan: downstream machine :machine already has a cumulative plan of :planned through :date (new supply is only :max). Reduce :machine plan first."
+    "Tidak dapat mengurangi rencana: mesin proses berikutnya :machine sudah merencanakan akumulasi :planned s.d. tanggal :date (suplai baru hanya :max). Kurangi rencana :machine terlebih dahulu.": "Cannot reduce plan: downstream machine :machine already has a cumulative plan of :planned through :date (new supply is only :max). Reduce :machine plan first.",
+    "Mesin pengganti tidak valid atau tidak aktif.": "Selected replacement machine is invalid or inactive."
 }

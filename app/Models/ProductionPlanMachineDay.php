@@ -12,11 +12,13 @@ class ProductionPlanMachineDay extends Model
         'machine_id',
         'shift_count',
         'initial_qdc',
+        'sync_downstream',
     ];
 
     protected $casts = [
         'shift_count' => 'integer',
         'initial_qdc' => 'boolean',
+        'sync_downstream' => 'boolean',
     ];
 
     public function plan(): BelongsTo

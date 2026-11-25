@@ -670,6 +670,16 @@ export interface ProductionPlanBoardMachine {
     avail_wo_count: number;
     initial_qdc: { d: boolean; d1: boolean; d2: boolean };
     shift_counts: { d: number; d1: number; d2: number };
+    rollover_target?: {
+        id: number;
+        machine_code: string;
+        machine_name: string;
+    } | null;
+    sync_downstream?: {
+        d: boolean;
+        d1: boolean;
+        d2: boolean;
+    };
     planned_rows: ProductionPlanMachineRow[];
     modal_rows: ProductionPlanMachineRow[];
     fg_part_ids: number[];

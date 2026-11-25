@@ -10,6 +10,7 @@ use App\Models\Part;
 use App\Models\PartStock;
 use App\Models\ProductionPlan;
 use App\Models\ProductionPlanItem;
+use App\Models\ProductionPlanMachineDay;
 use App\Models\ProductionResult;
 use App\Models\User;
 use App\Models\WorkOrder;
@@ -1127,5 +1128,382 @@ class ProductionPlanTest extends TestCase
 
         $pendingAfter = collect($receiptService->pendingForMachine($aida100));
         $this->assertTrue($pendingAfter->contains('material_issue_item_id', $issueItem->id));
+    }
+
+    public function test_tpl_kukil_rollover_syncs_day_qty_seq_shift_and_qdc_to_assy_1_and_respects_unchecked_day(): void
+    {
+        $monday = '2026-11-23';
+        $tuesday = '2026-11-24';
+        $wednesday = '2026-11-25';
+        $this->clearStocksForParts(['AAN30056405-WIP5', 'AAN30056405-WIP6', 'AAN30056405-WIP7']);
+
+        $tplKukil = Machine::where('machine_name', 'TPL KUKIL')->firstOrFail();
+        $assy1 = Machine::where('is_active', true)
+            ->whereIn('machine_name', ['ASSY. TPL KUKIL 1', 'ASSY TPL KUKIL 1', 'ASSY. TPL COMP BASE 1'])
+            ->firstOrFail();
+        $autoCaulking = Machine::where('machine_name', 'AUTO CAULKING')->firstOrFail();
+        $assy2 = Machine::where('is_active', true)
+            ->whereIn('machine_name', ['ASSY. TPL KUKIL 2', 'ASSY TPL KUKIL 2', 'ASSY. TPL COMP BASE 2'])
+            ->firstOrFail();
+
+        $wip5 = Part::where('part_number', 'AAN30056405-WIP5')->firstOrFail();
+        $wip6 = Part::where('part_number', 'AAN30056405-WIP6')->firstOrFail();
+
+        $planIds = ProductionPlan::whereIn('plan_date', [$monday, $tuesday, $wednesday])->pluck('id');
+        if ($planIds->isNotEmpty()) {
+            ProductionPlanItem::whereIn('production_plan_id', $planIds)
+                ->whereIn('machine_id', [$tplKukil->id, $assy1->id, $autoCaulking->id, $assy2->id])
+                ->delete();
+            ProductionPlanMachineDay::whereIn('production_plan_id', $planIds)
+                ->whereIn('machine_id', [$tplKukil->id, $assy1->id, $autoCaulking->id, $assy2->id])
+                ->delete();
+        }
+
+        MachineCycleTime::updateOrCreate(
+            ['machine_id' => $tplKukil->id, 'part_id' => $wip5->id],
+            ['cycle_time_seconds' => 6.7, 'qdc_minutes' => 25.0, 'is_active' => true],
+        );
+        MachineCycleTime::updateOrCreate(
+            ['machine_id' => $assy1->id, 'part_id' => $wip6->id],
+            ['cycle_time_seconds' => 6.7, 'qdc_minutes' => null, 'is_active' => true],
+        );
+
+        $wo = $this->createWo(500, $monday);
+
+        $this->get(route('production-plans.index', ['date' => $monday]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('machines', function ($machines) use ($tplKukil, $assy1, $autoCaulking, $assy2) {
+                    $byId = collect($machines)->keyBy('id');
+                    $tpl = $byId->get($tplKukil->id);
+                    $p2 = $byId->get($assy1->id);
+                    $caulk = $byId->get($autoCaulking->id);
+
+                    if ($tpl === null || $p2 === null || $caulk === null) {
+                        return false;
+                    }
+
+                    return ($tpl['rollover_target']['id'] ?? null) === $assy1->id
+                        && $tpl['sync_downstream'] === ['d' => true, 'd1' => true, 'd2' => true]
+                        && ($caulk['rollover_target']['id'] ?? null) === $assy2->id
+                        && $caulk['sync_downstream'] === ['d' => true, 'd1' => true, 'd2' => true]
+                        && $p2['rollover_target'] === null
+                        && $p2['sync_downstream'] === ['d' => false, 'd1' => false, 'd2' => false];
+                }));
+
+        $this->put(route('production-plans.machines.save', $tplKukil), [
+            'date' => $monday,
+            'shift_counts' => ['d' => 2, 'd1' => 3, 'd2' => 3],
+            'sync_downstream' => ['d' => true, 'd1' => false, 'd2' => true],
+            'rows' => [
+                [
+                    'work_order_id' => $wo->id,
+                    'd_seq' => 1,
+                    'd_qty' => 200,
+                    'd_qdc' => true,
+                    'd1_seq' => 1,
+                    'd1_qty' => 150,
+                    'd1_qdc' => false,
+                    'd2_seq' => null,
+                    'd2_qty' => null,
+                ],
+            ],
+        ])->assertRedirect(route('production-plans.index', ['date' => $monday]));
+
+        $this->get(route('production-plans.index', ['date' => $monday]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('machines', function ($machines) use ($tplKukil, $assy1, $autoCaulking, $wo) {
+                    $byId = collect($machines)->keyBy('id');
+                    $tpl = $byId->get($tplKukil->id);
+                    $p2 = $byId->get($assy1->id);
+                    $caulk = $byId->get($autoCaulking->id);
+
+                    if ($tpl === null || $p2 === null || $caulk === null) {
+                        return false;
+                    }
+
+                    $tplRow = collect($tpl['planned_rows'] ?? [])->firstWhere('work_order_id', $wo->id);
+                    $assy1Row = collect($p2['planned_rows'] ?? [])->firstWhere('work_order_id', $wo->id);
+                    $caulkModal = collect($caulk['modal_rows'] ?? [])->firstWhere('work_order_id', $wo->id);
+
+                    return $tpl['sync_downstream'] === ['d' => true, 'd1' => false, 'd2' => true]
+                        && (int) $p2['shift_counts']['d'] === 2
+                        && $tplRow !== null
+                        && $assy1Row !== null
+                        && (float) $assy1Row['days']['d']['qty'] === 200.0
+                        && (int) $assy1Row['days']['d']['sequence'] === 1
+                        && $assy1Row['days']['d']['apply_qdc'] === true
+                        && (float) $assy1Row['days']['d']['qdc_applied_minutes'] === 25.0
+                        && $assy1Row['days']['d']['start_time'] === '07:30'
+                        && $assy1Row['days']['d']['end_time'] === '08:17'
+                        && $assy1Row['days']['d']['start_time'] === $tplRow['days']['d']['start_time']
+                        && $assy1Row['days']['d']['end_time'] === $tplRow['days']['d']['end_time']
+                        && $assy1Row['days']['d1'] === null
+                        && $caulkModal !== null
+                        && (float) $caulkModal['day_caps']['d'] === 200.0;
+                }));
+
+        $this->put(route('production-plans.machines.save', $tplKukil), [
+            'date' => $monday,
+            'shift_counts' => ['d' => 2, 'd1' => 3, 'd2' => 3],
+            'sync_downstream' => ['d' => true, 'd1' => false, 'd2' => true],
+            'rows' => [
+                [
+                    'work_order_id' => $wo->id,
+                    'd_seq' => 1,
+                    'd_qty' => 120,
+                    'd_qdc' => true,
+                    'd1_seq' => 1,
+                    'd1_qty' => 150,
+                    'd1_qdc' => false,
+                    'd2_seq' => null,
+                    'd2_qty' => null,
+                ],
+            ],
+        ])->assertRedirect(route('production-plans.index', ['date' => $monday]));
+
+        $mondayPlan = ProductionPlan::whereDate('plan_date', $monday)->firstOrFail();
+
+        $this->assertSame(
+            120.0,
+            (float) ProductionPlanItem::where('production_plan_id', $mondayPlan->id)
+                ->where('work_order_id', $wo->id)
+                ->where('machine_id', $tplKukil->id)
+                ->value('target_d'),
+        );
+        $this->assertSame(
+            120.0,
+            (float) ProductionPlanItem::where('production_plan_id', $mondayPlan->id)
+                ->where('work_order_id', $wo->id)
+                ->where('machine_id', $assy1->id)
+                ->value('target_d'),
+        );
+
+        $this->put(route('production-plans.machines.save', $autoCaulking), [
+            'date' => $monday,
+            'rows' => [
+                [
+                    'work_order_id' => $wo->id,
+                    'd_seq' => 1,
+                    'd_qty' => 100,
+                    'd1_seq' => null,
+                    'd1_qty' => null,
+                    'd2_seq' => null,
+                    'd2_qty' => null,
+                ],
+            ],
+        ])->assertRedirect(route('production-plans.index', ['date' => $monday]));
+
+        $this->put(route('production-plans.machines.save', $tplKukil), [
+            'date' => $monday,
+            'shift_counts' => ['d' => 2, 'd1' => 3, 'd2' => 3],
+            'sync_downstream' => ['d' => true, 'd1' => false, 'd2' => true],
+            'rows' => [
+                [
+                    'work_order_id' => $wo->id,
+                    'd_seq' => 1,
+                    'd_qty' => 80,
+                    'd_qdc' => true,
+                    'd1_seq' => 1,
+                    'd1_qty' => 150,
+                    'd1_qdc' => false,
+                    'd2_seq' => null,
+                    'd2_qty' => null,
+                ],
+            ],
+        ])->assertSessionHasErrors('rows.0.qty');
+
+        $this->assertSame(
+            120.0,
+            (float) ProductionPlanItem::where('production_plan_id', $mondayPlan->id)
+                ->where('work_order_id', $wo->id)
+                ->where('machine_id', $tplKukil->id)
+                ->value('target_d'),
+        );
+        $this->assertSame(
+            120.0,
+            (float) ProductionPlanItem::where('production_plan_id', $mondayPlan->id)
+                ->where('work_order_id', $wo->id)
+                ->where('machine_id', $assy1->id)
+                ->value('target_d'),
+        );
+
+        $this->put(route('production-plans.machines.save', $autoCaulking), [
+            'date' => $monday,
+            'rows' => [
+                [
+                    'work_order_id' => $wo->id,
+                    'd_seq' => null,
+                    'd_qty' => null,
+                    'd1_seq' => null,
+                    'd1_qty' => null,
+                    'd2_seq' => null,
+                    'd2_qty' => null,
+                ],
+            ],
+        ])->assertRedirect(route('production-plans.index', ['date' => $monday]));
+
+        $this->put(route('production-plans.machines.save', $tplKukil), [
+            'date' => $monday,
+            'shift_counts' => ['d' => 2, 'd1' => 3, 'd2' => 3],
+            'sync_downstream' => ['d' => true, 'd1' => false, 'd2' => true],
+            'rows' => [
+                [
+                    'work_order_id' => $wo->id,
+                    'd_seq' => null,
+                    'd_qty' => null,
+                    'd1_seq' => 1,
+                    'd1_qty' => 150,
+                    'd1_qdc' => false,
+                    'd2_seq' => null,
+                    'd2_qty' => null,
+                ],
+            ],
+        ])->assertRedirect(route('production-plans.index', ['date' => $monday]));
+
+        $this->assertSame(
+            0,
+            ProductionPlanItem::where('production_plan_id', $mondayPlan->id)
+                ->where('work_order_id', $wo->id)
+                ->whereIn('machine_id', [$tplKukil->id, $assy1->id])
+                ->count(),
+        );
+    }
+
+    public function test_auto_caulking_rollover_syncs_and_inherits_qdc_to_assy_2(): void
+    {
+        $monday = '2026-11-23';
+        $tuesday = '2026-11-24';
+        $wednesday = '2026-11-25';
+        $this->clearStocksForParts(['AAN30056405-WIP5', 'AAN30056405-WIP6', 'AAN30056405-WIP7']);
+
+        $autoCaulking = Machine::where('machine_name', 'AUTO CAULKING')->firstOrFail();
+        $assy2 = Machine::where('is_active', true)
+            ->whereIn('machine_name', ['ASSY. TPL KUKIL 2', 'ASSY TPL KUKIL 2', 'ASSY. TPL COMP BASE 2'])
+            ->firstOrFail();
+
+        $wip6 = Part::where('part_number', 'AAN30056405-WIP6')->firstOrFail();
+        $wip7 = Part::where('part_number', 'AAN30056405-WIP7')->firstOrFail();
+        $fg = $this->fg();
+
+        $planIds = ProductionPlan::whereIn('plan_date', [$monday, $tuesday, $wednesday])->pluck('id');
+        if ($planIds->isNotEmpty()) {
+            ProductionPlanItem::whereIn('production_plan_id', $planIds)
+                ->whereIn('machine_id', [$autoCaulking->id, $assy2->id])
+                ->delete();
+            ProductionPlanMachineDay::whereIn('production_plan_id', $planIds)
+                ->whereIn('machine_id', [$autoCaulking->id, $assy2->id])
+                ->delete();
+        }
+
+        PartStock::create([
+            'part_id' => $wip6->id,
+            'tag' => 'TEST-WIP6-300',
+            'qty' => 300,
+            'qty_unit' => 'PCS',
+            'received_at' => now(),
+        ]);
+
+        MachineCycleTime::updateOrCreate(
+            ['machine_id' => $autoCaulking->id, 'part_id' => $wip7->id],
+            ['cycle_time_seconds' => 6.7, 'qdc_minutes' => 30.0, 'is_active' => true],
+        );
+        MachineCycleTime::updateOrCreate(
+            ['machine_id' => $assy2->id, 'part_id' => $fg->id],
+            ['cycle_time_seconds' => 6.7, 'qdc_minutes' => null, 'is_active' => true],
+        );
+
+        $wo = $this->createWo(300, $monday);
+
+        $this->put(route('production-plans.machines.save', $autoCaulking), [
+            'date' => $monday,
+            'shift_counts' => ['d' => 1, 'd1' => 3, 'd2' => 3],
+            'sync_downstream' => ['d' => true, 'd1' => true, 'd2' => true],
+            'rows' => [
+                [
+                    'work_order_id' => $wo->id,
+                    'd_seq' => 1,
+                    'd_qty' => 180,
+                    'd_qdc' => true,
+                    'd1_seq' => null,
+                    'd1_qty' => null,
+                    'd2_seq' => null,
+                    'd2_qty' => null,
+                ],
+            ],
+        ])->assertRedirect(route('production-plans.index', ['date' => $monday]));
+
+        $this->get(route('production-plans.index', ['date' => $monday]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('machines', function ($machines) use ($autoCaulking, $assy2, $wo) {
+                    $byId = collect($machines)->keyBy('id');
+                    $caulk = $byId->get($autoCaulking->id);
+                    $p4 = $byId->get($assy2->id);
+
+                    if ($caulk === null || $p4 === null) {
+                        return false;
+                    }
+
+                    $caulkRow = collect($caulk['planned_rows'] ?? [])->firstWhere('work_order_id', $wo->id);
+                    $assy2Row = collect($p4['planned_rows'] ?? [])->firstWhere('work_order_id', $wo->id);
+
+                    return (int) $p4['shift_counts']['d'] === 1
+                        && $caulkRow !== null
+                        && $assy2Row !== null
+                        && (float) $assy2Row['days']['d']['qty'] === 180.0
+                        && (int) $assy2Row['days']['d']['sequence'] === 1
+                        && $assy2Row['days']['d']['apply_qdc'] === true
+                        && (float) $assy2Row['days']['d']['qdc_applied_minutes'] === 30.0
+                        && $assy2Row['days']['d']['start_time'] === '07:30'
+                        && $assy2Row['days']['d']['end_time'] === '08:20'
+                        && $assy2Row['days']['d']['start_time'] === $caulkRow['days']['d']['start_time']
+                        && $assy2Row['days']['d']['end_time'] === $caulkRow['days']['d']['end_time'];
+                }));
+
+        $this->put(route('production-plans.machines.save', $autoCaulking), [
+            'date' => $monday,
+            'shift_counts' => ['d' => 1, 'd1' => 3, 'd2' => 3],
+            'sync_downstream' => ['d' => true, 'd1' => true, 'd2' => true],
+            'rows' => [
+                [
+                    'work_order_id' => $wo->id,
+                    'd_seq' => 1,
+                    'd_qty' => 180,
+                    'd_qdc' => false,
+                    'd1_seq' => null,
+                    'd1_qty' => null,
+                    'd2_seq' => null,
+                    'd2_qty' => null,
+                ],
+            ],
+        ])->assertRedirect(route('production-plans.index', ['date' => $monday]));
+
+        $this->get(route('production-plans.index', ['date' => $monday]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('machines', function ($machines) use ($autoCaulking, $assy2, $wo) {
+                    $byId = collect($machines)->keyBy('id');
+                    $caulk = $byId->get($autoCaulking->id);
+                    $p4 = $byId->get($assy2->id);
+
+                    if ($caulk === null || $p4 === null) {
+                        return false;
+                    }
+
+                    $caulkRow = collect($caulk['planned_rows'] ?? [])->firstWhere('work_order_id', $wo->id);
+                    $assy2Row = collect($p4['planned_rows'] ?? [])->firstWhere('work_order_id', $wo->id);
+
+                    return $caulkRow !== null
+                        && $assy2Row !== null
+                        && (float) $assy2Row['days']['d']['qty'] === 180.0
+                        && $assy2Row['days']['d']['apply_qdc'] === false
+                        && (float) $assy2Row['days']['d']['qdc_applied_minutes'] === 0.0
+                        && $assy2Row['days']['d']['start_time'] === '07:30'
+                        && $assy2Row['days']['d']['end_time'] === '07:50'
+                        && $assy2Row['days']['d']['start_time'] === $caulkRow['days']['d']['start_time']
+                        && $assy2Row['days']['d']['end_time'] === $caulkRow['days']['d']['end_time'];
+                }));
     }
 }

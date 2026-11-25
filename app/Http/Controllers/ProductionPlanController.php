@@ -160,13 +160,19 @@ class ProductionPlanController extends Controller
 
         foreach ($machines as $machine) {
             $mId = (int) $machine->id;
+            $rolloverTarget = $this->scheduleService->rolloverTargetFor($machine, $machines);
+            $rolloverSource = $this->scheduleService->rolloverSourceFor($machine, $machines);
             $initialQdc = [];
             $shiftCounts = [];
+            $syncDownstream = [];
             foreach ($dayDates as $dayKey => $planDateStr) {
                 $p = $plansByDate->get($planDateStr);
                 $md = $p !== null ? $machineDays->get($p->id.'|'.$mId) : null;
                 $initialQdc[$dayKey] = (bool) ($md?->initial_qdc ?? false);
                 $shiftCounts[$dayKey] = max(1, min(3, (int) ($md?->shift_count ?? 3)));
+                $syncDownstream[$dayKey] = $rolloverTarget !== null
+                    ? ($md !== null ? (bool) $md->sync_downstream : true)
+                    : false;
             }
 
             $candidatePairs = [];
@@ -235,6 +241,27 @@ class ProductionPlanController extends Controller
                     $originMachine,
                     $originId,
                 );
+
+                if (($ct['qdc_minutes'] === null || $ct['qdc_minutes'] <= 0) && $rolloverSource !== null) {
+                    $sourceSlot = $slotsByWoOrigin->get($woId.'|'.((int) $rolloverSource->id));
+                    $sourceWipPartId = $sourceSlot['wip_part_id'] ?? null;
+                    if ($sourceWipPartId === null) {
+                        $sourceDayItems = $plannedByOriginWo[(int) $rolloverSource->id][$woId] ?? [];
+                        $sourceFirstPi = reset($sourceDayItems) ?: null;
+                        $sourceWipPartId = $sourceFirstPi?->wip_part_id !== null ? (int) $sourceFirstPi->wip_part_id : null;
+                    }
+                    if ($sourceWipPartId !== null) {
+                        $sourceCt = $this->scheduleService->resolveCycleTime(
+                            $rolloverSource,
+                            (int) $rolloverSource->id,
+                            (int) $sourceWipPartId,
+                            $cycleTimeMaps,
+                        );
+                        if ($sourceCt['qdc_minutes'] !== null && $sourceCt['qdc_minutes'] > 0) {
+                            $ct['qdc_minutes'] = $sourceCt['qdc_minutes'];
+                        }
+                    }
+                }
 
                 $rowMetaByPair[$pairKey] = [
                     'work_order_id' => $woId,
@@ -432,6 +459,12 @@ class ProductionPlanController extends Controller
                 'avail_wo_count' => $availWoCount,
                 'initial_qdc' => $initialQdc,
                 'shift_counts' => $shiftCounts,
+                'rollover_target' => $rolloverTarget ? [
+                    'id' => (int) $rolloverTarget->id,
+                    'machine_code' => $rolloverTarget->machine_code,
+                    'machine_name' => $rolloverTarget->machine_name,
+                ] : null,
+                'sync_downstream' => $syncDownstream,
                 'planned_rows' => $plannedRows,
                 'modal_rows' => $modalRows,
                 'fg_part_ids' => $fgIdsByMachine->get($mId, []),
@@ -616,6 +649,10 @@ class ProductionPlanController extends Controller
             'shift_counts.d' => ['sometimes', 'integer', 'min:1', 'max:3'],
             'shift_counts.d1' => ['sometimes', 'integer', 'min:1', 'max:3'],
             'shift_counts.d2' => ['sometimes', 'integer', 'min:1', 'max:3'],
+            'sync_downstream' => ['sometimes', 'array'],
+            'sync_downstream.d' => ['sometimes', 'boolean'],
+            'sync_downstream.d1' => ['sometimes', 'boolean'],
+            'sync_downstream.d2' => ['sometimes', 'boolean'],
             'rows' => ['present', 'array'],
             'rows.*.work_order_id' => ['required', 'integer', 'exists:work_orders,id'],
             'rows.*.origin_machine_id' => ['sometimes', 'nullable', 'integer', 'exists:machines,id'],
@@ -645,6 +682,14 @@ class ProductionPlanController extends Controller
             'd2' => (int) ($data['shift_counts']['d2'] ?? 3),
         ];
 
+        $syncDownstream = $request->has('sync_downstream')
+            ? [
+                'd' => (bool) ($data['sync_downstream']['d'] ?? false),
+                'd1' => (bool) ($data['sync_downstream']['d1'] ?? false),
+                'd2' => (bool) ($data['sync_downstream']['d2'] ?? false),
+            ]
+            : null;
+
         $this->scheduleService->saveMachinePlan(
             $machine,
             $data['date'],
@@ -652,6 +697,7 @@ class ProductionPlanController extends Controller
             $data['rows'],
             (int) auth()->id(),
             $shiftCounts,
+            $syncDownstream,
         );
 
         return redirect()

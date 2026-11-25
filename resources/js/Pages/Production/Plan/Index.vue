@@ -314,10 +314,12 @@ const activeMachine = computed<ProductionPlanBoardMachine | null>(() =>
 const machinePlanForm = useForm<{
     date: string;
     shift_counts: { d: number; d1: number; d2: number };
+    sync_downstream: { d: boolean; d1: boolean; d2: boolean };
     rows: ModalRowDraft[];
 }>({
     date: props.date,
     shift_counts: { d: 3, d1: 3, d2: 3 },
+    sync_downstream: { d: true, d1: true, d2: true },
     rows: [],
 });
 
@@ -425,6 +427,12 @@ function openMachineModal(machineId: number) {
         d: machine.shift_counts?.d ?? 3,
         d1: machine.shift_counts?.d1 ?? 3,
         d2: machine.shift_counts?.d2 ?? 3,
+    };
+    const defaultSync = Boolean(machine.rollover_target);
+    machinePlanForm.sync_downstream = {
+        d: machine.sync_downstream?.d ?? defaultSync,
+        d1: machine.sync_downstream?.d1 ?? defaultSync,
+        d2: machine.sync_downstream?.d2 ?? defaultSync,
     };
     machinePlanForm.rows = machine.modal_rows.map((row) => toModalDraft(row, machine.id));
     showInlineCreateWo.value = false;
@@ -694,11 +702,13 @@ function executeSaveMachinePlan() {
     if (!activeMachine.value || hasAnyOverLimit.value) return;
 
     const toNullableNum = (v: string) => (v === '' ? null : Number(v));
+    const hasRolloverTarget = Boolean(activeMachine.value.rollover_target);
 
     machinePlanForm
         .transform((data) => ({
             date: props.date,
             shift_counts: data.shift_counts,
+            ...(hasRolloverTarget ? { sync_downstream: { ...data.sync_downstream } } : {}),
             rows: data.rows.map((r) => ({
                 work_order_id: r.work_order_id,
                 origin_machine_id: r.origin_machine_id,
@@ -1226,6 +1236,15 @@ function submitInlineCreateWo() {
                             {{ t('production.machinePlanModalTitle', { machine: activeMachine.machine_name }) }}
                         </h3>
                         <p class="mt-1 text-xs text-ink-secondary">{{ t('production.machinePlanModalHint') }}</p>
+                        <p
+                            v-if="activeMachine.rollover_target"
+                            class="mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded-md border border-primary/25 bg-primary-light/40 px-2 py-1 text-xs font-medium text-primary"
+                        >
+                            <svg aria-hidden="true" class="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                            </svg>
+                            <span class="min-w-0 break-words">{{ t('production.rolloverModalInfo', { machine: activeMachine.rollover_target.machine_name }) }}</span>
+                        </p>
                     </div>
                     <div class="flex items-center gap-2">
                         <button
@@ -1351,6 +1370,22 @@ function submitInlineCreateWo() {
                                                 {{ t('production.shiftRemainLabel', { time: fmtMinutes(dayUsageSummary(key).remainMinutes) }) }}
                                             </span>
                                         </div>
+                                        <label
+                                            v-if="activeMachine.rollover_target"
+                                            class="mt-1.5 flex w-full max-w-[200px] cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium transition-colors"
+                                            :class="machinePlanForm.sync_downstream[key]
+                                                ? 'border-primary/40 bg-primary-light/50 text-primary hover:border-primary/60'
+                                                : 'border-borderline bg-surface text-ink-secondary hover:border-primary/40 hover:text-ink-primary'"
+                                            :title="t('production.rolloverHint', { machine: activeMachine.rollover_target.machine_name })"
+                                        >
+                                            <input
+                                                v-model="machinePlanForm.sync_downstream[key]"
+                                                type="checkbox"
+                                                :aria-label="`${t('production.rolloverToMachine', { machine: activeMachine.rollover_target.machine_name })} (${dayFullLabel(key)})`"
+                                                class="h-3.5 w-3.5 shrink-0 rounded border-borderline text-primary focus:ring-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                                            />
+                                            <span class="min-w-0 truncate">{{ t('production.rolloverToMachine', { machine: activeMachine.rollover_target.machine_name }) }}</span>
+                                        </label>
                                         <div class="mt-1.5 grid grid-cols-[48px_76px_64px] items-center gap-1.5 border-t border-borderline/70 pt-1 text-[11px] font-semibold text-ink-secondary">
                                             <span class="text-center">{{ t('production.sequenceShort') }}</span>
                                             <span class="text-right">{{ t('production.qtyShort') }}</span>

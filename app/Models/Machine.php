@@ -50,6 +50,11 @@ class Machine extends Model
         'TAPPING 2' => 29,
     ];
 
+    public const ROLLOVER_TARGET_NAMES = [
+        'TPL KUKIL' => ['ASSY. TPL KUKIL 1', 'ASSY TPL KUKIL 1', 'ASSY. TPL COMP BASE 1'],
+        'AUTO CAULKING' => ['ASSY. TPL KUKIL 2', 'ASSY TPL KUKIL 2', 'ASSY. TPL COMP BASE 2'],
+    ];
+
     protected $fillable = [
         'machine_code', 'machine_name', 'sequence', 'is_active', 'created_by', 'updated_by',
     ];

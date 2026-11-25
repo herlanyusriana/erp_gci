@@ -20,8 +20,10 @@ class Machine extends Model
     public const DISPLAY_SEQUENCE = [
         'TPL KUKIL' => 1,
         'ASSY. TPL COMP BASE 1' => 2,
+        'ASSY. TPL KUKIL 1' => 2,
         'AUTO CAULKING' => 3,
         'ASSY. TPL COMP BASE 2' => 4,
+        'ASSY. TPL KUKIL 2' => 4,
         'SPOT WELDING 4 -  40 KVA' => 5,
         'SPOT WELDING 3 -  40 KVA' => 6,
         'SPOT WELDING 2 -  40 KVA' => 7,

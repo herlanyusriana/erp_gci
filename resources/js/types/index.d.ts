@@ -641,6 +641,9 @@ export interface ProductionPlanMachineRow {
     remaining_qty: number;
     planned_total: number;
     avail_qty: number;
+    has_upstream?: boolean;
+    eligible_qty?: number;
+    day_caps?: { d: number; d1: number; d2: number };
     fg_part: Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> | null;
     input_part: Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> | null;
     wip_part: Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> | null;

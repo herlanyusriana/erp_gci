@@ -122,6 +122,9 @@ class ProductionPlanController extends Controller
             $plannedByMachineWo[$mId][$woId][$dayKey] = $pi;
         }
 
+        $wipStockByPartId = $this->scheduleService->availableWipStockMap($allSlots);
+        $supplyCaps = $this->scheduleService->computeSlotSupplyCaps($allSlots, $plannedByMachineWo, $wipStockByPartId);
+
         // Kumpulkan semua wip_part_id untuk lookup Tact Time & QDC (1 query saja).
         $wipPartIds = $allSlots->pluck('wip_part_id')
             ->merge($planItems->pluck('wip_part_id'))
@@ -177,11 +180,21 @@ class ProductionPlanController extends Controller
                 $wipPartId = $slot['wip_part_id'] ?? ($firstPi?->wip_part_id !== null ? (int) $firstPi->wip_part_id : null);
                 $remainingQty = $slot !== null ? (float) $slot['remaining_qty'] : (float) ($firstPi?->workOrder?->qty ?? 0);
 
+                $capInfo = $supplyCaps[$woId.'|'.$mId] ?? [
+                    'has_upstream' => false,
+                    'day_caps' => [
+                        'd' => $remainingQty,
+                        'd1' => $remainingQty,
+                        'd2' => $remainingQty,
+                    ],
+                    'eligible_qty' => $remainingQty,
+                ];
+
                 $plannedD = isset($dayItems['d']) ? (float) $dayItems['d']->target_d : 0.0;
                 $plannedD1 = isset($dayItems['d1']) ? (float) $dayItems['d1']->target_d : 0.0;
                 $plannedD2 = isset($dayItems['d2']) ? (float) $dayItems['d2']->target_d : 0.0;
                 $plannedTotal = round($plannedD + $plannedD1 + $plannedD2, 4);
-                $availQty = round(max(0.0, $remainingQty - $plannedTotal), 4);
+                $availQty = round(max(0.0, (float) $capInfo['eligible_qty'] - $plannedTotal), 4);
 
                 $availMapByWoMachine[$woId][$mId] = [
                     'remaining_qty' => $remainingQty,
@@ -199,6 +212,9 @@ class ProductionPlanController extends Controller
                     'remaining_qty' => $remainingQty,
                     'planned_total' => $plannedTotal,
                     'avail_qty' => $availQty,
+                    'has_upstream' => (bool) $capInfo['has_upstream'],
+                    'eligible_qty' => (float) $capInfo['eligible_qty'],
+                    'day_caps' => $capInfo['day_caps'],
                     'fg_part' => $slot['fg_part'] ?? ($firstPi?->fgPart ? [
                         'id' => (int) $firstPi->fgPart->id,
                         'part_number' => $firstPi->fgPart->part_number,
@@ -290,6 +306,9 @@ class ProductionPlanController extends Controller
                     'remaining_qty' => $meta['remaining_qty'],
                     'planned_total' => $meta['planned_total'],
                     'avail_qty' => $meta['avail_qty'],
+                    'has_upstream' => $meta['has_upstream'],
+                    'eligible_qty' => $meta['eligible_qty'],
+                    'day_caps' => $meta['day_caps'],
                     'fg_part' => $meta['fg_part'],
                     'input_part' => $meta['input_part'],
                     'wip_part' => $meta['wip_part'],
@@ -353,7 +372,7 @@ class ProductionPlanController extends Controller
         $slotsByWo = $allSlots->groupBy('work_order_id');
         $availWorkOrders = $activeWorkOrders
             ->filter(fn (WorkOrder $wo): bool => in_array($wo->status, ['planned', 'in_progress'], true))
-            ->map(function (WorkOrder $wo) use ($slotsByWo, $availMapByWoMachine, $machinesById): ?array {
+            ->map(function (WorkOrder $wo) use ($slotsByWo, $availMapByWoMachine, $machinesById, $supplyCaps): ?array {
                 $woSlots = $slotsByWo->get($wo->id) ?? collect();
                 $machineSummaries = [];
                 $hasRemaining = false;
@@ -365,10 +384,12 @@ class ProductionPlanController extends Controller
                     if (! $machinesById->has($mId)) {
                         continue;
                     }
+                    $capInfo = $supplyCaps[$wo->id.'|'.$mId] ?? null;
+                    $fallbackAvail = $capInfo !== null ? (float) $capInfo['eligible_qty'] : (float) $slot['remaining_qty'];
                     $stats = $availMapByWoMachine[$wo->id][$mId] ?? [
                         'remaining_qty' => (float) $slot['remaining_qty'],
                         'planned_qty' => 0.0,
-                        'avail_qty' => (float) $slot['remaining_qty'],
+                        'avail_qty' => $fallbackAvail,
                     ];
 
                     if ($stats['remaining_qty'] > 0) {
@@ -379,6 +400,10 @@ class ProductionPlanController extends Controller
                     }
                     if ($stats['avail_qty'] > 0) {
                         $hasUnplanned = true;
+                    }
+
+                    if ($stats['avail_qty'] <= 0 && $stats['planned_qty'] <= 0) {
+                        continue;
                     }
 
                     $machineSummaries[] = [

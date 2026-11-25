@@ -19,6 +19,10 @@ use Illuminate\Validation\ValidationException;
 
 class ProductionPlanScheduleService
 {
+    public function __construct(
+        protected ReceiveMaterialService $receiveMaterialService,
+    ) {}
+
     /**
      * ID mesin Subcon — papan Production Plan hanya untuk mesin internal.
      *
@@ -55,6 +59,7 @@ class ProductionPlanScheduleService
         foreach ($workOrders as $wo) {
             $sortedItems = $wo->items->sortBy(fn ($it) => [$it->sequence ?? 0, $it->id]);
 
+            $validItems = [];
             $steps = [];
             foreach ($sortedItems as $item) {
                 if ($item->parent_part_id === null || strtoupper((string) $item->source) === 'SUBCON') {
@@ -63,6 +68,7 @@ class ProductionPlanScheduleService
                 if ($item->machine_id !== null && isset($subconLookup[(int) $item->machine_id])) {
                     continue;
                 }
+                $validItems[] = $item;
                 $stepKey = ($item->sequence ?? 0).'|'.$item->parent_part_id;
                 $steps[$stepKey] ??= $item;
             }
@@ -83,6 +89,7 @@ class ProductionPlanScheduleService
                 ];
             }
 
+            $woBoardGroups = [];
             $seenMachineForWo = [];
             foreach ($groups as $group) {
                 if ($group['machine_id'] === null || isset($seenMachineForWo[$group['machine_id']])) {
@@ -92,10 +99,69 @@ class ProductionPlanScheduleService
 
                 $first = $group['steps'][0];
                 $last = $group['steps'][count($group['steps']) - 1];
+                $stepParentPartIds = [];
+                foreach ($group['steps'] as $stepItem) {
+                    if ($stepItem->parent_part_id !== null) {
+                        $stepParentPartIds[(int) $stepItem->parent_part_id] = true;
+                    }
+                }
+
+                $woBoardGroups[] = [
+                    'machine_id' => $group['machine_id'],
+                    'machine_name' => (string) ($first->machine?->machine_name ?? ''),
+                    'first' => $first,
+                    'last' => $last,
+                    'wip_part_id' => $last->parent_part_id !== null ? (int) $last->parent_part_id : null,
+                    'step_parent_part_ids' => $stepParentPartIds,
+                ];
+            }
+
+            $wipOwnerByPartId = [];
+            foreach ($woBoardGroups as $bg) {
+                if ($bg['wip_part_id'] !== null && ! isset($wipOwnerByPartId[$bg['wip_part_id']])) {
+                    $wipOwnerByPartId[$bg['wip_part_id']] = [
+                        'machine_id' => $bg['machine_id'],
+                        'machine_name' => $bg['machine_name'],
+                        'wip_part_id' => $bg['wip_part_id'],
+                    ];
+                }
+            }
+
+            foreach ($woBoardGroups as $bg) {
+                $first = $bg['first'];
+                $last = $bg['last'];
+
+                $upstreamDeps = [];
+                $seenDep = [];
+                foreach ($validItems as $item) {
+                    if ($item->child_part_id === null) {
+                        continue;
+                    }
+                    if (! isset($bg['step_parent_part_ids'][(int) $item->parent_part_id])) {
+                        continue;
+                    }
+                    $childPartId = (int) $item->child_part_id;
+                    $owner = $wipOwnerByPartId[$childPartId] ?? null;
+                    if ($owner === null || $owner['machine_id'] === $bg['machine_id']) {
+                        continue;
+                    }
+                    $depKey = $owner['machine_id'].'|'.$owner['wip_part_id'];
+                    if (isset($seenDep[$depKey])) {
+                        continue;
+                    }
+                    $seenDep[$depKey] = true;
+                    $rawChildQty = $item->child_qty !== null ? (float) $item->child_qty : 1.0;
+                    $upstreamDeps[] = [
+                        'machine_id' => $owner['machine_id'],
+                        'machine_name' => $owner['machine_name'],
+                        'wip_part_id' => $owner['wip_part_id'],
+                        'child_qty' => $rawChildQty > 0 ? $rawChildQty : 1.0,
+                    ];
+                }
 
                 $woIds[$wo->id] = true;
-                if ($last->parent_part_id !== null) {
-                    $wipIds[(int) $last->parent_part_id] = true;
+                if ($bg['wip_part_id'] !== null) {
+                    $wipIds[$bg['wip_part_id']] = true;
                 }
 
                 $rawSlots[] = [
@@ -111,7 +177,7 @@ class ProductionPlanScheduleService
                         'part_name' => $wo->part->part_name,
                         'model' => $wo->part->model,
                     ] : null,
-                    'machine_id' => $group['machine_id'],
+                    'machine_id' => $bg['machine_id'],
                     'machine' => $first->machine ? [
                         'id' => (int) $first->machine->id,
                         'machine_code' => $first->machine->machine_code,
@@ -126,7 +192,7 @@ class ProductionPlanScheduleService
                         'part_name' => $first->childPart->part_name,
                         'model' => $first->childPart->model,
                     ] : null,
-                    'wip_part_id' => $last->parent_part_id !== null ? (int) $last->parent_part_id : null,
+                    'wip_part_id' => $bg['wip_part_id'],
                     'wip_part' => $last->parentPart ? [
                         'id' => (int) $last->parentPart->id,
                         'part_number' => $last->parentPart->part_number,
@@ -134,6 +200,8 @@ class ProductionPlanScheduleService
                         'model' => $last->parentPart->model,
                     ] : null,
                     'step_sequence' => $first->sequence !== null ? (int) $first->sequence : null,
+                    'upstream_deps' => $upstreamDeps,
+                    'has_upstream' => $upstreamDeps !== [],
                 ];
             }
         }
@@ -156,6 +224,118 @@ class ProductionPlanScheduleService
 
             return $slot;
         });
+    }
+
+    /**
+     * Ambil stok fisik WIP tersedia (FIFO, dikurangi booking aktif) untuk semua
+     * `wip_part_id` upstream yang dibutuhkan oleh slot-slot WO.
+     *
+     * @param  Collection<int, array<string, mixed>>  $allSlots
+     * @return array<int, float>
+     */
+    public function availableWipStockMap(Collection $allSlots): array
+    {
+        $upstreamWipPartIds = [];
+        foreach ($allSlots as $slot) {
+            foreach ($slot['upstream_deps'] ?? [] as $dep) {
+                $partId = (int) ($dep['wip_part_id'] ?? 0);
+                if ($partId > 0) {
+                    $upstreamWipPartIds[$partId] = true;
+                }
+            }
+        }
+
+        if ($upstreamWipPartIds === []) {
+            return [];
+        }
+
+        return $this->receiveMaterialService->availableFifoBatch(array_keys($upstreamWipPartIds));
+    }
+
+    /**
+     * Hitung batas suplai kumulatif (D, D+1, D+2) untuk setiap slot `"{$woId}|{$machineId}"`
+     * dari stok fisik WIP tersedia + rencana mesin upstream per tanggal.
+     *
+     * @param  Collection<int, array<string, mixed>>  $allSlots
+     * @param  array<int, array<int, array<string, ProductionPlanItem|float|int|null>>>  $plannedByMachineWo
+     * @param  array<int, float>  $wipStockByPartId
+     * @return array<string, array{has_upstream: bool, day_caps: array{d: float, d1: float, d2: float}, eligible_qty: float}>
+     */
+    public function computeSlotSupplyCaps(Collection $allSlots, array $plannedByMachineWo, array $wipStockByPartId): array
+    {
+        $slotsByKey = [];
+        foreach ($allSlots as $slot) {
+            $key = ((int) $slot['work_order_id']).'|'.((int) $slot['machine_id']);
+            $slotsByKey[$key] = $slot;
+        }
+
+        $caps = [];
+        foreach ($slotsByKey as $slotKey => $slot) {
+            $woId = (int) $slot['work_order_id'];
+            $remaining = round(max(0.0, (float) ($slot['remaining_qty'] ?? 0.0)), 4);
+            $produced = max(0.0, (float) ($slot['produced_qty'] ?? 0.0));
+            $upstreamDeps = $slot['upstream_deps'] ?? [];
+
+            if ($upstreamDeps === []) {
+                $caps[$slotKey] = [
+                    'has_upstream' => false,
+                    'day_caps' => [
+                        'd' => $remaining,
+                        'd1' => $remaining,
+                        'd2' => $remaining,
+                    ],
+                    'eligible_qty' => $remaining,
+                ];
+
+                continue;
+            }
+
+            $capD = $remaining;
+            $capD1 = $remaining;
+            $capD2 = $remaining;
+
+            foreach ($upstreamDeps as $dep) {
+                $upMachineId = (int) $dep['machine_id'];
+                $wipPartId = (int) $dep['wip_part_id'];
+                $childQty = (float) ($dep['child_qty'] ?? 1.0);
+                $ratio = $childQty > 0 ? $childQty : 1.0;
+
+                $upSlot = $slotsByKey[$woId.'|'.$upMachineId] ?? null;
+                $upProduced = max(0.0, (float) ($upSlot['produced_qty'] ?? 0.0));
+
+                $unconsumedFromWo = max(0.0, ($upProduced / $ratio) - $produced);
+                $stockUnits = max(0.0, (float) ($wipStockByPartId[$wipPartId] ?? 0.0)) / $ratio;
+                $physicalWipReady = max($unconsumedFromWo, $stockUnits);
+
+                $upD = $this->plannedDayQty($plannedByMachineWo, $upMachineId, $woId, 'd') / $ratio;
+                $upD1 = $this->plannedDayQty($plannedByMachineWo, $upMachineId, $woId, 'd1') / $ratio;
+                $upD2 = $this->plannedDayQty($plannedByMachineWo, $upMachineId, $woId, 'd2') / $ratio;
+
+                $depD = min($remaining, round(max(0.0, $physicalWipReady + $upD), 4));
+                $depD1 = min($remaining, round(max(0.0, $physicalWipReady + $upD + $upD1), 4));
+                $depD2 = min($remaining, round(max(0.0, $physicalWipReady + $upD + $upD1 + $upD2), 4));
+
+                $capD = min($capD, $depD);
+                $capD1 = min($capD1, $depD1);
+                $capD2 = min($capD2, $depD2);
+            }
+
+            $capD = round(max(0.0, $capD), 4);
+            $capD1 = round(max(0.0, $capD1), 4);
+            $capD2 = round(max(0.0, $capD2), 4);
+
+            $caps[$slotKey] = [
+                'has_upstream' => true,
+                'day_caps' => [
+                    'd' => $capD,
+                    'd1' => $capD1,
+                    'd2' => $capD2,
+                ],
+                'eligible_qty' => $capD2,
+            ];
+        }
+
+        return $caps;
     }
 
     /**
@@ -396,21 +576,72 @@ class ProductionPlanScheduleService
 
         $submittedWoIds = collect($rows)->pluck('work_order_id')->map(fn ($id): int => (int) $id)->unique()->values()->all();
 
-        $workOrders = WorkOrder::query()
-            ->whereIn('id', $submittedWoIds)
-            ->whereIn('status', ['planned', 'in_progress', 'completed'])
-            ->with([
-                'part:id,part_number,part_name,model',
-                'items.machine:id,machine_code,machine_name',
-                'items.process:id,process_name',
-                'items.parentPart:id,part_number,part_name,model',
-                'items.childPart:id,part_number,part_name,model',
-            ])
-            ->get();
+        $workOrders = $submittedWoIds !== []
+            ? WorkOrder::query()
+                ->whereIn('id', $submittedWoIds)
+                ->whereIn('status', ['planned', 'in_progress', 'completed'])
+                ->with([
+                    'part:id,part_number,part_name,model',
+                    'items.machine:id,machine_code,machine_name',
+                    'items.process:id,process_name',
+                    'items.parentPart:id,part_number,part_name,model',
+                    'items.childPart:id,part_number,part_name,model',
+                ])
+                ->get()
+            : collect();
 
-        $slotsByWo = $this->workOrderMachineSlots($workOrders, $dayDates['d'], $this->subconMachineIds())
-            ->where('machine_id', $machine->id)
-            ->keyBy('work_order_id');
+        $allSlots = $this->workOrderMachineSlots($workOrders, $dayDates['d'], $this->subconMachineIds());
+        $slotsByWo = $allSlots->where('machine_id', $machine->id)->keyBy('work_order_id');
+        $wipStockByPartId = $this->availableWipStockMap($allSlots);
+
+        $existingPlans = $submittedWoIds !== []
+            ? ProductionPlan::query()
+                ->whereIn(DB::raw('CAST(plan_date AS DATE)'), array_values($dayDates))
+                ->get(['id', 'plan_date'])
+            : collect();
+
+        $planKeyByDate = array_flip($dayDates);
+        $dayKeyByPlanId = [];
+        foreach ($existingPlans as $ep) {
+            $dStr = $ep->plan_date->toDateString();
+            if (isset($planKeyByDate[$dStr])) {
+                $dayKeyByPlanId[(int) $ep->id] = $planKeyByDate[$dStr];
+            }
+        }
+
+        $existingPlannedQty = [];
+        if ($submittedWoIds !== [] && $dayKeyByPlanId !== []) {
+            $existingItems = ProductionPlanItem::query()
+                ->whereIn('production_plan_id', array_keys($dayKeyByPlanId))
+                ->whereIn('work_order_id', $submittedWoIds)
+                ->whereNotNull('machine_id')
+                ->where('target_d', '>', 0)
+                ->get(['production_plan_id', 'machine_id', 'work_order_id', 'target_d']);
+
+            foreach ($existingItems as $ei) {
+                $dayKey = $dayKeyByPlanId[(int) $ei->production_plan_id] ?? null;
+                if ($dayKey === null) {
+                    continue;
+                }
+                $mId = (int) $ei->machine_id;
+                $wId = (int) $ei->work_order_id;
+                $existingPlannedQty[$mId][$wId][$dayKey] = ($existingPlannedQty[$mId][$wId][$dayKey] ?? 0.0) + (float) $ei->target_d;
+            }
+        }
+
+        $supplyCaps = $this->computeSlotSupplyCaps($allSlots, $existingPlannedQty, $wipStockByPartId);
+
+        $simulatedPlannedQty = $existingPlannedQty;
+        foreach ($rows as $row) {
+            $woId = (int) $row['work_order_id'];
+            $simulatedPlannedQty[$machine->id][$woId] = [
+                'd' => $this->positiveFloat($row['d_qty'] ?? null) ?? 0.0,
+                'd1' => $this->positiveFloat($row['d1_qty'] ?? null) ?? 0.0,
+                'd2' => $this->positiveFloat($row['d2_qty'] ?? null) ?? 0.0,
+            ];
+        }
+        $nextSupplyCaps = $this->computeSlotSupplyCaps($allSlots, $simulatedPlannedQty, $wipStockByPartId);
+        $allSlotsByWo = $allSlots->groupBy('work_order_id');
 
         $errors = [];
         foreach ($rows as $idx => $row) {
@@ -419,7 +650,10 @@ class ProductionPlanScheduleService
             $dQty = $this->positiveFloat($row['d_qty'] ?? null);
             $d1Qty = $this->positiveFloat($row['d1_qty'] ?? null);
             $d2Qty = $this->positiveFloat($row['d2_qty'] ?? null);
-            $totalPlanned = ($dQty ?? 0.0) + ($d1Qty ?? 0.0) + ($d2Qty ?? 0.0);
+            $dVal = $dQty ?? 0.0;
+            $d1Val = $d1Qty ?? 0.0;
+            $d2Val = $d2Qty ?? 0.0;
+            $totalPlanned = $dVal + $d1Val + $d2Val;
 
             if ($slot === null) {
                 if ($totalPlanned > 0) {
@@ -431,9 +665,100 @@ class ProductionPlanScheduleService
 
             if ($totalPlanned > (float) $slot['remaining_qty'] + 1e-6) {
                 $errors["rows.{$idx}.qty"] = __('Total Qty Plan (:planned) melebihi sisa WO (:remain). Klik "Buat WO" untuk menambah WO baru.', [
-                    'planned' => rtrim(rtrim(number_format($totalPlanned, 2, '.', ''), '0'), '.'),
-                    'remain' => rtrim(rtrim(number_format((float) $slot['remaining_qty'], 2, '.', ''), '0'), '.'),
+                    'planned' => $this->formatQty($totalPlanned),
+                    'remain' => $this->formatQty((float) $slot['remaining_qty']),
                 ]);
+
+                continue;
+            }
+
+            $capInfo = $supplyCaps[$woId.'|'.$machine->id] ?? null;
+            if ($capInfo !== null && $capInfo['has_upstream']) {
+                $caps = $capInfo['day_caps'];
+                if ($dVal > $caps['d'] + 1e-6) {
+                    $errors["rows.{$idx}.qty"] = __('Qty Plan tanggal :date (:planned) melebihi suplai proses sebelumnya / stok WIP (:max). Rencanakan proses sebelumnya terlebih dahulu.', [
+                        'date' => $dayDates['d'],
+                        'planned' => $this->formatQty($dVal),
+                        'max' => $this->formatQty($caps['d']),
+                    ]);
+
+                    continue;
+                }
+                if ($dVal + $d1Val > $caps['d1'] + 1e-6) {
+                    $errors["rows.{$idx}.qty"] = __('Akumulasi Qty Plan s.d. tanggal :date (:planned) melebihi suplai proses sebelumnya / stok WIP (:max). Rencanakan proses sebelumnya terlebih dahulu.', [
+                        'date' => $dayDates['d1'],
+                        'planned' => $this->formatQty($dVal + $d1Val),
+                        'max' => $this->formatQty($caps['d1']),
+                    ]);
+
+                    continue;
+                }
+                if ($totalPlanned > $caps['d2'] + 1e-6) {
+                    $errors["rows.{$idx}.qty"] = __('Akumulasi Qty Plan s.d. tanggal :date (:planned) melebihi suplai proses sebelumnya / stok WIP (:max). Rencanakan proses sebelumnya terlebih dahulu.', [
+                        'date' => $dayDates['d2'],
+                        'planned' => $this->formatQty($totalPlanned),
+                        'max' => $this->formatQty($caps['d2']),
+                    ]);
+
+                    continue;
+                }
+            }
+
+            foreach ($allSlotsByWo->get($woId, collect()) as $downSlot) {
+                $dependsOnCurrent = false;
+                foreach ($downSlot['upstream_deps'] ?? [] as $dep) {
+                    if ((int) $dep['machine_id'] === (int) $machine->id) {
+                        $dependsOnCurrent = true;
+                        break;
+                    }
+                }
+                if (! $dependsOnCurrent) {
+                    continue;
+                }
+
+                $downMachineId = (int) $downSlot['machine_id'];
+                $downD = $this->plannedDayQty($existingPlannedQty, $downMachineId, $woId, 'd');
+                $downD1 = $this->plannedDayQty($existingPlannedQty, $downMachineId, $woId, 'd1');
+                $downD2 = $this->plannedDayQty($existingPlannedQty, $downMachineId, $woId, 'd2');
+
+                if ($downD + $downD1 + $downD2 <= 0.0) {
+                    continue;
+                }
+
+                $newDownCaps = $nextSupplyCaps[$woId.'|'.$downMachineId]['day_caps'] ?? null;
+                if ($newDownCaps === null) {
+                    continue;
+                }
+
+                $downMachineName = (string) ($downSlot['machine']['machine_name'] ?? ('#'.$downMachineId));
+                $violatedDate = null;
+                $violatedPlanned = 0.0;
+                $violatedMax = 0.0;
+
+                if ($downD > $newDownCaps['d'] + 1e-6) {
+                    $violatedDate = $dayDates['d'];
+                    $violatedPlanned = $downD;
+                    $violatedMax = $newDownCaps['d'];
+                } elseif ($downD + $downD1 > $newDownCaps['d1'] + 1e-6) {
+                    $violatedDate = $dayDates['d1'];
+                    $violatedPlanned = $downD + $downD1;
+                    $violatedMax = $newDownCaps['d1'];
+                } elseif ($downD + $downD1 + $downD2 > $newDownCaps['d2'] + 1e-6) {
+                    $violatedDate = $dayDates['d2'];
+                    $violatedPlanned = $downD + $downD1 + $downD2;
+                    $violatedMax = $newDownCaps['d2'];
+                }
+
+                if ($violatedDate !== null) {
+                    $errors["rows.{$idx}.qty"] = __('Tidak dapat mengurangi rencana: mesin proses berikutnya :machine sudah merencanakan akumulasi :planned s.d. tanggal :date (suplai baru hanya :max). Kurangi rencana :machine terlebih dahulu.', [
+                        'machine' => $downMachineName,
+                        'planned' => $this->formatQty($violatedPlanned),
+                        'date' => $violatedDate,
+                        'max' => $this->formatQty($violatedMax),
+                    ]);
+
+                    break;
+                }
             }
         }
 
@@ -641,5 +966,26 @@ class ProductionPlanScheduleService
         $num = (float) $value;
 
         return $num > 0 ? $num : null;
+    }
+
+    /**
+     * @param  array<int, array<int, array<string, ProductionPlanItem|float|int|null>>>  $plannedByMachineWo
+     */
+    private function plannedDayQty(array $plannedByMachineWo, int $machineId, int $woId, string $dayKey): float
+    {
+        $entry = $plannedByMachineWo[$machineId][$woId][$dayKey] ?? null;
+        if ($entry instanceof ProductionPlanItem) {
+            return max(0.0, (float) $entry->target_d);
+        }
+        if (is_numeric($entry)) {
+            return max(0.0, (float) $entry);
+        }
+
+        return 0.0;
+    }
+
+    private function formatQty(float $value): string
+    {
+        return rtrim(rtrim(number_format($value, 2, '.', ''), '0'), '.');
     }
 }

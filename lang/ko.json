@@ -141,5 +141,8 @@
     "Subcont masih dipakai pada dokumen kedatangan.": "이 외주업체는 입고 예정 문서에서 아직 사용 중입니다.",
     "Customer masih dipakai pada dokumen kedatangan.": "이 고객사는 입고 예정 문서에서 아직 사용 중입니다.",
     "Part tidak terdaftar sebagai proses Subcon di BOM aktif.": "이 부품은 활성 BOM의 외주 공정에 등록되어 있지 않습니다.",
-    "Part tidak terdaftar sebagai FREE_ISSUE / OSP di BOM aktif.": "이 부품은 활성 BOM의 FREE_ISSUE / OSP로 등록되어 있지 않습니다."
+    "Part tidak terdaftar sebagai FREE_ISSUE / OSP di BOM aktif.": "이 부품은 활성 BOM의 FREE_ISSUE / OSP로 등록되어 있지 않습니다.",
+    "Qty Plan tanggal :date (:planned) melebihi suplai proses sebelumnya / stok WIP (:max). Rencanakan proses sebelumnya terlebih dahulu.": ":date 계획 수량(:planned)이 선행 공정 공급량 / 재공품 재고(:max)를 초과합니다. 선행 공정을 먼저 계획해 주세요.",
+    "Akumulasi Qty Plan s.d. tanggal :date (:planned) melebihi suplai proses sebelumnya / stok WIP (:max). Rencanakan proses sebelumnya terlebih dahulu.": ":date까지의 누적 계획 수량(:planned)이 선행 공정 공급량 / 재공품 재고(:max)를 초과합니다. 선행 공정을 먼저 계획해 주세요.",
+    "Tidak dapat mengurangi rencana: mesin proses berikutnya :machine sudah merencanakan akumulasi :planned s.d. tanggal :date (suplai baru hanya :max). Kurangi rencana :machine terlebih dahulu.": "계획을 줄일 수 없습니다: 후속 공정 설비 :machine에 :date까지 누적 :planned 수량이 이미 계획되어 있습니다(변경 후 공급량 :max). 먼저 :machine 계획을 줄여 주세요."
 }

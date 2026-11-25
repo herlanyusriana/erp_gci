@@ -33,6 +33,8 @@ interface ModalRowDraft {
     wo_no: string;
     wo_status: string;
     remaining_qty: number;
+    has_upstream: boolean;
+    day_caps: { d: number; d1: number; d2: number };
     fg_part: PartOpt | null;
     wip_part: PartOpt | null;
     cycle_time_seconds: number | null;
@@ -288,6 +290,10 @@ function toModalDraft(row: ProductionPlanMachineRow): ModalRowDraft {
         wo_no: row.wo_no,
         wo_status: row.wo_status,
         remaining_qty: row.remaining_qty,
+        has_upstream: Boolean(row.has_upstream),
+        day_caps: row.day_caps
+            ? { d: row.day_caps.d, d1: row.day_caps.d1, d2: row.day_caps.d2 }
+            : { d: row.remaining_qty, d1: row.remaining_qty, d2: row.remaining_qty },
         fg_part: row.fg_part,
         wip_part: row.wip_part,
         cycle_time_seconds: row.cycle_time_seconds,
@@ -347,6 +353,10 @@ watch(
                 ...kept,
                 remaining_qty: row.remaining_qty,
                 wo_status: row.wo_status,
+                has_upstream: Boolean(row.has_upstream),
+                day_caps: row.day_caps
+                    ? { d: row.day_caps.d, d1: row.day_caps.d1, d2: row.day_caps.d2 }
+                    : { d: row.remaining_qty, d1: row.remaining_qty, d2: row.remaining_qty },
             };
         });
     },
@@ -378,11 +388,39 @@ function plannedSumForDraft(row: ModalRowDraft): number {
 }
 
 function liveAvailForDraft(row: ModalRowDraft): number {
-    return Number((row.remaining_qty - plannedSumForDraft(row)).toFixed(4));
+    const ceiling = row.has_upstream ? row.day_caps.d2 : row.remaining_qty;
+    return Math.round((ceiling - plannedSumForDraft(row)) * 10000) / 10000;
 }
 
+function isDayLockedForDraft(row: ModalRowDraft, key: DayKey): boolean {
+    return row.has_upstream && row.day_caps[key] <= 1e-6 && numOrZero(row[`${key}_qty`]) <= 1e-6;
+}
+
+function dayMaxForDraft(row: ModalRowDraft, key: DayKey): number {
+    if (key === 'd') return Math.round(Math.max(0, row.day_caps.d) * 10000) / 10000;
+    if (key === 'd1') return Math.round(Math.max(0, row.day_caps.d1 - numOrZero(row.d_qty)) * 10000) / 10000;
+    return Math.round(Math.max(0, row.day_caps.d2 - numOrZero(row.d_qty) - numOrZero(row.d1_qty)) * 10000) / 10000;
+}
+
+function isDayOverCap(row: ModalRowDraft, key: DayKey): boolean {
+    if (!row.has_upstream) return false;
+    const dQty = numOrZero(row.d_qty);
+    if (key === 'd') return dQty > row.day_caps.d + 1e-6;
+    const d1Qty = numOrZero(row.d1_qty);
+    if (key === 'd1') return dQty + d1Qty > row.day_caps.d1 + 1e-6;
+    return dQty + d1Qty + numOrZero(row.d2_qty) > row.day_caps.d2 + 1e-6;
+}
+
+const hasAnyDayCapViolation = computed(() =>
+    machinePlanForm.rows.some((row) => dayKeys.some((key) => isDayOverCap(row, key))),
+);
+
+const hasAnyTotalAvailViolation = computed(() =>
+    machinePlanForm.rows.some((row) => !row.has_upstream && liveAvailForDraft(row) < -1e-6),
+);
+
 const hasAnyOverLimit = computed(() =>
-    machinePlanForm.rows.some((row) => liveAvailForDraft(row) < -1e-6),
+    machinePlanForm.rows.some((row) => liveAvailForDraft(row) < -1e-6) || hasAnyDayCapViolation.value,
 );
 
 function capacityMinutesFor(key: DayKey): number {
@@ -1106,7 +1144,7 @@ function submitInlineCreateWo() {
                                 <tr
                                     v-for="(row, idx) in machinePlanForm.rows"
                                     :key="row.work_order_id"
-                                    :class="liveAvailForDraft(row) < -1e-6 ? 'bg-danger/5' : ''"
+                                    :class="liveAvailForDraft(row) < -1e-6 || dayKeys.some((k) => isDayOverCap(row, k)) ? 'bg-danger/5' : ''"
                                 >
                                     <td class="px-3 py-2.5 align-top">
                                         <div class="flex flex-wrap items-center gap-1.5 font-semibold text-ink-primary">
@@ -1143,8 +1181,9 @@ function submitInlineCreateWo() {
                                                 min="1"
                                                 inputmode="numeric"
                                                 placeholder="1"
+                                                :disabled="isDayLockedForDraft(row, key)"
                                                 :aria-label="`${t('production.sequence')} ${dayLabels[key]} ${row.wo_no}`"
-                                                class="w-full rounded-md border border-borderline bg-background px-1.5 py-1 text-center text-xs tabular-nums text-ink-primary focus:border-primary focus:ring-primary"
+                                                class="w-full rounded-md border border-borderline bg-background px-1.5 py-1 text-center text-xs tabular-nums text-ink-primary focus:border-primary focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
                                                 @input="handleSeqInput(row, key)"
                                             />
                                             <input
@@ -1154,27 +1193,45 @@ function submitInlineCreateWo() {
                                                 min="0"
                                                 inputmode="decimal"
                                                 placeholder="0"
+                                                :disabled="isDayLockedForDraft(row, key)"
                                                 :aria-label="`${t('production.qtyShort')} ${dayLabels[key]} ${row.wo_no}`"
-                                                class="w-full rounded-md border px-2 py-1 text-right text-xs tabular-nums text-ink-primary focus:border-primary focus:ring-primary"
-                                                :class="row[`${key}_qty`] !== '' ? 'border-primary/50 bg-primary-light/30' : 'border-borderline bg-background'"
+                                                class="w-full rounded-md border px-2 py-1 text-right text-xs tabular-nums text-ink-primary focus:border-primary focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+                                                :class="isDayOverCap(row, key)
+                                                    ? 'border-danger bg-danger/10'
+                                                    : (row[`${key}_qty`] !== '' ? 'border-primary/50 bg-primary-light/30' : 'border-borderline bg-background')"
                                             />
                                             <label
                                                 v-if="hasMasterQdc(row)"
-                                                class="inline-flex cursor-pointer items-center justify-center gap-1 rounded-md border px-1.5 py-1 text-[11px] font-medium tabular-nums transition"
-                                                :class="row[`${key}_qdc`]
-                                                    ? 'border-info/50 bg-info/10 text-info'
-                                                    : 'border-borderline bg-background text-ink-secondary'"
+                                                class="inline-flex items-center justify-center gap-1 rounded-md border px-1.5 py-1 text-[11px] font-medium tabular-nums transition"
+                                                :class="[
+                                                    isDayLockedForDraft(row, key) ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
+                                                    row[`${key}_qdc`]
+                                                        ? 'border-info/50 bg-info/10 text-info'
+                                                        : 'border-borderline bg-background text-ink-secondary',
+                                                ]"
                                                 :title="t('production.initialQdcHint')"
                                             >
                                                 <input
                                                     v-model="row[`${key}_qdc`]"
                                                     type="checkbox"
-                                                    class="h-3.5 w-3.5 rounded border-borderline text-primary focus:ring-primary"
+                                                    :disabled="isDayLockedForDraft(row, key)"
+                                                    class="h-3.5 w-3.5 rounded border-borderline text-primary focus:ring-primary disabled:cursor-not-allowed"
                                                     @change="handleQdcToggle(row, key)"
                                                 />
                                                 <span>{{ fmt(row.qdc_minutes) }}m</span>
                                             </label>
                                             <span v-else class="text-center text-[11px] text-ink-secondary">-</span>
+                                        </div>
+                                        <div
+                                            v-if="row.has_upstream"
+                                            class="mt-1 text-[11px] tabular-nums"
+                                            :class="isDayOverCap(row, key) ? 'font-semibold text-danger' : 'text-ink-secondary'"
+                                        >
+                                            {{
+                                                isDayLockedForDraft(row, key)
+                                                    ? t('production.dayCapLocked')
+                                                    : t('production.dayCapMax', { qty: fmt(dayMaxForDraft(row, key)) })
+                                            }}
                                         </div>
                                     </td>
                                     <td class="border-l border-borderline px-3 py-2.5 text-right align-top">
@@ -1199,9 +1256,10 @@ function submitInlineCreateWo() {
 
                     <div
                         v-if="hasAnyOverLimit"
-                        class="mt-3 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-xs font-medium text-danger"
+                        class="mt-3 space-y-1 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-xs font-medium text-danger"
                     >
-                        {{ t('production.qtyPlanExceedsAvail') }}
+                        <div v-if="hasAnyDayCapViolation">{{ t('production.qtyPlanExceedsUpstreamCap') }}</div>
+                        <div v-if="hasAnyTotalAvailViolation || !hasAnyDayCapViolation">{{ t('production.qtyPlanExceedsAvail') }}</div>
                     </div>
 
                     <!-- Dialog Konfirmasi Overload + Roll Over (Centered Overlay inside Modal) -->

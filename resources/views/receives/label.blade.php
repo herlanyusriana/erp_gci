@@ -12,7 +12,12 @@
     $sizeText = trim((string) ($arrivalItem?->size ?: $part?->size));
     $sizeText = ($sizeText === '' || $sizeText === '-') ? null : $sizeText;
 
-    $weightUnit = UomCatalog::WEIGHT;
+    $isCoil = in_array('COIL', [
+        UomCatalog::normalize($receive->packing_type),
+        UomCatalog::normalize($receive->bundle_unit),
+        $goodsUnit,
+    ], true);
+    $weightUnit = $isCoil ? UomCatalog::WEIGHT : ($goodsUnit ?: UomCatalog::WEIGHT);
     $num = fn (float $n): string => number_format($n, fmod($n, 1.0) === 0.0 ? 0 : 2);
 
     // 1 tag = 1 bundle. Bundle memuat beberapa packing (sub-unit fisik).
@@ -35,7 +40,9 @@
 
     $packingWeights = $packings
         ->map(fn ($p) => $weightBasis
-            ? ($p->net_weight !== null ? (float) $p->net_weight : null)
+            ? ($p->net_weight !== null
+                ? (float) $p->net_weight
+                : (UomCatalog::isWeight($p->uom ?? $goodsUnit) && $p->qty !== null ? (float) $p->qty : null))
             : ($p->qty !== null ? (float) $p->qty : null))
         ->all();
 
@@ -43,7 +50,7 @@
     // Bila beratnya berbeda, setiap packing ditulis sendiri agar tidak menyesatkan.
     $packingUnit = $weightBasis
         ? $weightUnit
-        : (string) ($packings->first()?->uom ?? $goodsUnit);
+        : (UomCatalog::normalize($packings->first()?->uom) ?? $goodsUnit ?? UomCatalog::PIECE);
     $uniformWeight = $packingWeights !== []
         && ! in_array(null, $packingWeights, true)
         && count(array_unique(array_map(fn ($w) => (string) round((float) $w, 4), $packingWeights))) === 1;
@@ -74,7 +81,10 @@
                 $packingLines[] = $count.' × '.$num((float) $weight).' '.$packingUnit;
             }
         } else {
-            $packingLines[] = $head.' @ '.$num((float) ($receive->packing_qty ?? 0)).' '.$packingUnit;
+            $fallbackPerPacking = $weightBasis && ! UomCatalog::isWeight($goodsUnit) && $receive->net_weight !== null && $packingCount > 0
+                ? (float) $receive->net_weight / $packingCount
+                : (float) ($receive->packing_qty ?? 0);
+            $packingLines[] = $head.' @ '.$num($fallbackPerPacking).' '.$packingUnit;
         }
     }
 

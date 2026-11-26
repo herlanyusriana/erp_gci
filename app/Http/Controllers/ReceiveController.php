@@ -385,9 +385,8 @@ class ReceiveController extends Controller
         $receivedAt = $receive->ata_date ?? now();
         $monthNumber = (int) $receivedAt->format('m');
 
-        // Unit & qty teks menyesuaikan basis item (KGM untuk incoming, qty untuk local).
-        $goodsUnit = UomCatalog::normalize($arrivalItem?->unit_goods ?? $receive->qty_unit);
-        $weightBasis = $this->receiveService->usesWeightBasisItem($receive);
+        $goodsUnit = UomCatalog::normalize($arrivalItem?->unit_goods ?? $receive->qty_unit) ?? UomCatalog::PIECE;
+        $weightBasis = $this->receiveService->usesWeightOnLabel($receive);
 
         // Payload QR — standar scan app: identify part + tag + receive.
         $payload = [

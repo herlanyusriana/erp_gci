@@ -577,4 +577,117 @@ class TieredReceiveTest extends TestCase
                 ->component('Incoming/Receive/Form')
                 ->where('arrivalItem.material_group_label', $mapping->material_group));
     }
+
+    public function test_label_shows_uom_instead_of_kgm_for_non_coil_material_with_net_weight(): void
+    {
+        [$arrival, $item] = $this->createArrivalWithItem('SHEET', 12250.0);
+
+        $this->post(route('receive.store', $item), [
+            'receive_date' => now()->toDateString(),
+            'truck_no' => 'B 9001 GCI',
+            'location_code' => 'BULK-AREA',
+            'tags' => [
+                [
+                    'tag' => 'TAG-SHEET-01',
+                    'qty' => 800,
+                    'qty_unit' => 'SHEET',
+                    'bundle_count' => 1,
+                    'bundle_unit' => 'PALLET',
+                    'packing_count' => 1,
+                    'packing_type' => 'PALLET',
+                    'packing_qty' => 800,
+                    'net_weight' => 1750,
+                    'packings' => [
+                        ['packing_no' => 'TAG-SHEET-01-1', 'sequence' => 1, 'qty' => 800, 'uom' => 'SHEET', 'net_weight' => 1750],
+                    ],
+                ],
+            ],
+        ])->assertRedirect(route('receive.show', $arrival));
+
+        $receive = IncomingReceive::where('tag', 'TAG-SHEET-01')->firstOrFail();
+
+        $this->get(route('receive.label', $receive))
+            ->assertOk()
+            ->assertSee('1 PALLET')
+            ->assertSee('800 SHEET')
+            ->assertSee('1 PALLET @ 800 SHEET')
+            ->assertDontSee('1,750 KGM');
+    }
+
+    public function test_label_shows_kgm_for_coil_material_even_when_goods_uom_is_coil(): void
+    {
+        [$arrival, $item] = $this->createArrivalWithItem('COIL', 5000.0);
+
+        $this->post(route('receive.store', $item), [
+            'receive_date' => now()->toDateString(),
+            'truck_no' => 'B 9001 GCI',
+            'location_code' => 'BULK-AREA',
+            'tags' => [
+                [
+                    'tag' => 'TAG-COIL-KG-01',
+                    'qty' => 2,
+                    'qty_unit' => 'COIL',
+                    'bundle_count' => 1,
+                    'bundle_unit' => 'PALLET',
+                    'packing_count' => 2,
+                    'packing_type' => 'COIL',
+                    'packing_qty' => 1,
+                    'net_weight' => 2760,
+                    'packings' => [
+                        ['packing_no' => 'TAG-COIL-KG-01-1', 'sequence' => 1, 'qty' => 1, 'uom' => 'COIL', 'net_weight' => 1380],
+                        ['packing_no' => 'TAG-COIL-KG-01-2', 'sequence' => 2, 'qty' => 1, 'uom' => 'COIL', 'net_weight' => 1380],
+                    ],
+                ],
+            ],
+        ])->assertRedirect(route('receive.show', $arrival));
+
+        $receive = IncomingReceive::where('tag', 'TAG-COIL-KG-01')->firstOrFail();
+
+        $this->get(route('receive.label', $receive))
+            ->assertOk()
+            ->assertSee('1 PALLET')
+            ->assertSee('2,760 KGM')
+            ->assertSee('2 COIL @ 1,380 KGM')
+            ->assertDontSee('2 COIL @ 1 COIL');
+    }
+
+    public function test_label_groups_non_coil_packings_by_uom_qty_when_quantities_differ(): void
+    {
+        [$arrival, $item] = $this->createArrivalWithItem('PCS', 500.0);
+
+        $this->post(route('receive.store', $item), [
+            'receive_date' => now()->toDateString(),
+            'truck_no' => 'B 9001 GCI',
+            'location_code' => 'BULK-AREA',
+            'tags' => [
+                [
+                    'tag' => 'TAG-PCS-MIX-01',
+                    'qty' => 1300,
+                    'qty_unit' => 'PCS',
+                    'bundle_count' => 1,
+                    'bundle_unit' => 'PALLET',
+                    'packing_count' => 3,
+                    'packing_type' => 'BOX',
+                    'packing_qty' => 500,
+                    'net_weight' => 260,
+                    'packings' => [
+                        ['packing_no' => 'TAG-PCS-MIX-01-1', 'sequence' => 1, 'qty' => 500, 'uom' => 'PCS', 'net_weight' => 100],
+                        ['packing_no' => 'TAG-PCS-MIX-01-2', 'sequence' => 2, 'qty' => 500, 'uom' => 'PCS', 'net_weight' => 100],
+                        ['packing_no' => 'TAG-PCS-MIX-01-3', 'sequence' => 3, 'qty' => 300, 'uom' => 'PCS', 'net_weight' => 60],
+                    ],
+                ],
+            ],
+        ])->assertRedirect(route('receive.show', $arrival));
+
+        $receive = IncomingReceive::where('tag', 'TAG-PCS-MIX-01')->firstOrFail();
+
+        $this->get(route('receive.label', $receive))
+            ->assertOk()
+            ->assertSee('1 PALLET')
+            ->assertSee('1,300 PCS')
+            ->assertSee('3 BOX')
+            ->assertSee('2 × 500 PCS')
+            ->assertSee('1 × 300 PCS')
+            ->assertDontSee('260 KGM');
+    }
 }

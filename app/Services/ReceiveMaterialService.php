@@ -131,6 +131,26 @@ class ReceiveMaterialService
         return $this->usesWeightBasis($item);
     }
 
+    public function usesWeightOnLabel(IncomingReceive $receive): bool
+    {
+        $goodsUnit = UomCatalog::normalize($receive->arrivalItem?->unit_goods ?? $receive->qty_unit);
+        if (UomCatalog::isWeight($goodsUnit)) {
+            return true;
+        }
+
+        $isCoil = in_array('COIL', [
+            UomCatalog::normalize($receive->packing_type),
+            UomCatalog::normalize($receive->bundle_unit),
+            $goodsUnit,
+        ], true);
+
+        if (! $isCoil) {
+            return false;
+        }
+
+        return $this->usesWeightBasisItem($receive) || (float) ($receive->net_weight ?? 0) > 0;
+    }
+
     /**
      * Total yang sudah direceive untuk satu item, sesuai basis item.
      */

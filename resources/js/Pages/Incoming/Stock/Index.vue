@@ -98,14 +98,35 @@ interface UnitSummary {
 
 type ArrivalMeta = NonNullable<NonNullable<NonNullable<PartStock['receive']>['arrival_item']>['arrival']>;
 
+interface InvoicePartSummary {
+    key: string;
+    part_number: string | null;
+    part_name: string | null;
+    model: string | null;
+}
+
 interface InvoiceGroup {
     key: string;
     invoiceNo: string | null;
     arrival: ArrivalMeta | null;
     stocks: PartStock[];
+    parts: InvoicePartSummary[];
     tagCount: number;
     totalPackingCount: number;
     totalsByUnit: UnitSummary[];
+}
+
+const MAX_HEADER_PARTS = 3;
+
+function remainingPartsTooltip(parts: InvoicePartSummary[]): string {
+    return parts
+        .map((p) => {
+            const code = p.part_number || '—';
+            const name = p.part_name ? ` — ${p.part_name}` : '';
+            const model = p.model || '—';
+            return `${code}${name} (${t('master.model')}: ${model})`;
+        })
+        .join('\n');
 }
 
 const invoiceGroups = computed<InvoiceGroup[]>(() => {
@@ -122,6 +143,7 @@ const invoiceGroups = computed<InvoiceGroup[]>(() => {
                 invoiceNo: inv,
                 arrival: st.receive?.arrival_item?.arrival ?? null,
                 stocks: [],
+                parts: [],
                 tagCount: 0,
                 totalPackingCount: 0,
                 totalsByUnit: [],
@@ -138,7 +160,22 @@ const invoiceGroups = computed<InvoiceGroup[]>(() => {
 
     for (const group of map.values()) {
         const unitMap = new Map<string, UnitSummary>();
+        const partMap = new Map<string, InvoicePartSummary>();
         for (const st of group.stocks) {
+            if (st.part) {
+                const partKey = st.part.id != null
+                    ? `id:${st.part.id}`
+                    : `raw:${st.part.part_number ?? ''}|${st.part.part_name ?? ''}|${st.part.model ?? ''}`;
+                if (!partMap.has(partKey)) {
+                    partMap.set(partKey, {
+                        key: partKey,
+                        part_number: st.part.part_number?.trim() || null,
+                        part_name: st.part.part_name?.trim() || null,
+                        model: st.part.model?.trim() || null,
+                    });
+                }
+            }
+
             const unit = st.qty_unit?.trim() || '—';
             let entry = unitMap.get(unit);
             if (!entry) {
@@ -149,6 +186,7 @@ const invoiceGroups = computed<InvoiceGroup[]>(() => {
             entry.booked += Number(st.booked_qty ?? 0);
             entry.available += Number(st.avail_qty ?? st.qty ?? 0);
         }
+        group.parts = Array.from(partMap.values());
         group.totalsByUnit = Array.from(unitMap.values());
     }
 
@@ -327,10 +365,12 @@ function toggleAllPackings() {
                     :class="isInvoiceOpen(group.key) ? 'border-b border-borderline bg-primary-light/25' : ''"
                     @click="toggleInvoice(group.key)"
                 >
-                    <div class="flex min-w-0 items-center gap-3.5">
+                    <div class="flex min-w-0 flex-1 items-start gap-3.5">
                         <span
-                            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-borderline bg-surface text-primary transition"
-                            :class="isInvoiceOpen(group.key) ? 'border-primary bg-primary text-white' : ''"
+                            class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition"
+                            :class="isInvoiceOpen(group.key)
+                                ? 'border-primary bg-primary text-white'
+                                : 'border-borderline bg-surface text-primary'"
                         >
                             <svg
                                 aria-hidden="true"
@@ -365,6 +405,30 @@ function toggleAllPackings() {
                                     {{ arrivalSenderName(group.arrival) }}
                                 </span>
                                 <span v-if="group.arrival?.arrival_no">{{ group.arrival.arrival_no }}</span>
+                            </div>
+                            <div v-if="group.parts.length" class="mt-2 flex flex-wrap items-center gap-1.5">
+                                <span
+                                    v-for="part in group.parts.slice(0, MAX_HEADER_PARTS)"
+                                    :key="part.key"
+                                    class="inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-0.5 rounded-lg border border-borderline px-2.5 py-1 text-xs"
+                                    :class="isInvoiceOpen(group.key) ? 'bg-surface' : 'bg-background'"
+                                >
+                                    <span class="font-semibold tabular-nums text-ink-primary">{{ part.part_number ?? '—' }}</span>
+                                    <span class="h-3 w-px bg-borderline" aria-hidden="true" />
+                                    <span class="font-medium text-ink-primary">{{ part.part_name ?? '—' }}</span>
+                                    <span class="h-3 w-px bg-borderline" aria-hidden="true" />
+                                    <span class="text-ink-secondary">
+                                        {{ t('master.model') }}:
+                                        <span class="font-semibold text-ink-primary">{{ part.model ?? '—' }}</span>
+                                    </span>
+                                </span>
+                                <span
+                                    v-if="group.parts.length > MAX_HEADER_PARTS"
+                                    :title="remainingPartsTooltip(group.parts.slice(MAX_HEADER_PARTS))"
+                                    class="inline-flex items-center rounded-lg border border-borderline bg-surface px-2.5 py-1 text-xs font-semibold text-ink-secondary"
+                                >
+                                    {{ t('incoming.moreParts', { count: group.parts.length - MAX_HEADER_PARTS }) }}
+                                </span>
                             </div>
                         </div>
                     </div>

@@ -290,7 +290,8 @@ export default {
         "chooseCustomerFirst": "Pilih customer terlebih dahulu",
         "ospNoParts": "Belum ada part BOM aktif yang cocok untuk sub-jenis OSP ini.",
         "chooseOspPart": "Pilih part BOM yang diizinkan…",
-        "ospPartBomHint": "Daftar part disaring dari BOM aktif sesuai sub-jenis OSP."
+        "ospPartBomHint": "Daftar part disaring dari BOM aktif sesuai sub-jenis OSP.",
+        "moreParts": "+{count} part lainnya"
     },
     "en": {
         "purchaseOrder": "Purchase Order",
@@ -583,7 +584,8 @@ export default {
         "chooseCustomerFirst": "Select a customer first",
         "ospNoParts": "No active BOM parts match this OSP sub-type.",
         "chooseOspPart": "Select allowed BOM part…",
-        "ospPartBomHint": "Parts are filtered from active BOMs matching this OSP sub-type."
+        "ospPartBomHint": "Parts are filtered from active BOMs matching this OSP sub-type.",
+        "moreParts": "+{count} more parts"
     },
     "ko": {
         "purchaseOrder": "구매 주문",
@@ -876,6 +878,7 @@ export default {
         "chooseCustomerFirst": "먼저 고객사를 선택하세요",
         "ospNoParts": "이 OSP 하위 유형에 해당하는 활성 BOM 부품이 없습니다.",
         "chooseOspPart": "허용된 BOM 부품 선택…",
-        "ospPartBomHint": "부품 목록은 이 OSP 하위 유형의 활성 BOM 기준으로 필터링됩니다."
+        "ospPartBomHint": "부품 목록은 이 OSP 하위 유형의 활성 BOM 기준으로 필터링됩니다.",
+        "moreParts": "외 {count}개 부품"
     }
 };

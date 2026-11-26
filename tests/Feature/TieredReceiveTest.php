@@ -610,7 +610,44 @@ class TieredReceiveTest extends TestCase
             ->assertOk()
             ->assertSee('1 PALLET')
             ->assertSee('800 SHEET')
-            ->assertSee('1 PALLET @ 800 SHEET')
+            ->assertDontSee('1 PALLET @ 800 SHEET')
+            ->assertDontSee('1,750 KGM');
+    }
+
+    public function test_label_keeps_packing_line_when_packing_differs_from_bundle_for_non_coil(): void
+    {
+        [$arrival, $item] = $this->createArrivalWithItem('SHEET', 12250.0);
+
+        $this->post(route('receive.store', $item), [
+            'receive_date' => now()->toDateString(),
+            'truck_no' => 'B 9001 GCI',
+            'location_code' => 'BULK-AREA',
+            'tags' => [
+                [
+                    'tag' => 'TAG-SHEET-BOX-01',
+                    'qty' => 800,
+                    'qty_unit' => 'SHEET',
+                    'bundle_count' => 1,
+                    'bundle_unit' => 'PALLET',
+                    'packing_count' => 2,
+                    'packing_type' => 'BOX',
+                    'packing_qty' => 400,
+                    'net_weight' => 1750,
+                    'packings' => [
+                        ['packing_no' => 'TAG-SHEET-BOX-01-1', 'sequence' => 1, 'qty' => 400, 'uom' => 'SHEET', 'net_weight' => 875],
+                        ['packing_no' => 'TAG-SHEET-BOX-01-2', 'sequence' => 2, 'qty' => 400, 'uom' => 'SHEET', 'net_weight' => 875],
+                    ],
+                ],
+            ],
+        ])->assertRedirect(route('receive.show', $arrival));
+
+        $receive = IncomingReceive::where('tag', 'TAG-SHEET-BOX-01')->firstOrFail();
+
+        $this->get(route('receive.label', $receive))
+            ->assertOk()
+            ->assertSee('1 PALLET')
+            ->assertSee('800 SHEET')
+            ->assertSee('2 BOX @ 400 SHEET')
             ->assertDontSee('1,750 KGM');
     }
 
@@ -689,5 +726,39 @@ class TieredReceiveTest extends TestCase
             ->assertSee('2 × 500 PCS')
             ->assertSee('1 × 300 PCS')
             ->assertDontSee('260 KGM');
+    }
+
+    public function test_label_renders_part_model_beside_part_name(): void
+    {
+        [$arrival, $item, $part] = $this->createArrivalWithItem('SHEET', 1750.0);
+        $part->update(['part_name' => 'BACK PLATE', 'model' => 'VT 7']);
+
+        $receive = IncomingReceive::create([
+            'arrival_item_id' => $item->id,
+            'part_id' => $part->id,
+            'tag' => 'TAG-MODEL-01',
+            'bundle_count' => 1,
+            'bundle_unit' => 'PALLET',
+            'packing_count' => 1,
+            'packing_type' => 'PALLET',
+            'packing_qty' => 800,
+            'qty' => 800,
+            'qty_unit' => 'SHEET',
+            'net_weight' => 1750,
+            'qc_status' => 'pass',
+            'ata_date' => now(),
+        ]);
+
+        $this->get(route('receive.label', $receive))
+            ->assertOk()
+            ->assertSeeInOrder(['BACK PLATE', 'VT 7'])
+            ->assertSee('class="part-model"', false);
+
+        $part->update(['model' => null]);
+
+        $this->get(route('receive.label', $receive))
+            ->assertOk()
+            ->assertSee('BACK PLATE')
+            ->assertDontSee('class="part-model"', false);
     }
 }

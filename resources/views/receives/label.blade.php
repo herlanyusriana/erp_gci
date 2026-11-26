@@ -5,6 +5,8 @@
     $resolvedTag = $receive->tag ?: '-';
     $invoiceNo = $arrival?->invoice_no ?: ($arrival?->delivery_note_no ?: ($arrival?->arrival_no ?? '-'));
     $partName = $part?->part_name ?? '-';
+    $partModel = trim((string) ($part?->model ?? ''));
+    $partModel = ($partModel === '' || $partModel === '-') ? null : $partModel;
     $isOsp = (bool) $arrival?->isOsp();
     $ospBadge = $arrival?->resolvedArrivalType() === IncomingArrival::TYPE_OSP_GCI ? 'OSP GCI' : 'OSP CUSTOMER';
     $senderName = $arrival?->senderName();
@@ -23,6 +25,7 @@
     // 1 tag = 1 bundle. Bundle memuat beberapa packing (sub-unit fisik).
     $bundleCount = (float) ($receive->bundle_count ?: ($receive->bundle_qty ?: 1));
     $bundleUnit = strtoupper((string) ($receive->bundle_unit ?: 'BUNDLE'));
+    $bundleHead = trim($num($bundleCount).' '.$bundleUnit);
     $bundleQtyText = $weightBasis
         ? $num((float) ($receive->net_weight ?? $receive->qty ?? 0)).' '.$weightUnit
         : $num((float) ($receive->qty ?? 0)).' '.$goodsUnit;
@@ -62,7 +65,10 @@
             // Ringkas seperti label fisik: "2 COIL @ 1.380 KGM". Nomor packing
             // ({tag}/{n}) sengaja tidak dicetak: pada bundle berisi puluhan
             // packing deretnya memenuhi label dan tidak dibaca operator di rak.
-            $packingLines[] = $head.' @ '.$num((float) $packingWeights[0]).' '.$packingUnit;
+            $perPackingText = $num((float) $packingWeights[0]).' '.$packingUnit;
+            if ($head !== $bundleHead || $perPackingText !== $bundleQtyText) {
+                $packingLines[] = $head.' @ '.$perPackingText;
+            }
         } elseif ($packings->isNotEmpty()) {
             // Berat per packing berbeda: ringkas per berat ("3 × 1,000 KGM"),
             // jangan dirata-ratakan dan jangan cetak nomor packing. Satu baris
@@ -84,7 +90,10 @@
             $fallbackPerPacking = $weightBasis && ! UomCatalog::isWeight($goodsUnit) && $receive->net_weight !== null && $packingCount > 0
                 ? (float) $receive->net_weight / $packingCount
                 : (float) ($receive->packing_qty ?? 0);
-            $packingLines[] = $head.' @ '.$num($fallbackPerPacking).' '.$packingUnit;
+            $perPackingText = $num($fallbackPerPacking).' '.$packingUnit;
+            if ($head !== $bundleHead || $perPackingText !== $bundleQtyText) {
+                $packingLines[] = $head.' @ '.$perPackingText;
+            }
         }
     }
 
@@ -114,7 +123,9 @@
         .data { width: 62%; border-right: 2.5px solid #000; display: flex; flex-direction: column; padding: 3mm 5mm 3mm 4mm; }
         .side { width: 38%; display: flex; flex-direction: column; }
 
+        .part-head { display: flex; flex-wrap: wrap; align-items: center; gap: 1mm 2.5mm; }
         .part-name { font-size: 12pt; font-weight: 900; text-transform: uppercase; line-height: 1.15; }
+        .part-model { display: inline-block; border: 1.5px solid #000; padding: 0.3mm 2mm; font-size: 9.5pt; font-weight: 900; text-transform: uppercase; line-height: 1.1; white-space: nowrap; }
         .part-size { font-size: 8.5pt; font-weight: 600; text-transform: uppercase; color: #222; margin-top: 0.5mm; }
         .osp-tag { display: inline-block; margin-top: 1.5mm; border: 1.5px solid #000; padding: 0.5mm 2mm; font-size: 8pt; font-weight: 800; text-transform: uppercase; letter-spacing: 0.3px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         /* Invoice di atas, tag di bawahnya, ukuran keduanya sama supaya terbaca
@@ -160,7 +171,12 @@
 
         <main>
             <section class="data">
-                <div class="part-name">{{ $partName }}</div>
+                <div class="part-head">
+                    <span class="part-name">{{ $partName }}</span>
+                    @if ($partModel)
+                        <span class="part-model">{{ $partModel }}</span>
+                    @endif
+                </div>
                 @if ($sizeText)
                     <div class="part-size">{{ $sizeText }}</div>
                 @endif

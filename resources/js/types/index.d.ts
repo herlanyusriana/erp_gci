@@ -376,6 +376,7 @@ export interface IncomingReceive {
     gross_weight: number | null;
     qc_status: string | null;
     truck_no: string | null;
+    driver_name?: string | null;
     location_code: string | null;
     invoice_no: string | null;
     ata_date: string | null;

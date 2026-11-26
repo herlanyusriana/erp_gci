@@ -5,6 +5,7 @@ import { Head, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import InputError from '@/Components/InputError.vue';
+import MultiTagInput from '@/Components/MultiTagInput.vue';
 import { arrivalSenderName, arrivalTypeBadgeClass, arrivalTypeLabel, isOspType, resolveArrivalType } from '@/utils/arrivalType';
 import type { IncomingArrivalItem } from '@/types';
 
@@ -43,6 +44,17 @@ const props = defineProps<{
     weightUnit: string;
     locations: Array<{ code: string; name: string }>;
     defaultLocation?: string | null;
+    section1Prefill?: {
+        prefilled: boolean;
+        receive_date: string | null;
+        truck_no: string;
+        driver_name: string;
+        location_code: string | null;
+        pen_no: string;
+        pen_date: string;
+        aju_no: string;
+        aju_date: string;
+    };
 }>();
 
 const backHref = () => route('receive.show', props.arrivalItem.arrival_id);
@@ -85,15 +97,18 @@ function createIdempotencyKey(): string {
 }
 
 // Section 1 Form State
+const truckInputRef = ref<InstanceType<typeof MultiTagInput> | null>(null);
+const driverInputRef = ref<InstanceType<typeof MultiTagInput> | null>(null);
+
 const form = useForm({
-    receive_date: new Date().toISOString().slice(0, 10),
-    truck_no: '',
-    driver_name: '',
-    location_code: props.defaultLocation ?? 'BULK-AREA',
-    pen_no: props.arrivalItem.arrival?.pen_no ?? '',
-    pen_date: props.arrivalItem.arrival?.pen_date ? String(props.arrivalItem.arrival.pen_date).slice(0, 10) : '',
-    aju_no: props.arrivalItem.arrival?.aju_no ?? '',
-    aju_date: props.arrivalItem.arrival?.aju_date ? String(props.arrivalItem.arrival.aju_date).slice(0, 10) : '',
+    receive_date: props.section1Prefill?.receive_date || new Date().toISOString().slice(0, 10),
+    truck_no: props.section1Prefill?.truck_no ?? '',
+    driver_name: props.section1Prefill?.driver_name ?? '',
+    location_code: props.section1Prefill?.location_code ?? props.defaultLocation ?? 'BULK-AREA',
+    pen_no: props.section1Prefill?.pen_no || (props.arrivalItem.arrival?.pen_no ?? ''),
+    pen_date: props.section1Prefill?.pen_date || (props.arrivalItem.arrival?.pen_date ? String(props.arrivalItem.arrival.pen_date).slice(0, 10) : ''),
+    aju_no: props.section1Prefill?.aju_no || (props.arrivalItem.arrival?.aju_no ?? ''),
+    aju_date: props.section1Prefill?.aju_date || (props.arrivalItem.arrival?.aju_date ? String(props.arrivalItem.arrival.aju_date).slice(0, 10) : ''),
     idempotency_key: createIdempotencyKey(),
     tags: [] as any[],
 });
@@ -412,6 +427,8 @@ function submit() {
     }
 
     clientError.value = '';
+    truckInputRef.value?.commitDraft();
+    driverInputRef.value?.commitDraft();
 
     if (!form.truck_no.trim()) {
         clientError.value = t('incoming.truckNoRequired');
@@ -537,10 +554,25 @@ function submit() {
         <form @submit.prevent="submit" class="space-y-5">
             <!-- 1. Informasi Penerimaan -->
             <section class="rounded-xl border border-borderline bg-surface p-5">
-                <h2 class="mb-4 flex items-center gap-2 text-sm font-bold text-ink-primary">
-                    <span class="inline-grid h-6 w-6 place-items-center rounded-full bg-primary text-xs text-white">1</span>
-                    Informasi Penerimaan
-                </h2>
+                <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+                    <h2 class="flex items-center gap-2 text-sm font-bold text-ink-primary">
+                        <span class="inline-grid h-6 w-6 place-items-center rounded-full bg-primary text-xs text-white">1</span>
+                        Informasi Penerimaan
+                    </h2>
+                    <span
+                        v-if="section1Prefill?.prefilled"
+                        class="inline-flex items-center gap-1.5 rounded-full bg-primary-light px-3 py-1 text-xs font-semibold text-primary"
+                    >
+                        <svg aria-hidden="true" class="h-3.5 w-3.5 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                            <path
+                                fill-rule="evenodd"
+                                d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
+                                clip-rule="evenodd"
+                            />
+                        </svg>
+                        {{ t('incoming.prefilledFromInvoice') }}
+                    </span>
+                </div>
 
                 <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     <div>
@@ -586,26 +618,30 @@ function submit() {
                         <label class="text-xs font-semibold text-ink-secondary">
                             {{ t('incoming.truckNo') }} <span class="text-danger">*</span>
                         </label>
-                        <input
+                        <MultiTagInput
+                            ref="truckInputRef"
                             v-model="form.truck_no"
-                            type="text"
-                            placeholder="Contoh: B 9123 GCI"
+                            :placeholder="t('incoming.truckNoPlaceholder')"
                             :aria-label="t('incoming.truckNo')"
                             :aria-required="true"
-                            @keydown.enter.prevent
-                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm font-semibold text-ink-primary focus:border-primary focus:ring-primary"
+                            :uppercase="true"
+                            :dedupe="true"
+                            :remove-label="(v) => t('incoming.removeEntry', { value: v })"
                         />
+                        <p class="mt-1 text-[11px] text-ink-secondary">{{ t('incoming.multiEntryHint') }}</p>
                         <InputError :message="form.errors.truck_no" class="mt-1" />
                     </div>
                     <div>
-                        <label class="text-xs font-semibold text-ink-secondary">Nama Driver</label>
-                        <input
+                        <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.driverName') }}</label>
+                        <MultiTagInput
+                            ref="driverInputRef"
                             v-model="form.driver_name"
-                            type="text"
-                            placeholder="Nama driver pengirim"
-                            @keydown.enter.prevent
-                            class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                            :placeholder="t('incoming.driverNamePlaceholder')"
+                            :aria-label="t('incoming.driverName')"
+                            :remove-label="(v) => t('incoming.removeEntry', { value: v })"
                         />
+                        <p class="mt-1 text-[11px] text-ink-secondary">{{ t('incoming.multiEntryHint') }}</p>
+                        <InputError :message="form.errors.driver_name" class="mt-1" />
                     </div>
 
                     <div>

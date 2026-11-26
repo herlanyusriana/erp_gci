@@ -139,6 +139,7 @@ class ReceiveController extends Controller
             'weightUnit' => UomCatalog::WEIGHT,
             'locations' => $this->activeLocations(),
             'defaultLocation' => $this->bulkAreaCode(),
+            'section1Prefill' => $this->resolveSection1Prefill($arrivalItem),
         ]);
     }
 
@@ -157,8 +158,8 @@ class ReceiveController extends Controller
 
         $validated = $request->validate([
             'receive_date' => ['required', 'date'],
-            'truck_no' => ['required', 'string', 'max:50'],
-            'driver_name' => ['nullable', 'string', 'max:100'],
+            'truck_no' => ['required', 'string', 'max:1000'],
+            'driver_name' => ['nullable', 'string', 'max:1000'],
             'location_code' => $this->locationRule(),
             'pen_no' => ['nullable', 'string', 'max:255'],
             'pen_date' => ['nullable', 'date'],
@@ -213,12 +214,18 @@ class ReceiveController extends Controller
 
         $goodsUnit = UomCatalog::normalize($arrivalItem->unit_goods) ?? UomCatalog::WEIGHT;
         $receiveAt = Carbon::parse($validated['receive_date'])->setTimeFromTimeString(now()->format('H:i:s'));
-        $truckNo = trim((string) ($validated['truck_no'] ?? '')) !== '' ? strtoupper(trim((string) $validated['truck_no'])) : null;
+        $truckNo = $this->normalizeMultiValues($validated['truck_no'] ?? null, true);
+        if ($truckNo === null) {
+            throw ValidationException::withMessages([
+                'truck_no' => __('No. Truk wajib diisi.'),
+            ]);
+        }
+        $driverName = $this->normalizeMultiValues($validated['driver_name'] ?? null, false);
         $locationCode = $this->normalizeLocationCode($validated['location_code'] ?? null);
         $idempotencyKey = trim((string) ($validated['idempotency_key'] ?? ''));
         $idempotencyKey = $idempotencyKey !== '' ? $idempotencyKey : null;
 
-        DB::transaction(function () use ($validated, $arrivalItem, $goodsUnit, $receiveAt, $truckNo, $weightBasis, $locationCode, $totalRequested, $unitLabel, $idempotencyKey) {
+        DB::transaction(function () use ($validated, $arrivalItem, $goodsUnit, $receiveAt, $truckNo, $driverName, $weightBasis, $locationCode, $totalRequested, $unitLabel, $idempotencyKey) {
             $arrivalItem = IncomingArrivalItem::query()
                 ->with(['arrival', 'part', 'receives'])
                 ->lockForUpdate()
@@ -297,6 +304,7 @@ class ReceiveController extends Controller
                     'idempotency_key' => $idempotencyKey,
                     'invoice_no' => $arrivalItem->arrival?->invoice_no,
                     'truck_no' => $truckNo,
+                    'driver_name' => $driverName,
                     'location_code' => $locationCode,
                     'ata_date' => $receiveAt,
                 ]);
@@ -437,7 +445,8 @@ class ReceiveController extends Controller
         $validated = $request->validate([
             'receive_date' => ['required', 'date'],
             'tag' => ['nullable', 'string', 'max:255'],
-            'truck_no' => ['nullable', 'string', 'max:50'],
+            'truck_no' => ['nullable', 'string', 'max:1000'],
+            'driver_name' => ['nullable', 'string', 'max:1000'],
             'location_code' => $this->locationRule(),
             'pen_no' => ['nullable', 'string', 'max:255'],
             'pen_date' => ['nullable', 'date'],
@@ -503,7 +512,10 @@ class ReceiveController extends Controller
                 'gross_weight' => $validated['gross_weight'] ?? null,
                 'qty_unit' => $goodsUnit,
                 'qc_status' => 'pass',
-                'truck_no' => trim((string) ($validated['truck_no'] ?? '')) !== '' ? strtoupper(trim((string) $validated['truck_no'])) : null,
+                'truck_no' => $this->normalizeMultiValues($validated['truck_no'] ?? null, true),
+                ...(array_key_exists('driver_name', $validated)
+                    ? ['driver_name' => $this->normalizeMultiValues($validated['driver_name'], false)]
+                    : []),
                 'ata_date' => $receiveAt,
             ]);
 
@@ -659,6 +671,96 @@ class ReceiveController extends Controller
         $trimmed = trim((string) $code);
 
         return $trimmed === '' ? null : $trimmed;
+    }
+
+    /**
+     * Normalisasi nilai teks multi-entri (dipisah koma / titik koma / baris baru).
+     */
+    private function normalizeMultiValues(?string $raw, bool $uppercase = false): ?string
+    {
+        if ($raw === null) {
+            return null;
+        }
+
+        $parts = preg_split('/[,;\r\n]+/', $raw) ?: [];
+        $normalized = [];
+        $seen = [];
+
+        foreach ($parts as $part) {
+            $item = trim(preg_replace('/\s+/', ' ', $part) ?? '');
+            if ($item === '') {
+                continue;
+            }
+            if ($uppercase) {
+                $item = strtoupper($item);
+                $dedupeKey = $item;
+                if (isset($seen[$dedupeKey])) {
+                    continue;
+                }
+                $seen[$dedupeKey] = true;
+            }
+            $normalized[] = $item;
+        }
+
+        return $normalized === [] ? null : implode(', ', $normalized);
+    }
+
+    /**
+     * Nilai bawaan Bagian 1 (Informasi Penerimaan) dari receive terakhir
+     * pada kedatangan / nomor faktur yang sama agar operator tidak mengetik ulang.
+     *
+     * @return array{
+     *     prefilled: bool,
+     *     receive_date: ?string,
+     *     truck_no: string,
+     *     driver_name: string,
+     *     location_code: ?string,
+     *     pen_no: string,
+     *     pen_date: string,
+     *     aju_no: string,
+     *     aju_date: string,
+     * }
+     */
+    private function resolveSection1Prefill(IncomingArrivalItem $arrivalItem): array
+    {
+        $arrival = $arrivalItem->arrival;
+
+        $latest = IncomingReceive::query()
+            ->whereHas('arrivalItem', fn ($q) => $q->where('arrival_id', $arrivalItem->arrival_id))
+            ->with('arrivalItem.arrival')
+            ->orderByDesc('id')
+            ->first();
+
+        $invoiceNo = trim((string) ($arrival?->invoice_no ?? ''));
+        if ($latest === null && $invoiceNo !== '') {
+            $needle = mb_strtolower($invoiceNo);
+            $latest = IncomingReceive::query()
+                ->where(function ($q) use ($needle) {
+                    $q->whereRaw("LOWER(TRIM(COALESCE(invoice_no, ''))) = ?", [$needle])
+                        ->orWhereHas('arrivalItem.arrival', fn ($a) => $a->whereRaw("LOWER(TRIM(COALESCE(invoice_no, ''))) = ?", [$needle]));
+                })
+                ->with('arrivalItem.arrival')
+                ->orderByDesc('id')
+                ->first();
+        }
+
+        $latestArrival = $latest?->arrivalItem?->arrival;
+
+        return [
+            'prefilled' => $latest !== null,
+            'receive_date' => $latest?->ata_date?->toDateString(),
+            'truck_no' => (string) ($latest?->truck_no ?? ''),
+            'driver_name' => (string) ($latest?->driver_name ?? ''),
+            'location_code' => $latest?->location_code ?? $this->bulkAreaCode(),
+            'pen_no' => (string) ($arrival?->pen_no ?? $latestArrival?->pen_no ?? ''),
+            'pen_date' => $arrival?->pen_date?->toDateString()
+                ?? $latestArrival?->pen_date?->toDateString()
+                ?? '',
+            'aju_no' => (string) ($arrival?->aju_no ?? $latestArrival?->aju_no ?? ''),
+            'aju_date' => $arrival?->aju_date?->toDateString()
+                ?? $latestArrival?->aju_date?->toDateString()
+                ?? '',
+        ];
     }
 
     /**

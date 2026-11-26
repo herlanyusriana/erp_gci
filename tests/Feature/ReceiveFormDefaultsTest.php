@@ -411,4 +411,180 @@ class ReceiveFormDefaultsTest extends TestCase
         $this->assertSame(0, $item->receives()->count(), 'Penerimaan harus dibatalkan, bukan tersimpan tanpa stok.');
         $this->assertDatabaseMissing('part_stocks', ['tag' => $tag]);
     }
+
+    public function test_receive_form_prefills_section_1_from_previous_receive_in_same_arrival_and_invoice(): void
+    {
+        $parts = Part::query()->where('is_active', true)->limit(2)->get();
+        $this->assertCount(2, $parts);
+
+        $invoiceNo = 'INV-PREFILL-'.uniqid();
+        $arrival = IncomingArrival::create([
+            'arrival_no' => 'ARV-PREFILL-1-'.uniqid(),
+            'invoice_no' => $invoiceNo,
+            'supplier_id' => Supplier::query()->value('id'),
+            'is_local' => false,
+            'status' => 'pending',
+            'iqc_status' => 'passed',
+        ]);
+
+        $item1 = IncomingArrivalItem::create([
+            'arrival_id' => $arrival->id,
+            'part_id' => $parts[0]->id,
+            'qty_goods' => 100,
+            'unit_goods' => 'SHEET',
+            'weight_nett' => 500,
+            'unit_weight' => 'KGM',
+        ]);
+        $item2 = IncomingArrivalItem::create([
+            'arrival_id' => $arrival->id,
+            'part_id' => $parts[1]->id,
+            'qty_goods' => 200,
+            'unit_goods' => 'SHEET',
+            'weight_nett' => 1000,
+            'unit_weight' => 'KGM',
+        ]);
+
+        // Item pertama belum punya penerimaan sebelumnya → prefilled = false.
+        $this->get(route('receive.create', $item1))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Incoming/Receive/Form')
+                ->where('section1Prefill.prefilled', false)
+                ->where('section1Prefill.truck_no', '')
+                ->where('section1Prefill.driver_name', ''));
+
+        $this->post(route('receive.store', $item1), [
+            'receive_date' => '2026-11-26',
+            'truck_no' => 'b9374peh, B9390BEI, b9505teh, B9149BEI',
+            'driver_name' => 'Slamet, Budi Santoso, Agus',
+            'location_code' => 'BULK-AREA',
+            'pen_no' => '041064',
+            'pen_date' => '2026-09-18',
+            'aju_no' => '00097',
+            'aju_date' => '2026-09-18',
+            'tags' => [[
+                'tag' => 'TAG-PREF-1-'.uniqid(),
+                'qty' => 100,
+                'qty_unit' => 'SHEET',
+                'bundle_count' => 1,
+                'bundle_unit' => 'PALLET',
+                'packing_count' => 1,
+                'packing_type' => 'PALLET',
+                'packing_qty' => 100,
+                'net_weight' => 500,
+            ]],
+        ])->assertRedirect(route('receive.show', $arrival));
+
+        // Item kedua di arrival yang sama otomatis terisi Bagian 1 dari item pertama.
+        $this->get(route('receive.create', $item2))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Incoming/Receive/Form')
+                ->where('section1Prefill.prefilled', true)
+                ->where('section1Prefill.receive_date', '2026-11-26')
+                ->where('section1Prefill.truck_no', 'B9374PEH, B9390BEI, B9505TEH, B9149BEI')
+                ->where('section1Prefill.driver_name', 'Slamet, Budi Santoso, Agus')
+                ->where('section1Prefill.location_code', 'BULK-AREA')
+                ->where('section1Prefill.pen_no', '041064')
+                ->where('section1Prefill.pen_date', '2026-09-18')
+                ->where('section1Prefill.aju_no', '00097')
+                ->where('section1Prefill.aju_date', '2026-09-18'));
+
+        // Kedatangan terpisah dengan nomor faktur yang sama juga ikut terisi otomatis.
+        $sameInvoiceArrival = IncomingArrival::create([
+            'arrival_no' => 'ARV-PREFILL-2-'.uniqid(),
+            'invoice_no' => $invoiceNo,
+            'supplier_id' => Supplier::query()->value('id'),
+            'is_local' => false,
+            'status' => 'pending',
+            'iqc_status' => 'passed',
+        ]);
+        $item3 = IncomingArrivalItem::create([
+            'arrival_id' => $sameInvoiceArrival->id,
+            'part_id' => $parts[1]->id,
+            'qty_goods' => 50,
+            'unit_goods' => 'SHEET',
+            'weight_nett' => 250,
+            'unit_weight' => 'KGM',
+        ]);
+
+        $this->get(route('receive.create', $item3))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Incoming/Receive/Form')
+                ->where('section1Prefill.prefilled', true)
+                ->where('section1Prefill.truck_no', 'B9374PEH, B9390BEI, B9505TEH, B9149BEI')
+                ->where('section1Prefill.driver_name', 'Slamet, Budi Santoso, Agus')
+                ->where('section1Prefill.pen_no', '041064')
+                ->where('section1Prefill.aju_no', '00097'));
+    }
+
+    public function test_receive_supports_long_multiple_trucks_and_drivers_on_store_and_update(): void
+    {
+        $part = Part::where('part_number', 'AAN30056405')->firstOrFail();
+        $arrival = IncomingArrival::create([
+            'arrival_no' => 'ARV-MULTI-TRUCK-'.uniqid(),
+            'supplier_id' => Supplier::query()->value('id'),
+            'is_local' => true,
+            'status' => 'pending',
+            'iqc_status' => 'passed',
+        ]);
+        $item = IncomingArrivalItem::create([
+            'arrival_id' => $arrival->id,
+            'part_id' => $part->id,
+            'qty_goods' => 100,
+            'unit_goods' => 'PCS',
+            'weight_nett' => null,
+        ]);
+
+        // Tolak truck_no yang hanya berisi koma / spasi.
+        $this->post(route('receive.store', $item), [
+            'receive_date' => '2026-11-26',
+            'truck_no' => ' , , ',
+            'location_code' => 'BULK-AREA',
+            'tags' => [[
+                'tag' => 'TAG-EMPTY-TRUCK',
+                'qty' => 10,
+                'qty_unit' => 'PCS',
+            ]],
+        ])->assertSessionHasErrors('truck_no');
+
+        $manyTrucks = 'b9374peh, b9390bei, b9505teh, b9149bei, b9001gci, b9002gci, b9374peh';
+        $manyDrivers = 'Slamet Riyadi, Budi Santoso, Agus Setiawan, Hendra Wijaya, Joko Susilo, Dedi Kurniawan';
+
+        $tag = strtoupper('TAG-MULTI-'.uniqid());
+        $this->post(route('receive.store', $item), [
+            'receive_date' => '2026-11-26',
+            'truck_no' => $manyTrucks,
+            'driver_name' => $manyDrivers,
+            'location_code' => 'BULK-AREA',
+            'tags' => [[
+                'tag' => $tag,
+                'qty' => 50,
+                'qty_unit' => 'PCS',
+                'bundle_count' => 1,
+                'bundle_unit' => 'PALLET',
+                'packing_count' => 1,
+                'packing_type' => 'BOX',
+                'packing_qty' => 50,
+            ]],
+        ])->assertSessionHasNoErrors()->assertRedirect();
+
+        $receive = IncomingReceive::where('tag', $tag)->firstOrFail();
+        $this->assertSame('B9374PEH, B9390BEI, B9505TEH, B9149BEI, B9001GCI, B9002GCI', $receive->truck_no);
+        $this->assertSame($manyDrivers, $receive->driver_name);
+
+        $this->put(route('receive.update', $receive), [
+            'receive_date' => '2026-11-26',
+            'tag' => $tag,
+            'truck_no' => 'b9374peh, b9999xyz',
+            'driver_name' => 'Slamet, Roni',
+            'location_code' => 'BULK-AREA',
+            'qty' => 50,
+        ])->assertSessionHasNoErrors()->assertRedirect();
+
+        $receive->refresh();
+        $this->assertSame('B9374PEH, B9999XYZ', $receive->truck_no);
+        $this->assertSame('Slamet, Roni', $receive->driver_name);
+    }
 }

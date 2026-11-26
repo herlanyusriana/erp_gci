@@ -18,7 +18,7 @@ class IncomingReceive extends Model
         'packing_count', 'packing_type', 'packing_qty',
         'weight', 'net_weight', 'gross_weight', 'weight_kgm',
         'location_code', 'qc_status', 'idempotency_key',
-        'invoice_no', 'delivery_note_no', 'truck_no', 'jo_po_number',
+        'invoice_no', 'delivery_note_no', 'truck_no', 'driver_name', 'jo_po_number',
         'ata_date', 'qc_audited_at', 'qc_audited_by',
     ];
 

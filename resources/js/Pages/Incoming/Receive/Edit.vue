@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import { ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { Head, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import InputError from '@/Components/InputError.vue';
+import MultiTagInput from '@/Components/MultiTagInput.vue';
 import SearchableSelect from '@/Components/SearchableSelect.vue';
 import type { IncomingReceive, IncomingArrivalItem } from '@/types';
 
@@ -26,10 +28,14 @@ const backHref = () => route('receive.show', props.arrivalItem.arrival_id);
 const packingTypeOptions = () =>
     props.packingTypes?.length ? props.packingTypes : props.packingUnits;
 
+const truckInputRef = ref<InstanceType<typeof MultiTagInput> | null>(null);
+const driverInputRef = ref<InstanceType<typeof MultiTagInput> | null>(null);
+
 const form = useForm({
     receive_date: props.receive.ata_date?.slice(0, 10) ?? '',
     tag: props.receive.tag ?? '',
     truck_no: props.receive.truck_no ?? '',
+    driver_name: props.receive.driver_name ?? '',
     location_code: props.receive.location_code ?? '',
     pen_no: props.arrivalItem.arrival?.pen_no ?? '',
     pen_date: props.arrivalItem.arrival?.pen_date ? String(props.arrivalItem.arrival.pen_date).slice(0, 10) : '',
@@ -78,6 +84,8 @@ function calculateTotal() {
 }
 
 function submit() {
+    truckInputRef.value?.commitDraft();
+    driverInputRef.value?.commitDraft();
     form.bundle_qty = form.bundle_count;
     form.put(route('receive.update', props.receive.id));
 }
@@ -113,7 +121,29 @@ function submit() {
                 </div>
                 <div>
                     <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.truckNo') }}</label>
-                    <input :aria-label="t('incoming.truckNo')" v-model="form.truck_no" type="text" class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary" />
+                    <MultiTagInput
+                        ref="truckInputRef"
+                        v-model="form.truck_no"
+                        :placeholder="t('incoming.truckNoPlaceholder')"
+                        :aria-label="t('incoming.truckNo')"
+                        :uppercase="true"
+                        :dedupe="true"
+                        :remove-label="(v) => t('incoming.removeEntry', { value: v })"
+                    />
+                    <p class="mt-1 text-[11px] text-ink-secondary">{{ t('incoming.multiEntryHint') }}</p>
+                    <InputError :message="form.errors.truck_no" class="mt-1" />
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.driverName') }}</label>
+                    <MultiTagInput
+                        ref="driverInputRef"
+                        v-model="form.driver_name"
+                        :placeholder="t('incoming.driverNamePlaceholder')"
+                        :aria-label="t('incoming.driverName')"
+                        :remove-label="(v) => t('incoming.removeEntry', { value: v })"
+                    />
+                    <p class="mt-1 text-[11px] text-ink-secondary">{{ t('incoming.multiEntryHint') }}</p>
+                    <InputError :message="form.errors.driver_name" class="mt-1" />
                 </div>
                 <div>
                     <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.location') }}</label>

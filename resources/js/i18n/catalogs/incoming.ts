@@ -297,7 +297,16 @@ export default {
         "prefilledFromInvoice": "Diisi otomatis dari penerimaan sebelumnya di faktur ini",
         "removeEntry": "Hapus {value}",
         "qtyTotalPerTag": "Qty Total / Tag",
-        "qtyTotalForBundle": "Qty total tag {bundle}"
+        "qtyTotalForBundle": "Qty total tag {bundle}",
+        "choosePoPart": "— Pilih part dari PO —",
+        "poRemainingOption": "Sisa PO: {remaining} {unit} (PO: {po}, Tiba: {arrived})",
+        "poRemainingBadge": "Sisa PO: {remaining} {unit} (PO: {po} · Tiba: {arrived})",
+        "supplierPosExhaustedWarning": "Seluruh PO untuk pemasok ini sudah habis (tidak ada sisa kuantitas PO yang belum datang).",
+        "poExhaustedWarning": "PO ini sudah habis — seluruh kuantitas pada PO ini sudah dicatat kedatangannya.",
+        "allPoPartsSelectedHint": "Seluruh part yang tersisa pada PO ini sudah dipilih di daftar item. Tidak ada part lain yang tersisa di PO.",
+        "exceedsPoRemaining": "Melebihi sisa PO ({remaining} {unit}).",
+        "arrivedQty": "Sudah Tiba",
+        "arrivalHistory": "Riwayat Kedatangan"
     },
     "en": {
         "purchaseOrder": "Purchase Order",
@@ -597,7 +606,16 @@ export default {
         "prefilledFromInvoice": "Auto-filled from previous receipt on this invoice",
         "removeEntry": "Remove {value}",
         "qtyTotalPerTag": "Total Qty / Tag",
-        "qtyTotalForBundle": "Total qty for tag {bundle}"
+        "qtyTotalForBundle": "Total qty for tag {bundle}",
+        "choosePoPart": "— Select part from PO —",
+        "poRemainingOption": "PO Remaining: {remaining} {unit} (PO: {po}, Arrived: {arrived})",
+        "poRemainingBadge": "PO Remaining: {remaining} {unit} (PO: {po} · Arrived: {arrived})",
+        "supplierPosExhaustedWarning": "All POs for this supplier are exhausted (no remaining PO quantity to arrive).",
+        "poExhaustedWarning": "This PO is exhausted — all quantities on this PO have already arrived.",
+        "allPoPartsSelectedHint": "All remaining parts on this PO have been added below. No other parts remain on this PO.",
+        "exceedsPoRemaining": "Exceeds PO remaining ({remaining} {unit}).",
+        "arrivedQty": "Arrived",
+        "arrivalHistory": "Arrival History"
     },
     "ko": {
         "purchaseOrder": "구매 주문",
@@ -897,6 +915,15 @@ export default {
         "prefilledFromInvoice": "이 인보이스의 이전 입고 정보에서 자동 입력됨",
         "removeEntry": "{value} 삭제",
         "qtyTotalPerTag": "태그당 총 수량",
-        "qtyTotalForBundle": "태그 {bundle} 총 수량"
+        "qtyTotalForBundle": "태그 {bundle} 총 수량",
+        "choosePoPart": "— PO에서 부품 선택 —",
+        "poRemainingOption": "PO 잔량: {remaining} {unit} (PO: {po}, 입고: {arrived})",
+        "poRemainingBadge": "PO 잔량: {remaining} {unit} (PO: {po} · 입고: {arrived})",
+        "supplierPosExhaustedWarning": "이 공급업체의 모든 PO 수량이 소진되었습니다 (남은 입고 예정 수량 없음).",
+        "poExhaustedWarning": "이 PO는 소진되었습니다 — 모든 PO 수량이 이미 입고 등록되었습니다.",
+        "allPoPartsSelectedHint": "이 PO의 남은 부품이 모두 선택되었습니다. 추가로 남은 부품이 없습니다.",
+        "exceedsPoRemaining": "PO 잔량({remaining} {unit})을 초과합니다.",
+        "arrivedQty": "입고 완료",
+        "arrivalHistory": "입고 이력"
     }
 };

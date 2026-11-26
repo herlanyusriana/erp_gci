@@ -39,7 +39,11 @@ interface ItemRow {
     total_price: number | string;
     is_foc: boolean;
     notes: string;
-    po_qty_ref?: number; // referensi kuantitas asli PO
+    po_qty_ref?: number; // sisa kuantitas PO yang tersedia untuk item ini
+    po_total_qty?: number;
+    po_arrived_qty?: number;
+    po_unit_ref?: string;
+    po_unit_price?: number;
 }
 
 interface ContainerRow {
@@ -67,6 +71,7 @@ const props = defineProps<{
     ospGciParts: OspPartOption[];
     ospCustomerParts: OspPartOption[];
     purchaseOrders: Array<any>;
+    suppliersWithPos?: number[];
     uomCodes: string[];
     packingUnits: string[];
 }>();
@@ -130,27 +135,40 @@ function removeContainer(i: number) {
 }
 const containerSizes = ['20 FT', '40 FT', '40 HC', '45 HC'];
 
+const editPoRef = props.arrival?.purchase_order_id
+    ? props.purchaseOrders.find((p: any) => Number(p.id) === Number(props.arrival?.purchase_order_id)) ?? null
+    : null;
+
 const itemRows = ref<ItemRow[]>(
-    props.arrival?.items?.map((i: any) => ({
-        id: i.id ?? null,
-        part_id: i.part_id ?? null,
-        part_number: i.part?.part_number ?? '',
-        part_name: i.part?.part_name ?? '',
-        model: i.part?.model ?? '',
-        material_group: i.material_group ?? '',
-        size: i.size ?? i.part?.size ?? '',
-        qty_goods: i.qty_goods,
-        unit_goods: i.unit_goods ?? i.part?.uom?.code ?? 'KGM',
-        qty_bundle: i.qty_bundle ?? '',
-        unit_bundle: i.unit_bundle ?? (props.packingUnits[0] ?? 'PALLET'),
-        weight_nett: i.weight_nett ?? '',
-        unit_weight: i.unit_weight ?? 'KGM',
-        weight_gross: i.weight_gross ?? '',
-        price: i.price ?? '',
-        total_price: formatTotalPrice(i.total_price),
-        is_foc: Boolean(i.is_foc),
-        notes: i.notes ?? '',
-    })) ?? [blankItem()],
+    props.arrival?.items?.map((i: any) => {
+        const poItem = editPoRef?.items?.find((it: any) => Number(it.part_id) === Number(i.part_id));
+
+        return {
+            id: i.id ?? null,
+            part_id: i.part_id ?? null,
+            part_number: i.part?.part_number ?? '',
+            part_name: i.part?.part_name ?? '',
+            model: i.part?.model ?? '',
+            material_group: i.material_group ?? '',
+            size: i.size ?? i.part?.size ?? '',
+            qty_goods: i.qty_goods,
+            unit_goods: i.unit_goods ?? i.part?.uom?.code ?? 'KGM',
+            qty_bundle: i.qty_bundle ?? '',
+            unit_bundle: i.unit_bundle ?? (props.packingUnits[0] ?? 'PALLET'),
+            weight_nett: i.weight_nett ?? '',
+            unit_weight: i.unit_weight ?? 'KGM',
+            weight_gross: i.weight_gross ?? '',
+            price: i.price ?? '',
+            total_price: formatTotalPrice(i.total_price),
+            is_foc: Boolean(i.is_foc),
+            notes: i.notes ?? '',
+            po_qty_ref: poItem ? Number(poItem.remaining_qty ?? poItem.qty ?? 0) : undefined,
+            po_total_qty: poItem ? Number(poItem.qty ?? 0) : undefined,
+            po_arrived_qty: poItem ? Number(poItem.arrived_qty ?? 0) : undefined,
+            po_unit_ref: poItem ? String(poItem.unit ?? '') : undefined,
+            po_unit_price: poItem ? Number(poItem.price ?? 0) : undefined,
+        };
+    }) ?? [blankItem()],
 );
 
 const form = useForm({
@@ -201,38 +219,146 @@ const filteredPurchaseOrders = computed(() => {
     });
 });
 
+function clearPoMeta(row: ItemRow) {
+    row.po_qty_ref = undefined;
+    row.po_total_qty = undefined;
+    row.po_arrived_qty = undefined;
+    row.po_unit_ref = undefined;
+    row.po_unit_price = undefined;
+}
+
+const selectedPo = computed(() =>
+    form.purchase_order_id
+        ? props.purchaseOrders.find((p) => Number(p.id) === Number(form.purchase_order_id)) ?? null
+        : null,
+);
+
+const isLocalPoMode = computed(
+    () => isLocalArrival.value && Boolean(selectedPo.value) && Array.isArray(selectedPo.value?.items) && selectedPo.value.items.length > 0,
+);
+
+const supplierAllPosExhausted = computed(
+    () =>
+        isLocalArrival.value &&
+        Boolean(form.supplier_id) &&
+        !form.purchase_order_id &&
+        filteredPurchaseOrders.value.length === 0 &&
+        (props.suppliersWithPos ?? []).includes(Number(form.supplier_id)),
+);
+
+const selectedPoExhausted = computed(
+    () =>
+        isLocalPoMode.value &&
+        selectedPo.value.items.every((it: any) => Number(it.remaining_qty ?? 0) <= 1e-9),
+);
+
+const remainingUnpickedPoPartsCount = computed(() => {
+    if (!isLocalPoMode.value || !selectedPo.value) return 0;
+    const pickedIds = new Set(
+        itemRows.value
+            .map((row) => (row.part_id != null ? Number(row.part_id) : null))
+            .filter((id): id is number => id !== null),
+    );
+    return selectedPo.value.items.filter(
+        (it: any) => Number(it.remaining_qty ?? 0) > 1e-9 && !pickedIds.has(Number(it.part_id)),
+    ).length;
+});
+
+const allPoPartsPickedOrExhausted = computed(
+    () => isLocalPoMode.value && remainingUnpickedPoPartsCount.value === 0,
+);
+
+const canAddItemRow = computed(
+    () => !(isLocalPoMode.value && allPoPartsPickedOrExhausted.value && itemRows.value.every((row) => Boolean(row.part_id))),
+);
+
+function poOptionsForRow(rowIndex: number) {
+    if (!selectedPo.value?.items) return [];
+
+    const currentPartId = itemRows.value[rowIndex]?.part_id;
+    const otherPickedIds = new Set(
+        itemRows.value
+            .filter((_, idx) => idx !== rowIndex)
+            .map((row) => (row.part_id != null ? Number(row.part_id) : null))
+            .filter((id): id is number => id !== null),
+    );
+
+    return selectedPo.value.items
+        .filter((it: any) => {
+            const pId = Number(it.part_id);
+            const isCurrent = currentPartId != null && pId === Number(currentPartId);
+            const hasRemaining = Number(it.remaining_qty ?? 0) > 1e-9;
+            return (hasRemaining || isCurrent) && !otherPickedIds.has(pId);
+        })
+        .map((it: any) => ({
+            value: it.part_id,
+            label: `${it.part?.part_number ?? ''} · ${it.part?.part_name ?? ''}`,
+            sublabel: [
+                `${t('master.model')}: ${it.part?.model || '—'}`,
+                `${t('incoming.size')}: ${it.size || it.part?.size || 'STD'}`,
+                t('incoming.poRemainingOption', {
+                    remaining: Number(it.remaining_qty || 0).toLocaleString(),
+                    unit: it.unit || 'PCS',
+                    po: Number(it.qty || 0).toLocaleString(),
+                    arrived: Number(it.arrived_qty || 0).toLocaleString(),
+                }),
+            ].join(' · '),
+            raw: it,
+        }));
+}
+
 function onSupplierChange() {
     resetMaterialRows();
     // Jika PO yang saat ini terpilih bukan milik supplier baru, reset purchase_order_id
     if (form.purchase_order_id) {
-        const po = props.purchaseOrders.find((p) => p.id === Number(form.purchase_order_id));
+        const po = props.purchaseOrders.find((p) => Number(p.id) === Number(form.purchase_order_id));
         if (po && Number(po.supplier_id) !== Number(form.supplier_id)) {
             form.purchase_order_id = '';
         }
     }
 }
 
-// Auto-populate item saat PO dipilih
+// Pilih PO: Lokal mulai 1 baris kosong (part dipilih manual via dropdown + Qty kosong);
+// Impor tetap memuat item bersisa secara otomatis.
 function onPurchaseOrderChange() {
     const poId = Number(form.purchase_order_id);
-    if (!poId) return;
+    if (!poId) {
+        itemRows.value.forEach(clearPoMeta);
+        return;
+    }
 
-    const po = props.purchaseOrders.find((p) => p.id === poId);
+    const po = props.purchaseOrders.find((p) => Number(p.id) === poId);
     if (!po) return;
 
-    // Auto-set supplier jika belum diset
+    // Auto-set supplier dan mata uang jika tersedia
     if (po.supplier_id) {
         form.supplier_id = po.supplier_id;
     }
+    if (po.currency) {
+        form.currency = po.currency;
+    }
 
-    // Auto-populate items dari PO
+    if (isLocalArrival.value) {
+        const defaultUnit = po.items?.[0]?.unit || 'PCS';
+        const row = blankItem();
+        row.unit_goods = defaultUnit;
+        itemRows.value = [row];
+        return;
+    }
+
     if (po.items && Array.isArray(po.items) && po.items.length > 0) {
-        itemRows.value = po.items.map((it: any) => {
+        const remainingItems = po.items.filter((it: any) => Number(it.remaining_qty ?? it.qty ?? 0) > 1e-9);
+        const itemsToLoad = remainingItems.length > 0 ? remainingItems : po.items;
+
+        itemRows.value = itemsToLoad.map((it: any) => {
             // Kelompok material diambil dari pemetaan substitute supplier untuk
             // part ini — part number BUKAN kelompok material.
             const mapped = props.materialOptions.find(
                 (m) => m.supplier_id === Number(po.supplier_id) && m.part_id === Number(it.part_id),
             );
+            const remQty = Number(it.remaining_qty ?? it.qty ?? 0);
+            const unit = it.unit ?? it.part?.uom?.code ?? 'KGM';
+            const unitPrice = Number(it.price ?? 0);
 
             return {
                 id: null,
@@ -242,18 +368,20 @@ function onPurchaseOrderChange() {
                 model: it.part?.model ?? '',
                 material_group: mapped?.group ?? it.material_group ?? '',
                 size: it.size ?? mapped?.size ?? it.part?.size ?? 'STD',
-                qty_goods: it.qty ?? '',
-                po_qty_ref: it.qty ?? 0,
-                unit_goods: it.unit ?? it.part?.uom?.code ?? 'KGM',
+                qty_goods: remQty > 0 ? remQty : '',
+                po_qty_ref: remQty,
+                po_total_qty: Number(it.qty ?? 0),
+                po_arrived_qty: Number(it.arrived_qty ?? 0),
+                po_unit_ref: unit,
+                po_unit_price: unitPrice,
+                unit_goods: unit,
                 qty_bundle: '',
                 unit_bundle: props.packingUnits[0] ?? 'PALLET',
-                weight_nett: it.unit === 'KGM' || !it.unit ? it.qty : '',
+                weight_nett: (unit === 'KGM' || unit === 'KG') && remQty > 0 ? remQty : '',
                 unit_weight: 'KGM',
                 weight_gross: '',
-                price: it.price ?? '',
-                total_price: ((Number(it.qty) || 0) * (Number(it.price) || 0)) > 0
-                    ? formatTotalPrice((Number(it.qty) || 0) * (Number(it.price) || 0))
-                    : '',
+                price: unitPrice > 0 ? unitPrice : '',
+                total_price: remQty > 0 && unitPrice > 0 ? formatTotalPrice(remQty * unitPrice) : '',
                 is_foc: false,
                 notes: it.notes ?? '',
             };
@@ -272,6 +400,7 @@ function selectTab(tab: 'import' | 'local' | 'osp') {
     form.is_local = tab === 'local';
     form.purchase_order_id = '';
     form.currency = tab === 'import' ? 'USD' : 'IDR';
+    itemRows.value.forEach(clearPoMeta);
 
     if (tab === 'osp' && !wasOsp) {
         form.supplier_id = '';
@@ -340,7 +469,7 @@ const materialPickerPlaceholder = computed(() => {
     return form.supplier_id ? t('incoming.chooseMaterial') : t('incoming.chooseSupplierFirst');
 });
 
-function onSelectMaterial(r: ItemRow, partId: number | '') {
+function onSelectMaterial(r: ItemRow, partId: number | string | null | '') {
     if (!partId) {
         r.part_id = null;
         r.part_number = '';
@@ -348,6 +477,36 @@ function onSelectMaterial(r: ItemRow, partId: number | '') {
         r.model = '';
         r.material_group = '';
         r.size = '';
+        clearPoMeta(r);
+        return;
+    }
+
+    if (isLocalPoMode.value && selectedPo.value) {
+        const poItem = selectedPo.value.items.find((it: any) => Number(it.part_id) === Number(partId));
+        if (poItem) {
+            const mapped = props.materialOptions.find(
+                (m) => m.supplier_id === Number(form.supplier_id) && m.part_id === Number(partId),
+            );
+            const poUnit = String(poItem.unit || mapped?.unit || 'PCS');
+            const poUnitPrice = Number(poItem.price ?? 0);
+
+            r.part_id = poItem.part_id;
+            r.part_number = poItem.part?.part_number ?? '';
+            r.part_name = poItem.part?.part_name ?? '';
+            r.model = poItem.part?.model ?? '';
+            r.material_group = mapped?.group ?? '';
+            r.size = poItem.size ?? mapped?.size ?? poItem.part?.size ?? 'STD';
+            r.unit_goods = poUnit;
+            r.qty_goods = '';
+            r.weight_nett = '';
+            r.po_qty_ref = Number(poItem.remaining_qty ?? 0);
+            r.po_total_qty = Number(poItem.qty ?? 0);
+            r.po_arrived_qty = Number(poItem.arrived_qty ?? 0);
+            r.po_unit_ref = poUnit;
+            r.po_unit_price = poUnitPrice;
+            r.price = poUnitPrice > 0 ? poUnitPrice : '';
+            r.total_price = '';
+        }
         return;
     }
 
@@ -392,13 +551,38 @@ function onSelectMaterial(r: ItemRow, partId: number | '') {
     }
 }
 
-function onQtyGoodsInput(r: ItemRow) {
-    if (r.unit_goods === 'KGM' || !r.weight_nett) {
-        if (r.unit_goods === 'KGM') {
-            r.weight_nett = r.qty_goods;
-        }
+function rowBasisQty(r: ItemRow): number {
+    const unit = (r.po_unit_ref || r.unit_goods || '').toUpperCase();
+    if (unit === 'KGM' || unit === 'KG') {
+        return Number(r.weight_nett) || Number(r.qty_goods) || 0;
+    }
+    return Number(r.qty_goods) || 0;
+}
+
+function rowExceedsPoRemaining(r: ItemRow): boolean {
+    if (r.po_qty_ref === undefined || !r.part_id) return false;
+    return rowBasisQty(r) > r.po_qty_ref + 1e-9;
+}
+
+function syncPoPriceFromQty(r: ItemRow) {
+    if (r.po_unit_price && r.po_unit_price > 0 && !r.is_foc) {
+        const basis = rowBasisQty(r);
+        r.price = r.po_unit_price;
+        r.total_price = basis > 0 ? formatTotalPrice(basis * r.po_unit_price) : '';
+        return;
     }
     recalcPrice(r);
+}
+
+function onQtyGoodsInput(r: ItemRow) {
+    if (r.unit_goods === 'KGM') {
+        r.weight_nett = r.qty_goods;
+    }
+    syncPoPriceFromQty(r);
+}
+
+function onWeightNettInput(r: ItemRow) {
+    syncPoPriceFromQty(r);
 }
 
 function resetMaterialRows(defaultUnit?: string) {
@@ -409,6 +593,7 @@ function resetMaterialRows(defaultUnit?: string) {
         row.part_number = '';
         row.part_name = '';
         row.model = '';
+        clearPoMeta(row);
         if (defaultUnit) {
             row.unit_goods = defaultUnit;
         }
@@ -615,6 +800,13 @@ function submit() {
                             />
                         </div>
                         <InputError :message="form.errors.purchase_order_id" class="mt-1" />
+                        <p
+                            v-if="supplierAllPosExhausted"
+                            role="status"
+                            class="mt-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs font-medium text-warning-ink"
+                        >
+                            {{ t('incoming.supplierPosExhaustedWarning') }}
+                        </p>
                     </div>
 
                     <div>
@@ -1061,12 +1253,32 @@ function submit() {
                         <h2 class="text-base font-semibold text-ink-primary">{{ t('incoming.items') }}</h2>
                         <p class="text-xs text-ink-secondary">{{ t('incoming.itemsHint') }}</p>
                     </div>
-                    <button type="button" @click="addItem" class="inline-flex items-center gap-1.5 rounded-md border border-primary px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-primary-light">
-                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                    <button
+                        type="button"
+                        :disabled="!canAddItemRow"
+                        @click="addItem"
+                        class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-primary px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-primary-light active:scale-[0.98] motion-reduce:active:scale-100 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                    >
+                        <svg aria-hidden="true" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
                         {{ t('incoming.addRow') }}
                     </button>
                 </div>
                 <InputError :message="form.errors.items" class="mb-3" />
+
+                <div
+                    v-if="selectedPoExhausted"
+                    role="alert"
+                    class="mb-4 rounded-lg border border-warning/40 bg-warning/10 px-3.5 py-2.5 text-xs font-semibold text-warning-ink"
+                >
+                    {{ t('incoming.poExhaustedWarning') }}
+                </div>
+                <div
+                    v-else-if="isLocalPoMode && allPoPartsPickedOrExhausted && itemRows.some((row) => Boolean(row.part_id))"
+                    role="status"
+                    class="mb-4 rounded-lg border border-warning/40 bg-warning/10 px-3.5 py-2.5 text-xs font-medium text-warning-ink"
+                >
+                    {{ t('incoming.allPoPartsSelectedHint') }}
+                </div>
 
                 <div v-if="rowErrorList.length" class="mb-4 space-y-1 rounded-lg bg-danger/10 p-3 text-xs text-danger">
                     <div v-for="err in rowErrorList" :key="err.row">
@@ -1092,8 +1304,15 @@ function submit() {
                                     <span v-if="r.model" class="rounded bg-background px-1.5 py-0.5 text-[11px] font-medium text-ink-secondary">
                                         {{ t('master.model') }}: {{ r.model }}
                                     </span>
-                                    <span v-if="r.po_qty_ref" class="rounded bg-primary-light px-2 py-0.5 text-[11px] font-semibold text-primary">
-                                        Ref PO: {{ r.po_qty_ref }} {{ r.unit_goods }}
+                                    <span v-if="r.po_qty_ref !== undefined" class="rounded bg-primary-light px-2 py-0.5 text-[11px] font-semibold text-primary">
+                                        {{
+                                            t('incoming.poRemainingBadge', {
+                                                remaining: Number(r.po_qty_ref).toLocaleString(),
+                                                unit: r.po_unit_ref || r.unit_goods,
+                                                po: Number(r.po_total_qty ?? r.po_qty_ref).toLocaleString(),
+                                                arrived: Number(r.po_arrived_qty ?? 0).toLocaleString(),
+                                            })
+                                        }}
                                     </span>
                                 </div>
                                 <div v-else class="text-xs font-semibold text-ink-secondary">
@@ -1119,7 +1338,7 @@ function submit() {
                         <div class="grid gap-3 sm:grid-cols-12">
                             <div class="sm:col-span-5">
                                 <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.partMaterial') }}</label>
-                                <div v-if="r.part_id && form.purchase_order_id" class="mt-1 flex items-center justify-between rounded-lg border border-borderline bg-surface px-3 py-2 text-sm text-ink-primary">
+                                <div v-if="isImportArrival && r.part_id && form.purchase_order_id" class="mt-1 flex items-center justify-between rounded-lg border border-borderline bg-surface px-3 py-2 text-sm text-ink-primary">
                                     <div class="truncate">
                                         <span class="font-mono font-bold">{{ r.part_number || r.material_group }}</span>
                                         <span v-if="r.part_name" class="ml-1.5 text-xs text-ink-secondary">{{ r.part_name }}</span>
@@ -1129,11 +1348,11 @@ function submit() {
                                 <div v-else class="mt-1">
                                     <SearchableSelect
                                         :model-value="r.part_id"
-                                        :options="supplierMaterialOptions"
+                                        :options="isLocalPoMode ? poOptionsForRow(i) : supplierMaterialOptions"
                                         value-key="value"
                                         label-key="label"
                                         sublabel-key="sublabel"
-                                        :placeholder="materialPickerPlaceholder"
+                                        :placeholder="isLocalPoMode ? t('incoming.choosePoPart') : materialPickerPlaceholder"
                                         :disabled="isOspArrival ? (!ospSenderSelected || ospActiveParts.length === 0) : !form.supplier_id"
                                         @update:model-value="onSelectMaterial(r, $event)"
                                     />
@@ -1155,7 +1374,9 @@ function submit() {
                             <div class="sm:col-span-3">
                                 <div class="flex items-center justify-between">
                                     <label class="text-xs font-semibold text-ink-secondary">{{ t('incoming.qtyGoods') }}</label>
-                                    <span v-if="r.po_qty_ref" class="font-mono text-[10px] text-ink-secondary">Maks: {{ r.po_qty_ref }}</span>
+                                    <span v-if="r.po_qty_ref !== undefined" class="font-mono text-[10px] text-ink-secondary">
+                                        Maks: {{ Number(r.po_qty_ref).toLocaleString() }} {{ r.po_unit_ref || r.unit_goods }}
+                                    </span>
                                 </div>
                                 <input
                                     v-model="r.qty_goods"
@@ -1166,6 +1387,10 @@ function submit() {
                                     @input="onQtyGoodsInput(r)"
                                     class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm font-bold text-primary focus:border-primary focus:ring-primary"
                                 />
+                                <p v-if="rowExceedsPoRemaining(r)" class="mt-1 text-[11px] font-medium text-danger">
+                                    {{ t('incoming.exceedsPoRemaining', { remaining: Number(r.po_qty_ref).toLocaleString(), unit: r.po_unit_ref || r.unit_goods }) }}
+                                </p>
+                                <InputError :message="(form.errors as any)[`items.${i}.qty_goods`]" class="mt-1" />
                             </div>
 
                             <div class="sm:col-span-2">
@@ -1173,11 +1398,14 @@ function submit() {
                                 <input
                                     v-model="r.unit_goods"
                                     :aria-label="t('incoming.unitGoods')"
-                                    list="uom-codes"
+                                    :list="isLocalPoMode && r.part_id ? undefined : 'uom-codes'"
+                                    :readonly="isLocalPoMode && Boolean(r.part_id)"
                                     type="text"
                                     placeholder="KGM / PCS"
-                                    class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
+                                    class="mt-1 w-full rounded-lg border-borderline px-3 py-2 text-sm focus:border-primary focus:ring-primary"
+                                    :class="isLocalPoMode && r.part_id ? 'cursor-not-allowed bg-background font-medium text-ink-secondary' : 'bg-surface text-ink-primary'"
                                 />
+                                <InputError :message="(form.errors as any)[`items.${i}.unit_goods`]" class="mt-1" />
                             </div>
                         </div>
 
@@ -1218,7 +1446,7 @@ function submit() {
                                     step="0.0001"
                                     min="0"
                                     placeholder="0.0000"
-                                    @input="recalcPrice(r)"
+                                    @input="onWeightNettInput(r)"
                                     class="mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-2 text-sm text-ink-primary focus:border-primary focus:ring-primary"
                                 />
                             </div>

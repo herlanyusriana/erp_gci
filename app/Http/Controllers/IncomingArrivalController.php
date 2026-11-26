@@ -11,6 +11,7 @@ use App\Models\IncomingArrivalItem;
 use App\Models\Part;
 use App\Models\PartSubstitute;
 use App\Models\PurchaseOrder;
+use App\Models\PurchaseOrderItem;
 use App\Models\Subcontractor;
 use App\Models\Supplier;
 use App\Models\TruckingCompany;
@@ -417,70 +418,73 @@ class IncomingArrivalController extends Controller
     }
 
     /**
-     * Mengambil daftar PO aktif yang masih memiliki sisa kuantitas belum tiba,
+     * Mengambil daftar PO aktif yang masih memiliki minimal 1 item bersisa belum tiba,
      * atau menyertakan PO saat ini jika dalam mode edit.
      *
      * @return Collection<int, array<string, mixed>>
      */
-    private function activePurchaseOrders(?int $currentPoId = null)
+    private function activePurchaseOrders(?int $currentPoId = null, ?int $excludeArrivalId = null)
     {
         $pos = PurchaseOrder::query()
             ->with(['items.part.uom', 'supplier:id,source,supplier_name'])
             ->whereNotIn('status', ['cancelled'])
-            ->select('id', 'po_no', 'supplier_id', 'status', 'po_date', 'expected_date')
+            ->select('id', 'po_no', 'supplier_id', 'status', 'currency', 'po_date', 'expected_date')
             ->orderByDesc('created_at')
             ->get();
 
-        // Hitung total kuantitas arrival yang sudah dicatat per PO
-        $arrivalTotals = DB::table('incoming_arrival_items as iai')
-            ->join('incoming_arrivals as ia', 'ia.id', '=', 'iai.arrival_id')
-            ->whereNull('ia.deleted_at')
-            ->whereNull('iai.deleted_at')
-            ->whereNotNull('ia.purchase_order_id')
-            ->groupBy('ia.purchase_order_id')
-            ->selectRaw('ia.purchase_order_id, SUM(iai.qty_goods) as total_arrived')
-            ->pluck('total_arrived', 'purchase_order_id');
+        $poIds = $pos->pluck('id')->all();
+        $arrivalItemsByPoPart = $poIds === []
+            ? collect()
+            : IncomingArrivalItem::query()
+                ->select(
+                    'incoming_arrival_items.id',
+                    'incoming_arrival_items.arrival_id',
+                    'incoming_arrival_items.part_id',
+                    'incoming_arrival_items.qty_goods',
+                    'incoming_arrival_items.unit_goods',
+                    'incoming_arrival_items.weight_nett',
+                    'incoming_arrival_items.unit_weight',
+                    'ia.purchase_order_id',
+                )
+                ->join('incoming_arrivals as ia', 'ia.id', '=', 'incoming_arrival_items.arrival_id')
+                ->whereNull('ia.deleted_at')
+                ->whereIn('ia.purchase_order_id', $poIds)
+                ->when($excludeArrivalId !== null, fn ($q) => $q->where('ia.id', '!=', $excludeArrivalId))
+                ->get()
+                ->groupBy(fn ($row) => $row->purchase_order_id.'#'.$row->part_id);
 
-        return $pos->filter(function (PurchaseOrder $po) use ($arrivalTotals, $currentPoId) {
-            // Selalu sertakan PO milik arrival yang sedang diedit
-            if ($currentPoId !== null && (int) $po->id === (int) $currentPoId) {
-                return true;
-            }
+        return $pos->map(function (PurchaseOrder $po) use ($arrivalItemsByPoPart) {
+            $mappedItems = $po->items->map(function (PurchaseOrderItem $it) use ($po, $arrivalItemsByPoPart): array {
+                $poUnit = UomCatalog::normalize($it->unit)
+                    ?? UomCatalog::normalize($it->part?->uom?->code)
+                    ?? UomCatalog::WEIGHT;
+                $poQty = (float) $it->qty;
 
-            if ($po->status === 'completed') {
-                return false;
-            }
+                $arrived = 0.0;
+                foreach ($arrivalItemsByPoPart->get($po->id.'#'.$it->part_id, collect()) as $row) {
+                    $contribution = PurchaseOrderLimit::itemContributionForPoUnit(
+                        (float) $row->qty_goods,
+                        $row->unit_goods,
+                        $row->weight_nett !== null ? (float) $row->weight_nett : null,
+                        $row->unit_weight,
+                        $poUnit,
+                    );
+                    if ($contribution !== null) {
+                        $arrived += $contribution;
+                    }
+                }
 
-            $totalPoQty = (float) $po->items->sum('qty');
-            $arrived = (float) ($arrivalTotals[$po->id] ?? 0);
-            $remaining = $totalPoQty - $arrived;
+                $arrivedRounded = round($arrived, 4);
+                $remainingRounded = max(0.0, round($poQty - $arrived, 4));
 
-            // Jika total PO 0 (belum ada item), tetap izinkan agar bisa diisi
-            return $totalPoQty <= 0 || $remaining > 1e-6;
-        })->map(function (PurchaseOrder $po) use ($arrivalTotals) {
-            $totalPoQty = (float) $po->items->sum('qty');
-            $arrived = (float) ($arrivalTotals[$po->id] ?? 0);
-            $remaining = max(0.0, $totalPoQty - $arrived);
-
-            return [
-                'id' => $po->id,
-                'po_no' => $po->po_no,
-                'supplier_id' => $po->supplier_id,
-                'status' => $po->status,
-                'total_qty' => round($totalPoQty, 4),
-                'arrived_qty' => round($arrived, 4),
-                'remaining_qty' => round($remaining, 4),
-                'supplier' => $po->supplier ? [
-                    'id' => $po->supplier->id,
-                    'supplier_name' => $po->supplier->supplier_name,
-                    'source' => $po->supplier->source,
-                ] : null,
-                'items' => $po->items->map(fn ($it) => [
+                return [
                     'id' => $it->id,
                     'part_id' => $it->part_id,
                     'size' => $it->size,
-                    'qty' => (float) $it->qty,
-                    'unit' => $it->unit ?? $it->part?->uom?->code,
+                    'qty' => $poQty,
+                    'arrived_qty' => $arrivedRounded,
+                    'remaining_qty' => $remainingRounded,
+                    'unit' => $poUnit,
                     'price' => (float) $it->price,
                     'notes' => $it->notes,
                     'part' => $it->part ? [
@@ -490,8 +494,41 @@ class IncomingArrivalController extends Controller
                         'model' => $it->part->model,
                         'size' => $it->part->size,
                     ] : null,
-                ])->values()->all(),
+                ];
+            })->values();
+
+            $totalPoQty = round((float) $mappedItems->sum('qty'), 4);
+            $arrivedQty = round((float) $mappedItems->sum('arrived_qty'), 4);
+            $remainingQty = round((float) $mappedItems->sum('remaining_qty'), 4);
+
+            return [
+                'id' => $po->id,
+                'po_no' => $po->po_no,
+                'supplier_id' => $po->supplier_id,
+                'status' => $po->status,
+                'currency' => $po->currency,
+                'total_qty' => $totalPoQty,
+                'arrived_qty' => $arrivedQty,
+                'remaining_qty' => $remainingQty,
+                'has_remaining_item' => $mappedItems->contains(fn (array $it) => $it['remaining_qty'] > 1e-6),
+                'supplier' => $po->supplier ? [
+                    'id' => $po->supplier->id,
+                    'supplier_name' => $po->supplier->supplier_name,
+                    'source' => $po->supplier->source,
+                ] : null,
+                'items' => $mappedItems->all(),
             ];
+        })->filter(function (array $poData) use ($currentPoId) {
+            if ($currentPoId !== null && (int) $poData['id'] === (int) $currentPoId) {
+                return true;
+            }
+
+            if ($poData['status'] === 'completed') {
+                return false;
+            }
+
+            // Jika PO belum memiliki item (legacy), tetap tampilkan agar bisa diisi.
+            return $poData['items'] === [] || $poData['has_remaining_item'];
         })->values();
     }
 
@@ -523,7 +560,15 @@ class IncomingArrivalController extends Controller
             'materialOptions' => $this->materialOptions(),
             'ospGciParts' => $this->ospPartOptions(IncomingArrival::TYPE_OSP_GCI),
             'ospCustomerParts' => $this->ospPartOptions(IncomingArrival::TYPE_OSP_CUSTOMER),
-            'purchaseOrders' => $this->activePurchaseOrders($arrival?->purchase_order_id),
+            'purchaseOrders' => $this->activePurchaseOrders($arrival?->purchase_order_id, $arrival?->id),
+            'suppliersWithPos' => PurchaseOrder::query()
+                ->whereNotIn('status', ['cancelled'])
+                ->whereNotNull('supplier_id')
+                ->distinct()
+                ->pluck('supplier_id')
+                ->map(fn ($id) => (int) $id)
+                ->values()
+                ->all(),
             'uomCodes' => UomCatalog::codes(),
             'packingUnits' => UomCatalog::packingUnits(),
         ];
@@ -551,7 +596,10 @@ class IncomingArrivalController extends Controller
             $validated['items'] = $this->resolveOspItems($validated['items'], $arrivalType);
         } else {
             $validated['items'] = $this->resolveMaterialItems($validated['items'], (int) $validated['supplier_id']);
-            $this->assertWithinPurchaseOrderLimit($validated['purchase_order_id'] ?? null, $validated['items']);
+            $this->assertWithinPurchaseOrderLimit(
+                isset($validated['purchase_order_id']) ? (int) $validated['purchase_order_id'] : null,
+                $validated['items'],
+            );
         }
 
         $createArrival = function () use ($validated, $arrivalType, $isOsp, $isLocal, $isImport, $request) {
@@ -633,45 +681,73 @@ class IncomingArrivalController extends Controller
     }
 
     /**
-     * Pastikan total kedatangan tidak melebihi qty baris PO.
+     * Pastikan total kedatangan tidak melebihi qty baris PO (akumulatif lintas arrival dan baris ganda).
      *
      * @param  array<int, array<string, mixed>>  $items
      */
-    private function assertWithinPurchaseOrderLimit(?int $purchaseOrderId, array $items, bool $excludeExistingItems = false): void
+    private function assertWithinPurchaseOrderLimit(?int $purchaseOrderId, array $items, ?int $excludeArrivalId = null): void
     {
         if ($purchaseOrderId === null) {
             return;
         }
 
+        $poItems = PurchaseOrderItem::query()
+            ->with('part.uom')
+            ->where('purchase_order_id', $purchaseOrderId)
+            ->get()
+            ->keyBy('part_id');
+
+        if ($poItems->isEmpty()) {
+            return;
+        }
+
         $errors = [];
+        $cumulativeByPart = [];
 
         foreach ($items as $index => $item) {
             $partId = isset($item['part_id']) ? (int) $item['part_id'] : null;
-            $basis = PurchaseOrderLimit::arrivalBasis(
+            if ($partId === null || ! $poItems->has($partId)) {
+                $errors["items.$index.part_id"] = __('Part tidak terdaftar pada Purchase Order yang dipilih.');
+
+                continue;
+            }
+
+            $poItem = $poItems->get($partId);
+            $poUnit = UomCatalog::normalize($poItem->unit)
+                ?? UomCatalog::normalize($poItem->part?->uom?->code)
+                ?? UomCatalog::WEIGHT;
+
+            $contribution = PurchaseOrderLimit::itemContributionForPoUnit(
                 (float) ($item['qty_goods'] ?? 0),
                 $item['unit_goods'] ?? null,
-                (float) ($item['weight_nett'] ?? 0),
+                isset($item['weight_nett']) && $item['weight_nett'] !== '' ? (float) $item['weight_nett'] : null,
                 $item['unit_weight'] ?? null,
+                $poUnit,
             );
 
-            if ($partId === null || $basis === null) {
+            if ($contribution === null) {
+                $errors["items.$index.unit_goods"] = __('Satuan kedatangan tidak sesuai dengan satuan PO (:unit).', ['unit' => $poUnit]);
+
                 continue;
             }
 
-            [$qty, $unit] = $basis;
-            $excludeId = $excludeExistingItems && ! empty($item['id']) ? (int) $item['id'] : null;
-            $limit = PurchaseOrderLimit::arrivalLimit($purchaseOrderId, $partId, $unit, $excludeId);
+            if ($contribution <= 0) {
+                $errors["items.$index.qty_goods"] = __('Qty kedatangan harus lebih dari 0.');
 
-            if ($limit === null || $qty <= $limit['remaining'] + 1e-9) {
                 continue;
             }
 
-            $errors["items.$index.qty_goods"] = __('Qty kedatangan (:qty :unit) melebihi qty PO (:po :unit). Sisa yang bisa dikedatangkan :remaining :unit.', [
-                'qty' => $qty,
-                'unit' => $unit,
-                'po' => $limit['po_qty'],
-                'remaining' => $limit['remaining'],
-            ]);
+            $cumulativeByPart[$partId] = ($cumulativeByPart[$partId] ?? 0.0) + $contribution;
+            $limit = PurchaseOrderLimit::arrivalLimit($purchaseOrderId, $partId, $poUnit, null, $excludeArrivalId);
+
+            if ($limit !== null && $cumulativeByPart[$partId] > $limit['remaining'] + 1e-9) {
+                $errors["items.$index.qty_goods"] = __('Qty kedatangan (:qty :unit) melebihi qty PO (:po :unit). Sisa yang bisa dikedatangkan :remaining :unit.', [
+                    'qty' => round($cumulativeByPart[$partId], 4),
+                    'unit' => $poUnit,
+                    'po' => $limit['po_qty'],
+                    'remaining' => round($limit['remaining'], 4),
+                ]);
+            }
         }
 
         if ($errors !== []) {
@@ -738,7 +814,11 @@ class IncomingArrivalController extends Controller
             $validated['items'] = $this->resolveOspItems($validated['items'], $arrivalType);
         } else {
             $validated['items'] = $this->resolveMaterialItems($validated['items'], (int) $validated['supplier_id']);
-            $this->assertWithinPurchaseOrderLimit($validated['purchase_order_id'] ?? null, $validated['items'], true);
+            $this->assertWithinPurchaseOrderLimit(
+                isset($validated['purchase_order_id']) ? (int) $validated['purchase_order_id'] : null,
+                $validated['items'],
+                $arrival->id,
+            );
         }
         $validated['updated_by'] = $request->user()?->id;
 

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ConfigMaster;
+use App\Models\IncomingArrival;
 use App\Models\Part;
 use App\Models\PartPrice;
 use App\Models\PartSubstitute;
@@ -11,6 +12,7 @@ use App\Models\PurchaseOrderItem;
 use App\Models\Supplier;
 use App\Rules\PartTypeRule;
 use App\Rules\UomCode;
+use App\Support\PurchaseOrderLimit;
 use App\Support\RowErrorKeys;
 use App\Support\UomCatalog;
 use Illuminate\Http\RedirectResponse;
@@ -66,10 +68,56 @@ class PurchaseOrderController extends Controller
     {
         Gate::authorize('view', $purchaseOrder);
 
-        $purchaseOrder->load(['supplier', 'items.part']);
+        $purchaseOrder->load([
+            'supplier',
+            'items.part.uom',
+            'arrivals' => fn ($q) => $q->with('items')->orderByDesc('invoice_date')->orderByDesc('id'),
+        ]);
+
+        $arrivalItemsByPart = $purchaseOrder->arrivals
+            ->flatMap(fn (IncomingArrival $arrival) => $arrival->items)
+            ->groupBy('part_id');
+
+        foreach ($purchaseOrder->items as $item) {
+            $poUnit = UomCatalog::normalize($item->unit)
+                ?? UomCatalog::normalize($item->part?->uom?->code)
+                ?? UomCatalog::WEIGHT;
+
+            $arrived = 0.0;
+            foreach ($arrivalItemsByPart->get($item->part_id, collect()) as $arrItem) {
+                $contribution = PurchaseOrderLimit::itemContributionForPoUnit(
+                    (float) $arrItem->qty_goods,
+                    $arrItem->unit_goods,
+                    $arrItem->weight_nett !== null ? (float) $arrItem->weight_nett : null,
+                    $arrItem->unit_weight,
+                    $poUnit,
+                );
+                if ($contribution !== null) {
+                    $arrived += $contribution;
+                }
+            }
+
+            $arrivedRounded = round($arrived, 4);
+            $item->setAttribute('arrived_qty', $arrivedRounded);
+            $item->setAttribute('remaining_qty', max(0.0, round((float) $item->qty - $arrivedRounded, 4)));
+        }
+
+        $arrivalsSummary = $purchaseOrder->arrivals->map(fn (IncomingArrival $arv) => [
+            'id' => $arv->id,
+            'arrival_no' => $arv->arrival_no,
+            'arrival_type' => $arv->resolvedArrivalType(),
+            'is_local' => (bool) $arv->is_local,
+            'invoice_date' => $arv->invoice_date?->toDateString() ?? (is_string($arv->invoice_date) ? substr($arv->invoice_date, 0, 10) : null),
+            'invoice_no' => $arv->invoice_no,
+            'delivery_note_no' => $arv->delivery_note_no,
+            'status' => $arv->status,
+            'iqc_status' => $arv->iqc_status,
+            'items_count' => $arv->items->count(),
+        ])->values()->all();
 
         return Inertia::render('Incoming/PurchaseOrder/Show', [
             'purchaseOrder' => $purchaseOrder,
+            'arrivals' => $arrivalsSummary,
         ]);
     }
 

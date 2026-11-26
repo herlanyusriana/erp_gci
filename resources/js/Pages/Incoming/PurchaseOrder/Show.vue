@@ -11,7 +11,24 @@ const { t } = useI18n();
 
 const props = defineProps<{
     purchaseOrder: PurchaseOrder;
+    arrivals?: Array<{
+        id: number;
+        arrival_no: string;
+        arrival_type: string;
+        is_local: boolean;
+        invoice_date: string | null;
+        invoice_no: string | null;
+        delivery_note_no: string | null;
+        status: string;
+        iqc_status?: string | null;
+        items_count: number;
+    }>;
 }>();
+
+function formatQty(val: number | null | undefined): string {
+    if (val == null) return '—';
+    return Number(val).toLocaleString('en-US', { maximumFractionDigits: 4 });
+}
 
 /** Harga baris PO selalu ditampilkan dengan mata uang dokumennya. */
 function formatPrice(price: number | null): string {
@@ -89,24 +106,75 @@ function formatPrice(price: number | null): string {
                             <th scope="col" class="px-4 py-3">{{ t('master.model') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('incoming.size') }}</th>
                             <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.qty') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.arrivedQty') }}</th>
+                            <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.remaining') }}</th>
                             <th scope="col" class="px-4 py-3">{{ t('incoming.unit') }}</th>
                             <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.price') }}</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-borderline">
                         <tr v-for="item in purchaseOrder.items" :key="item.id" class="hover:bg-primary-light/40">
-                            <td class="px-4 py-3 font-medium text-ink-primary">{{ item.part?.part_number ?? '—' }}</td>
+                            <td class="px-4 py-3">
+                                <div class="font-medium text-ink-primary">{{ item.part?.part_number ?? '—' }}</div>
+                                <div v-if="item.part?.part_name" class="text-xs text-ink-secondary">{{ item.part.part_name }}</div>
+                            </td>
                             <td class="px-4 py-3 text-ink-primary">{{ item.part?.model || '—' }}</td>
                             <td class="px-4 py-3 text-ink-primary">{{ item.size ?? '—' }}</td>
-                            <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ item.qty }}</td>
+                            <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ formatQty(item.qty) }}</td>
+                            <td class="px-4 py-3 text-right tabular-nums text-ink-secondary">{{ formatQty(item.arrived_qty ?? 0) }}</td>
+                            <td
+                                class="px-4 py-3 text-right tabular-nums font-semibold"
+                                :class="Number(item.remaining_qty ?? item.qty) <= 0 ? 'text-success-ink' : 'text-warning-ink'"
+                            >
+                                {{ formatQty(item.remaining_qty ?? item.qty) }}
+                            </td>
                             <td class="px-4 py-3 text-ink-primary">{{ item.unit ?? '—' }}</td>
                             <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ formatPrice(item.price) }}</td>
                         </tr>
                         <tr v-if="!purchaseOrder.items?.length">
-                            <td colspan="6" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noItems') }}</td>
+                            <td colspan="8" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('incoming.noItems') }}</td>
                         </tr>
                     </tbody>
                 </table>
+            </div>
+        </div>
+
+        <div class="mt-6">
+            <h2 class="mb-3 min-w-0 break-words text-base font-semibold text-ink-primary">{{ t('incoming.arrivalHistory') }}</h2>
+            <div class="overflow-hidden rounded-xl border border-borderline bg-surface">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-borderline text-sm">
+                        <thead class="bg-background">
+                            <tr class="text-left text-xs font-semibold text-ink-secondary">
+                                <th scope="col" class="px-4 py-3">{{ t('incoming.arrivalNo') }}</th>
+                                <th scope="col" class="px-4 py-3">{{ t('incoming.date') }}</th>
+                                <th scope="col" class="px-4 py-3">{{ t('incoming.deliveryNoteNo') }} / {{ t('incoming.invoiceNo') }}</th>
+                                <th scope="col" class="px-4 py-3 text-right">{{ t('incoming.items') }}</th>
+                                <th scope="col" class="px-4 py-3">{{ t('incoming.status') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-borderline">
+                            <tr v-for="arv in arrivals ?? []" :key="arv.id" class="hover:bg-primary-light/40">
+                                <td class="px-4 py-3 font-mono font-semibold text-primary">
+                                    <Link :href="route('incoming-arrivals.show', arv.id)" class="hover:underline">
+                                        {{ arv.arrival_no }}
+                                    </Link>
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap text-ink-primary">{{ formatDate(arv.invoice_date) }}</td>
+                                <td class="px-4 py-3 text-ink-primary">
+                                    {{ arv.delivery_note_no || arv.invoice_no || '—' }}
+                                </td>
+                                <td class="px-4 py-3 text-right tabular-nums text-ink-primary">{{ arv.items_count }}</td>
+                                <td class="px-4 py-3">
+                                    <StatusBadge uppercase :status="arv.status">{{ t('incoming.status_' + arv.status) }}</StatusBadge>
+                                </td>
+                            </tr>
+                            <tr v-if="!arrivals?.length">
+                                <td colspan="5" class="px-4 py-10 text-center text-sm text-ink-secondary">{{ t('incoming.noArrivals') }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </AppLayout>

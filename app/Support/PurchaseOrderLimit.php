@@ -27,9 +27,49 @@ final class PurchaseOrderLimit
         }
 
         return PurchaseOrderItem::query()
+            ->with('part.uom')
             ->where('purchase_order_id', $purchaseOrderId)
             ->where('part_id', $partId)
             ->first();
+    }
+
+    /**
+     * Kontribusi kuantitas satu item kedatangan terhadap satuan baris PO.
+     *
+     * Untuk PO berbasis berat (KGM/KG), nilai diambil dari `weight_nett` (fallback `qty_goods`).
+     * Untuk PO non-berat (PCS/SHEET/BAG/dll.), nilai diambil dari `qty_goods` meskipun
+     * operator juga mengisi `weight_nett`, sepanjang `unit_goods` cocok dengan satuan PO.
+     */
+    public static function itemContributionForPoUnit(
+        ?float $qtyGoods,
+        ?string $unitGoods,
+        ?float $weightNett,
+        ?string $unitWeight,
+        string $poUnit,
+    ): ?float {
+        $normalizedPoUnit = UomCatalog::normalize($poUnit);
+        if ($normalizedPoUnit === null) {
+            return null;
+        }
+
+        if (UomCatalog::isWeight($normalizedPoUnit)) {
+            if ((float) $weightNett > 0) {
+                return (float) $weightNett;
+            }
+
+            if (UomCatalog::isWeight($unitGoods) && (float) $qtyGoods > 0) {
+                return (float) $qtyGoods;
+            }
+
+            return 0.0;
+        }
+
+        $normGoods = UomCatalog::normalize($unitGoods);
+        if ($normGoods === null || $normGoods === $normalizedPoUnit) {
+            return (float) ($qtyGoods ?? 0);
+        }
+
+        return null;
     }
 
     /**
@@ -70,25 +110,39 @@ final class PurchaseOrderLimit
     /**
      * Sisa qty PO yang masih boleh dikedatangkan untuk satu baris PO.
      *
-     * @return array{po_qty: float, remaining: float}|null null bila item tidak
-     *                                                     terhubung ke baris PO atau satuannya berbeda
+     * @return array{po_qty: float, arrived: float, remaining: float, unit: string}|null null bila item tidak
+     *                                                                                   terhubung ke baris PO atau satuannya berbeda
      */
     public static function arrivalLimit(
         int $purchaseOrderId,
         int $partId,
-        string $unit,
+        ?string $unit = null,
         ?int $excludeArrivalItemId = null,
+        ?int $excludeArrivalId = null,
     ): ?array {
         $poItem = self::poItem($purchaseOrderId, $partId);
-        if ($poItem === null || UomCatalog::normalize($poItem->unit) !== $unit) {
+        if ($poItem === null) {
+            return null;
+        }
+
+        $poUnit = UomCatalog::normalize($poItem->unit)
+            ?? UomCatalog::normalize($poItem->part?->uom?->code);
+        if ($poUnit === null) {
+            return null;
+        }
+
+        if ($unit !== null && ! UomCatalog::isWeight($poUnit) && UomCatalog::normalize($unit) !== $poUnit) {
             return null;
         }
 
         $poQty = (float) $poItem->qty;
+        $arrived = self::arrivedQty($purchaseOrderId, $partId, $poUnit, $excludeArrivalItemId, $excludeArrivalId);
 
         return [
             'po_qty' => $poQty,
-            'remaining' => max(0.0, $poQty - self::arrivedQty($purchaseOrderId, $partId, $unit, $excludeArrivalItemId)),
+            'arrived' => $arrived,
+            'remaining' => max(0.0, $poQty - $arrived),
+            'unit' => $poUnit,
         ];
     }
 
@@ -131,21 +185,30 @@ final class PurchaseOrderLimit
         int $partId,
         string $unit,
         ?int $excludeArrivalItemId = null,
+        ?int $excludeArrivalId = null,
     ): float {
         $items = IncomingArrivalItem::query()
             ->with('arrival:id,purchase_order_id')
             ->where('part_id', $partId)
-            ->whereHas('arrival', fn ($query) => $query->where('purchase_order_id', $purchaseOrderId))
+            ->whereHas('arrival', fn ($query) => $query
+                ->where('purchase_order_id', $purchaseOrderId)
+                ->when($excludeArrivalId !== null, fn ($q) => $q->whereKeyNot($excludeArrivalId)))
             ->when($excludeArrivalItemId !== null, fn ($query) => $query->whereKeyNot($excludeArrivalItemId))
             ->get();
 
         $total = 0.0;
 
         foreach ($items as $item) {
-            $basis = self::arrivalBasis($item->qty_goods, $item->unit_goods, $item->weight_nett, $item->unit_weight);
+            $contribution = self::itemContributionForPoUnit(
+                (float) $item->qty_goods,
+                $item->unit_goods,
+                $item->weight_nett !== null ? (float) $item->weight_nett : null,
+                $item->unit_weight,
+                $unit,
+            );
 
-            if ($basis !== null && $basis[1] === $unit) {
-                $total += $basis[0];
+            if ($contribution !== null) {
+                $total += $contribution;
             }
         }
 

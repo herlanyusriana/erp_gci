@@ -587,4 +587,16 @@ class ReceiveFormDefaultsTest extends TestCase
         $this->assertSame('B9374PEH, B9999XYZ', $receive->truck_no);
         $this->assertSame('Slamet, Roni', $receive->driver_name);
     }
+
+    public function test_receive_form_supports_per_tag_total_qty_auto_distribution(): void
+    {
+        $source = file_get_contents(resource_path('js/Pages/Incoming/Receive/Form.vue'));
+        $this->assertNotFalse($source);
+
+        $this->assertStringContainsString("t('incoming.qtyTotalPerTag')", $source);
+        $this->assertStringContainsString('v-model="b.total_qty"', $source);
+        $this->assertStringContainsString('function distributeBundleQty', $source);
+        $this->assertStringContainsString('splitEvenly(round4(total), bundle.packings.length)', $source);
+        $this->assertStringNotContainsString('minimumPackingCount', $source, 'Menurunkan Packing Qty tidak boleh terkunci saat auto-distribute.');
+    }
 }

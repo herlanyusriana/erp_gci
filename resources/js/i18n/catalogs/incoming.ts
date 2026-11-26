@@ -296,7 +296,9 @@ export default {
         "truckNoPlaceholder": "Contoh: B 9123 GCI",
         "driverNamePlaceholder": "Nama driver pengirim",
         "prefilledFromInvoice": "Diisi otomatis dari penerimaan sebelumnya di faktur ini",
-        "removeEntry": "Hapus {value}"
+        "removeEntry": "Hapus {value}",
+        "qtyTotalPerTag": "Qty Total / Tag",
+        "qtyTotalForBundle": "Qty total tag {bundle}"
     },
     "en": {
         "purchaseOrder": "Purchase Order",
@@ -595,7 +597,9 @@ export default {
         "truckNoPlaceholder": "e.g. B 9123 GCI",
         "driverNamePlaceholder": "Delivery driver name",
         "prefilledFromInvoice": "Auto-filled from previous receipt on this invoice",
-        "removeEntry": "Remove {value}"
+        "removeEntry": "Remove {value}",
+        "qtyTotalPerTag": "Total Qty / Tag",
+        "qtyTotalForBundle": "Total qty for tag {bundle}"
     },
     "ko": {
         "purchaseOrder": "구매 주문",
@@ -894,6 +898,8 @@ export default {
         "truckNoPlaceholder": "예: B 9123 GCI",
         "driverNamePlaceholder": "배송 기사 이름",
         "prefilledFromInvoice": "이 인보이스의 이전 입고 정보에서 자동 입력됨",
-        "removeEntry": "{value} 삭제"
+        "removeEntry": "{value} 삭제",
+        "qtyTotalPerTag": "태그당 총 수량",
+        "qtyTotalForBundle": "태그 {bundle} 총 수량"
     }
 };

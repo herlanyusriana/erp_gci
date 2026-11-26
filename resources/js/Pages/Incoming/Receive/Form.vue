@@ -24,6 +24,7 @@ interface PackingSubRow {
 
 interface BundleGroup {
     tag: string;
+    total_qty: number | '';
     packings: PackingSubRow[];
 }
 
@@ -143,34 +144,48 @@ function bundleRowCap(bundleIndex: number): number {
     return Math.max(1, Math.min(MAX_PACKINGS, MAX_TOTAL_ROWS - otherRows));
 }
 
-/** Baris terakhir yang berisi menentukan batas bawah jumlah packing. */
-function minimumPackingCount(bundle: BundleGroup): number {
-    let lastFilled = -1;
+function distributeBundleQty(bundle: BundleGroup) {
+    const total = Number(bundle.total_qty);
+    if (!Number.isFinite(total) || total <= 0) {
+        bundle.packings.forEach((p) => {
+            p.qty = '';
+            p.net_weight = '';
+        });
+        return;
+    }
 
-    bundle.packings.forEach((packing, index) => {
-        if (isPackingFilled(packing)) {
-            lastFilled = index;
-        }
+    const qtyValues = splitEvenly(round4(total), bundle.packings.length);
+    bundle.packings.forEach((p, idx) => {
+        const q = qtyValues[idx] ?? 0;
+        p.qty = q;
+        p.net_weight = calcPackingNetWeight(q, p.uom);
     });
+}
 
-    return lastFilled + 1;
+function onBundleTotalQty(bundle: BundleGroup) {
+    distributeBundleQty(bundle);
 }
 
 function setBundlePackingCount(bundle: BundleGroup, bundleIndex: number, value: number) {
-    // Jangan pernah memotong baris yang sudah berisi: operator harus
-    // mengosongkan barisnya dulu. Tanpa batas ini salah ketik "3" pada bundle
-    // berisi 8 packing menghapus 5 packing tanpa peringatan.
-    const floor = Math.max(1, minimumPackingCount(bundle));
-    const target = Math.min(bundleRowCap(bundleIndex), Math.max(floor, Math.floor(value) || 1));
+    const target = Math.min(bundleRowCap(bundleIndex), Math.max(1, Math.floor(value) || 1));
 
     while (bundle.packings.length < target) {
         bundle.packings.push(createPackingRow());
     }
     bundle.packings.length = target;
+
+    if ((Number(bundle.total_qty) || 0) > 0) {
+        distributeBundleQty(bundle);
+    }
 }
 
 function onBundlePackingCount(bundle: BundleGroup, bundleIndex: number, event: Event) {
-    const value = Number((event.target as HTMLInputElement).value);
+    const raw = (event.target as HTMLInputElement).value;
+    if (raw === '') {
+        return;
+    }
+
+    const value = Number(raw);
     const cap = bundleRowCap(bundleIndex);
     packingCapNotice.value = Number.isFinite(value) && value > cap ? cap : null;
     setBundlePackingCount(bundle, bundleIndex, Number.isFinite(value) && value > 0 ? value : 1);
@@ -180,9 +195,14 @@ function onBundlePackingCount(bundle: BundleGroup, bundleIndex: number, event: E
     (event.target as HTMLInputElement).value = String(bundle.packings.length);
 }
 
+function onBundlePackingCountBlur(bundle: BundleGroup, event: Event) {
+    (event.target as HTMLInputElement).value = String(bundle.packings.length);
+}
+
 function createBundle(index: number): BundleGroup {
     return {
         tag: String(index),
+        total_qty: '',
         packings: [createPackingRow()],
     };
 }
@@ -231,9 +251,11 @@ function calcPackingNetWeight(qty: number, uom: string): number | '' {
 }
 
 // Otomasi Qty/packing -> Net weight (kg) = ((Total Net Weight / Total Qty Barang) × Qty/packing)
-function onQtyChange(r: PackingSubRow) {
+function onQtyChange(bundle: BundleGroup, r: PackingSubRow) {
     const qty = Number(r.qty) || 0;
     r.net_weight = calcPackingNetWeight(qty, r.uom);
+    const sum = round4(bundle.packings.reduce((acc, p) => acc + (Number(p.qty) || 0), 0));
+    bundle.total_qty = sum > 0 ? sum : '';
 }
 
 /** Baris packing yang benar-benar berisi; baris kosong tidak dikirim ke server. */
@@ -346,6 +368,11 @@ function autoDistributeRemaining() {
             (lastPacking as PackingSubRow).net_weight = round4((Number((lastPacking as PackingSubRow).net_weight) || 0) + diff);
         }
     }
+
+    bundles.value.forEach((b) => {
+        const sum = round4(b.packings.reduce((acc, p) => acc + (Number(p.qty) || 0), 0));
+        b.total_qty = sum > 0 ? sum : '';
+    });
 }
 
 resizeBundles();
@@ -811,6 +838,7 @@ function submit() {
                                 <th class="w-52 border border-borderline px-3 py-2.5">{{ t('master.partName') }}</th>
                                 <th class="w-32 border border-borderline px-3 py-2.5">{{ t('master.model') }}</th>
                                 <th class="w-44 border border-borderline px-3 py-2.5">Tag # (Bundle)</th>
+                                <th class="w-36 border border-borderline px-3 py-2.5 text-right">{{ t('incoming.qtyTotalPerTag') }}</th>
                                 <th class="w-28 border border-borderline px-3 py-2.5 text-center">{{ t('incoming.packingQty') }}</th>
                                 <th class="w-36 border border-borderline px-3 py-2.5">Packing #</th>
                                 <th class="w-32 border border-borderline px-3 py-2.5 text-right">Qty/packing</th>
@@ -865,6 +893,26 @@ function submit() {
                                     <td
                                         v-if="ri === 0"
                                         :rowspan="b.packings.length"
+                                        class="border border-borderline bg-surface p-2 text-right align-middle"
+                                    >
+                                        <input
+                                            v-model="b.total_qty"
+                                            type="number"
+                                            step="any"
+                                            min="0"
+                                            placeholder="0"
+                                            :aria-label="t('incoming.qtyTotalForBundle', { bundle: bi + 1 })"
+                                            @input="onBundleTotalQty(b)"
+                                            @keydown.enter.prevent
+                                            class="w-full rounded border-borderline bg-surface px-2 py-1.5 text-right text-xs font-bold tabular-nums text-primary focus:border-primary focus:ring-primary"
+                                        />
+                                        <div class="mt-1 text-[10px] font-semibold text-ink-secondary">
+                                            {{ defaultUom() }}
+                                        </div>
+                                    </td>
+                                    <td
+                                        v-if="ri === 0"
+                                        :rowspan="b.packings.length"
                                         class="border border-borderline bg-surface p-2 text-center align-middle"
                                     >
                                         <input
@@ -877,6 +925,7 @@ function submit() {
                                             @keydown.enter.prevent
                                             class="w-16 rounded border-borderline bg-surface px-2 py-1.5 text-center text-xs font-bold text-ink-primary focus:border-primary focus:ring-primary"
                                             @input="onBundlePackingCount(b, bi, $event)"
+                                            @blur="onBundlePackingCountBlur(b, $event)"
                                         />
                                         <div class="mt-1 text-[10px] font-semibold uppercase tracking-wide text-ink-secondary">
                                             {{ bundleConfig.packing_type }}
@@ -894,7 +943,7 @@ function submit() {
                                             type="number"
                                             step="any"
                                             min="0"
-                                            @input="onQtyChange(r)"
+                                            @input="onQtyChange(b, r)"
                                             @keydown.enter.prevent
                                             placeholder="0"
                                             class="w-full rounded border-borderline bg-surface px-2 py-1 text-right text-xs font-bold text-ink-primary focus:border-primary focus:ring-primary"
@@ -924,7 +973,7 @@ function submit() {
                         </tbody>
                         <tfoot class="border-t-2 border-ink-primary bg-background font-bold text-ink-primary">
                             <tr>
-                                <td colspan="6" class="border border-borderline px-3 py-2 text-right text-xs uppercase">
+                                <td colspan="7" class="border border-borderline px-3 py-2 text-right text-xs uppercase">
                                     TOTAL ({{ totals.bundles }} Bundle, {{ totals.packings }} Packing) :
                                 </td>
                                 <td class="border border-borderline px-3 py-2 text-right tabular-nums text-primary text-xs font-bold">

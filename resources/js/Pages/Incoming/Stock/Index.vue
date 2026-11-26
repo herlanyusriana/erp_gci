@@ -99,7 +99,6 @@ interface UnitSummary {
 type ArrivalMeta = NonNullable<NonNullable<NonNullable<PartStock['receive']>['arrival_item']>['arrival']>;
 
 interface InvoicePartSummary {
-    key: string;
     part_number: string | null;
     part_name: string | null;
     model: string | null;
@@ -109,24 +108,11 @@ interface InvoiceGroup {
     key: string;
     invoiceNo: string | null;
     arrival: ArrivalMeta | null;
+    part: InvoicePartSummary | null;
     stocks: PartStock[];
-    parts: InvoicePartSummary[];
     tagCount: number;
     totalPackingCount: number;
     totalsByUnit: UnitSummary[];
-}
-
-const MAX_HEADER_PARTS = 3;
-
-function remainingPartsTooltip(parts: InvoicePartSummary[]): string {
-    return parts
-        .map((p) => {
-            const code = p.part_number || '—';
-            const name = p.part_name ? ` — ${p.part_name}` : '';
-            const model = p.model || '—';
-            return `${code}${name} (${t('master.model')}: ${model})`;
-        })
-        .join('\n');
 }
 
 const invoiceGroups = computed<InvoiceGroup[]>(() => {
@@ -134,7 +120,11 @@ const invoiceGroups = computed<InvoiceGroup[]>(() => {
 
     for (const st of props.stocks.data) {
         const inv = invoiceOf(st);
-        const key = inv ? `inv:${inv.toUpperCase()}` : '__NO_INVOICE__';
+        const invKey = inv ? `inv:${inv.toUpperCase()}` : '__NO_INVOICE__';
+        const partKey = st.part?.id != null
+            ? `part:${st.part.id}`
+            : `part:${st.part?.part_number?.trim().toUpperCase() || '__NO_PART__'}`;
+        const key = `${invKey}|${partKey}`;
         let group = map.get(key);
 
         if (!group) {
@@ -142,8 +132,14 @@ const invoiceGroups = computed<InvoiceGroup[]>(() => {
                 key,
                 invoiceNo: inv,
                 arrival: st.receive?.arrival_item?.arrival ?? null,
+                part: st.part
+                    ? {
+                          part_number: st.part.part_number?.trim() || null,
+                          part_name: st.part.part_name?.trim() || null,
+                          model: st.part.model?.trim() || null,
+                      }
+                    : null,
                 stocks: [],
-                parts: [],
                 tagCount: 0,
                 totalPackingCount: 0,
                 totalsByUnit: [],
@@ -160,22 +156,7 @@ const invoiceGroups = computed<InvoiceGroup[]>(() => {
 
     for (const group of map.values()) {
         const unitMap = new Map<string, UnitSummary>();
-        const partMap = new Map<string, InvoicePartSummary>();
         for (const st of group.stocks) {
-            if (st.part) {
-                const partKey = st.part.id != null
-                    ? `id:${st.part.id}`
-                    : `raw:${st.part.part_number ?? ''}|${st.part.part_name ?? ''}|${st.part.model ?? ''}`;
-                if (!partMap.has(partKey)) {
-                    partMap.set(partKey, {
-                        key: partKey,
-                        part_number: st.part.part_number?.trim() || null,
-                        part_name: st.part.part_name?.trim() || null,
-                        model: st.part.model?.trim() || null,
-                    });
-                }
-            }
-
             const unit = st.qty_unit?.trim() || '—';
             let entry = unitMap.get(unit);
             if (!entry) {
@@ -186,11 +167,18 @@ const invoiceGroups = computed<InvoiceGroup[]>(() => {
             entry.booked += Number(st.booked_qty ?? 0);
             entry.available += Number(st.avail_qty ?? st.qty ?? 0);
         }
-        group.parts = Array.from(partMap.values());
         group.totalsByUnit = Array.from(unitMap.values());
     }
 
     return Array.from(map.values());
+});
+
+const distinctInvoiceCount = computed(() => {
+    const set = new Set<string>();
+    for (const g of invoiceGroups.value) {
+        set.add(g.invoiceNo ? g.invoiceNo.toUpperCase() : '__NO_INVOICE__');
+    }
+    return set.size;
 });
 
 // Saat user melakukan pencarian atau hanya ada 1 invoice, buka otomatis supaya hasil langsung terlihat.
@@ -278,7 +266,7 @@ function toggleAllPackings() {
             </div>
             <div class="flex items-center gap-2 rounded-xl border border-borderline bg-surface px-4 py-2 text-sm text-ink-secondary">
                 <template v-if="isMaterialTab">
-                    <span class="font-semibold tabular-nums text-ink-primary">{{ invoiceGroups.length }}</span>
+                    <span class="font-semibold tabular-nums text-ink-primary">{{ distinctInvoiceCount }}</span>
                     <span>{{ t('incoming.invoiceGroups') }}</span>
                     <span class="h-3.5 w-px bg-borderline" aria-hidden="true" />
                 </template>
@@ -386,49 +374,39 @@ function toggleAllPackings() {
                         </span>
 
                         <div class="min-w-0 whitespace-normal">
-                            <div class="flex flex-wrap items-center gap-2">
-                                <span class="text-xs font-medium text-ink-secondary">
-                                    {{ t('incoming.invoice') }}
+                            <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                <span class="text-base font-bold tabular-nums text-ink-primary">
+                                    {{ group.part?.part_number ?? '—' }}
                                 </span>
-                                <span class="text-base font-bold text-ink-primary">
-                                    {{ group.invoiceNo ?? t('incoming.noInvoiceGroup') }}
+                                <template v-if="group.part?.part_name">
+                                    <span class="h-3.5 w-px bg-borderline" aria-hidden="true" />
+                                    <span class="text-sm font-semibold text-ink-primary">
+                                        {{ group.part.part_name }}
+                                    </span>
+                                </template>
+                                <span
+                                    class="inline-flex items-center gap-1 rounded-md border border-borderline px-2 py-0.5 text-xs text-ink-secondary"
+                                    :class="isInvoiceOpen(group.key) ? 'bg-surface' : 'bg-background'"
+                                >
+                                    <span>{{ t('master.model') }}:</span>
+                                    <span class="font-semibold text-ink-primary">{{ group.part?.model ?? '—' }}</span>
+                                </span>
+                            </div>
+                            <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-secondary">
+                                <span>
+                                    {{ t('incoming.invoice') }}
+                                    <span class="font-medium text-ink-primary">{{ group.invoiceNo ?? t('incoming.noInvoiceGroup') }}</span>
                                 </span>
                                 <span
                                     v-if="group.arrival"
-                                    :class="['inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold', arrivalTypeBadgeClass(resolveArrivalType(group.arrival))]"
+                                    :class="['inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold', arrivalTypeBadgeClass(resolveArrivalType(group.arrival))]"
                                 >
                                     {{ arrivalTypeLabel(group.arrival, t) }}
                                 </span>
-                            </div>
-                            <div class="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs text-ink-secondary">
                                 <span v-if="group.arrival" class="font-medium text-ink-primary">
                                     {{ arrivalSenderName(group.arrival) }}
                                 </span>
                                 <span v-if="group.arrival?.arrival_no">{{ group.arrival.arrival_no }}</span>
-                            </div>
-                            <div v-if="group.parts.length" class="mt-2 flex flex-wrap items-center gap-1.5">
-                                <span
-                                    v-for="part in group.parts.slice(0, MAX_HEADER_PARTS)"
-                                    :key="part.key"
-                                    class="inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-0.5 rounded-lg border border-borderline px-2.5 py-1 text-xs"
-                                    :class="isInvoiceOpen(group.key) ? 'bg-surface' : 'bg-background'"
-                                >
-                                    <span class="font-semibold tabular-nums text-ink-primary">{{ part.part_number ?? '—' }}</span>
-                                    <span class="h-3 w-px bg-borderline" aria-hidden="true" />
-                                    <span class="font-medium text-ink-primary">{{ part.part_name ?? '—' }}</span>
-                                    <span class="h-3 w-px bg-borderline" aria-hidden="true" />
-                                    <span class="text-ink-secondary">
-                                        {{ t('master.model') }}:
-                                        <span class="font-semibold text-ink-primary">{{ part.model ?? '—' }}</span>
-                                    </span>
-                                </span>
-                                <span
-                                    v-if="group.parts.length > MAX_HEADER_PARTS"
-                                    :title="remainingPartsTooltip(group.parts.slice(MAX_HEADER_PARTS))"
-                                    class="inline-flex items-center rounded-lg border border-borderline bg-surface px-2.5 py-1 text-xs font-semibold text-ink-secondary"
-                                >
-                                    {{ t('incoming.moreParts', { count: group.parts.length - MAX_HEADER_PARTS }) }}
-                                </span>
                             </div>
                         </div>
                     </div>

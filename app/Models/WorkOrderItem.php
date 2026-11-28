@@ -12,7 +12,7 @@ class WorkOrderItem extends Model
         'work_order_id', 'sequence', 'process_id', 'machine_id',
         'parent_part_id', 'parent_part_name', 'parent_qty', 'parent_uom',
         'child_part_id', 'selected_part_id', 'child_part_name', 'size', 'child_qty', 'uom_rm',
-        'special_code', 'source',
+        'special_code', 'source', 'output_type',
         'qty_required', 'qty_consumed',
         'created_by', 'updated_by',
     ];

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\IncomingArrival;
 use App\Models\IncomingArrivalItem;
+use App\Models\IncomingReceive;
 use App\Models\Part;
 use App\Models\PartSubstitute;
 use App\Models\PurchaseOrder;
@@ -443,5 +444,223 @@ class ReceivePoQuantityLimitTest extends TestCase
                         && (float) $b['remaining_qty'] === 0.0;
                 })
                 ->has('arrivals', 3));
+    }
+
+    public function test_cancelled_arrival_does_not_deduct_po_remaining_quantity(): void
+    {
+        $po = $this->makePo(100, 'PCS');
+        $cancelledItem = $this->makeArrival($po, 100, 'PCS');
+        $cancelledItem->arrival->update(['status' => 'cancelled']);
+
+        $this->get(route('incoming-arrivals.create'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('purchaseOrders', function ($orders) use ($po) {
+                    $found = collect($orders)->firstWhere('id', $po->id);
+                    if (! $found) {
+                        return false;
+                    }
+
+                    $item = collect($found['items'])->firstWhere('part_id', $this->part->id);
+
+                    return (float) $item['arrived_qty'] === 0.0
+                        && (float) $item['remaining_qty'] === 100.0;
+                }));
+
+        $this->get(route('purchase-orders.show', $po))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('purchaseOrder.items.0.arrived_qty', 0)
+                ->where('purchaseOrder.items.0.remaining_qty', 100)
+                ->has('arrivals', 1));
+
+        $this->post(route('incoming-arrivals.store'), [
+            'is_local' => true,
+            'arrival_type' => 'local',
+            'purchase_order_id' => $po->id,
+            'supplier_id' => $this->supplier->id,
+            'invoice_date' => now()->toDateString(),
+            'items' => [[
+                'part_id' => $this->part->id,
+                'qty_goods' => 100,
+                'unit_goods' => 'PCS',
+            ]],
+        ])->assertSessionHasNoErrors()->assertRedirect();
+    }
+
+    public function test_edit_arrival_exposes_receives_count_per_item(): void
+    {
+        $parts = Part::query()
+            ->where('is_active', true)
+            ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))
+            ->orderBy('id')
+            ->limit(2)
+            ->get();
+        [$partA, $partB] = [$parts[0], $parts[1]];
+
+        $po = PurchaseOrder::create([
+            'po_no' => 'PO-EDIT-RCV-'.uniqid(),
+            'supplier_id' => $this->supplier->id,
+            'status' => 'confirmed',
+            'currency' => 'IDR',
+        ]);
+        PurchaseOrderItem::create(['purchase_order_id' => $po->id, 'part_id' => $partA->id, 'qty' => 700, 'unit' => 'ROLL']);
+        PurchaseOrderItem::create(['purchase_order_id' => $po->id, 'part_id' => $partB->id, 'qty' => 500, 'unit' => 'ROLL']);
+
+        $arrival = IncomingArrival::create([
+            'arrival_no' => 'ARV-EDIT-'.uniqid(),
+            'is_local' => true,
+            'arrival_type' => IncomingArrival::TYPE_LOCAL,
+            'purchase_order_id' => $po->id,
+            'supplier_id' => $this->supplier->id,
+            'invoice_date' => now()->toDateString(),
+            'status' => 'pending',
+            'iqc_status' => 'passed',
+        ]);
+        $itemA = IncomingArrivalItem::create([
+            'arrival_id' => $arrival->id,
+            'part_id' => $partA->id,
+            'qty_goods' => 200,
+            'unit_goods' => 'ROLL',
+        ]);
+        $itemB = IncomingArrivalItem::create([
+            'arrival_id' => $arrival->id,
+            'part_id' => $partB->id,
+            'qty_goods' => 500,
+            'unit_goods' => 'ROLL',
+        ]);
+
+        IncomingReceive::create([
+            'arrival_item_id' => $itemA->id,
+            'part_id' => $partA->id,
+            'tag' => 'TAG-EDIT-'.uniqid(),
+            'qty' => 200,
+            'qty_unit' => 'ROLL',
+            'qc_status' => 'pass',
+            'ata_date' => now(),
+        ]);
+
+        $this->get(route('incoming-arrivals.edit', $arrival))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Incoming/Arrival/Form')
+                ->where('arrival.items', function ($items) use ($itemA, $itemB) {
+                    $col = collect($items);
+                    $a = $col->firstWhere('id', $itemA->id);
+                    $b = $col->firstWhere('id', $itemB->id);
+
+                    return (int) ($a['receives_count'] ?? -1) === 1
+                        && (int) ($b['receives_count'] ?? -1) === 0;
+                }));
+    }
+
+    public function test_clean_unreceived_arrival_items_command_dry_run_and_force_restores_po_remaining(): void
+    {
+        $parts = Part::query()
+            ->where('is_active', true)
+            ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) != ?', ['fg']))
+            ->orderBy('id')
+            ->limit(2)
+            ->get();
+        [$partA, $partB] = [$parts[0], $parts[1]];
+
+        $poStuck = PurchaseOrder::create([
+            'po_no' => 'PO-CLEAN-STUCK-'.uniqid(),
+            'supplier_id' => $this->supplier->id,
+            'status' => 'confirmed',
+            'currency' => 'IDR',
+        ]);
+        PurchaseOrderItem::create(['purchase_order_id' => $poStuck->id, 'part_id' => $partA->id, 'qty' => 700, 'unit' => 'ROLL']);
+        PurchaseOrderItem::create(['purchase_order_id' => $poStuck->id, 'part_id' => $partB->id, 'qty' => 500, 'unit' => 'ROLL']);
+
+        $arrivalStuck = IncomingArrival::create([
+            'arrival_no' => 'ARV-STUCK-'.uniqid(),
+            'is_local' => true,
+            'arrival_type' => IncomingArrival::TYPE_LOCAL,
+            'purchase_order_id' => $poStuck->id,
+            'supplier_id' => $this->supplier->id,
+            'invoice_date' => now()->toDateString(),
+            'status' => 'pending',
+            'iqc_status' => 'passed',
+        ]);
+        $receivedItem = IncomingArrivalItem::create([
+            'arrival_id' => $arrivalStuck->id,
+            'part_id' => $partA->id,
+            'qty_goods' => 200,
+            'unit_goods' => 'ROLL',
+        ]);
+        $stuckUnreceivedItem = IncomingArrivalItem::create([
+            'arrival_id' => $arrivalStuck->id,
+            'part_id' => $partB->id,
+            'qty_goods' => 500,
+            'unit_goods' => 'ROLL',
+        ]);
+        IncomingReceive::create([
+            'arrival_item_id' => $receivedItem->id,
+            'part_id' => $partA->id,
+            'tag' => 'TAG-CLEAN-'.uniqid(),
+            'qty' => 200,
+            'qty_unit' => 'ROLL',
+            'qc_status' => 'pass',
+            'ata_date' => now(),
+        ]);
+
+        // Arrival baru yang seluruh itemnya memang masih pending (belum ada receive sama sekali) tidak boleh tersentuh.
+        $poPending = PurchaseOrder::create([
+            'po_no' => 'PO-CLEAN-PENDING-'.uniqid(),
+            'supplier_id' => $this->supplier->id,
+            'status' => 'confirmed',
+            'currency' => 'IDR',
+        ]);
+        PurchaseOrderItem::create(['purchase_order_id' => $poPending->id, 'part_id' => $partA->id, 'qty' => 100, 'unit' => 'ROLL']);
+        $pendingArrival = IncomingArrival::create([
+            'arrival_no' => 'ARV-PENDING-'.uniqid(),
+            'is_local' => true,
+            'arrival_type' => IncomingArrival::TYPE_LOCAL,
+            'purchase_order_id' => $poPending->id,
+            'supplier_id' => $this->supplier->id,
+            'invoice_date' => now()->toDateString(),
+            'status' => 'pending',
+            'iqc_status' => 'pending',
+        ]);
+        $pendingOnlyItem = IncomingArrivalItem::create([
+            'arrival_id' => $pendingArrival->id,
+            'part_id' => $partA->id,
+            'qty_goods' => 100,
+            'unit_goods' => 'ROLL',
+        ]);
+
+        // Dry run tidak menghapus apa pun.
+        $this->artisan('incoming:clean-unreceived-arrival-items', ['--po' => $poStuck->po_no])
+            ->assertExitCode(0);
+        $this->assertNotSoftDeleted('incoming_arrival_items', ['id' => $stuckUnreceivedItem->id]);
+        $this->assertNotSoftDeleted('incoming_arrival_items', ['id' => $pendingOnlyItem->id]);
+
+        // Force hanya men-soft-delete baris belum receive pada arrival yang sudah sebagian diterima.
+        $this->artisan('incoming:clean-unreceived-arrival-items', ['--force' => true, '--local-only' => true])
+            ->assertExitCode(0);
+
+        $this->assertSoftDeleted('incoming_arrival_items', ['id' => $stuckUnreceivedItem->id]);
+        $this->assertNotSoftDeleted('incoming_arrival_items', ['id' => $receivedItem->id]);
+        $this->assertNotSoftDeleted('incoming_arrival_items', ['id' => $pendingOnlyItem->id]);
+
+        // Setelah cleanup, Part B di PO kembali punya remaining penuh (500) di form Arrival.
+        $this->get(route('incoming-arrivals.create'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('purchaseOrders', function ($orders) use ($poStuck, $partA, $partB) {
+                    $found = collect($orders)->firstWhere('id', $poStuck->id);
+                    if (! $found) {
+                        return false;
+                    }
+                    $items = collect($found['items']);
+                    $a = $items->firstWhere('part_id', $partA->id);
+                    $b = $items->firstWhere('part_id', $partB->id);
+
+                    return (float) $a['arrived_qty'] === 200.0
+                        && (float) $a['remaining_qty'] === 500.0
+                        && (float) $b['arrived_qty'] === 0.0
+                        && (float) $b['remaining_qty'] === 500.0;
+                }));
     }
 }

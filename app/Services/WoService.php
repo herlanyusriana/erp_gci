@@ -4,10 +4,12 @@ namespace App\Services;
 
 use App\Events\MaterialIssuePosted;
 use App\Models\Bom;
+use App\Models\BomItem;
 use App\Models\ConfigMaster;
 use App\Models\MaterialIssue;
 use App\Models\MaterialIssueItem;
 use App\Models\Part;
+use App\Models\PartStock;
 use App\Models\PartSubstitute;
 use App\Models\ProductionPlan;
 use App\Models\ProductionPlanHistory;
@@ -37,6 +39,11 @@ class WoService
             ->first();
     }
 
+    private function childRatio(object $it): float
+    {
+        return (float) ($it->child_qty ?? 0);
+    }
+
     /**
      * Build demand map key=partKey => total qty yang dibutuhkan (dikonsumsi).
      * Berlaku untuk bom_items (create) maupun work_order_items snapshot (release).
@@ -44,22 +51,37 @@ class WoService
     public function buildRequirements(iterable $items, float $qty, string $fgPartNumber): array
     {
         $parentsOf = [];
+        $sharedGroups = [];
+        $allParentKeys = [];
+        $consumedAsChild = [];
         foreach ($items as $it) {
+            $outputType = $it->output_type ?? BomItem::OUTPUT_NORMAL;
+            if ($outputType === BomItem::OUTPUT_BYPRODUCT) {
+                continue;
+            }
             $childKey = $this->childKeyOf($it);
             $parentKey = $this->parentKeyOf($it);
             if ($childKey === '' || $parentKey === '') {
                 continue;
             }
-            $parentsOf[$childKey][] = [$parentKey, (float) $it->child_qty];
+            $allParentKeys[$parentKey] = true;
+            $consumedAsChild[$childKey] = true;
+            if ($outputType === BomItem::OUTPUT_SHARED) {
+                $groupKey = ($it->sequence ?? 0).'|'.$childKey;
+                $sharedGroups[$childKey][$groupKey][] = [$parentKey, $this->childRatio($it)];
+
+                continue;
+            }
+            $parentsOf[$childKey][] = [$parentKey, $this->childRatio($it)];
         }
 
         $memo = [];
 
-        $req = function (string $partKey) use (&$req, &$memo, $parentsOf, $fgPartNumber, $qty) {
+        $req = function (string $partKey) use (&$req, &$memo, $parentsOf, $sharedGroups, $allParentKeys, $consumedAsChild, $fgPartNumber, $qty) {
             if (array_key_exists($partKey, $memo)) {
                 return $memo[$partKey];
             }
-            if ($partKey === $fgPartNumber) {
+            if ($partKey === $fgPartNumber || (isset($allParentKeys[$partKey]) && ! isset($consumedAsChild[$partKey]))) {
                 $memo[$partKey] = $qty;
 
                 return $qty;
@@ -68,6 +90,13 @@ class WoService
             $sum = 0.0;
             foreach ($parentsOf[$partKey] ?? [] as [$parentKey, $childQty]) {
                 $sum += $req($parentKey) * $childQty;
+            }
+            foreach ($sharedGroups[$partKey] ?? [] as $entries) {
+                $groupMax = 0.0;
+                foreach ($entries as [$parentKey, $childQty]) {
+                    $groupMax = max($groupMax, $req($parentKey) * $childQty);
+                }
+                $sum += $groupMax;
             }
             $memo[$partKey] = $sum;
 
@@ -124,9 +153,18 @@ class WoService
 
         // Step unik (sequence + parent), urut sesuai BOM.
         $steps = [];
+        $seenShared = [];
         foreach ($items as $item) {
-            if ($item->parent_part_id === null || strtoupper((string) $item->source) === 'SUBCON') {
+            $outputType = $item->output_type ?? BomItem::OUTPUT_NORMAL;
+            if ($item->parent_part_id === null || strtoupper((string) $item->source) === 'SUBCON' || $outputType === BomItem::OUTPUT_BYPRODUCT) {
                 continue;
+            }
+            if ($outputType === BomItem::OUTPUT_SHARED && $item->child_part_id !== null) {
+                $sharedKey = ($item->sequence ?? 0).'|'.$item->child_part_id;
+                if (isset($seenShared[$sharedKey])) {
+                    continue;
+                }
+                $seenShared[$sharedKey] = true;
             }
             $stepKey = ($item->sequence ?? 0).'|'.$item->parent_part_id;
             $steps[$stepKey] ??= $item;
@@ -217,15 +255,27 @@ class WoService
 
         // Aggregasi kebutuhan leaf per (child_part_id, uom).
         $leafNeeds = [];
+        $seenSharedLeaf = [];
         foreach ($bom->items as $it) {
+            $outputType = $it->output_type ?? BomItem::OUTPUT_NORMAL;
+            if ($outputType === BomItem::OUTPUT_BYPRODUCT) {
+                continue;
+            }
             $cid = $it->child_part_id;
             if ($cid === null || isset($postedParentIds[$cid])) {
                 continue;
             }
+            if ($outputType === BomItem::OUTPUT_SHARED) {
+                $sharedKey = ($it->sequence ?? 0).'|'.$cid;
+                if (isset($seenSharedLeaf[$sharedKey])) {
+                    continue;
+                }
+                $seenSharedLeaf[$sharedKey] = true;
+            }
             $parentKey = $this->parentKeyOf($it);
-            $childQty = (float) $it->child_qty;
+            $ratio = $this->childRatio($it);
             $qtyRequired = ($parentKey !== '' && isset($requirements[$parentKey]))
-                ? $requirements[$parentKey] * $childQty
+                ? round($requirements[$parentKey] * $ratio, 6)
                 : 0.0;
             if ($qtyRequired <= 0) {
                 continue;
@@ -253,12 +303,23 @@ class WoService
                 'created_by' => $creatorId,
             ]);
 
+            $seenSharedItem = [];
             foreach ($bom->items as $it) {
+                $outputType = $it->output_type ?? BomItem::OUTPUT_NORMAL;
                 $parentKey = $this->parentKeyOf($it);
-                $childQty = (float) $it->child_qty;
-                $qtyRequired = ($parentKey !== '' && isset($requirements[$parentKey]))
-                    ? $requirements[$parentKey] * $childQty
+                $ratio = $this->childRatio($it);
+                $qtyRequired = ($outputType !== BomItem::OUTPUT_BYPRODUCT && $parentKey !== '' && isset($requirements[$parentKey]))
+                    ? round($requirements[$parentKey] * $ratio, 6)
                     : 0.0;
+
+                if ($outputType === BomItem::OUTPUT_SHARED && $it->child_part_id !== null) {
+                    $sharedKey = ($it->sequence ?? 0).'|'.$it->child_part_id;
+                    if (isset($seenSharedItem[$sharedKey])) {
+                        $qtyRequired = 0.0;
+                    } else {
+                        $seenSharedItem[$sharedKey] = true;
+                    }
+                }
 
                 WorkOrderItem::create([
                     'work_order_id' => $workOrder->id,
@@ -277,6 +338,7 @@ class WoService
                     'uom_rm' => $it->uom_rm,
                     'special_code' => $it->special_code,
                     'source' => $it->source,
+                    'output_type' => $outputType,
                     'qty_required' => $qtyRequired,
                     'qty_consumed' => 0,
                     'created_by' => $creatorId,
@@ -606,8 +668,12 @@ class WoService
                             "items.$itemId.scans.$i.qty" => __('Qty scan harus lebih dari 0.'),
                         ]);
                     }
+                    $packingNos = array_values(array_unique(array_filter(
+                        array_map(fn ($p): string => trim((string) $p), (array) ($scan['packing_nos'] ?? [])),
+                        fn (string $p): bool => $p !== '',
+                    )));
                     $total += $qty;
-                    $scans[] = ['tag' => $tag, 'part_id' => $partId, 'qty' => $qty];
+                    $scans[] = ['tag' => $tag, 'part_id' => $partId, 'qty' => $qty, 'packing_nos' => $packingNos];
                 }
 
                 $qtyRequired = (float) $item->qty_required;
@@ -624,12 +690,79 @@ class WoService
                 }
 
                 // Tanpa penanda `bundle_plan` klien lama tetap memakai batas 2x
-                // supaya kemasan utuh masih bisa keluar. Dengan penanda, batasnya
-                // tegas: total issue tidak boleh melebihi kebutuhan bersih.
+                // supaya kemasan utuh masih bisa keluar. Dengan penanda `bundle_plan`:
+                // - bila memilih kemasan fisik utuh (`packing_nos`), izinkan kelebihan
+                //   maksimal 1 kemasan utuh (tanpa menumpuk kemasan ekstra yang tidak perlu);
+                // - selain itu batas tegas: total issue tidak boleh melebihi kebutuhan bersih.
                 $enforcesNet = ! empty($row['bundle_plan']);
-                $maxAllowed = $enforcesNet ? $required : $required + $qtyRequired;
+                $netCap = $enforcesNet
+                    ? app(MaterialIssueBundleService::class)->netRequirement($item, $workOrder)['net_requirement']
+                    : $required;
+                $maxAllowed = $enforcesNet ? $netCap : $required + $qtyRequired;
 
-                if ($total > $maxAllowed + 1e-9) {
+                if ($enforcesNet && $total > $maxAllowed + 1e-9) {
+                    $allHavePackings = $scans !== [] && collect($scans)->every(fn (array $s): bool => $s['packing_nos'] !== []);
+                    $wholePackingAllowed = false;
+
+                    if ($allHavePackings && $netCap > 1e-9) {
+                        $bundleService = app(MaterialIssueBundleService::class);
+                        $selectedPackingQtys = [];
+                        foreach ($scans as $scanEntry) {
+                            $stocks = PartStock::query()
+                                ->whereRaw('LOWER(COALESCE(tag, \'\')) = ?', [mb_strtolower($scanEntry['tag'])])
+                                ->when($scanEntry['part_id'] !== null, fn ($q) => $q->where('part_id', $scanEntry['part_id']))
+                                ->whereNotNull('receive_id')
+                                ->get(['id', 'receive_id']);
+
+                            $matchedQtys = [];
+                            foreach ($stocks as $st) {
+                                $allPackings = DB::table('incoming_receive_packings')
+                                    ->where('receive_id', $st->receive_id)
+                                    ->get(['packing_no', 'qty']);
+                                $caps = [];
+                                foreach ($allPackings as $p) {
+                                    $caps[strtoupper(trim((string) $p->packing_no))] = (float) $p->qty;
+                                }
+                                $usage = $bundleService->packingUsage((int) $st->id, $caps);
+                                foreach ($scanEntry['packing_nos'] as $pNo) {
+                                    $key = strtoupper(trim($pNo));
+                                    if (! isset($caps[$key])) {
+                                        continue;
+                                    }
+                                    $rem = max(0.0, $caps[$key] - (float) ($usage[$key]['used_qty'] ?? 0.0));
+                                    if ($rem > 1e-6) {
+                                        $matchedQtys[] = $rem;
+                                    }
+                                }
+                                if (count($matchedQtys) === count($scanEntry['packing_nos'])) {
+                                    break;
+                                }
+                                $matchedQtys = [];
+                            }
+
+                            if (count($matchedQtys) === count($scanEntry['packing_nos'])) {
+                                array_push($selectedPackingQtys, ...$matchedQtys);
+                            }
+                        }
+
+                        if ($selectedPackingQtys !== []) {
+                            $sumMatched = array_sum($selectedPackingQtys);
+                            $minPacking = min($selectedPackingQtys);
+                            if (abs($total - $sumMatched) <= 0.05 && ($total - $minPacking) < $netCap - 1e-9) {
+                                $wholePackingAllowed = true;
+                            }
+                        }
+                    }
+
+                    if (! $wholePackingAllowed) {
+                        throw ValidationException::withMessages([
+                            "items.$itemId" => __('Total issue (:total) melebihi kebutuhan bersih (:max).', [
+                                'total' => round($total, 4),
+                                'max' => round($maxAllowed, 4),
+                            ]),
+                        ]);
+                    }
+                } elseif (! $enforcesNet && $total > $maxAllowed + 1e-9) {
                     throw ValidationException::withMessages([
                         "items.$itemId" => __('Total issue (:total) melebihi kebutuhan bersih (:max).', [
                             'total' => round($total, 4),
@@ -695,6 +828,59 @@ class WoService
                                 ]);
                             }
 
+                            $packingNos = $scan['packing_nos'] ?? [];
+                            if ($packingNos !== []) {
+                                $stockRow = PartStock::query()->find($alloc['part_stock_id'], ['id', 'receive_id']);
+                                $caps = [];
+                                if ($stockRow?->receive_id !== null) {
+                                    $packingRows = DB::table('incoming_receive_packings')
+                                        ->where('receive_id', $stockRow->receive_id)
+                                        ->get(['packing_no', 'qty']);
+                                    foreach ($packingRows as $pRow) {
+                                        $caps[strtoupper(trim((string) $pRow->packing_no))] = (float) $pRow->qty;
+                                    }
+                                }
+                                $usage = app(MaterialIssueBundleService::class)->packingUsage((int) $alloc['part_stock_id'], $caps);
+
+                                $totalSelectedRemaining = 0.0;
+                                $allKnownInCaps = true;
+                                foreach ($packingNos as $pNo) {
+                                    $key = strtoupper(trim($pNo));
+                                    $usedQty = (float) ($usage[$key]['used_qty'] ?? 0.0);
+                                    if (isset($caps[$key])) {
+                                        $rem = max(0.0, $caps[$key] - $usedQty);
+                                        if ($rem <= 1e-6) {
+                                            throw ValidationException::withMessages([
+                                                'items' => __('Packing :packing pada tag :tag sudah habis di-issue.', [
+                                                    'packing' => $pNo,
+                                                    'tag' => $alloc['tag'],
+                                                ]),
+                                            ]);
+                                        }
+                                        $totalSelectedRemaining += $rem;
+                                    } else {
+                                        $allKnownInCaps = false;
+                                        if ($usedQty > 1e-6) {
+                                            throw ValidationException::withMessages([
+                                                'items' => __('Packing :packing pada tag :tag sudah pernah di-issue.', [
+                                                    'packing' => $pNo,
+                                                    'tag' => $alloc['tag'],
+                                                ]),
+                                            ]);
+                                        }
+                                    }
+                                }
+
+                                if ($allKnownInCaps && (float) $alloc['take_qty'] > $totalSelectedRemaining + 0.05) {
+                                    throw ValidationException::withMessages([
+                                        'items' => __('Qty issue (:qty) melebihi sisa kapasitas packing terpilih (:max).', [
+                                            'qty' => round((float) $alloc['take_qty'], 4),
+                                            'max' => round($totalSelectedRemaining, 4),
+                                        ]),
+                                    ]);
+                                }
+                            }
+
                             $taken += (float) $alloc['take_qty'];
                             MaterialIssueItem::create([
                                 'material_issue_id' => $issue->id,
@@ -702,6 +888,7 @@ class WoService
                                 'part_id' => $alloc['part_id'],
                                 'part_stock_id' => $alloc['part_stock_id'],
                                 'tag' => $alloc['tag'],
+                                'packing_nos' => $packingNos !== [] ? $packingNos : null,
                                 'invoice' => $alloc['invoice'],
                                 'supplier' => $alloc['supplier'],
                                 'qty' => (float) $alloc['take_qty'],

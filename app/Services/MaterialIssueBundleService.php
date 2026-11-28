@@ -26,7 +26,10 @@ class MaterialIssueBundleService
     /** Batas jumlah bundle yang dirender per tag agar layar tetap ringan. */
     public const MAX_BUNDLES = 100;
 
-    public function __construct(private WoService $woService) {}
+    public function __construct(
+        private WoService $woService,
+        private DailyScheduleService $schedule,
+    ) {}
 
     /**
      * Ringkasan satu tag untuk satu item WO.
@@ -37,7 +40,7 @@ class MaterialIssueBundleService
      */
     public function forTag(WorkOrderItem $item, WorkOrder $workOrder, string $tag): array
     {
-        if ($this->remainingQty($item) <= 1e-9) {
+        if ($this->remainingQty($item, $workOrder) <= 1e-9) {
             throw ValidationException::withMessages([
                 'tag' => __('Kebutuhan item ini sudah terpenuhi.'),
             ]);
@@ -72,7 +75,7 @@ class MaterialIssueBundleService
      */
     public function forStock(WorkOrderItem $item, WorkOrder $workOrder, int $partStockId): ?array
     {
-        if ($this->remainingQty($item) <= 1e-9) {
+        if ($this->remainingQty($item, $workOrder) <= 1e-9) {
             return null;
         }
 
@@ -163,31 +166,309 @@ class MaterialIssueBundleService
     }
 
     /**
+     * Kebutuhan harian item WO berdasarkan `cons BOM × qty Plan hari ini`.
+     * Bila WO tidak ada pada jadwal hari ini, jatuh ke `qty_required` total WO.
+     *
+     * @return array{
+     *     has_daily_plan: bool,
+     *     planned_qty: float|null,
+     *     cons_per_unit: float,
+     *     plan_required: float,
+     *     wo_required: float,
+     *     effective_required: float
+     * }
+     */
+    public function planRequirement(WorkOrderItem $item, ?WorkOrder $workOrder = null): array
+    {
+        $wo = $workOrder ?? $item->workOrder;
+        $woQty = (float) ($wo?->qty ?? 0);
+        $woRequired = round((float) $item->qty_required, 4);
+
+        $parentQty = (float) ($item->parent_qty ?? 1);
+        $rawRatio = $parentQty > 0
+            ? ((float) ($item->child_qty ?? 0) / $parentQty)
+            : (float) ($item->child_qty ?? 0);
+        $consPerUnit = ($woQty > 1e-9 && $woRequired > 1e-9)
+            ? round($woRequired / $woQty, 6)
+            : round($rawRatio, 6);
+
+        $plannedQty = null;
+        if ($wo !== null) {
+            $today = $this->schedule->plantToday();
+            $scheduled = $this->schedule->scheduledQuantities($today)
+                ->where('ppi.work_order_id', $wo->id)
+                ->first();
+            if ($scheduled !== null && (float) $scheduled->planned_qty > 1e-9) {
+                $plannedQty = round((float) $scheduled->planned_qty, 4);
+            }
+        }
+
+        if ($plannedQty !== null) {
+            $planRequired = round($consPerUnit * $plannedQty, 4);
+
+            return [
+                'has_daily_plan' => true,
+                'planned_qty' => $plannedQty,
+                'cons_per_unit' => $consPerUnit,
+                'plan_required' => $planRequired,
+                'wo_required' => $woRequired,
+                'effective_required' => $planRequired,
+            ];
+        }
+
+        return [
+            'has_daily_plan' => false,
+            'planned_qty' => null,
+            'cons_per_unit' => $consPerUnit,
+            'plan_required' => $woRequired,
+            'wo_required' => $woRequired,
+            'effective_required' => $woRequired,
+        ];
+    }
+
+    /**
+     * Sisa surplus material kompatibel dari WO lain di lantai produksi (baik yang
+     * sudah diterima di mesin maupun yang baru saja di-issue gudang dan masih
+     * in-transit), termasuk lintas mesin.
+     *
+     * Mengurangi klaim dari WO aktif lain yang di-release memakai sisa lantai
+     * produksi (tanpa bon issue/booking sendiri) agar tidak terjadi double-claim.
+     *
+     * @return array{qty: float, packings: list<string>}
+     */
+    public function sharedMachineSurplusDetails(WorkOrderItem $item, ?WorkOrder $workOrder = null): array
+    {
+        $allowedPartIds = $this->allowedPartIds($item);
+        if ($allowedPartIds === []) {
+            return ['qty' => 0.0, 'packings' => []];
+        }
+
+        $uom = UomCatalog::normalize((string) $item->uom_rm);
+        $woId = (int) ($workOrder?->id ?? $item->work_order_id);
+
+        $receipts = ProductionMaterialReceipt::query()
+            ->with([
+                'workOrder:id,wo_no,status',
+                'workOrderItem:id,qty_required,qty_consumed',
+                'materialIssueItem:id,packing_nos',
+            ])
+            ->where('transfer_status', 'transferred')
+            ->where('work_order_id', '!=', $woId)
+            ->whereIn('part_id', $allowedPartIds)
+            ->when($uom !== null, fn ($q) => $q->where('uom', $uom))
+            ->whereColumn('qty', '>', 'qty_consumed')
+            ->get();
+
+        $inTransitIssues = MaterialIssueItem::query()
+            ->with([
+                'materialIssue:id,work_order_id,issue_no,status',
+                'materialIssue.workOrder:id,wo_no,status',
+                'workOrderItem:id,qty_required,qty_consumed',
+            ])
+            ->where('qty', '>', 0)
+            ->whereIn('part_id', $allowedPartIds)
+            ->when($uom !== null, fn ($q) => $q->where('uom', $uom))
+            ->whereNotIn('id', ProductionMaterialReceipt::query()->select('material_issue_item_id'))
+            ->whereHas('materialIssue', fn ($q) => $q
+                ->where('status', 'posted')
+                ->where('work_order_id', '!=', $woId)
+                ->whereHas('workOrder', fn ($wo) => $wo->whereIn('status', ['released', 'in_progress'])))
+            ->get();
+
+        if ($receipts->isEmpty() && $inTransitIssues->isEmpty()) {
+            return ['qty' => 0.0, 'packings' => []];
+        }
+
+        $supplyByKey = [];
+
+        foreach ($receipts as $receipt) {
+            $balance = max(0.0, (float) $receipt->qty - (float) $receipt->qty_consumed);
+            if ($balance <= 1e-9) {
+                continue;
+            }
+            $key = $receipt->work_order_id.'|'.($receipt->work_order_item_id ?? 0);
+            if (! isset($supplyByKey[$key])) {
+                $supplyByKey[$key] = [
+                    'balance' => 0.0,
+                    'status' => $receipt->workOrder?->status,
+                    'wo_no' => $receipt->workOrder?->wo_no,
+                    'item' => $receipt->workOrderItem,
+                    'same_machine' => false,
+                    'packings' => [],
+                ];
+            }
+            $supplyByKey[$key]['balance'] += $balance;
+            if ($item->machine_id !== null && (int) $receipt->machine_id === (int) $item->machine_id) {
+                $supplyByKey[$key]['same_machine'] = true;
+            }
+            foreach ((array) ($receipt->materialIssueItem?->packing_nos ?? []) as $pNo) {
+                $pNo = trim((string) $pNo);
+                if ($pNo !== '') {
+                    $supplyByKey[$key]['packings'][$pNo] = true;
+                }
+            }
+        }
+
+        foreach ($inTransitIssues as $issueItem) {
+            $qty = max(0.0, (float) $issueItem->qty);
+            if ($qty <= 1e-9) {
+                continue;
+            }
+            $otherWo = $issueItem->materialIssue?->workOrder;
+            $otherWoId = (int) ($issueItem->materialIssue?->work_order_id ?? 0);
+            $key = $otherWoId.'|'.($issueItem->work_order_item_id ?? 0);
+            if (! isset($supplyByKey[$key])) {
+                $supplyByKey[$key] = [
+                    'balance' => 0.0,
+                    'status' => $otherWo?->status,
+                    'wo_no' => $otherWo?->wo_no,
+                    'item' => $issueItem->workOrderItem,
+                    'same_machine' => false,
+                    'packings' => [],
+                ];
+            }
+            $supplyByKey[$key]['balance'] += $qty;
+            foreach ((array) ($issueItem->packing_nos ?? []) as $pNo) {
+                $pNo = trim((string) $pNo);
+                if ($pNo !== '') {
+                    $supplyByKey[$key]['packings'][$pNo] = true;
+                }
+            }
+        }
+
+        uasort($supplyByKey, fn (array $a, array $b): int => ($b['same_machine'] <=> $a['same_machine']));
+
+        $rawSurplus = 0.0;
+        $packingLabels = [];
+
+        foreach ($supplyByKey as $entry) {
+            $balance = (float) $entry['balance'];
+            $otherStatus = $entry['status'];
+            $otherItem = $entry['item'];
+
+            if (in_array($otherStatus, ['completed', 'cancelled'], true) || $otherItem === null) {
+                $groupSurplus = $balance;
+            } else {
+                $otherRemainingNeed = max(0.0, (float) $otherItem->qty_required - (float) $otherItem->qty_consumed);
+                $groupSurplus = max(0.0, $balance - $otherRemainingNeed);
+            }
+
+            if ($groupSurplus <= 1e-9) {
+                continue;
+            }
+
+            $rawSurplus += $groupSurplus;
+            $woNo = (string) ($entry['wo_no'] ?? '');
+            foreach (array_keys($entry['packings']) as $pNo) {
+                $label = $woNo !== '' ? "{$pNo} · {$woNo}" : $pNo;
+                $packingLabels[$label] = true;
+            }
+        }
+
+        if ($rawSurplus <= 1e-9) {
+            return ['qty' => 0.0, 'packings' => []];
+        }
+
+        // Kurangi klaim WO aktif lain yang di-release memakai sisa lantai produksi
+        // (status released/in_progress tanpa bon issue & tanpa booking gudang sendiri).
+        $claimed = $this->claimedFloorSurplus($woId, $allowedPartIds, $uom);
+        $netSurplus = round(max(0.0, $rawSurplus - $claimed), 4);
+
+        return [
+            'qty' => $netSurplus,
+            'packings' => $netSurplus > 1e-9 ? array_keys($packingLabels) : [],
+        ];
+    }
+
+    /**
+     * Sisa surplus material kompatibel dari WO lain di lantai produksi.
+     */
+    public function sharedMachineSurplus(WorkOrderItem $item, ?WorkOrder $workOrder = null): float
+    {
+        return $this->sharedMachineSurplusDetails($item, $workOrder)['qty'];
+    }
+
+    /**
+     * Total sisa kebutuhan WO aktif lain yang telah di-release langsung memakai
+     * surplus lantai produksi (tanpa bon issue/booking sendiri) agar surplus
+     * tidak diklaim ganda oleh WO ke-3 dst.
+     *
+     * @param  list<int>  $allowedPartIds
+     */
+    private function claimedFloorSurplus(int $excludeWoId, array $allowedPartIds, ?string $uom): float
+    {
+        $otherItems = WorkOrderItem::query()
+            ->where('work_order_id', '!=', $excludeWoId)
+            ->whereColumn('qty_required', '>', 'qty_consumed')
+            ->whereHas('workOrder', fn ($q) => $q->whereIn('status', ['released', 'in_progress']))
+            ->where(function ($q) use ($allowedPartIds) {
+                $q->whereIn('child_part_id', $allowedPartIds)
+                    ->orWhereIn('selected_part_id', $allowedPartIds)
+                    ->orWhereHas('allocations', fn ($a) => $a->whereIn('part_id', $allowedPartIds));
+            })
+            ->whereNotExists(function ($q) {
+                $q->select(DB::raw(1))
+                    ->from('material_issue_items as mii')
+                    ->join('material_issues as mi', 'mi.id', '=', 'mii.material_issue_id')
+                    ->whereColumn('mii.work_order_item_id', 'work_order_items.id')
+                    ->where('mi.status', 'posted');
+            })
+            ->whereNotExists(function ($q) {
+                $q->select(DB::raw(1))
+                    ->from('work_order_material_bookings as wmb')
+                    ->whereColumn('wmb.work_order_item_id', 'work_order_items.id')
+                    ->whereIn('wmb.status', [
+                        WorkOrderMaterialBooking::STATUS_BOOKED,
+                        WorkOrderMaterialBooking::STATUS_CONSUMED,
+                    ]);
+            })
+            ->get(['id', 'work_order_id', 'qty_required', 'qty_consumed', 'uom_rm', 'child_part_id']);
+
+        $claimed = 0.0;
+        foreach ($otherItems as $other) {
+            if ($uom !== null && UomCatalog::normalize((string) $other->uom_rm) !== $uom) {
+                continue;
+            }
+            $claimed += max(0.0, (float) $other->qty_required - (float) $other->qty_consumed);
+        }
+
+        return round($claimed, 4);
+    }
+
+    /**
      * Kebutuhan bersih item WO.
      */
-    public function netRequirement(WorkOrderItem $item): array
+    public function netRequirement(WorkOrderItem $item, ?WorkOrder $workOrder = null): array
     {
-        $required = $this->requiredQty($item);
+        $planReq = $this->planRequirement($item, $workOrder);
+        $required = $planReq['effective_required'];
         $issued = round($this->issuedQty($item), 4);
-        $stock = $this->stockAtMachine($item);
+        $ownAtMachine = $this->stockAtMachine($item);
+        $sharedDetails = $this->sharedMachineSurplusDetails($item, $workOrder);
+        $sharedAtMachine = $sharedDetails['qty'];
 
-        // Kebutuhan bersih issue gudang selalu dihitung dari total yang sudah
-        // di-issue terhadap total kebutuhan item WO, supaya material yang sudah
-        // di-issue lalu dikonsumsi mesin tidak pernah bisa di-issue ulang.
         return [
             'required_qty' => $required,
+            'wo_required_qty' => $planReq['wo_required'],
+            'planned_qty' => $planReq['planned_qty'],
+            'cons_per_unit' => $planReq['cons_per_unit'],
+            'plan_required_qty' => $planReq['plan_required'],
+            'has_daily_plan' => $planReq['has_daily_plan'],
             'issued_qty' => $issued,
-            'stock_at_machine' => $stock,
-            'net_requirement' => BundlePacking::netRequirement($required, $issued),
+            'own_stock_at_machine' => $ownAtMachine,
+            'shared_machine_stock' => $sharedAtMachine,
+            'shared_machine_packings' => $sharedDetails['packings'],
+            'stock_at_machine' => round($ownAtMachine + $sharedAtMachine, 4),
+            'net_requirement' => BundlePacking::netRequirement($required, round($issued + $sharedAtMachine, 4)),
         ];
     }
 
     /**
      * Qty yang masih boleh di-issue untuk item ini.
      */
-    public function remainingQty(WorkOrderItem $item): float
+    public function remainingQty(WorkOrderItem $item, ?WorkOrder $workOrder = null): float
     {
-        return BundlePacking::netRequirement($this->requiredQty($item), round($this->issuedQty($item), 4));
+        return $this->netRequirement($item, $workOrder)['net_requirement'];
     }
 
     /**
@@ -220,7 +501,7 @@ class MaterialIssueBundleService
             ?? UomCatalog::normalize((string) $item->uom_rm);
         $totalQty = (float) $stock->qty;
         $bundleCount = $this->bundleCount($stock);
-        $net = $this->netRequirement($item);
+        $net = $this->netRequirement($item, $workOrder);
         $receive = $stock->receive;
         $arrivalItem = $receive?->arrivalItem;
 
@@ -228,11 +509,10 @@ class MaterialIssueBundleService
         // fallback ke bundle_unit (mis. PALLET / BUNDLE)
         $itemPackingUnit = $receive?->packing_type ?: ($receive?->bundle_unit ?: 'bundle');
 
-        // `net_requirement` sudah memperhitungkan issued + stok di mesin; jangan
-        // kurangi dua kali.
+        // `net_requirement` sudah memperhitungkan issued + stok surplus di mesin.
         $plan = BundlePacking::plan(
             $net['required_qty'],
-            $net['issued_qty'],
+            round($net['issued_qty'] + $net['shared_machine_stock'], 4),
             $totalQty,
             $bundleCount,
         );
@@ -255,10 +535,18 @@ class MaterialIssueBundleService
             'packing_qty' => $plan['packing_qty'],
             'packaging_text' => $this->packagingSummary($receive),
             'bundles' => $plan['bundles'],
-            'packings' => $this->packingRows($receive, $uom, $plan['net_requirement']),
+            'packings' => $this->packingRows($receive, $stock, $uom, $plan['net_requirement']),
             'net_requirement' => $plan['net_requirement'],
             'required_qty' => $net['required_qty'],
+            'wo_required_qty' => $net['wo_required_qty'],
+            'planned_qty' => $net['planned_qty'],
+            'cons_per_unit' => $net['cons_per_unit'],
+            'plan_required_qty' => $net['plan_required_qty'],
+            'has_daily_plan' => $net['has_daily_plan'],
             'issued_qty' => $net['issued_qty'],
+            'own_stock_at_machine' => $net['own_stock_at_machine'],
+            'shared_machine_stock' => $net['shared_machine_stock'],
+            'shared_machine_packings' => $net['shared_machine_packings'],
             'stock_at_machine' => $net['stock_at_machine'],
             'bundle_qty' => $plan['bundle_qty'],
             'total_issue' => $plan['total_qty'],
@@ -272,15 +560,80 @@ class MaterialIssueBundleService
     }
 
     /**
-     * Daftar packing riil hasil penerimaan (TAG/1, TAG/2, ...) dengan centang
-     * otomatis: packing diambil berurutan sampai kebutuhan bersih terpenuhi.
+     * Ringkasan pemakaian per packing_no (uppercase) pada satu part_stock_id:
+     * berapa qty yang sudah dikeluarkan dari gudang dan daftar WO pemakainya.
      *
-     * Bila penerimaan lama belum menyimpan rincian packing, hasilnya kosong dan
-     * aplikasi memakai daftar `bundles` sintetis seperti sebelumnya.
+     * Bila satu packing diambil sebagian oleh WO #1 (mis. 600 dari 1143.33 KGM),
+     * sisa 543.33 KGM tetap bisa dipilih dan dikeluarkan untuk WO #2. Packing baru
+     * terkunci penuh bila sisa kapasitasnya <= 0.
      *
-     * @return list<array{packing_no: string, sequence: int, qty: float, uom: string|null, net_weight: float|null, gross_weight: float|null, checked: bool}>
+     * @param  array<string, float>  $packingCapacities  peta packing_no (uppercase) -> qty asli
+     * @return array<string, array{used_qty: float, wos: list<string>}>
      */
-    private function packingRows(?IncomingReceive $receive, ?string $uom, float $netRequirement): array
+    public function packingUsage(int $partStockId, array $packingCapacities = []): array
+    {
+        $rows = DB::table('material_issue_items as mii')
+            ->join('material_issues as mi', 'mi.id', '=', 'mii.material_issue_id')
+            ->leftJoin('work_orders as wo', 'wo.id', '=', 'mi.work_order_id')
+            ->where('mi.status', 'posted')
+            ->where('mii.part_stock_id', $partStockId)
+            ->whereNotNull('mii.packing_nos')
+            ->orderBy('mii.id')
+            ->get(['mii.packing_nos', 'mii.qty', 'wo.wo_no', 'mi.issue_no']);
+
+        $usage = [];
+        foreach ($rows as $row) {
+            $decoded = is_string($row->packing_nos) ? json_decode($row->packing_nos, true) : $row->packing_nos;
+            if (! is_array($decoded) || $decoded === []) {
+                continue;
+            }
+            $keys = array_values(array_filter(
+                array_map(fn ($p): string => strtoupper(trim((string) $p)), $decoded),
+                fn (string $k): bool => $k !== '',
+            ));
+            if ($keys === []) {
+                continue;
+            }
+
+            $label = (string) ($row->wo_no ?: $row->issue_no ?: '');
+            $rowQty = max(0.0, (float) $row->qty);
+
+            if (count($keys) === 1) {
+                $k = $keys[0];
+                $usage[$k] ??= ['used_qty' => 0.0, 'wos' => []];
+                $usage[$k]['used_qty'] = round($usage[$k]['used_qty'] + $rowQty, 4);
+                if ($label !== '' && ! in_array($label, $usage[$k]['wos'], true)) {
+                    $usage[$k]['wos'][] = $label;
+                }
+
+                continue;
+            }
+
+            $left = $rowQty;
+            foreach ($keys as $index => $k) {
+                $usage[$k] ??= ['used_qty' => 0.0, 'wos' => []];
+                $cap = isset($packingCapacities[$k])
+                    ? max(0.0, $packingCapacities[$k] - $usage[$k]['used_qty'])
+                    : $left;
+                $alloc = ($index === count($keys) - 1) ? $left : min($left, $cap);
+                $usage[$k]['used_qty'] = round($usage[$k]['used_qty'] + $alloc, 4);
+                $left = round(max(0.0, $left - $alloc), 4);
+                if ($label !== '' && ! in_array($label, $usage[$k]['wos'], true)) {
+                    $usage[$k]['wos'][] = $label;
+                }
+            }
+        }
+
+        return $usage;
+    }
+
+    /**
+     * Daftar packing riil hasil penerimaan (TAG/1, TAG/2, ...) dengan sisa qty
+     * per packing, status sudah-diambil (habis vs sebagian), dan centang otomatis.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function packingRows(?IncomingReceive $receive, PartStock $stock, ?string $uom, float $netRequirement): array
     {
         if ($receive === null) {
             return [];
@@ -291,24 +644,44 @@ class MaterialIssueBundleService
             return [];
         }
 
-        $remaining = max(0.0, $netRequirement);
+        $capacities = [];
+        foreach ($packings as $p) {
+            $capacities[strtoupper(trim((string) $p->packing_no))] = (float) $p->qty;
+        }
+        $usage = $this->packingUsage((int) $stock->id, $capacities);
+
+        $remainingNeed = max(0.0, $netRequirement);
         $rows = [];
 
         foreach ($packings as $packing) {
-            $qty = (float) $packing->qty;
-            $checked = $remaining > 1e-9 && $qty > 1e-9;
+            $packingNo = (string) $packing->packing_no;
+            $key = strtoupper(trim($packingNo));
+            $originalQty = round((float) $packing->qty, 4);
+            $usedQty = round(min($originalQty, (float) ($usage[$key]['used_qty'] ?? 0.0)), 4);
+            $remainingQty = round(max(0.0, $originalQty - $usedQty), 4);
+            $wos = $usage[$key]['wos'] ?? [];
+            $issuedToWo = $wos !== [] ? implode(', ', $wos) : null;
+            $isExhausted = $remainingQty <= 1e-6;
+
+            $selectableQty = $isExhausted ? $originalQty : $remainingQty;
+            $checked = ! $isExhausted && $remainingNeed > 1e-9 && $remainingQty > 1e-9;
             if ($checked) {
-                $remaining = round($remaining - $qty, 4);
+                $remainingNeed = round($remainingNeed - $remainingQty, 4);
             }
 
             $rows[] = [
-                'packing_no' => (string) $packing->packing_no,
+                'packing_no' => $packingNo,
                 'sequence' => (int) $packing->sequence,
-                'qty' => round($qty, 4),
+                'qty' => $selectableQty,
+                'original_qty' => $originalQty,
+                'issued_qty' => $usedQty,
+                'remaining_qty' => $remainingQty,
                 'uom' => UomCatalog::normalize((string) $packing->uom) ?? $uom,
                 'net_weight' => $packing->net_weight !== null ? round((float) $packing->net_weight, 4) : null,
                 'gross_weight' => $packing->gross_weight !== null ? round((float) $packing->gross_weight, 4) : null,
                 'checked' => $checked,
+                'issued' => $isExhausted,
+                'issued_to_wo' => $issuedToWo,
             ];
         }
 

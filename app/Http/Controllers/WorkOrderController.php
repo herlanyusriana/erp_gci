@@ -57,10 +57,13 @@ class WorkOrderController extends Controller
     {
         Gate::authorize('create', WorkOrder::class);
 
-        // FG parts saja yang boleh diproduksi.
+        // FG dan part WIP yang memiliki BOM aktif (mis. blank bersama Press L+R).
         $fgParts = Part::query()
-            ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) = ?', ['fg']))
             ->where('is_active', true)
+            ->where(function ($q) {
+                $q->whereHas('partType', fn ($t) => $t->whereRaw('LOWER(code) = ?', ['fg']))
+                    ->orWhereHas('bom', fn ($b) => $b->where('is_active', true));
+            })
             ->orderBy('part_number')
             ->get(['id', 'part_number', 'part_name', 'model', 'part_type_id']);
 
@@ -80,12 +83,15 @@ class WorkOrderController extends Controller
             'remarks' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        $isFg = Part::query()
+        $canProduce = Part::query()
             ->whereKey($validated['part_id'])
-            ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) = ?', ['fg']))
+            ->where(function ($q) {
+                $q->whereHas('partType', fn ($t) => $t->whereRaw('LOWER(code) = ?', ['fg']))
+                    ->orWhereHas('bom', fn ($b) => $b->where('is_active', true));
+            })
             ->exists();
-        if (! $isFg) {
-            throw ValidationException::withMessages(['part_id' => __('Work Order hanya untuk part FG.')]);
+        if (! $canProduce) {
+            throw ValidationException::withMessages(['part_id' => __('Work Order hanya untuk part FG atau WIP yang memiliki BOM aktif.')]);
         }
 
         [$workOrderId, $warnings] = $this->woService->createWorkOrder(

@@ -192,6 +192,7 @@ final class PurchaseOrderLimit
             ->where('part_id', $partId)
             ->whereHas('arrival', fn ($query) => $query
                 ->where('purchase_order_id', $purchaseOrderId)
+                ->where(fn ($status) => $status->whereNull('status')->orWhere('status', '!=', 'cancelled'))
                 ->when($excludeArrivalId !== null, fn ($q) => $q->whereKeyNot($excludeArrivalId)))
             ->when($excludeArrivalItemId !== null, fn ($query) => $query->whereKeyNot($excludeArrivalItemId))
             ->get();

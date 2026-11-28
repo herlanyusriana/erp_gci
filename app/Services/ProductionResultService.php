@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\BomItem;
 use App\Models\ConfigMaster;
 use App\Models\DeliveryScan;
 use App\Models\Machine;
@@ -17,7 +18,9 @@ use App\Support\MachineRouting;
 use App\Support\UomCatalog;
 use Brick\Math\BigDecimal;
 use Brick\Math\Exception\MathException;
+use Brick\Math\RoundingMode;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -52,6 +55,9 @@ class ProductionResultService
                 ->where('parent_part_id', $parentPartId)->lockForUpdate()->get();
             if ($rows->isEmpty()) {
                 throw ValidationException::withMessages(['parent_part_id' => __('Step ini tidak ada di WO.')]);
+            }
+            if ($rows->every(fn (WorkOrderItem $r): bool => ($r->output_type ?? BomItem::OUTPUT_NORMAL) === BomItem::OUTPUT_BYPRODUCT)) {
+                throw ValidationException::withMessages(['parent_part_id' => __('Hasil sampingan otomatis terbuat dari proses utamanya.')]);
             }
             $qtyGood = (float) ($data['qty_good'] ?? 0);
             $qtyReject = (float) ($data['qty_reject'] ?? 0);
@@ -137,10 +143,43 @@ class ProductionResultService
                 'created_by' => $actorId, 'updated_by' => $actorId,
             ]);
 
+            // Kumpulkan baris input efektif: bila step ini adalah bagian dari grup `shared`
+            // (1 stroke -> 2+ hasil), konsumsi harus menggunakan baris pemegang qty_required
+            // (sekali saja, baik operator melapor hasil pertama maupun pasangannya).
+            $consumptionRows = collect();
+            $seenSharedConsume = [];
             foreach ($rows as $row) {
+                $outputType = $row->output_type ?? BomItem::OUTPUT_NORMAL;
+                if ($outputType === BomItem::OUTPUT_BYPRODUCT) {
+                    continue;
+                }
+                if ($outputType === BomItem::OUTPUT_SHARED && $row->child_part_id !== null) {
+                    $sharedKey = ($row->sequence ?? 0).'|'.$row->child_part_id;
+                    if (isset($seenSharedConsume[$sharedKey])) {
+                        continue;
+                    }
+                    $seenSharedConsume[$sharedKey] = true;
+                    $holder = $workOrder->items()
+                        ->with(['machine:id,machine_code,machine_name', 'parentPart:id,part_number,part_name', 'childPart:id,part_number,part_name'])
+                        ->where('sequence', $row->sequence)
+                        ->where('child_part_id', $row->child_part_id)
+                        ->where('output_type', BomItem::OUTPUT_SHARED)
+                        ->orderByDesc('qty_required')
+                        ->orderBy('id')
+                        ->lockForUpdate()
+                        ->first();
+                    $consumptionRows->push($holder ?? $row);
+
+                    continue;
+                }
+                $consumptionRows->push($row);
+            }
+
+            foreach ($consumptionRows as $row) {
                 $childId = $row->child_part_id;
-                $need = BigDecimal::of($row->getRawOriginal('child_qty') ?? 0)
-                    ->multipliedBy($goodDecimal->plus($rejectDecimal))->toScale(10);
+                $need = $this->ratioDecimal($row)
+                    ->multipliedBy($goodDecimal->plus($rejectDecimal))
+                    ->toScale(10, RoundingMode::HALF_UP);
                 if ($childId === null || $need->isLessThanOrEqualTo(0)) {
                     continue;
                 }
@@ -203,15 +242,18 @@ class ProductionResultService
                         ]);
                     }
                 } else {
-                    $receipts = ProductionMaterialReceipt::query()
-                        ->where('work_order_id', $workOrder->id)->where('work_order_item_id', $row->id)
-                        ->where('machine_id', $machineId)->where('transfer_status', 'transferred')
-                        ->where('uom', UomCatalog::normalize((string) $row->uom_rm))
-                        ->orderBy('received_at')->orderBy('id')->lockForUpdate()->get();
+                    $receiptEntries = $machineId !== null
+                        ? $this->consumableMachineReceipts($workOrder, $row, (int) $machineId, UomCatalog::normalize((string) $row->uom_rm))
+                        : collect();
                     $available = BigDecimal::zero();
-                    foreach ($receipts as $receipt) {
+                    foreach ($receiptEntries as $entry) {
+                        $receipt = $entry['receipt'];
                         $receipt->assertValidBalance();
-                        $available = $available->plus(BigDecimal::of($receipt->getRawOriginal('qty'))->minus($receipt->getRawOriginal('qty_consumed')));
+                        $balance = BigDecimal::of($receipt->getRawOriginal('qty'))->minus($receipt->getRawOriginal('qty_consumed'));
+                        $usable = $entry['limit'] !== null && $entry['limit']->isLessThan($balance) ? $entry['limit'] : $balance;
+                        if ($usable->isGreaterThan(0)) {
+                            $available = $available->plus($usable);
+                        }
                     }
                     if ($machineId === null || $available->isLessThan($need)) {
                         if ($machineId !== null && $rows->count() > 1 && ReleaseContextService::isAuxiliaryItem($row)) {
@@ -235,12 +277,17 @@ class ProductionResultService
                         continue;
                     }
                     $remaining = $need;
-                    foreach ($receipts as $receipt) {
+                    foreach ($receiptEntries as $entry) {
                         if ($remaining->isZero()) {
                             break;
                         }
+                        $receipt = $entry['receipt'];
                         $balance = BigDecimal::of($receipt->getRawOriginal('qty'))->minus($receipt->getRawOriginal('qty_consumed'));
-                        $take = $remaining->isLessThan($balance) ? $remaining : $balance;
+                        $usable = $entry['limit'] !== null && $entry['limit']->isLessThan($balance) ? $entry['limit'] : $balance;
+                        if ($usable->isLessThanOrEqualTo(0)) {
+                            continue;
+                        }
+                        $take = $remaining->isLessThan($usable) ? $remaining : $usable;
                         if ($take->isZero()) {
                             continue;
                         }
@@ -271,10 +318,107 @@ class ProductionResultService
                     $machine?->machine_code,
                 );
                 $result->update(['output_part_stock_id' => $output->id]);
+
+                $this->postCompanionOutputs($workOrder, $rows, $result, $goodDecimal, $uom, $reportedAt, $machine, $actorId, $operatorName);
             }
 
             return $result;
         });
+    }
+
+    /**
+     * Terbitkan stok WIP/FG tambahan untuk hasil bersama (`shared`) pada stroke
+     * yang sama maupun hasil sampingan (`byproduct`) pada sequence yang sama.
+     *
+     * @param  Collection<int, WorkOrderItem>  $reportedRows
+     */
+    private function postCompanionOutputs(
+        WorkOrder $workOrder,
+        Collection $reportedRows,
+        ProductionResult $primaryResult,
+        BigDecimal $goodDecimal,
+        string $primaryUom,
+        Carbon $reportedAt,
+        ?Machine $machine,
+        ?int $actorId,
+        ?string $operatorName,
+    ): void {
+        $companions = collect();
+
+        foreach ($reportedRows as $row) {
+            if (($row->output_type ?? BomItem::OUTPUT_NORMAL) === BomItem::OUTPUT_SHARED && $row->child_part_id !== null) {
+                $sharedSiblings = $workOrder->items()
+                    ->with('parentPart:id,part_number,part_name')
+                    ->where('sequence', $row->sequence)
+                    ->where('child_part_id', $row->child_part_id)
+                    ->where('output_type', BomItem::OUTPUT_SHARED)
+                    ->where('parent_part_id', '!=', $primaryResult->parent_part_id)
+                    ->whereNotNull('parent_part_id')
+                    ->get();
+                $companions = $companions->concat($sharedSiblings);
+            }
+
+            if ($row->sequence !== null) {
+                $byproducts = $workOrder->items()
+                    ->with('parentPart:id,part_number,part_name')
+                    ->where('sequence', $row->sequence)
+                    ->where('output_type', BomItem::OUTPUT_BYPRODUCT)
+                    ->where('parent_part_id', '!=', $primaryResult->parent_part_id)
+                    ->whereNotNull('parent_part_id')
+                    ->get();
+                $companions = $companions->concat($byproducts);
+            }
+        }
+
+        $companions = $companions->unique('parent_part_id')->values();
+
+        foreach ($companions as $comp) {
+            $compPartId = (int) $comp->parent_part_id;
+            $compType = $comp->output_type ?? BomItem::OUTPUT_NORMAL;
+            $compQty = $compType === BomItem::OUTPUT_BYPRODUCT
+                ? $goodDecimal->multipliedBy(BigDecimal::of($comp->getRawOriginal('parent_qty') ?? 1))->toScale(4, RoundingMode::HALF_UP)
+                : $goodDecimal;
+
+            if ($compQty->isLessThanOrEqualTo(0)) {
+                continue;
+            }
+
+            $compUom = UomCatalog::normalize((string) $comp->parent_uom) ?? $primaryUom;
+            $compTag = $workOrder->wo_no.'#'.($comp->parentPart?->part_number ?? $compPartId).'#R'.$primaryResult->id;
+
+            $compStock = $this->stockService->postProductionStock(
+                $compPartId,
+                $compTag,
+                (string) $compQty,
+                $compUom,
+                $reportedAt,
+                $machine?->machine_code,
+            );
+
+            ProductionResult::create([
+                'work_order_id' => $workOrder->id,
+                'parent_result_id' => $primaryResult->id,
+                'parent_part_id' => $compPartId,
+                'process_id' => $comp->process_id ?? $primaryResult->process_id,
+                'machine_id' => $primaryResult->machine_id,
+                'result_date' => $reportedAt->toDateString(),
+                'shift' => $primaryResult->shift,
+                'period_start' => $primaryResult->period_start,
+                'period_end' => $primaryResult->period_end,
+                'is_backfilled' => $primaryResult->is_backfilled,
+                'label_status' => 'pending',
+                'qty_good' => (string) $compQty,
+                'qty_reject' => '0',
+                'uom' => $compUom,
+                'reported_by' => $actorId,
+                'operator_name' => $operatorName,
+                'notes' => $primaryResult->notes,
+                'output_part_stock_id' => $compStock->id,
+                'idempotency_key' => null,
+                'created_by' => $actorId,
+                'updated_by' => $actorId,
+            ]);
+        }
     }
 
     public function reverse(WorkOrder $workOrder, ProductionResult $result, ?int $actorId = null): void
@@ -288,26 +432,28 @@ class ProductionResultService
             if ($result->trashed()) {
                 return;
             }
+            if ($result->parent_result_id !== null) {
+                throw ValidationException::withMessages(['result' => __('Batalkan laporan hasil utama untuk membatalkan hasil bersama/sampingan ini.')]);
+            }
             // Laporan reject saja tidak punya baris output; konsumsinya tetap
             // harus dikembalikan di bawah.
             $hadOutput = BigDecimal::of($result->getRawOriginal('qty_good'))->isGreaterThan(0);
             if ($result->output_part_stock_id === null && $hadOutput) {
                 throw ValidationException::withMessages(['result' => __('Hasil produksi lama perlu rekonsiliasi sebelum dibatalkan.')]);
             }
-            if ($result->output_part_stock_id !== null) {
-                $output = PartStock::query()->lockForUpdate()->find($result->output_part_stock_id);
-                if ($output === null || BigDecimal::of($output->getRawOriginal('qty'))->isLessThan($result->getRawOriginal('qty_good'))
-                    || WorkOrderConsumption::where('part_stock_id', $output->id)->exists()
-                    || WorkOrderMaterialBooking::where('part_stock_id', $output->id)->where('status', 'booked')->exists()
-                    || DeliveryScan::where('part_stock_id', $output->id)->exists()) {
-                    throw ValidationException::withMessages(['result' => __('Output hasil ini sudah digunakan atau dibooking. Batalkan proses berikutnya terlebih dahulu.')]);
-                }
-                $outputRemaining = BigDecimal::of($output->getRawOriginal('qty'))->minus($result->getRawOriginal('qty_good'));
-                PartStock::query()->whereKey($output->id)->update(['qty' => (string) $outputRemaining]);
-                if ($outputRemaining->isZero()) {
-                    $output->delete();
-                }
+
+            $companions = ProductionResult::query()
+                ->where('parent_result_id', $result->id)
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($companions as $companion) {
+                $this->reverseOutputStock($companion);
+                $companion->update(['reversed_by' => $actorId]);
+                $companion->delete();
             }
+
+            $this->reverseOutputStock($result);
             $consumptions = WorkOrderConsumption::where('production_result_id', $result->id)->orderBy('id')->lockForUpdate()->get();
             foreach ($consumptions as $consumption) {
                 $item = WorkOrderItem::query()->lockForUpdate()->findOrFail($consumption->work_order_item_id);
@@ -341,6 +487,25 @@ class ProductionResultService
             $result->update(['reversed_by' => $actorId]);
             $result->delete();
         });
+    }
+
+    private function reverseOutputStock(ProductionResult $result): void
+    {
+        if ($result->output_part_stock_id === null) {
+            return;
+        }
+        $output = PartStock::query()->lockForUpdate()->find($result->output_part_stock_id);
+        if ($output === null || BigDecimal::of($output->getRawOriginal('qty'))->isLessThan($result->getRawOriginal('qty_good'))
+            || WorkOrderConsumption::where('part_stock_id', $output->id)->exists()
+            || WorkOrderMaterialBooking::where('part_stock_id', $output->id)->where('status', 'booked')->exists()
+            || DeliveryScan::where('part_stock_id', $output->id)->exists()) {
+            throw ValidationException::withMessages(['result' => __('Output hasil ini sudah digunakan atau dibooking. Batalkan proses berikutnya terlebih dahulu.')]);
+        }
+        $outputRemaining = BigDecimal::of($output->getRawOriginal('qty'))->minus($result->getRawOriginal('qty_good'));
+        PartStock::query()->whereKey($output->id)->update(['qty' => (string) $outputRemaining]);
+        if ($outputRemaining->isZero()) {
+            $output->delete();
+        }
     }
 
     public function progress(WorkOrder $workOrder): array
@@ -406,18 +571,22 @@ class ProductionResultService
                 continue;
             }
 
-            $receipts = ProductionMaterialReceipt::query()
-                ->where('work_order_id', $workOrder->id)
-                ->where('work_order_item_id', $rootItem->id)
-                ->where('machine_id', $machine->id)
-                ->where('transfer_status', 'transferred')
-                ->where('uom', UomCatalog::normalize((string) $rootItem->uom_rm))
-                ->orderBy('received_at')->orderBy('id')->lockForUpdate()->get();
+            $receiptEntries = $this->consumableMachineReceipts(
+                $workOrder,
+                $rootItem,
+                (int) $machine->id,
+                UomCatalog::normalize((string) $rootItem->uom_rm),
+            );
 
             $available = BigDecimal::zero();
-            foreach ($receipts as $receipt) {
+            foreach ($receiptEntries as $entry) {
+                $receipt = $entry['receipt'];
                 $receipt->assertValidBalance();
-                $available = $available->plus(BigDecimal::of($receipt->getRawOriginal('qty'))->minus($receipt->getRawOriginal('qty_consumed')));
+                $balance = BigDecimal::of($receipt->getRawOriginal('qty'))->minus($receipt->getRawOriginal('qty_consumed'));
+                $usable = $entry['limit'] !== null && $entry['limit']->isLessThan($balance) ? $entry['limit'] : $balance;
+                if ($usable->isGreaterThan(0)) {
+                    $available = $available->plus($usable);
+                }
             }
 
             if ($available->isLessThan($need)) {
@@ -436,12 +605,17 @@ class ProductionResultService
             }
 
             $remaining = $need;
-            foreach ($receipts as $receipt) {
+            foreach ($receiptEntries as $entry) {
                 if ($remaining->isZero()) {
                     break;
                 }
+                $receipt = $entry['receipt'];
                 $balance = BigDecimal::of($receipt->getRawOriginal('qty'))->minus($receipt->getRawOriginal('qty_consumed'));
-                $take = $remaining->isLessThan($balance) ? $remaining : $balance;
+                $usable = $entry['limit'] !== null && $entry['limit']->isLessThan($balance) ? $entry['limit'] : $balance;
+                if ($usable->isLessThanOrEqualTo(0)) {
+                    continue;
+                }
+                $take = $remaining->isLessThan($usable) ? $remaining : $usable;
                 if ($take->isZero()) {
                     continue;
                 }
@@ -489,7 +663,7 @@ class ProductionResultService
                 return;
             }
 
-            $itemQty = BigDecimal::of($item->getRawOriginal('child_qty') ?? 1);
+            $itemQty = $this->ratioDecimal($item);
             $currentRatio = $ratio->multipliedBy($itemQty);
 
             // Jika child_part_id merupakan parent step lain di mesin TPL yang sama, telusuri ke hulu
@@ -501,7 +675,7 @@ class ProductionResultService
                 // Sampai di input awal (Raw Material) di stasiun 1 TPL
                 $inputs[] = [
                     'item' => $item,
-                    'need' => $currentRatio->multipliedBy($totalQty)->toScale(10),
+                    'need' => $currentRatio->multipliedBy($totalQty)->toScale(10, RoundingMode::HALF_UP),
                 ];
             }
         };
@@ -509,5 +683,105 @@ class ProductionResultService
         $trace($finalItem, BigDecimal::one());
 
         return $inputs;
+    }
+
+    /**
+     * Ambil daftar penerimaan material yang boleh dikonsumsi oleh WO ini:
+     * 1. Milik WO sendiri di mesin ini (FIFO, tanpa batas surplus).
+     * 2. Hanya SURPLUS milik WO lain (mesin sama dulu, lalu lintas mesin):
+     *    - Bila WO lain berstatus completed/cancelled -> seluruh sisa balance.
+     *    - Bila WO lain masih aktif -> hanya kelebihan di atas sisa kebutuhannya
+     *      (`total_balance_grup - max(0, otherItem->qty_required - otherItem->qty_consumed)`),
+     *      sehingga hak material WO lain yang belum dipakai tidak pernah terambil.
+     *
+     * @return Collection<int, array{receipt: ProductionMaterialReceipt, limit: BigDecimal|null}>
+     */
+    private function consumableMachineReceipts(WorkOrder $workOrder, WorkOrderItem $item, int $machineId, ?string $uom): Collection
+    {
+        $ownReceipts = ProductionMaterialReceipt::query()
+            ->where('work_order_id', $workOrder->id)
+            ->where('work_order_item_id', $item->id)
+            ->where('machine_id', $machineId)
+            ->where('transfer_status', 'transferred')
+            ->when($uom !== null, fn ($q) => $q->where('uom', $uom))
+            ->orderBy('received_at')
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get()
+            ->map(fn (ProductionMaterialReceipt $r): array => ['receipt' => $r, 'limit' => null]);
+
+        $item->loadMissing('allocations');
+        $allowedPartIds = app(WoService::class)->allowedPartIdsForItem($item);
+
+        if ($allowedPartIds === []) {
+            return $ownReceipts;
+        }
+
+        $sharedCandidates = ProductionMaterialReceipt::query()
+            ->with(['workOrder:id,status', 'workOrderItem:id,qty_required,qty_consumed'])
+            ->where('work_order_id', '!=', $workOrder->id)
+            ->where('transfer_status', 'transferred')
+            ->whereIn('part_id', $allowedPartIds)
+            ->when($uom !== null, fn ($q) => $q->where('uom', $uom))
+            ->whereColumn('qty', '>', 'qty_consumed')
+            ->orderByRaw('CASE WHEN machine_id = ? THEN 0 ELSE 1 END', [$machineId])
+            ->orderBy('received_at')
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+
+        if ($sharedCandidates->isEmpty()) {
+            return $ownReceipts;
+        }
+
+        $groupSurplus = [];
+        foreach ($sharedCandidates->groupBy(fn (ProductionMaterialReceipt $r): string => $r->work_order_id.'|'.($r->work_order_item_id ?? 0)) as $key => $group) {
+            $first = $group->first();
+            $totalBalance = BigDecimal::zero();
+            foreach ($group as $r) {
+                $totalBalance = $totalBalance->plus(BigDecimal::of($r->getRawOriginal('qty'))->minus($r->getRawOriginal('qty_consumed')));
+            }
+
+            $otherStatus = $first?->workOrder?->status;
+            $otherItem = $first?->workOrderItem;
+
+            if (in_array($otherStatus, ['completed', 'cancelled'], true) || $otherItem === null) {
+                $groupSurplus[$key] = $totalBalance;
+
+                continue;
+            }
+
+            $otherNeed = BigDecimal::of($otherItem->getRawOriginal('qty_required') ?? 0)
+                ->minus(BigDecimal::of($otherItem->getRawOriginal('qty_consumed') ?? 0));
+            if ($otherNeed->isLessThan(0)) {
+                $otherNeed = BigDecimal::zero();
+            }
+
+            $surplus = $totalBalance->minus($otherNeed);
+            $groupSurplus[$key] = $surplus->isGreaterThan(0) ? $surplus : BigDecimal::zero();
+        }
+
+        $sharedEntries = collect();
+        foreach ($sharedCandidates as $candidate) {
+            $key = $candidate->work_order_id.'|'.($candidate->work_order_item_id ?? 0);
+            $remainingSurplus = $groupSurplus[$key] ?? BigDecimal::zero();
+            if ($remainingSurplus->isLessThanOrEqualTo(0)) {
+                continue;
+            }
+            $balance = BigDecimal::of($candidate->getRawOriginal('qty'))->minus($candidate->getRawOriginal('qty_consumed'));
+            if ($balance->isLessThanOrEqualTo(0)) {
+                continue;
+            }
+            $cap = $balance->isLessThan($remainingSurplus) ? $balance : $remainingSurplus;
+            $groupSurplus[$key] = $remainingSurplus->minus($cap);
+            $sharedEntries->push(['receipt' => $candidate, 'limit' => $cap]);
+        }
+
+        return $ownReceipts->concat($sharedEntries);
+    }
+
+    private function ratioDecimal(WorkOrderItem $item): BigDecimal
+    {
+        return BigDecimal::of($item->getRawOriginal('child_qty') ?? 0);
     }
 }

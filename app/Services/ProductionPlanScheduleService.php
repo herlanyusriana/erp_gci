@@ -227,11 +227,13 @@ class ProductionPlanScheduleService
                     }
                     $seenDep[$depKey] = true;
                     $rawChildQty = $item->child_qty !== null ? (float) $item->child_qty : 1.0;
+                    $rawParentQty = $item->parent_qty !== null && (float) $item->parent_qty > 0 ? (float) $item->parent_qty : 1.0;
+                    $effectiveChildQty = $rawChildQty > 0 ? ($rawChildQty / $rawParentQty) : 1.0;
                     $upstreamDeps[] = [
                         'machine_id' => $owner['machine_id'],
                         'machine_name' => $owner['machine_name'],
                         'wip_part_id' => $owner['wip_part_id'],
-                        'child_qty' => $rawChildQty > 0 ? $rawChildQty : 1.0,
+                        'child_qty' => $effectiveChildQty,
                     ];
                 }
 
@@ -491,66 +493,106 @@ class ProductionPlanScheduleService
 
         usort($entries, fn (array $a, array $b): int => ($a['sequence'] <=> $b['sequence']) ?: ($a['id'] <=> $b['id']));
 
+        $groupedBySeq = [];
+        foreach ($entries as $entry) {
+            $seq = (int) ($entry['sequence'] > 0 ? $entry['sequence'] : 1);
+            $groupedBySeq[$seq][] = $entry;
+        }
+        ksort($groupedBySeq);
+
         $cursor = (float) $intervals[0][0];
         $lastEnd = (float) $intervals[count($intervals) - 1][1];
         $results = [];
-        $timedIndex = 0;
-        $prevWipPartId = null;
+        $timedGroupIndex = 0;
+        $prevWipPartIds = [];
 
-        foreach ($entries as $entry) {
-            $key = $entry['key'];
-            $qty = (float) $entry['qty'];
-            $tt = $entry['cycle_time_seconds'];
-            $qdc = $entry['qdc_minutes'];
+        foreach ($groupedBySeq as $seqEntries) {
+            $timedEntries = [];
+            foreach ($seqEntries as $entry) {
+                $key = $entry['key'];
+                $qty = (float) $entry['qty'];
+                $tt = $entry['cycle_time_seconds'];
 
-            if ($qty <= 0 || $tt === null || $tt <= 0) {
-                $results[$key] = [
-                    'start_time' => null,
-                    'end_time' => null,
-                    'qdc_applied_minutes' => 0.0,
-                    'duration_seconds' => null,
-                    'is_overload' => false,
-                ];
+                if ($qty <= 0 || $tt === null || $tt <= 0) {
+                    $results[$key] = [
+                        'start_time' => null,
+                        'end_time' => null,
+                        'qdc_applied_minutes' => 0.0,
+                        'duration_seconds' => null,
+                        'is_overload' => false,
+                    ];
 
+                    continue;
+                }
+
+                $timedEntries[] = $entry;
+            }
+
+            if ($timedEntries === []) {
                 continue;
             }
 
-            $qdcApplied = 0.0;
-            if ($qdc !== null && $qdc > 0) {
+            // Entri pada Seq yang sama berjalan paralel dalam 1 mesin / 1 mold:
+            // QDC dihitung 1x (MAX), semua mulai bersamaan, dan Seq berikutnya
+            // mulai setelah yang paling lama selesai.
+            $groupQdcApplied = 0.0;
+            foreach ($timedEntries as $entry) {
+                $qdc = $entry['qdc_minutes'];
+                if ($qdc === null || $qdc <= 0) {
+                    continue;
+                }
+
+                $shouldApply = false;
                 if (array_key_exists('apply_qdc', $entry) && $entry['apply_qdc'] !== null) {
-                    if ((bool) $entry['apply_qdc']) {
-                        $qdcApplied = (float) $qdc;
-                    }
-                } elseif ($timedIndex === 0) {
-                    if ($initialQdc) {
-                        $qdcApplied = (float) $qdc;
-                    }
-                } elseif ($entry['wip_part_id'] === null || $entry['wip_part_id'] !== $prevWipPartId) {
-                    $qdcApplied = (float) $qdc;
+                    $shouldApply = (bool) $entry['apply_qdc'];
+                } elseif ($timedGroupIndex === 0) {
+                    $shouldApply = $initialQdc;
+                } elseif ($entry['wip_part_id'] === null || ! in_array($entry['wip_part_id'], $prevWipPartIds, true)) {
+                    $shouldApply = true;
+                }
+
+                if ($shouldApply) {
+                    $groupQdcApplied = max($groupQdcApplied, (float) $qdc);
                 }
             }
 
             $cursor = $this->snapToWorking($cursor, $intervals);
-            $startMinute = $cursor;
+            $groupStartMinute = $cursor;
+            $groupMaxEndMinute = $groupStartMinute;
+            $currentWipPartIds = [];
 
-            $runMinutes = ($qty * $tt) / 60.0;
-            [$cursor, $isOverload] = $this->advanceCursor($cursor, $qdcApplied + $runMinutes, $intervals);
-            $endMinute = $cursor;
+            foreach ($timedEntries as $entry) {
+                $key = $entry['key'];
+                $qty = (float) $entry['qty'];
+                $tt = (float) $entry['cycle_time_seconds'];
 
-            if ($endMinute > $lastEnd + 1e-6) {
-                $isOverload = true;
+                $runMinutes = ($qty * $tt) / 60.0;
+                [$entryEndMinute, $isOverload] = $this->advanceCursor($groupStartMinute, $groupQdcApplied + $runMinutes, $intervals);
+
+                if ($entryEndMinute > $lastEnd + 1e-6) {
+                    $isOverload = true;
+                }
+
+                if ($entryEndMinute > $groupMaxEndMinute) {
+                    $groupMaxEndMinute = $entryEndMinute;
+                }
+
+                $results[$key] = [
+                    'start_time' => $this->formatClock($groupStartMinute),
+                    'end_time' => $this->formatClock($entryEndMinute),
+                    'qdc_applied_minutes' => round($groupQdcApplied, 2),
+                    'duration_seconds' => round(($groupQdcApplied * 60.0) + ($qty * $tt), 2),
+                    'is_overload' => $isOverload,
+                ];
+
+                if ($entry['wip_part_id'] !== null) {
+                    $currentWipPartIds[] = $entry['wip_part_id'];
+                }
             }
 
-            $results[$key] = [
-                'start_time' => $this->formatClock($startMinute),
-                'end_time' => $this->formatClock($endMinute),
-                'qdc_applied_minutes' => round($qdcApplied, 2),
-                'duration_seconds' => round(($qdcApplied * 60.0) + ($qty * $tt), 2),
-                'is_overload' => $isOverload,
-            ];
-
-            $timedIndex++;
-            $prevWipPartId = $entry['wip_part_id'];
+            $cursor = $groupMaxEndMinute;
+            $timedGroupIndex++;
+            $prevWipPartIds = $currentWipPartIds;
         }
 
         return $results;

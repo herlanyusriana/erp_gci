@@ -190,6 +190,7 @@ export interface BomItem {
     uom_rm: string | null;
     special_code: string | null;
     source: string | null;
+    output_type?: 'normal' | 'shared' | 'byproduct' | null;
     tact_time_seconds?: number | null;
     qdc_minutes?: number | null;
     parent_part?: Pick<Part, 'id' | 'part_number' | 'part_name' | 'model'> | null;
@@ -277,6 +278,7 @@ export interface IncomingArrivalItem {
         purchase_order?: { id: number; po_no: string } | null;
     } | null;
     receives?: IncomingReceive[];
+    receives_count?: number;
 }
 
 export type ArrivalType = 'import' | 'local' | 'osp_gci' | 'osp_customer';

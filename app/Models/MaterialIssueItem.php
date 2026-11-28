@@ -9,12 +9,13 @@ class MaterialIssueItem extends Model
 {
     protected $fillable = [
         'material_issue_id', 'work_order_item_id', 'part_id',
-        'part_stock_id', 'tag', 'invoice', 'supplier', 'qty', 'uom', 'price',
+        'part_stock_id', 'tag', 'packing_nos', 'invoice', 'supplier', 'qty', 'uom', 'price',
     ];
 
     protected $casts = [
         'qty' => 'float',
         'price' => 'float',
+        'packing_nos' => 'array',
     ];
 
     public function materialIssue(): BelongsTo

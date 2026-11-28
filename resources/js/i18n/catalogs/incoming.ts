@@ -306,7 +306,14 @@ export default {
         "allPoPartsSelectedHint": "Seluruh part yang tersisa pada PO ini sudah dipilih di daftar item. Tidak ada part lain yang tersisa di PO.",
         "exceedsPoRemaining": "Melebihi sisa PO ({remaining} {unit}).",
         "arrivedQty": "Sudah Tiba",
-        "arrivalHistory": "Riwayat Kedatangan"
+        "arrivalHistory": "Riwayat Kedatangan",
+        "rowReceivedBadge": "Sudah Receive ({count})",
+        "rowUnreceivedBadge": "Belum Receive",
+        "cannotDeleteReceivedRow": "Baris ini sudah memiliki penerimaan (receive), tidak dapat dihapus.",
+        "removeUnreceivedRows": "Hapus {count} baris belum di-receive",
+        "poPartsProgressSummary": "{remaining} dari {total} part masih bersisa · {exhausted} part sudah penuh (0)",
+        "poExhaustedPartsHint": "Part dengan sisa 0 tidak muncul di pilihan. Periksa riwayat Arrival di detail PO bila ada item lama yang belum di-receive.",
+        "viewPoDetail": "Lihat Detail PO"
     },
     "en": {
         "purchaseOrder": "Purchase Order",
@@ -615,7 +622,14 @@ export default {
         "allPoPartsSelectedHint": "All remaining parts on this PO have been added below. No other parts remain on this PO.",
         "exceedsPoRemaining": "Exceeds PO remaining ({remaining} {unit}).",
         "arrivedQty": "Arrived",
-        "arrivalHistory": "Arrival History"
+        "arrivalHistory": "Arrival History",
+        "rowReceivedBadge": "Received ({count})",
+        "rowUnreceivedBadge": "Not Received",
+        "cannotDeleteReceivedRow": "This row already has receive records and cannot be deleted.",
+        "removeUnreceivedRows": "Remove {count} unreceived rows",
+        "poPartsProgressSummary": "{remaining} of {total} parts remaining · {exhausted} parts full (0)",
+        "poExhaustedPartsHint": "Parts with 0 remaining are hidden from the dropdown. Check Arrival history on the PO detail page if older items were not received.",
+        "viewPoDetail": "View PO Detail"
     },
     "ko": {
         "purchaseOrder": "구매 주문",
@@ -924,6 +938,13 @@ export default {
         "allPoPartsSelectedHint": "이 PO의 남은 부품이 모두 선택되었습니다. 추가로 남은 부품이 없습니다.",
         "exceedsPoRemaining": "PO 잔량({remaining} {unit})을 초과합니다.",
         "arrivedQty": "입고 완료",
-        "arrivalHistory": "입고 이력"
+        "arrivalHistory": "입고 이력",
+        "rowReceivedBadge": "입고 완료 ({count})",
+        "rowUnreceivedBadge": "미입고",
+        "cannotDeleteReceivedRow": "이미 입고(Receive) 기록이 있어 삭제할 수 없습니다.",
+        "removeUnreceivedRows": "미입고 {count}개 행 삭제",
+        "poPartsProgressSummary": "전체 {total}개 중 {remaining}개 부품 잔량 있음 · {exhausted}개 부품 소진 (0)",
+        "poExhaustedPartsHint": "잔량이 0인 부품은 목록에 표시되지 않습니다. 미입고된 이전 항목이 있다면 PO 상세의 입고 이력을 확인하세요.",
+        "viewPoDetail": "PO 상세 보기"
     }
 };

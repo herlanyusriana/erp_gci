@@ -22,6 +22,7 @@ class ReleaseContextService
     public function __construct(
         private WoService $woService,
         private PartStockTagService $stockTags,
+        private MaterialIssueBundleService $bundleService,
     ) {}
 
     /**
@@ -33,7 +34,8 @@ class ReleaseContextService
             ->with([
                 'process:id,process_name',
                 'machine:id,machine_code,machine_name',
-                'childPart:id,part_number,part_name,model',
+                'childPart:id,part_number,part_name,model,part_type_id',
+                'childPart.partType:id,code',
                 'allocations.part:id,part_number,part_name,model',
             ])
             ->get();
@@ -135,6 +137,12 @@ class ReleaseContextService
                     ->map(fn ($id) => ['part_id' => $id, 'source' => 'substitute', 'allocation_qty' => null])
                     ->values()
                     ->all();
+
+                // Untuk item berbahan WIP dari WO lain (mis. blank hasil Press L+R),
+                // stok berada pada child_part_id itu sendiri.
+                if ($candidates === [] && strtoupper((string) ($it->childPart?->partType?->code ?? '')) === 'WIP' && $it->child_part_id !== null) {
+                    $candidates = [['part_id' => (int) $it->child_part_id, 'source' => 'wip', 'allocation_qty' => null]];
+                }
             }
 
             $materials = collect($candidates)->map(function (array $candidate) use ($stock, $uom, $parts, $it, $issuedForItem) {
@@ -160,6 +168,7 @@ class ReleaseContextService
 
             $firstMaterial = $materials->first();
             $issuedTotal = round((float) $issuedForItem->sum('issued_qty'), 4);
+            $net = $this->bundleService->netRequirement($it, $workOrder);
 
             $rows[] = [
                 'work_order_item_id' => $it->id,
@@ -174,9 +183,14 @@ class ReleaseContextService
                 ] : null,
                 'child_part_name' => $it->child_part_name,
                 'uom' => $uom,
-                'required' => round((float) $it->qty_required, 4),
+                'required' => $net['required_qty'],
+                'wo_required' => $net['wo_required_qty'],
+                'planned_qty' => $net['planned_qty'],
+                'cons_per_unit' => $net['cons_per_unit'],
+                'shared_machine_stock' => $net['shared_machine_stock'],
+                'shared_machine_packings' => $net['shared_machine_packings'],
                 'consumed' => round((float) $it->qty_consumed, 4),
-                'remaining' => round(max(0.0, (float) $it->qty_required - $issuedTotal), 4),
+                'remaining' => $net['net_requirement'],
                 'stock_state' => $materials->contains(fn (array $m) => $m['available_qty'] > 1e-9) ? 'available' : 'none',
                 'is_auxiliary' => self::isAuxiliaryItem($it),
                 'size' => $firstMaterial !== null ? $firstMaterial['size'] : $it->size,
@@ -188,6 +202,35 @@ class ReleaseContextService
         }
 
         return $rows;
+    }
+
+    /**
+     * Ringkasan kecukupan stok surplus di mesin (dari WO lain bermaterial sama di
+     * mesin yang sama). Bila seluruh kebutuhan utama sudah tertutup oleh surplus
+     * mesin, WO planned boleh langsung di-release tanpa scan tag baru di gudang.
+     *
+     * @param  list<array<string, mixed>>  $items
+     * @return array{machine_surplus_qty: float, can_release_with_machine_stock: bool}
+     */
+    public function machineStockSummary(WorkOrder $workOrder, array $items): array
+    {
+        $nonAux = collect($items)->reject(fn (array $row): bool => (bool) ($row['is_auxiliary'] ?? false));
+        $totalSurplus = round((float) $nonAux->sum(fn (array $row): float => (float) ($row['shared_machine_stock'] ?? 0)), 4);
+        $packings = $nonAux
+            ->flatMap(fn (array $row): array => (array) ($row['shared_machine_packings'] ?? []))
+            ->filter(fn ($p): bool => is_string($p) && $p !== '')
+            ->unique()
+            ->values()
+            ->all();
+        $allCovered = $nonAux->isNotEmpty()
+            && $totalSurplus > 1e-9
+            && $nonAux->every(fn (array $row): bool => (float) ($row['remaining'] ?? 0) <= 1e-9);
+
+        return [
+            'machine_surplus_qty' => $totalSurplus,
+            'machine_surplus_packings' => $packings,
+            'can_release_with_machine_stock' => $workOrder->status === 'planned' && $allCovered,
+        ];
     }
 
     /**

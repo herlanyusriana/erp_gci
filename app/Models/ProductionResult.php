@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class ProductionResult extends Model
@@ -11,7 +12,7 @@ class ProductionResult extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        'work_order_id', 'parent_part_id', 'process_id', 'machine_id',
+        'work_order_id', 'parent_result_id', 'parent_part_id', 'process_id', 'machine_id',
         'result_date', 'shift', 'qty_good', 'qty_reject', 'uom',
         'period_start', 'period_end', 'is_backfilled', 'label_status',
         'label_carried_over_qty', 'label_carry_over_source_id',
@@ -63,5 +64,15 @@ class ProductionResult extends Model
     public function carryOverSource(): BelongsTo
     {
         return $this->belongsTo(self::class, 'label_carry_over_source_id');
+    }
+
+    public function parentResult(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'parent_result_id');
+    }
+
+    public function companionResults(): HasMany
+    {
+        return $this->hasMany(self::class, 'parent_result_id');
     }
 }

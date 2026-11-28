@@ -59,4 +59,14 @@ class ProductionMaterialReceipt extends Model
     {
         return $this->belongsTo(User::class, 'received_by');
     }
+
+    public function workOrder(): BelongsTo
+    {
+        return $this->belongsTo(WorkOrder::class);
+    }
+
+    public function workOrderItem(): BelongsTo
+    {
+        return $this->belongsTo(WorkOrderItem::class);
+    }
 }

@@ -149,6 +149,8 @@ class MaterialIssueApiController extends Controller
 
         $workOrder->load(['part:id,part_number,part_name,model']);
         $wip = $this->releaseContextService->wipSummary($workOrder);
+        $items = $this->releaseContextService->items($workOrder);
+        $machineStock = $this->releaseContextService->machineStockSummary($workOrder, $items);
 
         return response()->json([
             'ok' => true,
@@ -161,13 +163,16 @@ class MaterialIssueApiController extends Controller
                     'wip_available_qty' => $wip['wip_available_qty'],
                     'can_release_with_wip' => $wip['can_release_with_wip'],
                     'wip_stocks' => $wip['wip_stocks'],
+                    'machine_surplus_qty' => $machineStock['machine_surplus_qty'],
+                    'machine_surplus_packings' => $machineStock['machine_surplus_packings'],
+                    'can_release_with_machine_stock' => $machineStock['can_release_with_machine_stock'],
                     'part' => $workOrder->part ? [
                         'id' => $workOrder->part->id,
                         'part_number' => $workOrder->part->part_number,
                         'part_name' => $workOrder->part->part_name,
                     ] : null,
                 ],
-                'items' => $this->releaseContextService->items($workOrder),
+                'items' => $items,
             ],
         ]);
     }
@@ -317,7 +322,7 @@ class MaterialIssueApiController extends Controller
 
         return response()->json([
             'ok' => true,
-            'data' => $this->bundleService->netRequirement($item),
+            'data' => $this->bundleService->netRequirement($item, $workOrder),
         ]);
     }
 
@@ -709,6 +714,12 @@ class MaterialIssueApiController extends Controller
 
         $allowWipRelease = $request->boolean('use_wip')
             && $this->releaseContextService->wipSummary($workOrder)['can_release_with_wip'];
+        $allowMachineStockRelease = $request->boolean('use_machine_stock')
+            && $this->releaseContextService->machineStockSummary(
+                $workOrder,
+                $this->releaseContextService->items($workOrder),
+            )['can_release_with_machine_stock'];
+        $allowEmptyItems = $allowWipRelease || $allowMachineStockRelease;
 
         $data = $request->validate([
             'issue_date' => ['nullable', 'date'],
@@ -721,13 +732,16 @@ class MaterialIssueApiController extends Controller
             'idempotency_key' => ['required', 'string', 'max:80'],
             'notes' => ['nullable', 'string', 'max:2000'],
             'use_wip' => ['nullable', 'boolean'],
-            'items' => $allowWipRelease ? ['nullable', 'array'] : ['required', 'array', 'min:1'],
+            'use_machine_stock' => ['nullable', 'boolean'],
+            'items' => $allowEmptyItems ? ['nullable', 'array'] : ['required', 'array', 'min:1'],
             'items.*.work_order_item_id' => ['required', 'integer'],
             'items.*.scans' => ['required', 'array', 'min:1'],
             'items.*.scans.*.tag' => ['required', 'string', 'max:255'],
             'items.*.scans.*.qty' => ['required', 'numeric', 'gt:0'],
             'items.*.scans.*.part_id' => ['nullable', 'integer', 'exists:parts,id'],
-            // Penanda dari layar bundle: total issue harus ≤ kebutuhan bersih.
+            'items.*.scans.*.packing_nos' => ['nullable', 'array'],
+            'items.*.scans.*.packing_nos.*' => ['string', 'max:100'],
+            // Penanda dari layar bundle: total issue harus ≤ kebutuhan bersih (dengan toleransi 1 kemasan utuh).
             'items.*.bundle_plan' => ['nullable', 'boolean'],
         ]);
 

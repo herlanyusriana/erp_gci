@@ -448,6 +448,7 @@ class IncomingArrivalController extends Controller
                 )
                 ->join('incoming_arrivals as ia', 'ia.id', '=', 'incoming_arrival_items.arrival_id')
                 ->whereNull('ia.deleted_at')
+                ->where(fn ($q) => $q->whereNull('ia.status')->orWhere('ia.status', '!=', 'cancelled'))
                 ->whereIn('ia.purchase_order_id', $poIds)
                 ->when($excludeArrivalId !== null, fn ($q) => $q->where('ia.id', '!=', $excludeArrivalId))
                 ->get()
@@ -794,7 +795,13 @@ class IncomingArrivalController extends Controller
     {
         Gate::authorize('update', $arrival);
 
-        $arrival->load(['supplier', 'subcontractor', 'customer', 'items.part.uom', 'containers']);
+        $arrival->load([
+            'supplier',
+            'subcontractor',
+            'customer',
+            'items' => fn ($q) => $q->with('part.uom')->withCount('receives'),
+            'containers',
+        ]);
 
         return Inertia::render('Incoming/Arrival/Form', $this->formProps($arrival));
     }

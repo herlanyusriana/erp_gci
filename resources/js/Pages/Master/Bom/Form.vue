@@ -27,6 +27,7 @@ interface ItemRow {
     uom_rm: string;
     special_code: string;
     source: string;
+    output_type: 'normal' | 'shared' | 'byproduct';
 }
 
 const props = defineProps<{
@@ -61,6 +62,7 @@ const blankItem = (): ItemRow => ({
     uom_rm: '',
     special_code: '',
     source: '',
+    output_type: 'normal',
 });
 
 const seedItems = (): ItemRow[] => {
@@ -81,6 +83,7 @@ const seedItems = (): ItemRow[] => {
             uom_rm: i.uom_rm ?? '',
             special_code: i.special_code ?? '',
             source: i.source ?? '',
+            output_type: i.output_type ?? 'normal',
         }));
     }
 
@@ -259,6 +262,7 @@ function submit() {
         uom_rm: r.uom_rm,
         special_code: r.special_code,
         source: r.source,
+        output_type: r.output_type,
     })) as any;
 
     if (props.bom) {
@@ -437,15 +441,24 @@ const fieldClass = 'mt-1 w-full rounded-lg border-borderline bg-surface px-3 py-
                             </p>
                             <InputError :message="rowError(i, 'size')" class="mt-1" />
                         </div>
-                        <div class="sm:col-span-4">
+                        <div class="sm:col-span-3">
                             <label class="text-xs font-semibold text-ink-secondary">{{ t('master.specialCode') }}</label>
                             <input :aria-label="t('master.specialCode')" v-model="r.special_code" type="text" :class="fieldClass" />
                             <InputError :message="rowError(i, 'special_code')" class="mt-1" />
                         </div>
-                        <div class="sm:col-span-4">
+                        <div class="sm:col-span-2">
                             <label class="text-xs font-semibold text-ink-secondary">{{ t('master.source') }}</label>
                             <input :aria-label="t('master.source')" v-model="r.source" type="text" :class="fieldClass" />
                             <InputError :message="rowError(i, 'source')" class="mt-1" />
+                        </div>
+                        <div class="sm:col-span-3">
+                            <label class="text-xs font-semibold text-ink-secondary">{{ t('master.outputType') }}</label>
+                            <select :aria-label="t('master.outputType')" v-model="r.output_type" :class="fieldClass">
+                                <option value="normal">{{ t('master.outputTypeNormal') }}</option>
+                                <option value="shared">{{ t('master.outputTypeShared') }}</option>
+                                <option value="byproduct">{{ t('master.outputTypeByproduct') }}</option>
+                            </select>
+                            <InputError :message="rowError(i, 'output_type')" class="mt-1" />
                         </div>
                     </div>
                 </div>

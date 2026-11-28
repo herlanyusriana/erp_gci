@@ -59,15 +59,25 @@ interface ModalRowDraft {
     d2_machine_id: number;
 }
 
-interface OverloadPrompt {
-    dayKey: DayKey;
-    nextDayKey: DayKey | null;
-    shifts: number;
+interface OverloadEntry {
     rowIndex: number;
     woNo: string;
     partLabel: string;
     maxQty: number;
     overflowQty: number;
+}
+
+interface OverloadPrompt {
+    dayKey: DayKey;
+    nextDayKey: DayKey | null;
+    shifts: number;
+    seq: number;
+    rowIndex: number;
+    woNo: string;
+    partLabel: string;
+    maxQty: number;
+    overflowQty: number;
+    entries: OverloadEntry[];
 }
 
 interface UnusedShiftItem {
@@ -325,6 +335,7 @@ const machinePlanForm = useForm<{
 
 const showInlineCreateWo = ref(false);
 const showAllFgInInlineCreate = ref(false);
+const modalSearch = ref('');
 const inlineWoForm = useForm({
     plan_date: props.date,
     fg_part_id: '',
@@ -435,6 +446,7 @@ function openMachineModal(machineId: number) {
         d2: machine.sync_downstream?.d2 ?? defaultSync,
     };
     machinePlanForm.rows = machine.modal_rows.map((row) => toModalDraft(row, machine.id));
+    modalSearch.value = '';
     showInlineCreateWo.value = false;
     showAllFgInInlineCreate.value = false;
     overloadPrompt.value = null;
@@ -445,10 +457,31 @@ function openMachineModal(machineId: number) {
 
 function closeMachineModal() {
     activeMachineId.value = null;
+    modalSearch.value = '';
     showInlineCreateWo.value = false;
     overloadPrompt.value = null;
     unusedShiftItems.value = [];
 }
+
+const filteredModalRows = computed(() => {
+    const q = modalSearch.value.trim().toLowerCase();
+    const mapped = machinePlanForm.rows.map((row, idx) => ({ row, idx }));
+    if (q === '') return mapped;
+    return mapped.filter(({ row }) =>
+        [
+            row.wo_no,
+            row.fg_part?.part_number,
+            row.fg_part?.part_name,
+            row.fg_part?.model,
+            row.wip_part?.part_number,
+            row.wip_part?.part_name,
+        ]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase()
+            .includes(q),
+    );
+});
 
 watch(
     () => activeMachine.value?.modal_rows,
@@ -544,23 +577,80 @@ function capacityMinutesFor(key: DayKey): number {
     return props.dayShiftCapacities?.[key]?.[shifts] ?? shifts * 420;
 }
 
-function dayUsageSummary(key: DayKey) {
-    const capMinutes = capacityMinutesFor(key);
+function effectiveSeq(row: ModalRowDraft, key: DayKey): number {
+    const raw = Number(row[`${key}_seq`]);
+    return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 1;
+}
+
+function isParallelRowInDay(row: ModalRowDraft, key: DayKey): boolean {
     const currentMachineId = activeMachine.value?.id;
-    let usedSeconds = 0;
+    if (currentMachineId != null && row[`${key}_machine_id`] !== currentMachineId) return false;
+    if (numOrZero(row[`${key}_qty`]) <= 0) return false;
+
+    const targetSeq = effectiveSeq(row, key);
+    let count = 0;
+    for (const candidate of machinePlanForm.rows) {
+        if (currentMachineId != null && candidate[`${key}_machine_id`] !== currentMachineId) continue;
+        if (numOrZero(candidate[`${key}_qty`]) <= 0) continue;
+        if (effectiveSeq(candidate, key) === targetSeq) {
+            count++;
+            if (count >= 2) return true;
+        }
+    }
+    return false;
+}
+
+function groupedTimedEntriesForDay(key: DayKey) {
+    const currentMachineId = activeMachine.value?.id;
+    const bySeq = new Map<number, Array<{ row: ModalRowDraft; idx: number; qty: number; tt: number; qdcSeconds: number }>>();
     let plannedCount = 0;
     let timedCount = 0;
 
-    for (const row of machinePlanForm.rows) {
-        if (currentMachineId != null && row[`${key}_machine_id`] !== currentMachineId) continue;
+    machinePlanForm.rows.forEach((row, idx) => {
+        if (currentMachineId != null && row[`${key}_machine_id`] !== currentMachineId) return;
         const qty = numOrZero(row[`${key}_qty`]);
-        if (qty <= 0) continue;
+        if (qty <= 0) return;
         plannedCount++;
-        if (row.cycle_time_seconds != null && row.cycle_time_seconds > 0) {
-            timedCount++;
-            const qdcSecs = row[`${key}_qdc`] && hasMasterQdc(row) ? Number(row.qdc_minutes) * 60 : 0;
-            usedSeconds += qdcSecs + (qty * row.cycle_time_seconds);
-        }
+        if (row.cycle_time_seconds == null || row.cycle_time_seconds <= 0) return;
+
+        timedCount++;
+        const seq = effectiveSeq(row, key);
+        const tt = Number(row.cycle_time_seconds);
+        const qdcSeconds = row[`${key}_qdc`] && hasMasterQdc(row) ? Number(row.qdc_minutes) * 60 : 0;
+        const list = bySeq.get(seq) ?? [];
+        list.push({ row, idx, qty, tt, qdcSeconds });
+        bySeq.set(seq, list);
+    });
+
+    const groups = [...bySeq.entries()]
+        .sort((a, b) => a[0] - b[0])
+        .map(([seq, entries]) => {
+            let groupQdcSeconds = 0;
+            let groupProdSeconds = 0;
+            for (const e of entries) {
+                if (e.qdcSeconds > groupQdcSeconds) groupQdcSeconds = e.qdcSeconds;
+                const prod = e.qty * e.tt;
+                if (prod > groupProdSeconds) groupProdSeconds = prod;
+            }
+            return {
+                seq,
+                entries,
+                groupQdcSeconds,
+                groupProdSeconds,
+                groupTotalSeconds: groupQdcSeconds + groupProdSeconds,
+            };
+        });
+
+    return { groups, plannedCount, timedCount };
+}
+
+function dayUsageSummary(key: DayKey) {
+    const capMinutes = capacityMinutesFor(key);
+    const { groups, plannedCount, timedCount } = groupedTimedEntriesForDay(key);
+    let usedSeconds = 0;
+
+    for (const group of groups) {
+        usedSeconds += group.groupTotalSeconds;
     }
 
     const usedMinutes = usedSeconds / 60;
@@ -579,51 +669,59 @@ function dayUsageSummary(key: DayKey) {
 
 function findFirstOverload(): OverloadPrompt | null {
     const nextMap: Record<DayKey, DayKey | null> = { d: 'd1', d1: 'd2', d2: null };
-    const currentMachineId = activeMachine.value?.id;
 
     for (const key of dayKeys) {
         const capSeconds = capacityMinutesFor(key) * 60;
         const shifts = machinePlanForm.shift_counts[key] ?? 3;
-
-        const ordered = machinePlanForm.rows
-            .map((row, idx) => ({
-                row,
-                idx,
-                seq: Number(row[`${key}_seq`]) > 0 ? Number(row[`${key}_seq`]) : 1,
-                qty: numOrZero(row[`${key}_qty`]),
-            }))
-            .filter((e) =>
-                (currentMachineId == null || e.row[`${key}_machine_id`] === currentMachineId)
-                && e.qty > 0
-                && e.row.cycle_time_seconds != null
-                && e.row.cycle_time_seconds > 0,
-            )
-            .sort((a, b) => (a.seq - b.seq) || (a.idx - b.idx));
+        const { groups } = groupedTimedEntriesForDay(key);
 
         let remainingSeconds = capSeconds;
-        for (const entry of ordered) {
-            const tt = Number(entry.row.cycle_time_seconds);
-            const qdcSeconds = entry.row[`${key}_qdc`] && hasMasterQdc(entry.row) ? Number(entry.row.qdc_minutes) * 60 : 0;
-            const prodSeconds = entry.qty * tt;
+        for (const group of groups) {
+            if (group.groupTotalSeconds > remainingSeconds + 1e-6) {
+                const availForProd = Math.max(0, remainingSeconds - group.groupQdcSeconds);
+                const overloadedEntries: OverloadEntry[] = [];
 
-            if (qdcSeconds + prodSeconds > remainingSeconds + 1e-6) {
-                const availForProd = Math.max(0, remainingSeconds - qdcSeconds);
-                const maxQty = Math.max(0, Math.floor(availForProd / tt));
-                const overflowQty = Number(Math.max(0, entry.qty - maxQty).toFixed(4));
+                for (const entry of group.entries) {
+                    const maxQty = Math.max(0, Math.floor(availForProd / entry.tt));
+                    const overflowQty = Number(Math.max(0, entry.qty - maxQty).toFixed(4));
+                    if (overflowQty > 1e-6) {
+                        overloadedEntries.push({
+                            rowIndex: entry.idx,
+                            woNo: entry.row.wo_no,
+                            partLabel: fgPrimaryName(entry.row.fg_part),
+                            maxQty,
+                            overflowQty,
+                        });
+                    }
+                }
 
+                if (overloadedEntries.length === 0) {
+                    const first = group.entries[0];
+                    overloadedEntries.push({
+                        rowIndex: first.idx,
+                        woNo: first.row.wo_no,
+                        partLabel: fgPrimaryName(first.row.fg_part),
+                        maxQty: 0,
+                        overflowQty: first.qty,
+                    });
+                }
+
+                const primary = overloadedEntries[0];
                 return {
                     dayKey: key,
                     nextDayKey: nextMap[key],
                     shifts,
-                    rowIndex: entry.idx,
-                    woNo: entry.row.wo_no,
-                    partLabel: fgPrimaryName(entry.row.fg_part),
-                    maxQty,
-                    overflowQty,
+                    seq: group.seq,
+                    rowIndex: primary.rowIndex,
+                    woNo: primary.woNo,
+                    partLabel: primary.partLabel,
+                    maxQty: primary.maxQty,
+                    overflowQty: primary.overflowQty,
+                    entries: overloadedEntries,
                 };
             }
 
-            remainingSeconds -= (qdcSeconds + prodSeconds);
+            remainingSeconds -= group.groupTotalSeconds;
         }
     }
 
@@ -650,21 +748,23 @@ function applyRollOver() {
     const prompt = overloadPrompt.value;
     if (!prompt || !prompt.nextDayKey) return;
 
-    const targetRow = machinePlanForm.rows[prompt.rowIndex];
-    if (!targetRow) return;
-
     const curr = prompt.dayKey;
     const next = prompt.nextDayKey;
     const currentMachineId = activeMachine.value?.id;
+    const movedIndices = new Set(prompt.entries.map((e) => e.rowIndex));
 
-    targetRow[`${curr}_qty`] = prompt.maxQty > 0 ? String(prompt.maxQty) : '';
-    if (prompt.maxQty <= 0) {
-        targetRow[`${curr}_seq`] = '';
-        targetRow[`${curr}_qdc`] = false;
+    for (const entry of prompt.entries) {
+        const targetRow = machinePlanForm.rows[entry.rowIndex];
+        if (!targetRow) continue;
+        targetRow[`${curr}_qty`] = entry.maxQty > 0 ? String(entry.maxQty) : '';
+        if (entry.maxQty <= 0) {
+            targetRow[`${curr}_seq`] = '';
+            targetRow[`${curr}_qdc`] = false;
+        }
     }
 
     for (let i = 0; i < machinePlanForm.rows.length; i++) {
-        if (i === prompt.rowIndex) continue;
+        if (movedIndices.has(i)) continue;
         const other = machinePlanForm.rows[i];
         if (currentMachineId != null && other[`${next}_machine_id`] !== currentMachineId) continue;
         if (numOrZero(other[`${next}_qty`]) > 0) {
@@ -676,14 +776,18 @@ function applyRollOver() {
         }
     }
 
-    const existingNextQty = numOrZero(targetRow[`${next}_qty`]);
-    if (currentMachineId != null) {
-        targetRow[`${next}_machine_id`] = currentMachineId;
+    for (const entry of prompt.entries) {
+        const targetRow = machinePlanForm.rows[entry.rowIndex];
+        if (!targetRow) continue;
+        const existingNextQty = numOrZero(targetRow[`${next}_qty`]);
+        if (currentMachineId != null) {
+            targetRow[`${next}_machine_id`] = currentMachineId;
+        }
+        targetRow[`${next}_qty`] = String(Number((existingNextQty + entry.overflowQty).toFixed(4)));
+        targetRow[`${next}_seq`] = '1';
+        targetRow[`${next}_qdc`] = false;
+        targetRow[`${next}_qdc_touched`] = true;
     }
-    targetRow[`${next}_qty`] = String(Number((existingNextQty + prompt.overflowQty).toFixed(4)));
-    targetRow[`${next}_seq`] = '1';
-    targetRow[`${next}_qdc`] = false;
-    targetRow[`${next}_qdc_touched`] = true;
 
     overloadPrompt.value = null;
 }
@@ -1326,6 +1430,40 @@ function submitInlineCreateWo() {
 
                 <!-- Tabel input Add/Edit Plan (Seq | Qty | QDC + Jumlah Shift di header tiap hari) -->
                 <form @submit.prevent="handleSaveClick">
+                    <div v-if="machinePlanForm.rows.length > 0" class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <div class="relative min-w-60 flex-1 sm:max-w-sm">
+                            <svg
+                                aria-hidden="true"
+                                class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-secondary"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                            >
+                                <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+                            </svg>
+                            <input
+                                v-model="modalSearch"
+                                type="search"
+                                :aria-label="t('production.search')"
+                                :placeholder="t('production.modalSearchPlaceholder')"
+                                class="w-full rounded-lg border-borderline bg-background py-1.5 pl-9 pr-8 text-xs text-ink-primary placeholder-ink-secondary focus:border-primary focus:ring-primary"
+                            />
+                            <button
+                                v-if="modalSearch.trim() !== ''"
+                                type="button"
+                                :aria-label="t('production.clearSearch')"
+                                class="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-ink-secondary transition hover:bg-surface hover:text-ink-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                                @click="modalSearch = ''"
+                            >
+                                ×
+                            </button>
+                        </div>
+                        <span class="text-[11px] tabular-nums text-ink-secondary">
+                            {{ t('production.modalSearchMatchCount', { shown: filteredModalRows.length, total: machinePlanForm.rows.length }) }}
+                        </span>
+                    </div>
+
                     <div class="max-h-[58vh] overflow-auto rounded-xl border border-borderline">
                         <table class="min-w-full divide-y divide-borderline text-xs">
                             <thead class="sticky top-0 z-10 bg-background">
@@ -1396,7 +1534,7 @@ function submitInlineCreateWo() {
                             </thead>
                             <tbody class="divide-y divide-borderline bg-surface">
                                 <tr
-                                    v-for="(row, idx) in machinePlanForm.rows"
+                                    v-for="{ row, idx } in filteredModalRows"
                                     :key="`${row.work_order_id}-${row.origin_machine_id}`"
                                     :class="liveAvailForDraft(row) < -1e-6 || dayKeys.some((k) => isDayOverCap(row, k)) ? 'bg-danger/5' : ''"
                                 >
@@ -1492,6 +1630,13 @@ function submitInlineCreateWo() {
                                             </label>
                                             <span v-else class="text-center text-[11px] text-ink-secondary">-</span>
                                         </div>
+                                        <div
+                                            v-if="isParallelRowInDay(row, key)"
+                                            class="mt-1 inline-flex items-center gap-1 rounded bg-primary-light px-1.5 py-0.5 text-[10px] font-semibold text-primary"
+                                            :title="t('production.parallelMoldHint')"
+                                        >
+                                            <span>{{ t('production.parallelMoldBadge', { seq: effectiveSeq(row, key) }) }}</span>
+                                        </div>
                                         <div class="mt-1.5">
                                             <div
                                                 v-if="row[`${key}_machine_id`] !== activeMachine.id"
@@ -1537,6 +1682,20 @@ function submitInlineCreateWo() {
                                         {{ t('production.noAvailWoForMachine') }}
                                     </td>
                                 </tr>
+                                <tr v-else-if="filteredModalRows.length === 0">
+                                    <td colspan="5" class="px-4 py-8 text-center text-xs text-ink-secondary">
+                                        <div class="flex flex-col items-center gap-2">
+                                            <span>{{ t('production.noModalSearchMatch') }}</span>
+                                            <button
+                                                type="button"
+                                                class="rounded-md border border-borderline bg-background px-2.5 py-1 text-xs font-medium text-primary transition hover:bg-primary-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                                                @click="modalSearch = ''"
+                                            >
+                                                {{ t('production.clearSearch') }}
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -1563,7 +1722,7 @@ function submitInlineCreateWo() {
                     >
                         <div class="w-full max-w-lg rounded-xl border-t-4 border-danger bg-surface p-5 shadow-xl">
                             <h4 id="overload-dialog-title" class="min-w-0 break-words text-sm font-bold text-danger">{{ t('production.overloadRollOverTitle') }}</h4>
-                            <p class="mt-1.5 text-xs leading-relaxed text-ink-primary">
+                            <p v-if="overloadPrompt.entries.length <= 1" class="mt-1.5 text-xs leading-relaxed text-ink-primary">
                                 {{
                                     overloadPrompt.nextDayKey
                                         ? t('production.overloadRollOverBody', {
@@ -1585,6 +1744,31 @@ function submitInlineCreateWo() {
                                         })
                                 }}
                             </p>
+                            <div v-else class="mt-1.5 space-y-2 text-xs leading-relaxed text-ink-primary">
+                                <p>
+                                    {{
+                                        overloadPrompt.nextDayKey
+                                            ? t('production.overloadParallelRollOverBody', {
+                                                day: dayFullLabel(overloadPrompt.dayKey),
+                                                shifts: overloadPrompt.shifts,
+                                                seq: overloadPrompt.seq,
+                                                parts: overloadPrompt.entries.map((e) => `${e.partLabel} (${e.woNo})`).join(', '),
+                                                nextDay: dayFullLabel(overloadPrompt.nextDayKey),
+                                            })
+                                            : t('production.overloadParallelLastDayBody', {
+                                                day: dayFullLabel(overloadPrompt.dayKey),
+                                                shifts: overloadPrompt.shifts,
+                                                seq: overloadPrompt.seq,
+                                                parts: overloadPrompt.entries.map((e) => `${e.partLabel} (${e.woNo})`).join(', '),
+                                            })
+                                    }}
+                                </p>
+                                <ul class="list-disc space-y-0.5 pl-4 text-[11px] tabular-nums text-ink-secondary">
+                                    <li v-for="entry in overloadPrompt.entries" :key="entry.rowIndex">
+                                        <span class="font-medium text-ink-primary">{{ entry.partLabel }}</span> ({{ entry.woNo }}): {{ fmt(entry.maxQty) }} → +{{ fmt(entry.overflowQty) }}
+                                    </li>
+                                </ul>
+                            </div>
                             <div class="mt-4 flex flex-wrap items-center justify-end gap-2">
                                 <button
                                     type="button"

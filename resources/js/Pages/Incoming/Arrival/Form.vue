@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
 import { computed, ref } from 'vue';
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import BackButton from '@/Components/BackButton.vue';
 import InputError from '@/Components/InputError.vue';
@@ -44,6 +44,7 @@ interface ItemRow {
     po_arrived_qty?: number;
     po_unit_ref?: string;
     po_unit_price?: number;
+    receives_count?: number;
 }
 
 interface ContainerRow {
@@ -117,6 +118,7 @@ const blankItem = (): ItemRow => ({
     total_price: '',
     is_foc: false,
     notes: '',
+    receives_count: 0,
 });
 
 const blankContainer = (): ContainerRow => ({ container_no: '', seal_code: '', size: '' });
@@ -167,6 +169,7 @@ const itemRows = ref<ItemRow[]>(
             po_arrived_qty: poItem ? Number(poItem.arrived_qty ?? 0) : undefined,
             po_unit_ref: poItem ? String(poItem.unit ?? '') : undefined,
             po_unit_price: poItem ? Number(poItem.price ?? 0) : undefined,
+            receives_count: Number(i.receives_count ?? 0),
         };
     }) ?? [blankItem()],
 );
@@ -266,6 +269,29 @@ const remainingUnpickedPoPartsCount = computed(() => {
 
 const allPoPartsPickedOrExhausted = computed(
     () => isLocalPoMode.value && remainingUnpickedPoPartsCount.value === 0,
+);
+
+const isEditingArrival = computed(() => Boolean(props.arrival));
+
+const selectedPoSummary = computed(() => {
+    if (!isLocalPoMode.value || !selectedPo.value?.items) return null;
+    const total = selectedPo.value.items.length;
+    const remaining = selectedPo.value.items.filter((it: any) => Number(it.remaining_qty ?? 0) > 1e-9).length;
+    return {
+        total,
+        remaining,
+        exhausted: Math.max(0, total - remaining),
+    };
+});
+
+const hasReceivedRows = computed(() => itemRows.value.some((row) => (row.receives_count ?? 0) > 0));
+
+const unreceivedSavedRowsCount = computed(
+    () => itemRows.value.filter((row) => row.id !== null && (row.receives_count ?? 0) === 0).length,
+);
+
+const canQuickCleanUnreceived = computed(
+    () => isEditingArrival.value && hasReceivedRows.value && unreceivedSavedRowsCount.value > 0,
 );
 
 const canAddItemRow = computed(
@@ -649,7 +675,16 @@ const rowErrorList = computed(() =>
 );
 
 function addItem() { itemRows.value.push(blankItem()); }
-function removeItem(i: number) { if (itemRows.value.length > 1) itemRows.value.splice(i, 1); }
+function removeItem(i: number) {
+    if (itemRows.value.length <= 1) return;
+    if ((itemRows.value[i]?.receives_count ?? 0) > 0) return;
+    itemRows.value.splice(i, 1);
+}
+function removeUnreceivedRows() {
+    if (!canQuickCleanUnreceived.value) return;
+    const kept = itemRows.value.filter((row) => row.id === null || (row.receives_count ?? 0) > 0);
+    itemRows.value = kept.length > 0 ? kept : [blankItem()];
+}
 
 function isRowEmpty(r: ItemRow) {
     return !r.part_id && !r.material_group && !r.size && r.qty_goods === '' && r.total_price === '';
@@ -1248,22 +1283,63 @@ function submit() {
 
             <!-- Items Kedatangan (Auto-populated dari PO & bisa diedit parsial) -->
             <div class="rounded-xl border border-borderline bg-surface p-5">
-                <div class="mb-4 flex items-center justify-between">
+                <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
                     <div>
                         <h2 class="text-base font-semibold text-ink-primary">{{ t('incoming.items') }}</h2>
                         <p class="text-xs text-ink-secondary">{{ t('incoming.itemsHint') }}</p>
                     </div>
-                    <button
-                        type="button"
-                        :disabled="!canAddItemRow"
-                        @click="addItem"
-                        class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-primary px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-primary-light active:scale-[0.98] motion-reduce:active:scale-100 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
-                    >
-                        <svg aria-hidden="true" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                        {{ t('incoming.addRow') }}
-                    </button>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button
+                            v-if="canQuickCleanUnreceived"
+                            type="button"
+                            @click="removeUnreceivedRows"
+                            class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-danger/40 bg-danger/10 px-3 py-1.5 text-sm font-medium text-danger transition hover:bg-danger/15 active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                        >
+                            <svg aria-hidden="true" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            {{ t('incoming.removeUnreceivedRows', { count: unreceivedSavedRowsCount }) }}
+                        </button>
+                        <button
+                            type="button"
+                            :disabled="!canAddItemRow"
+                            @click="addItem"
+                            class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-primary px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-primary-light active:scale-[0.98] motion-reduce:active:scale-100 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                        >
+                            <svg aria-hidden="true" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                            {{ t('incoming.addRow') }}
+                        </button>
+                    </div>
                 </div>
                 <InputError :message="form.errors.items" class="mb-3" />
+
+                <div
+                    v-if="selectedPoSummary && selectedPo"
+                    class="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-borderline bg-background/70 px-3.5 py-2.5 text-xs"
+                >
+                    <div class="space-y-0.5">
+                        <div class="flex flex-wrap items-center gap-2 text-ink-primary">
+                            <span class="font-mono font-bold">{{ selectedPo.po_no }}</span>
+                            <span class="text-ink-secondary">·</span>
+                            <span class="font-medium">
+                                {{
+                                    t('incoming.poPartsProgressSummary', {
+                                        remaining: selectedPoSummary.remaining,
+                                        total: selectedPoSummary.total,
+                                        exhausted: selectedPoSummary.exhausted,
+                                    })
+                                }}
+                            </span>
+                        </div>
+                        <p v-if="selectedPoSummary.exhausted > 0" class="text-[11px] text-ink-secondary">
+                            {{ t('incoming.poExhaustedPartsHint') }}
+                        </p>
+                    </div>
+                    <Link
+                        :href="route('purchase-orders.show', selectedPo.id)"
+                        class="shrink-0 font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                    >
+                        {{ t('incoming.viewPoDetail') }} →
+                    </Link>
+                </div>
 
                 <div
                     v-if="selectedPoExhausted"
@@ -1314,6 +1390,18 @@ function submit() {
                                             })
                                         }}
                                     </span>
+                                    <span
+                                        v-if="isEditingArrival && r.id !== null && (r.receives_count ?? 0) > 0"
+                                        class="rounded-full bg-success/15 px-2 py-0.5 text-[11px] font-semibold text-success-ink"
+                                    >
+                                        {{ t('incoming.rowReceivedBadge', { count: r.receives_count }) }}
+                                    </span>
+                                    <span
+                                        v-else-if="isEditingArrival && r.id !== null"
+                                        class="rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-semibold text-warning-ink"
+                                    >
+                                        {{ t('incoming.rowUnreceivedBadge') }}
+                                    </span>
                                 </div>
                                 <div v-else class="text-xs font-semibold text-ink-secondary">
                                     {{ t('incoming.chooseGroup') }}
@@ -1323,9 +1411,9 @@ function submit() {
                             <button
                                 type="button"
                                 @click="removeItem(i)"
-                                :disabled="itemRows.length <= 1"
-                                class="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-danger transition hover:bg-danger/10 disabled:opacity-30"
-                                :title="t('incoming.delete')"
+                                :disabled="itemRows.length <= 1 || (r.receives_count ?? 0) > 0"
+                                class="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-danger transition hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-30"
+                                :title="(r.receives_count ?? 0) > 0 ? t('incoming.cannotDeleteReceivedRow') : t('incoming.delete')"
                             >
                                 <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />

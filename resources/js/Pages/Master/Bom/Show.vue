@@ -95,6 +95,7 @@ function sourceLabel(source: string | null): string {
                             <th scope="col" class="px-3 py-3">{{ t('master.uom') }}</th>
                             <th scope="col" class="px-3 py-3">{{ t('master.special') }}</th>
                             <th scope="col" class="px-3 py-3">{{ t('master.source') }}</th>
+                            <th scope="col" class="px-3 py-3">{{ t('master.outputType') }}</th>
                             <th scope="col" class="px-3 py-3 text-right">{{ t('master.tactTimeShort') }}</th>
                             <th scope="col" class="px-3 py-3 text-right">{{ t('master.qdcShort') }}</th>
                         </tr>
@@ -124,6 +125,11 @@ function sourceLabel(source: string | null): string {
                             <td class="px-3 py-2.5">
                                 <StatusBadge :status="it.source">{{ sourceLabel(it.source) }}</StatusBadge>
                             </td>
+                            <td class="px-3 py-2.5">
+                                <StatusBadge v-if="it.output_type === 'shared'" tone="info">{{ t('master.outputTypeShared') }}</StatusBadge>
+                                <StatusBadge v-else-if="it.output_type === 'byproduct'" tone="warning">{{ t('master.outputTypeByproduct') }}</StatusBadge>
+                                <span v-else class="text-xs text-ink-secondary">{{ t('master.outputTypeNormal') }}</span>
+                            </td>
                             <td class="px-3 py-2.5 text-right tabular-nums text-ink-primary">
                                 {{ it.tact_time_seconds != null ? `${fmt(it.tact_time_seconds)} ${t('master.secondShort')}` : '—' }}
                             </td>
@@ -132,7 +138,7 @@ function sourceLabel(source: string | null): string {
                             </td>
                         </tr>
                         <tr v-if="items.length === 0">
-                            <td colspan="14" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.bomItemsEmpty') }}</td>
+                            <td colspan="15" class="px-4 py-12 text-center text-sm text-ink-secondary">{{ t('master.bomItemsEmpty') }}</td>
                         </tr>
                     </tbody>
                 </table>

@@ -8,6 +8,7 @@ use App\Models\Machine;
 use App\Models\Part;
 use App\Models\Process;
 use App\Models\User;
+use App\Support\ReinforceSharedBlankSetup;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\File;
 
@@ -73,6 +74,8 @@ class BomSeeder extends Seeder
                 'created_by' => $systemUser,
             ]);
         }
+
+        ReinforceSharedBlankSetup::apply();
     }
 
     private function resolvePart(?string $number, $parts, array &$cache): ?int

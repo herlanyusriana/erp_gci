@@ -75,6 +75,7 @@ class PurchaseOrderController extends Controller
         ]);
 
         $arrivalItemsByPart = $purchaseOrder->arrivals
+            ->reject(fn (IncomingArrival $arrival) => $arrival->status === 'cancelled')
             ->flatMap(fn (IncomingArrival $arrival) => $arrival->items)
             ->groupBy('part_id');
 

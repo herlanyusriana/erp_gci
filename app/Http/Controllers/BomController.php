@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Bom;
+use App\Models\BomItem;
 use App\Models\Machine;
 use App\Models\MachineCycleTime;
 use App\Models\Part;
@@ -53,7 +54,7 @@ class BomController extends Controller
         return Inertia::render('Master/Bom/Form', [
             'bom' => null,
             'fgParts' => Part::query()
-                ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) = ?', ['fg']))
+                ->whereHas('partType', fn ($q) => $q->whereIn(DB::raw('LOWER(code)'), ['fg', 'wip']))
                 ->whereNotIn('id', Bom::withTrashed()->select('part_id'))
                 ->orderBy('part_number')
                 ->get(['id', 'part_number', 'part_name', 'model', 'part_type_id']),
@@ -77,12 +78,12 @@ class BomController extends Controller
         $data = $request->validate($this->rules());
         $partId = (int) $data['part_id'];
 
-        $isFg = Part::query()
+        $isFgOrWip = Part::query()
             ->whereKey($partId)
-            ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) = ?', ['fg']))
+            ->whereHas('partType', fn ($q) => $q->whereIn(DB::raw('LOWER(code)'), ['fg', 'wip']))
             ->exists();
-        if (! $isFg) {
-            throw ValidationException::withMessages(['part_id' => __('BOM hanya untuk part FG.')]);
+        if (! $isFgOrWip) {
+            throw ValidationException::withMessages(['part_id' => __('BOM hanya untuk part FG atau WIP.')]);
         }
 
         $actorId = $request->user()?->id;
@@ -145,10 +146,22 @@ class BomController extends Controller
             'items.*.child_part_id' => ['required', 'integer', 'exists:parts,id'],
             'items.*.child_part_name' => ['nullable', 'string', 'max:255'],
             'items.*.size' => ['nullable', 'string', 'max:100'],
-            'items.*.child_qty' => ['required', 'numeric', 'gt:0'],
+            'items.*.child_qty' => [
+                'required',
+                'numeric',
+                'min:0',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    $index = explode('.', $attribute)[1] ?? null;
+                    $outputType = $index !== null ? request()->input("items.{$index}.output_type", BomItem::OUTPUT_NORMAL) : BomItem::OUTPUT_NORMAL;
+                    if ($outputType !== BomItem::OUTPUT_BYPRODUCT && (float) $value <= 0) {
+                        $fail(__('validation.gt.numeric', ['attribute' => $attribute, 'value' => 0]));
+                    }
+                },
+            ],
             'items.*.uom_rm' => ['nullable', 'string', 'max:20'],
             'items.*.special_code' => ['nullable', 'string', 'max:50'],
             'items.*.source' => ['nullable', 'string', 'max:50'],
+            'items.*.output_type' => ['nullable', Rule::in(BomItem::OUTPUT_TYPES)],
         ];
     }
 
@@ -165,7 +178,7 @@ class BomController extends Controller
             'sequence', 'process_id', 'machine_id',
             'parent_part_id', 'parent_part_name', 'parent_qty', 'parent_uom',
             'child_part_id', 'child_part_name', 'size', 'child_qty',
-            'uom_rm', 'special_code', 'source',
+            'uom_rm', 'special_code', 'source', 'output_type',
         ];
 
         $normalized = [];
@@ -173,6 +186,7 @@ class BomController extends Controller
             $value = $item[$field] ?? null;
             $normalized[$field] = is_string($value) && trim($value) === '' ? null : $value;
         }
+        $normalized['output_type'] ??= BomItem::OUTPUT_NORMAL;
 
         $parts = Part::query()
             ->whereIn('id', array_filter([$normalized['child_part_id'], $normalized['parent_part_id']]))
@@ -242,7 +256,7 @@ class BomController extends Controller
             'bom' => $bom,
             'items' => $bom->items,
             'fgParts' => Part::query()
-                ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) = ?', ['fg']))
+                ->whereHas('partType', fn ($q) => $q->whereIn(DB::raw('LOWER(code)'), ['fg', 'wip']))
                 ->whereKey($bom->part_id)
                 ->orderBy('part_number')
                 ->get(['id', 'part_number', 'part_name', 'model', 'part_type_id']),
@@ -266,12 +280,12 @@ class BomController extends Controller
         $data = $request->validate($this->updateRules());
         $partId = (int) $data['part_id'];
 
-        $isFg = Part::query()
+        $isFgOrWip = Part::query()
             ->whereKey($partId)
-            ->whereHas('partType', fn ($q) => $q->whereRaw('LOWER(code) = ?', ['fg']))
+            ->whereHas('partType', fn ($q) => $q->whereIn(DB::raw('LOWER(code)'), ['fg', 'wip']))
             ->exists();
-        if (! $isFg) {
-            throw ValidationException::withMessages(['part_id' => __('BOM hanya untuk part FG.')]);
+        if (! $isFgOrWip) {
+            throw ValidationException::withMessages(['part_id' => __('BOM hanya untuk part FG atau WIP.')]);
         }
 
         DB::transaction(function () use ($request, $bom, $data, $partId): void {

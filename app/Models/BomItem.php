@@ -7,11 +7,23 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class BomItem extends Model
 {
+    public const OUTPUT_NORMAL = 'normal';
+
+    public const OUTPUT_SHARED = 'shared';
+
+    public const OUTPUT_BYPRODUCT = 'byproduct';
+
+    public const OUTPUT_TYPES = [
+        self::OUTPUT_NORMAL,
+        self::OUTPUT_SHARED,
+        self::OUTPUT_BYPRODUCT,
+    ];
+
     protected $fillable = [
         'bom_id', 'sequence', 'process_id', 'machine_id',
         'parent_part_id', 'parent_part_name', 'parent_qty', 'parent_uom',
         'child_part_id', 'child_part_name', 'size', 'child_qty',
-        'uom_rm', 'special_code', 'source', 'is_active',
+        'uom_rm', 'special_code', 'source', 'output_type', 'is_active',
         'created_by', 'updated_by',
     ];
 
